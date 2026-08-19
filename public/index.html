@@ -2,47 +2,155 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="theme-color" content="#fbf8f5">
+  <meta name="theme-color" content="#fffaf7">
   <title>Libri Convites | Faça seu pedido</title>
+  <meta name="description" content="Monte seu pedido de convite personalizado com a Libri Convites.">
   <link rel="stylesheet" href="/css/app.css">
 </head>
+
 <body>
+  <div class="page-glow page-glow-one" aria-hidden="true"></div>
+  <div class="page-glow page-glow-two" aria-hidden="true"></div>
+
   <main class="shell">
-    <header class="brand">
-      <div class="brand-name">Libri Convites</div>
-      <small>Portal de Pedidos</small>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Libri Convites">
+        <span class="brand-mark">L</span>
+        <span class="brand-copy">
+          <strong>Libri Convites</strong>
+          <small>Portal de Pedidos</small>
+        </span>
+      </a>
+
+      <a id="topHelpWhatsapp" class="top-help hidden" href="#" target="_blank" rel="noopener">
+        Preciso de ajuda
+      </a>
     </header>
 
-    <section id="landing" class="card hero">
-      <h1>Vamos criar seu convite? 💛</h1>
-      <p>Preencha seu pedido com calma. Você poderá conferir tudo antes de finalizar.</p>
-      <div class="stack">
-        <button id="newOrder" class="btn btn-primary btn-wide">Fazer um novo pedido</button>
-        <button id="continueOrder" class="btn btn-secondary btn-wide hidden">Continuar meu pedido</button>
+    <section id="landing" class="landing">
+      <div class="hero-card">
+        <div class="hero-copy">
+          <span class="eyebrow">Seu convite começa aqui ✦</span>
+          <h1>Vamos criar algo que tenha a cara da sua festa?</h1>
+          <p>
+            Escolha o tipo de experiência, conte os detalhes da comemoração e deixe o restante com a Libri.
+            Seu pedido fica salvo enquanto você preenche.
+          </p>
+
+          <div class="hero-actions">
+            <button id="newOrder" class="btn btn-primary btn-large" disabled>
+              Começar meu pedido
+              <span aria-hidden="true">→</span>
+            </button>
+            <button id="continueOrder" class="btn btn-soft btn-large hidden" disabled>
+              Continuar meu pedido salvo
+            </button>
+          </div>
+
+          <div class="hero-trust" aria-label="Como funciona">
+            <span><b>1</b> Você escolhe</span>
+            <span><b>2</b> Conta os detalhes</span>
+            <span><b>3</b> A Libri cria</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="visual-card visual-card-back">
+            <span class="visual-star">✦</span>
+          </div>
+          <div class="visual-card visual-card-front">
+            <span class="visual-kicker">um convite</span>
+            <strong>feito para<br>ser lembrado</strong>
+            <span class="visual-heart">♡</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="landing-notes">
+        <div class="mini-note">
+          <span class="mini-note-icon">◇</span>
+          <div>
+            <strong>Sem pressa para preencher</strong>
+            <p>O rascunho fica salvo neste aparelho.</p>
+          </div>
+        </div>
+
+        <div class="mini-note">
+          <span class="mini-note-icon">✓</span>
+          <div>
+            <strong>Você confere antes de enviar</strong>
+            <p>Nada vira pedido oficial até a última etapa.</p>
+          </div>
+        </div>
+
+        <div class="mini-note">
+          <span class="mini-note-icon">♡</span>
+          <div>
+            <strong>Fotos só no final</strong>
+            <p>Você envia tudo pelo WhatsApp depois do pedido.</p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="flow" class="hidden">
-      <div class="progress-wrap">
-        <div class="progress-meta"><span id="progressLabel">Etapa 1 de 6</span><span id="saveStatus">Salvo automaticamente</span></div>
-        <div class="progress"><span id="progressBar" style="width:16.6%"></span></div>
+    <section id="flow" class="flow hidden">
+      <div class="progress-shell">
+        <div class="progress-top">
+          <div>
+            <span id="progressLabel" class="progress-label">Etapa 1 de 6</span>
+            <strong id="progressTitle">Seu convite</strong>
+          </div>
+
+          <span id="saveStatus" class="save-status" aria-live="polite">
+            Salvo automaticamente
+          </span>
+        </div>
+
+        <div class="progress" aria-hidden="true">
+          <span id="progressBar" style="width:16.66%"></span>
+        </div>
+
+        <div id="stepDots" class="step-dots" aria-hidden="true"></div>
       </div>
-      <div id="stepCard" class="card"></div>
+
+      <div id="stepCard" class="step-card"></div>
     </section>
 
-    <section id="finalScreen" class="card final-card hidden"></section>
+    <section id="finalScreen" class="final-card hidden"></section>
 
-    <div class="footer-help">
-      Está com dificuldade? <a id="helpWhatsapp" href="#" target="_blank" rel="noopener">Falar com a Libri no WhatsApp</a>
-    </div>
+    <footer class="footer-help">
+      <span>Ficou com alguma dúvida?</span>
+      <a id="helpWhatsapp" href="#" target="_blank" rel="noopener">
+        Falar com a Libri no WhatsApp
+      </a>
+    </footer>
   </main>
 
-  <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div
+    id="modalBackdrop"
+    class="modal-backdrop hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modalTitle"
+  >
     <div class="modal">
-      <div class="row-between"><h3 id="modalTitle">Informações</h3><button id="closeModal" class="btn btn-secondary btn-small">Fechar</button></div>
-      <div id="modalContent"></div>
+      <div class="modal-head">
+        <h3 id="modalTitle">Informações</h3>
+        <button
+          id="closeModal"
+          class="icon-button"
+          type="button"
+          aria-label="Fechar"
+        >
+          ×
+        </button>
+      </div>
+
+      <div id="modalContent" class="modal-content"></div>
     </div>
   </div>
 

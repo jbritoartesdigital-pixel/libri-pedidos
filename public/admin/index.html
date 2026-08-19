@@ -2,45 +2,434 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Libri | Painel de Pedidos</title>
-  <link rel="stylesheet" href="/css/app.css">
-  <link rel="stylesheet" href="/css/admin.css">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+
+  <meta
+    name="robots"
+    content="noindex, nofollow, noarchive"
+  >
+
+  <meta
+    name="theme-color"
+    content="#f7f5f2"
+  >
+
+  <title>
+    Libri Convites | Painel de Pedidos
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="/css/admin.css"
+  >
 </head>
+
 <body>
   <main class="admin-shell">
+    <!-- ==================================================
+         CABEÇALHO
+    =================================================== -->
+
     <header class="admin-top">
-      <div><div class="brand-name">Libri Convites</div><h1>Painel de Pedidos</h1></div>
-      <div class="tabs"><button class="btn btn-primary btn-small" data-tab="orders">Pedidos</button><button class="btn btn-secondary btn-small" data-tab="settings">Configurações</button></div>
+      <div class="admin-brand">
+        <span
+          class="admin-brand-mark"
+          aria-hidden="true"
+        >
+          L
+        </span>
+
+        <div>
+          <span class="admin-kicker">
+            Libri Convites
+          </span>
+
+          <h1>
+            Central de Produção
+          </h1>
+        </div>
+      </div>
+
+      <nav
+        class="admin-tabs"
+        aria-label="Seções do painel"
+      >
+        <button
+          class="admin-tab active"
+          type="button"
+          data-tab="orders"
+        >
+          Pedidos
+        </button>
+
+        <button
+          class="admin-tab"
+          type="button"
+          data-tab="settings"
+        >
+          Configurações
+        </button>
+
+        <button
+          class="admin-tab"
+          type="button"
+          data-tab="terms"
+        >
+          Termos
+        </button>
+      </nav>
     </header>
 
-    <section id="ordersTab">
-      <div class="kpis" id="kpis"></div>
-      <div class="toolbar">
-        <input id="search" placeholder="Buscar por nome, tema ou nº do pedido">
-        <select id="statusFilter"><option value="">Todos os status</option><option value="new">Novos</option><option value="ready">Prontos</option><option value="producing">Em produção</option><option value="waiting_client">Aguardando cliente</option><option value="revisions">Ajustes</option><option value="waiting_balance">Aguardando saldo</option><option value="finished">Finalizados</option><option value="cancelled">Cancelados</option></select>
-        <button id="refreshOrders" class="btn btn-secondary btn-small">Atualizar</button>
+    <!-- ==================================================
+         PEDIDOS
+    =================================================== -->
+
+    <section
+      id="ordersTab"
+      class="admin-tab-panel"
+    >
+      <div class="section-heading">
+        <div>
+          <span class="section-eyebrow">
+            Visão geral
+          </span>
+
+          <h2>
+            O que precisa da sua atenção
+          </h2>
+        </div>
+
+        <button
+          id="refreshOrders"
+          class="btn btn-secondary btn-small"
+          type="button"
+        >
+          Atualizar
+        </button>
       </div>
-      <div id="ordersList" class="orders-list"></div>
+
+      <div
+        id="kpis"
+        class="kpis"
+        aria-live="polite"
+      ></div>
+
+      <div class="orders-toolbar">
+        <div class="search-field">
+          <span
+            class="search-icon"
+            aria-hidden="true"
+          >
+            ⌕
+          </span>
+
+          <input
+            id="search"
+            type="search"
+            placeholder="Buscar nome, tema ou nº do pedido"
+            autocomplete="off"
+          >
+        </div>
+
+        <select
+          id="statusFilter"
+          aria-label="Filtrar pedidos por status"
+        >
+          <option value="">
+            Todos os status
+          </option>
+
+          <option value="new">
+            Novos
+          </option>
+
+          <option value="ready">
+            Prontos para produção
+          </option>
+
+          <option value="producing">
+            Em produção
+          </option>
+
+          <option value="waiting_client">
+            Aguardando cliente
+          </option>
+
+          <option value="revisions">
+            Ajustes
+          </option>
+
+          <option value="waiting_balance">
+            Aguardando saldo
+          </option>
+
+          <option value="finished">
+            Finalizados
+          </option>
+
+          <option value="cancelled">
+            Cancelados
+          </option>
+        </select>
+      </div>
+
+      <div
+        id="ordersList"
+        class="orders-list"
+        aria-live="polite"
+      >
+        <div class="empty-state">
+          Carregando pedidos...
+        </div>
+      </div>
     </section>
 
-    <section id="settingsTab" class="hidden">
-      <div class="card">
-        <h2>Configurações do Portal</h2>
-        <p class="lead">Altere preços, Pix, WhatsApp e exemplos sem editar o código.</p>
-        <form id="settingsForm"></form>
+    <!-- ==================================================
+         CONFIGURAÇÕES
+    =================================================== -->
+
+    <section
+      id="settingsTab"
+      class="admin-tab-panel hidden"
+    >
+      <div class="section-heading">
+        <div>
+          <span class="section-eyebrow">
+            Portal
+          </span>
+
+          <h2>
+            Configurações
+          </h2>
+
+          <p>
+            Preços, pagamento, contato e links de exemplos.
+          </p>
+        </div>
+      </div>
+
+      <form
+        id="settingsForm"
+        class="settings-card"
+      >
+        <div class="empty-state">
+          Carregando configurações...
+        </div>
+      </form>
+    </section>
+
+    <!-- ==================================================
+         TERMOS
+    =================================================== -->
+
+    <section
+      id="termsTab"
+      class="admin-tab-panel hidden"
+    >
+      <div class="section-heading">
+        <div>
+          <span class="section-eyebrow">
+            Condições comerciais
+          </span>
+
+          <h2>
+            Termos do pedido
+          </h2>
+
+          <p>
+            A versão ativa é a que a cliente aceita ao finalizar um novo pedido.
+          </p>
+        </div>
+      </div>
+
+      <div class="terms-layout">
+        <section class="settings-card">
+          <div class="card-heading">
+            <div>
+              <span class="section-eyebrow">
+                Nova versão
+              </span>
+
+              <h3>
+                Publicar novos termos
+              </h3>
+            </div>
+          </div>
+
+          <form id="termsForm">
+            <div class="field">
+              <label for="termsVersion">
+                Versão
+              </label>
+
+              <input
+                id="termsVersion"
+                type="text"
+                placeholder="Ex.: 2026.08"
+                autocomplete="off"
+              >
+            </div>
+
+            <div class="field">
+              <label for="termsBody">
+                Texto completo
+              </label>
+
+              <textarea
+                id="termsBody"
+                rows="18"
+                placeholder="Cole aqui o texto completo dos termos..."
+              ></textarea>
+
+              <span class="hint">
+                Ao publicar uma nova versão, ela se torna a versão ativa para os próximos pedidos.
+              </span>
+            </div>
+
+            <div class="form-actions">
+              <button
+                id="publishTerms"
+                class="btn btn-primary"
+                type="submit"
+              >
+                Publicar nova versão
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section class="settings-card">
+          <div class="card-heading">
+            <div>
+              <span class="section-eyebrow">
+                Histórico
+              </span>
+
+              <h3>
+                Versões publicadas
+              </h3>
+            </div>
+
+            <button
+              id="refreshTerms"
+              class="btn btn-secondary btn-small"
+              type="button"
+            >
+              Atualizar
+            </button>
+          </div>
+
+          <div
+            id="termsList"
+            class="terms-list"
+          >
+            <div class="empty-state">
+              Carregando versões...
+            </div>
+          </div>
+        </section>
       </div>
     </section>
   </main>
 
-  <div id="adminModal" class="modal-backdrop hidden">
-    <div class="modal admin-modal">
-      <div class="row-between"><h3 id="detailTitle">Pedido</h3><button id="closeAdminModal" class="btn btn-secondary btn-small">Fechar</button></div>
-      <div id="detailBody"></div>
-    </div>
+  <!-- ==================================================
+       DETALHE DO PEDIDO
+  =================================================== -->
+
+  <div
+    id="adminModal"
+    class="admin-modal-backdrop hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="detailTitle"
+  >
+    <section class="admin-modal">
+      <header class="admin-modal-header">
+        <div class="modal-title-group">
+          <span class="section-eyebrow">
+            Pedido
+          </span>
+
+          <h2 id="detailTitle">
+            Detalhes
+          </h2>
+        </div>
+
+        <button
+          id="closeAdminModal"
+          class="modal-close"
+          type="button"
+          aria-label="Fechar pedido"
+        >
+          ×
+        </button>
+      </header>
+
+      <div
+        id="detailBody"
+        class="admin-modal-body"
+      ></div>
+    </section>
   </div>
 
-  <script type="module" src="/js/admin.js"></script>
+  <!-- ==================================================
+       MODAL AUXILIAR
+  =================================================== -->
+
+  <div
+    id="infoModal"
+    class="admin-modal-backdrop hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="infoModalTitle"
+  >
+    <section class="admin-modal admin-modal-small">
+      <header class="admin-modal-header">
+        <div class="modal-title-group">
+          <span class="section-eyebrow">
+            Informações
+          </span>
+
+          <h2 id="infoModalTitle">
+            Detalhes
+          </h2>
+        </div>
+
+        <button
+          id="closeInfoModal"
+          class="modal-close"
+          type="button"
+          aria-label="Fechar"
+        >
+          ×
+        </button>
+      </header>
+
+      <div
+        id="infoModalBody"
+        class="admin-modal-body"
+      ></div>
+    </section>
+  </div>
+
+  <!-- ==================================================
+       FEEDBACK
+  =================================================== -->
+
+  <div
+    id="adminToast"
+    class="admin-toast hidden"
+    role="status"
+    aria-live="polite"
+  ></div>
+
+  <script
+    type="module"
+    src="/js/admin.js"
+  ></script>
 </body>
 </html>

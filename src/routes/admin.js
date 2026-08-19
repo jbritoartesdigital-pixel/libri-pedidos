@@ -1,142 +1,537 @@
-import { fail, json, nowIso, parseJson, readJson } from '../lib/http.js';
-import { addBusinessDays, addHistory, getOrderDetail, nextActionFor } from '../lib/orders.js';
-import { calculateQuote } from '../lib/quote.js';
-import { catalogFromSettings, loadSettings, saveSettings } from '../lib/settings.js';
+import {
+  fail,
+  json,
+  nowIso,
+  parseJson,
+  readJson,
+} from '../lib/http.js';
 
-function adminOrderSummary(row) {
+import {
+  addBusinessDays,
+  addHistory,
+  getOrderDetail,
+  nextActionFor,
+} from '../lib/orders.js';
+
+import {
+  catalogFromSettings,
+  loadSettings,
+  saveSettings,
+} from '../lib/settings.js';
+
+/* ==================================================
+   HELPERS
+================================================== */
+
+function legacyCommercialIssue(
+  row,
+) {
+  if (!row) {
+    return false;
+  }
+
+  const addons =
+    row.addons
+    || parseJson(
+      row.addons_json,
+      {},
+    );
+
+  return (
+    row.format === 'video'
+    && addons
+      ?.confirmation === true
+  );
+}
+
+function adminOrderSummary(
+  row,
+) {
   return {
-    id: row.id,
-    orderCode: row.order_code,
-    customerName: row.customer_name,
-    whatsapp: row.whatsapp,
-    honoreeName: row.honoree_name,
-    displayName: row.display_name,
-    age: row.age,
-    eventDate: row.event_date,
-    eventTime: row.event_time,
-    theme: row.theme,
-    experience: row.experience,
-    format: row.format,
-    status: row.status,
-    photosStatus: row.photos_status,
-    entryStatus: row.entry_status,
-    balanceStatus: row.balance_status,
-    urgencyEnabled: Boolean(row.urgency_enabled),
-    productionStartedAt: row.production_started_at,
-    productionDeadlineAt: row.deadline_override_at || row.production_deadline_at,
-    updatedAt: row.updated_at,
-    nextAction: nextActionFor(row),
+    id:
+      row.id,
+
+    orderCode:
+      row.order_code,
+
+    customerName:
+      row.customer_name,
+
+    whatsapp:
+      row.whatsapp,
+
+    honoreeName:
+      row.honoree_name,
+
+    displayName:
+      row.display_name,
+
+    age:
+      row.age,
+
+    eventDate:
+      row.event_date,
+
+    eventTime:
+      row.event_time,
+
+    theme:
+      row.theme,
+
+    experience:
+      row.experience,
+
+    format:
+      row.format,
+
+    status:
+      row.status,
+
+    photosStatus:
+      row.photos_status,
+
+    entryStatus:
+      row.entry_status,
+
+    balanceStatus:
+      row.balance_status,
+
+    urgencyEnabled:
+      Boolean(
+        row.urgency_enabled,
+      ),
+
+    productionStartedAt:
+      row.production_started_at,
+
+    productionDeadlineAt:
+      row.deadline_override_at
+      || row.production_deadline_at,
+
+    updatedAt:
+      row.updated_at,
+
+    legacyCommercialIssue:
+      legacyCommercialIssue(
+        row,
+      ),
+
+    nextAction:
+      nextActionFor(
+        row,
+      ),
   };
 }
 
-function descriptionForStatus(field, value) {
+function descriptionForStatus(
+  field,
+  value,
+) {
   const labels = {
     photos_status: {
-      waiting: 'Fotos aguardando',
-      received: 'Fotos recebidas',
-      approved: 'Fotos aprovadas',
-      needs_new: 'Novas fotos solicitadas',
+      waiting:
+        'Fotos aguardando',
+
+      received:
+        'Fotos recebidas',
+
+      approved:
+        'Fotos aprovadas',
+
+      needs_new:
+        'Novas fotos solicitadas',
     },
+
     entry_status: {
-      waiting: 'Entrada aguardando',
-      confirmed: 'Entrada confirmada',
+      waiting:
+        'Entrada aguardando',
+
+      confirmed:
+        'Entrada confirmada',
     },
+
     balance_status: {
-      waiting: 'Saldo aguardando',
-      confirmed: 'Saldo confirmado',
+      waiting:
+        'Saldo aguardando',
+
+      confirmed:
+        'Saldo confirmado',
     },
+
     mascot_status: {
-      waiting: 'Mascote aguardando',
-      sent: 'Mascote enviado',
-      approved: 'Mascote aprovado',
+      waiting:
+        'Mascote aguardando',
+
+      sent:
+        'Mascote enviado',
+
+      approved:
+        'Mascote aprovado',
     },
+
     speech_status: {
-      not_required: 'Falas sem aprovação necessária',
-      waiting: 'Falas aguardando',
-      sent: 'Falas enviadas',
-      approved: 'Falas aprovadas',
+      not_required:
+        'Falas sem aprovação necessária',
+
+      waiting:
+        'Falas aguardando',
+
+      sent:
+        'Falas enviadas',
+
+      approved:
+        'Falas aprovadas',
     },
+
     invitation_status: {
-      waiting: 'Convite aguardando',
-      producing: 'Convite em produção',
-      sent: 'Convite enviado',
-      approved: 'Convite aprovado',
+      waiting:
+        'Convite aguardando',
+
+      producing:
+        'Convite em produção',
+
+      sent:
+        'Convite enviado',
+
+      approved:
+        'Convite aprovado',
     },
+
     status: {
-      new: 'Pedido novo',
-      ready: 'Pronto para produção',
-      producing: 'Em produção',
-      waiting_client: 'Aguardando cliente',
-      revisions: 'Em ajustes',
-      waiting_balance: 'Aguardando saldo',
-      finished: 'Finalizado',
-      cancelled: 'Cancelado',
+      new:
+        'Pedido novo',
+
+      ready:
+        'Pronto para produção',
+
+      producing:
+        'Em produção',
+
+      waiting_client:
+        'Aguardando cliente',
+
+      revisions:
+        'Em ajustes',
+
+      waiting_balance:
+        'Aguardando saldo',
+
+      finished:
+        'Finalizado',
+
+      cancelled:
+        'Cancelado',
     },
   };
 
-  return labels[field]?.[value] || `${field} alterado para ${value}`;
+  return (
+    labels[field]?.[value]
+    || `${field} alterado para ${value}`
+  );
 }
 
-export async function handleAdminApi(request, env, url) {
-  const method = request.method.toUpperCase();
-  const path = url.pathname;
+async function readOrder(
+  db,
+  id,
+) {
+  return db
+    .prepare(
+      `
+        SELECT *
+        FROM orders
+        WHERE id = ?
+      `,
+    )
+    .bind(id)
+    .first();
+}
 
-  if (method === 'GET' && path === '/api/admin/orders') {
-    const status = url.searchParams.get('status') || '';
-    const search = (url.searchParams.get('search') || '').trim();
+function updatePricingForUrgency(
+  existing,
+  urgencyEnabled,
+  urgencyPercent,
+) {
+  /*
+   * HARD LOCK FINANCEIRO
+   *
+   * A urgência incide sobre
+   * o subtotal JÁ CONTRATADO.
+   *
+   * Nunca recalculamos o produto
+   * usando a tabela de preços atual.
+   */
+
+  const subtotalCents =
+    Math.max(
+      0,
+      Number(
+        existing.subtotal_cents
+        || 0,
+      ),
+    );
+
+  const depositPercent =
+    Math.max(
+      0,
+      Number(
+        existing.deposit_percent
+        || 0,
+      ),
+    );
+
+  const appliedPercent =
+    urgencyEnabled
+      ? urgencyPercent
+      : 0;
+
+  const urgencyAmountCents =
+    urgencyEnabled
+      ? Math.round(
+        subtotalCents
+        * appliedPercent
+        / 100,
+      )
+      : 0;
+
+  const totalCents =
+    subtotalCents
+    + urgencyAmountCents;
+
+  const depositCents =
+    Math.round(
+      totalCents
+      * depositPercent
+      / 100,
+    );
+
+  const balanceCents =
+    totalCents
+    - depositCents;
+
+  const previousPricing =
+    parseJson(
+      existing.pricing_json,
+      {},
+    );
+
+  const pricing = {
+    ...previousPricing,
+
+    experience:
+      existing.experience,
+
+    format:
+      existing.format,
+
+    addons:
+      parseJson(
+        existing.addons_json,
+        {},
+      ),
+
+    subtotalCents,
+
+    urgencyEnabled,
+
+    urgencyPercent:
+      appliedPercent,
+
+    urgencyAmountCents,
+
+    totalCents,
+
+    depositPercent,
+
+    depositCents,
+
+    balanceCents,
+  };
+
+  return {
+    subtotalCents,
+
+    urgencyEnabled,
+
+    urgencyPercent:
+      appliedPercent,
+
+    urgencyAmountCents,
+
+    totalCents,
+
+    depositPercent,
+
+    depositCents,
+
+    balanceCents,
+
+    pricing,
+  };
+}
+
+/* ==================================================
+   API ADMIN
+================================================== */
+
+export async function handleAdminApi(
+  request,
+  env,
+  url,
+) {
+  const method =
+    request.method
+      .toUpperCase();
+
+  const path =
+    url.pathname;
+
+  /* ==================================================
+     LISTA DE PEDIDOS
+  ================================================== */
+
+  if (
+    method === 'GET'
+    && path === '/api/admin/orders'
+  ) {
+    const status =
+      url.searchParams
+        .get('status')
+      || '';
+
+    const search =
+      (
+        url.searchParams
+          .get('search')
+        || ''
+      ).trim();
 
     const params = [];
     const where = [];
 
     if (status) {
-      where.push('status = ?');
-      params.push(status);
+      where.push(
+        'status = ?',
+      );
+
+      params.push(
+        status,
+      );
     }
 
     if (search) {
       where.push(
-        '(order_code LIKE ? OR customer_name LIKE ? OR honoree_name LIKE ? OR theme LIKE ?)',
+        `
+          (
+            order_code LIKE ?
+            OR customer_name LIKE ?
+            OR honoree_name LIKE ?
+            OR theme LIKE ?
+          )
+        `,
       );
 
-      const q = `%${search}%`;
+      const q =
+        `%${search}%`;
 
-      params.push(q, q, q, q);
+      params.push(
+        q,
+        q,
+        q,
+        q,
+      );
     }
 
+    /*
+     * ORDEM:
+     *
+     * 1. festas de hoje/futuras
+     * 2. pedidos sem data
+     * 3. festas passadas
+     *
+     * Dentro do futuro:
+     * mais próxima primeiro.
+     *
+     * Dentro do passado:
+     * mais recente primeiro.
+     */
     const sql = `
       SELECT *
       FROM orders
-      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+
+      ${
+        where.length
+          ? `WHERE ${where.join(' AND ')}`
+          : ''
+      }
+
       ORDER BY
         CASE
-          WHEN event_date IS NULL OR event_date = '' THEN 1
+          WHEN event_date IS NULL
+            OR event_date = ''
+          THEN 1
+
+          WHEN event_date < date('now')
+          THEN 2
+
           ELSE 0
-        END,
-        event_date ASC,
+        END ASC,
+
+        CASE
+          WHEN event_date >= date('now')
+          THEN event_date
+        END ASC,
+
+        CASE
+          WHEN event_date < date('now')
+          THEN event_date
+        END DESC,
+
         created_at DESC
+
       LIMIT 500
     `;
 
-    const result = await env.DB
-      .prepare(sql)
-      .bind(...params)
-      .all();
+    const result =
+      await env.DB
+        .prepare(sql)
+        .bind(
+          ...params,
+        )
+        .all();
 
     return json({
       ok: true,
-      orders: (result.results || []).map(adminOrderSummary),
+
+      orders:
+        (
+          result.results
+          || []
+        ).map(
+          adminOrderSummary,
+        ),
     });
   }
 
-  const orderMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)$/,
-  );
+  /* ==================================================
+     DETALHE
+  ================================================== */
 
-  if (orderMatch && method === 'GET') {
-    const detail = await getOrderDetail(
-      env.DB,
-      Number(orderMatch[1]),
+  const orderMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)$/,
     );
+
+  if (
+    orderMatch
+    && method === 'GET'
+  ) {
+    const detail =
+      await getOrderDetail(
+        env.DB,
+        Number(
+          orderMatch[1],
+        ),
+      );
 
     if (!detail) {
       return fail(
@@ -147,29 +542,50 @@ export async function handleAdminApi(request, env, url) {
 
     return json({
       ok: true,
+
       order: {
         ...detail,
-        nextAction: nextActionFor(detail),
+
+        legacyCommercialIssue:
+          legacyCommercialIssue(
+            detail,
+          ),
+
+        nextAction:
+          nextActionFor(
+            detail,
+          ),
       },
     });
   }
 
-  if (orderMatch && method === 'DELETE') {
-    const id = Number(orderMatch[1]);
+  /* ==================================================
+     EXCLUIR
+  ================================================== */
 
-    const order = await env.DB
-      .prepare(
-        `
-          SELECT
-            id,
-            order_code,
-            honoree_name
-          FROM orders
-          WHERE id = ?
-        `,
-      )
-      .bind(id)
-      .first();
+  if (
+    orderMatch
+    && method === 'DELETE'
+  ) {
+    const id =
+      Number(
+        orderMatch[1],
+      );
+
+    const order =
+      await env.DB
+        .prepare(
+          `
+            SELECT
+              id,
+              order_code,
+              honoree_name
+            FROM orders
+            WHERE id = ?
+          `,
+        )
+        .bind(id)
+        .first();
 
     if (!order) {
       return fail(
@@ -181,19 +597,28 @@ export async function handleAdminApi(request, env, url) {
     await env.DB.batch([
       env.DB
         .prepare(
-          'DELETE FROM internal_notes WHERE order_id = ?',
+          `
+            DELETE FROM internal_notes
+            WHERE order_id = ?
+          `,
         )
         .bind(id),
 
       env.DB
         .prepare(
-          'DELETE FROM order_history WHERE order_id = ?',
+          `
+            DELETE FROM order_history
+            WHERE order_id = ?
+          `,
         )
         .bind(id),
 
       env.DB
         .prepare(
-          'DELETE FROM orders WHERE id = ?',
+          `
+            DELETE FROM orders
+            WHERE id = ?
+          `,
         )
         .bind(id),
     ]);
@@ -203,6 +628,7 @@ export async function handleAdminApi(request, env, url) {
 
       deleted: {
         id,
+
         orderCode:
           order.order_code,
 
@@ -212,15 +638,24 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  if (orderMatch && method === 'PATCH') {
-    const id = Number(orderMatch[1]);
+  /* ==================================================
+     ALTERAR PEDIDO
+  ================================================== */
 
-    const existing = await env.DB
-      .prepare(
-        'SELECT * FROM orders WHERE id = ?',
-      )
-      .bind(id)
-      .first();
+  if (
+    orderMatch
+    && method === 'PATCH'
+  ) {
+    const id =
+      Number(
+        orderMatch[1],
+      );
+
+    const existing =
+      await readOrder(
+        env.DB,
+        id,
+      );
 
     if (!existing) {
       return fail(
@@ -229,28 +664,36 @@ export async function handleAdminApi(request, env, url) {
       );
     }
 
-    const body = await readJson(request);
+    const body =
+      await readJson(
+        request,
+      );
 
-    const allowed = new Set([
-      'status',
-      'photos_status',
-      'photos_note',
-      'entry_status',
-      'balance_status',
-      'mascot_status',
-      'speech_status',
-      'invitation_status',
-      'deadline_override_at',
-    ]);
+    const allowed =
+      new Set([
+        'status',
+        'photos_status',
+        'photos_note',
+        'entry_status',
+        'balance_status',
+        'mascot_status',
+        'speech_status',
+        'invitation_status',
+        'deadline_override_at',
+      ]);
 
     const changes = [];
     const values = [];
 
     for (
       const [key, value]
-      of Object.entries(body || {})
+      of Object.entries(
+        body || {},
+      )
     ) {
-      if (!allowed.has(key)) {
+      if (
+        !allowed.has(key)
+      ) {
         continue;
       }
 
@@ -265,41 +708,42 @@ export async function handleAdminApi(request, env, url) {
       );
     }
 
-    let urgencyChanged = false;
-    let urgencyQuote = null;
+    let urgencyChanged =
+      false;
+
+    let urgencyPricing =
+      null;
 
     if (
-      typeof body.urgency_enabled === 'boolean'
-      && Number(existing.urgency_enabled)
-        !== Number(body.urgency_enabled)
+      typeof body
+        .urgency_enabled
+        === 'boolean'
+
+      && Number(
+        existing
+          .urgency_enabled,
+      )
+        !== Number(
+          body
+            .urgency_enabled,
+        )
     ) {
       const settings =
-        await loadSettings(
-          env.DB,
+        catalogFromSettings(
+          await loadSettings(
+            env.DB,
+          ),
         );
 
-      const selection = {
-        experience:
-          existing.experience,
+      const approvedUrgencyPercent =
+        settings.rules
+          .urgencyPercent;
 
-        format:
-          existing.format,
-
-        addons:
-          parseJson(
-            existing.addons_json,
-            {},
-          ),
-      };
-
-      urgencyQuote =
-        calculateQuote(
-          selection,
-          settings,
-          {
-            urgencyEnabled:
-              body.urgency_enabled,
-          },
+      urgencyPricing =
+        updatePricingForUrgency(
+          existing,
+          body.urgency_enabled,
+          approvedUrgencyPercent,
         );
 
       changes.push(
@@ -319,36 +763,40 @@ export async function handleAdminApi(request, env, url) {
           ? 1
           : 0,
 
-        urgencyQuote
+        urgencyPricing
           .urgencyPercent,
 
-        urgencyQuote
+        urgencyPricing
           .urgencyAmountCents,
 
-        urgencyQuote
+        urgencyPricing
           .subtotalCents,
 
-        urgencyQuote
+        urgencyPricing
           .totalCents,
 
-        urgencyQuote
+        urgencyPricing
           .depositPercent,
 
-        urgencyQuote
+        urgencyPricing
           .depositCents,
 
-        urgencyQuote
+        urgencyPricing
           .balanceCents,
 
         JSON.stringify(
-          urgencyQuote,
+          urgencyPricing
+            .pricing,
         ),
       );
 
-      urgencyChanged = true;
+      urgencyChanged =
+        true;
     }
 
-    if (!changes.length) {
+    if (
+      !changes.length
+    ) {
       return fail(
         'Nenhuma alteração válida recebida.',
         422,
@@ -372,16 +820,21 @@ export async function handleAdminApi(request, env, url) {
           WHERE id = ?
         `,
       )
-      .bind(...values)
+      .bind(
+        ...values,
+      )
       .run();
 
     for (
       const [key, value]
-      of Object.entries(body || {})
+      of Object.entries(
+        body || {},
+      )
     ) {
       if (
         allowed.has(key)
-        && key !== 'photos_note'
+        && key
+          !== 'photos_note'
       ) {
         await addHistory(
           env.DB,
@@ -395,14 +848,27 @@ export async function handleAdminApi(request, env, url) {
       }
     }
 
-    if (urgencyChanged) {
+    if (
+      urgencyChanged
+    ) {
       await addHistory(
         env.DB,
         id,
         'urgency_changed',
+
         body.urgency_enabled
-          ? `Urgência aprovada (+${urgencyQuote.urgencyPercent}%)`
+          ? `Urgência aprovada (+${urgencyPricing.urgencyPercent}%)`
           : 'Urgência removida',
+
+        {
+          subtotalPreservado:
+            urgencyPricing
+              .subtotalCents,
+
+          total:
+            urgencyPricing
+              .totalCents,
+        },
       );
     }
 
@@ -417,6 +883,12 @@ export async function handleAdminApi(request, env, url) {
 
       order: {
         ...detail,
+
+        legacyCommercialIssue:
+          legacyCommercialIssue(
+            detail,
+          ),
+
         nextAction:
           nextActionFor(
             detail,
@@ -425,9 +897,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const noteMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/notes$/,
-  );
+  /* ==================================================
+     OBSERVAÇÕES
+  ================================================== */
+
+  const noteMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/notes$/,
+    );
 
   if (
     noteMatch
@@ -445,7 +922,8 @@ export async function handleAdminApi(request, env, url) {
 
     const note =
       String(
-        body.note || '',
+        body.note
+        || '',
       ).trim();
 
     if (!note) {
@@ -458,7 +936,11 @@ export async function handleAdminApi(request, env, url) {
     const order =
       await env.DB
         .prepare(
-          'SELECT id FROM orders WHERE id = ?',
+          `
+            SELECT id
+            FROM orders
+            WHERE id = ?
+          `,
         )
         .bind(id)
         .first();
@@ -506,9 +988,14 @@ export async function handleAdminApi(request, env, url) {
     );
   }
 
-  const startMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/start-production$/,
-  );
+  /* ==================================================
+     INICIAR PRODUÇÃO
+  ================================================== */
+
+  const startMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/start-production$/,
+    );
 
   if (
     startMatch
@@ -520,17 +1007,41 @@ export async function handleAdminApi(request, env, url) {
       );
 
     const order =
-      await env.DB
-        .prepare(
-          'SELECT * FROM orders WHERE id = ?',
-        )
-        .bind(id)
-        .first();
+      await readOrder(
+        env.DB,
+        id,
+      );
 
     if (!order) {
       return fail(
         'Pedido não encontrado.',
         404,
+      );
+    }
+
+    if (
+      order.status
+        === 'cancelled'
+      || order.status
+        === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está encerrado.',
+        409,
+      );
+    }
+
+    /*
+     * Evita um segundo clique
+     * resetar o prazo.
+     */
+    if (
+      order
+        .production_started_at
+    ) {
+      return fail(
+        'A produção deste pedido já foi iniciada.',
+        409,
       );
     }
 
@@ -555,14 +1066,17 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      !order.terms_accepted_at
+      !order
+        .terms_accepted_at
     ) {
       blockers.push(
         'Termos não registrados',
       );
     }
 
-    if (blockers.length) {
+    if (
+      blockers.length
+    ) {
       return fail(
         'Ainda não é possível iniciar a produção.',
         409,
@@ -596,17 +1110,19 @@ export async function handleAdminApi(request, env, url) {
           UPDATE orders
           SET
             status = 'producing',
+
             invitation_status =
               CASE
                 WHEN invitation_status = 'waiting'
                 THEN 'producing'
                 ELSE invitation_status
               END,
-            production_started_at =
-              COALESCE(production_started_at, ?),
+
+            production_started_at = ?,
             production_deadline_at = ?,
             production_paused_at = NULL,
             updated_at = ?
+
           WHERE id = ?
         `,
       )
@@ -636,9 +1152,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const pauseMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/pause$/,
-  );
+  /* ==================================================
+     PAUSAR PRODUÇÃO
+  ================================================== */
+
+  const pauseMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/pause$/,
+    );
 
   if (
     pauseMatch
@@ -650,12 +1171,10 @@ export async function handleAdminApi(request, env, url) {
       );
 
     const order =
-      await env.DB
-        .prepare(
-          'SELECT * FROM orders WHERE id = ?',
-        )
-        .bind(id)
-        .first();
+      await readOrder(
+        env.DB,
+        id,
+      );
 
     if (!order) {
       return fail(
@@ -665,7 +1184,8 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      !order.production_started_at
+      !order
+        .production_started_at
     ) {
       return fail(
         'A produção ainda não começou.',
@@ -674,10 +1194,23 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      order.production_paused_at
+      order
+        .production_paused_at
     ) {
       return fail(
         'O prazo já está pausado.',
+        409,
+      );
+    }
+
+    if (
+      order.status
+        === 'cancelled'
+      || order.status
+        === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está encerrado.',
         409,
       );
     }
@@ -714,6 +1247,7 @@ export async function handleAdminApi(request, env, url) {
       env.DB,
       id,
       'production_paused',
+
       body.reason
         ? `Produção pausada: ${body.reason}`
         : 'Produção pausada aguardando cliente',
@@ -724,9 +1258,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const resumeMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/resume$/,
-  );
+  /* ==================================================
+     RETOMAR PRODUÇÃO
+  ================================================== */
+
+  const resumeMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/resume$/,
+    );
 
   if (
     resumeMatch
@@ -738,12 +1277,10 @@ export async function handleAdminApi(request, env, url) {
       );
 
     const order =
-      await env.DB
-        .prepare(
-          'SELECT * FROM orders WHERE id = ?',
-        )
-        .bind(id)
-        .first();
+      await readOrder(
+        env.DB,
+        id,
+      );
 
     if (!order) {
       return fail(
@@ -753,10 +1290,23 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      !order.production_paused_at
+      !order
+        .production_paused_at
     ) {
       return fail(
         'O prazo não está pausado.',
+        409,
+      );
+    }
+
+    if (
+      order.status
+        === 'cancelled'
+      || order.status
+        === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está encerrado.',
         409,
       );
     }
@@ -783,9 +1333,16 @@ export async function handleAdminApi(request, env, url) {
         ),
       );
 
+    const hasManualDeadline =
+      Boolean(
+        order
+          .deadline_override_at,
+      );
+
     const currentDeadline =
-      order.deadline_override_at
-      || order.production_deadline_at;
+      hasManualDeadline
+        ? order.deadline_override_at
+        : order.production_deadline_at;
 
     const shifted =
       currentDeadline
@@ -793,35 +1350,70 @@ export async function handleAdminApi(request, env, url) {
           new Date(
             currentDeadline,
           ).getTime()
-          + seconds * 1000,
+          + (
+            seconds
+            * 1000
+          ),
         ).toISOString()
+
         : null;
 
     const stamp =
       now.toISOString();
 
-    await env.DB
-      .prepare(
-        `
-          UPDATE orders
-          SET
-            status = 'producing',
-            production_paused_at = NULL,
-            paused_total_seconds =
-              paused_total_seconds + ?,
-            production_deadline_at =
-              COALESCE(?, production_deadline_at),
-            updated_at = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        seconds,
-        shifted,
-        stamp,
-        id,
-      )
-      .run();
+    if (
+      hasManualDeadline
+    ) {
+      await env.DB
+        .prepare(
+          `
+            UPDATE orders
+            SET
+              status = 'producing',
+              production_paused_at = NULL,
+
+              paused_total_seconds =
+                paused_total_seconds + ?,
+
+              deadline_override_at = ?,
+              updated_at = ?
+
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          seconds,
+          shifted,
+          stamp,
+          id,
+        )
+        .run();
+    } else {
+      await env.DB
+        .prepare(
+          `
+            UPDATE orders
+            SET
+              status = 'producing',
+              production_paused_at = NULL,
+
+              paused_total_seconds =
+                paused_total_seconds + ?,
+
+              production_deadline_at = ?,
+              updated_at = ?
+
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          seconds,
+          shifted,
+          stamp,
+          id,
+        )
+        .run();
+    }
 
     await addHistory(
       env.DB,
@@ -838,9 +1430,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const revisionMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/revision$/,
-  );
+  /* ==================================================
+     RODADA DE AJUSTE
+  ================================================== */
+
+  const revisionMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/revision$/,
+    );
 
   if (
     revisionMatch
@@ -907,7 +1504,10 @@ export async function handleAdminApi(request, env, url) {
           `
             SELECT
               ${config.column}
-              AS current
+              AS current,
+
+              status
+
             FROM orders
             WHERE id = ?
           `,
@@ -922,14 +1522,28 @@ export async function handleAdminApi(request, env, url) {
       );
     }
 
+    if (
+      order.status
+        === 'cancelled'
+      || order.status
+        === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está encerrado.',
+        409,
+      );
+    }
+
     const next =
       Number(
-        order.current || 0,
+        order.current
+        || 0,
       ) + 1;
 
     if (
       next > config.max
-      && body.force !== true
+      && body.force
+        !== true
     ) {
       return fail(
         `As ${config.max} rodadas incluídas para ${config.label.toLowerCase()} já foram utilizadas.`,
@@ -969,6 +1583,7 @@ export async function handleAdminApi(request, env, url) {
       `${config.label}: rodada de ajuste ${next} registrada`,
       {
         stage,
+
         revision:
           next,
       },
@@ -985,9 +1600,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const approveMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/approve$/,
-  );
+  /* ==================================================
+     APROVAÇÃO
+  ================================================== */
+
+  const approveMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/approve$/,
+    );
 
   if (
     approveMatch
@@ -1042,7 +1662,13 @@ export async function handleAdminApi(request, env, url) {
     const order =
       await env.DB
         .prepare(
-          'SELECT id FROM orders WHERE id = ?',
+          `
+            SELECT
+              id,
+              status
+            FROM orders
+            WHERE id = ?
+          `,
         )
         .bind(id)
         .first();
@@ -1054,8 +1680,21 @@ export async function handleAdminApi(request, env, url) {
       );
     }
 
+    if (
+      order.status
+        === 'cancelled'
+      || order.status
+        === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está encerrado.',
+        409,
+      );
+    }
+
     const status =
-      stage === 'invitation'
+      stage
+        === 'invitation'
         ? 'waiting_balance'
         : 'producing';
 
@@ -1089,9 +1728,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
-  const finishMatch = path.match(
-    /^\/api\/admin\/orders\/(\d+)\/finish$/,
-  );
+  /* ==================================================
+     FINALIZAR PEDIDO
+  ================================================== */
+
+  const finishMatch =
+    path.match(
+      /^\/api\/admin\/orders\/(\d+)\/finish$/,
+    );
 
   if (
     finishMatch
@@ -1103,12 +1747,10 @@ export async function handleAdminApi(request, env, url) {
       );
 
     const order =
-      await env.DB
-        .prepare(
-          'SELECT * FROM orders WHERE id = ?',
-        )
-        .bind(id)
-        .first();
+      await readOrder(
+        env.DB,
+        id,
+      );
 
     if (!order) {
       return fail(
@@ -1118,7 +1760,28 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      order.invitation_status
+      order.status
+      === 'cancelled'
+    ) {
+      return fail(
+        'Este pedido está cancelado.',
+        409,
+      );
+    }
+
+    if (
+      order.status
+      === 'finished'
+    ) {
+      return fail(
+        'Este pedido já está finalizado.',
+        409,
+      );
+    }
+
+    if (
+      order
+        .invitation_status
       !== 'approved'
     ) {
       return fail(
@@ -1128,7 +1791,8 @@ export async function handleAdminApi(request, env, url) {
     }
 
     if (
-      order.balance_status
+      order
+        .balance_status
       !== 'confirmed'
     ) {
       return fail(
@@ -1165,9 +1829,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
+  /* ==================================================
+     CONFIGURAÇÕES
+  ================================================== */
+
   if (
     method === 'GET'
-    && path === '/api/admin/settings'
+    && path
+      === '/api/admin/settings'
   ) {
     const settings =
       await loadSettings(
@@ -1188,17 +1857,31 @@ export async function handleAdminApi(request, env, url) {
 
   if (
     method === 'PUT'
-    && path === '/api/admin/settings'
+    && path
+      === '/api/admin/settings'
   ) {
     const body =
       await readJson(
         request,
       );
 
-    await saveSettings(
-      env.DB,
-      body.settings || body,
-    );
+    try {
+      await saveSettings(
+        env.DB,
+        body.settings
+        || body,
+      );
+    } catch (error) {
+      return fail(
+        error?.message
+        || 'Confira as configurações informadas.',
+        422,
+        {
+          code:
+            'invalid_settings',
+        },
+      );
+    }
 
     const settings =
       await loadSettings(
@@ -1217,9 +1900,14 @@ export async function handleAdminApi(request, env, url) {
     });
   }
 
+  /* ==================================================
+     TERMOS
+  ================================================== */
+
   if (
     method === 'GET'
-    && path === '/api/admin/terms'
+    && path
+      === '/api/admin/terms'
   ) {
     const result =
       await env.DB
@@ -1240,13 +1928,15 @@ export async function handleAdminApi(request, env, url) {
       ok: true,
 
       terms:
-        result.results || [],
+        result.results
+        || [],
     });
   }
 
   if (
     method === 'POST'
-    && path === '/api/admin/terms'
+    && path
+      === '/api/admin/terms'
   ) {
     const body =
       await readJson(
@@ -1255,12 +1945,14 @@ export async function handleAdminApi(request, env, url) {
 
     const version =
       String(
-        body.version || '',
+        body.version
+        || '',
       ).trim();
 
     const termsBody =
       String(
-        body.body || '',
+        body.body
+        || '',
       ).trim();
 
     if (
@@ -1270,6 +1962,30 @@ export async function handleAdminApi(request, env, url) {
       return fail(
         'Informe versão e texto dos termos.',
         422,
+      );
+    }
+
+    const existingVersion =
+      await env.DB
+        .prepare(
+          `
+            SELECT version
+            FROM terms_versions
+            WHERE version = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          version,
+        )
+        .first();
+
+    if (
+      existingVersion
+    ) {
+      return fail(
+        `A versão ${version} dos termos já existe.`,
+        409,
       );
     }
 

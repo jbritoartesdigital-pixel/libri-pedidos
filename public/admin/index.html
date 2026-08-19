@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Libri | Painel de Pedidos</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-top">
+      <div><div class="brand-name">Libri Convites</div><h1>Painel de Pedidos</h1></div>
+      <div class="tabs"><button class="btn btn-primary btn-small" data-tab="orders">Pedidos</button><button class="btn btn-secondary btn-small" data-tab="settings">Configurações</button></div>
+    </header>
+
+    <section id="ordersTab">
+      <div class="kpis" id="kpis"></div>
+      <div class="toolbar">
+        <input id="search" placeholder="Buscar por nome, tema ou nº do pedido">
+        <select id="statusFilter"><option value="">Todos os status</option><option value="new">Novos</option><option value="ready">Prontos</option><option value="producing">Em produção</option><option value="waiting_client">Aguardando cliente</option><option value="revisions">Ajustes</option><option value="waiting_balance">Aguardando saldo</option><option value="finished">Finalizados</option><option value="cancelled">Cancelados</option></select>
+        <button id="refreshOrders" class="btn btn-secondary btn-small">Atualizar</button>
+      </div>
+      <div id="ordersList" class="orders-list"></div>
+    </section>
+
+    <section id="settingsTab" class="hidden">
+      <div class="card">
+        <h2>Configurações do Portal</h2>
+        <p class="lead">Altere preços, Pix, WhatsApp e exemplos sem editar o código.</p>
+        <form id="settingsForm"></form>
+      </div>
+    </section>
+  </main>
+
+  <div id="adminModal" class="modal-backdrop hidden">
+    <div class="modal admin-modal">
+      <div class="row-between"><h3 id="detailTitle">Pedido</h3><button id="closeAdminModal" class="btn btn-secondary btn-small">Fechar</button></div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

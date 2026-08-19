@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#fbf8f5">
+  <title>Libri Convites | Faça seu pedido</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="brand">
+      <div class="brand-name">Libri Convites</div>
+      <small>Portal de Pedidos</small>
+    </header>
+
+    <section id="landing" class="card hero">
+      <h1>Vamos criar seu convite? 💛</h1>
+      <p>Preencha seu pedido com calma. Você poderá conferir tudo antes de finalizar.</p>
+      <div class="stack">
+        <button id="newOrder" class="btn btn-primary btn-wide">Fazer um novo pedido</button>
+        <button id="continueOrder" class="btn btn-secondary btn-wide hidden">Continuar meu pedido</button>
+      </div>
+    </section>
+
+    <section id="flow" class="hidden">
+      <div class="progress-wrap">
+        <div class="progress-meta"><span id="progressLabel">Etapa 1 de 6</span><span id="saveStatus">Salvo automaticamente</span></div>
+        <div class="progress"><span id="progressBar" style="width:16.6%"></span></div>
+      </div>
+      <div id="stepCard" class="card"></div>
+    </section>
+
+    <section id="finalScreen" class="card final-card hidden"></section>
+
+    <div class="footer-help">
+      Está com dificuldade? <a id="helpWhatsapp" href="#" target="_blank" rel="noopener">Falar com a Libri no WhatsApp</a>
+    </div>
+  </main>
+
+  <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="row-between"><h3 id="modalTitle">Informações</h3><button id="closeModal" class="btn btn-secondary btn-small">Fechar</button></div>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

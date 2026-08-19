@@ -21,6 +21,253 @@ jobs:
       - name: Instalar dependências
         run: npm install
 
+      - name: Validar sintaxe JavaScript
+        run: |
+          find src public/js -type f \( -name "*.js" -o -name "*.mjs" \) -print0 \
+            | xargs -0 -n1 node --check
+
+      - name: Validar regras comerciais
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+
+          import {
+            calculateQuote,
+          } from './src/lib/quote.js';
+
+          import {
+            catalogFromSettings,
+          } from './src/lib/settings.js';
+
+          const settings = {
+            price_video_full_cents: '15000',
+            price_video_reduced_cents: '7500',
+
+            price_interactive_full_cents: '18000',
+            price_interactive_reduced_cents: '10500',
+
+            addon_confirmation_cents: '2500',
+            addon_filter_cents: '3000',
+            addon_extra_scene_cents: '3000',
+            addon_extra_person_cents: '3000',
+
+            deposit_percent: '50',
+            urgency_percent: '30',
+            deadline_business_days: '5',
+          };
+
+          function quote(
+            selection,
+            options = {},
+          ) {
+            return calculateQuote(
+              selection,
+              settings,
+              options,
+            );
+          }
+
+          // Vídeo Completo
+          let result = quote({
+            experience: 'full',
+            format: 'video',
+            addons: {},
+          });
+
+          assert.equal(
+            result.format,
+            'video',
+          );
+
+          assert.equal(
+            result.totalCents,
+            15000,
+          );
+
+          // Interativo Completo
+          result = quote({
+            experience: 'full',
+            format: 'interactive',
+            addons: {},
+          });
+
+          assert.equal(
+            result.format,
+            'interactive',
+          );
+
+          assert.equal(
+            result.totalCents,
+            18000,
+          );
+
+          // HARD LOCK:
+          // Vídeo + Confirmação
+          // deve virar Interativo.
+          result = quote({
+            experience: 'full',
+            format: 'video',
+
+            addons: {
+              confirmation: true,
+            },
+          });
+
+          assert.equal(
+            result.requestedFormat,
+            'video',
+          );
+
+          assert.equal(
+            result.format,
+            'interactive',
+          );
+
+          assert.equal(
+            result.formatAdjusted,
+            true,
+          );
+
+          assert.equal(
+            result.productCents,
+            18000,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            2500,
+          );
+
+          assert.equal(
+            result.totalCents,
+            20500,
+          );
+
+          // Reduzido + Confirmação
+          result = quote({
+            experience: 'reduced',
+            format: 'video',
+
+            addons: {
+              confirmation: true,
+            },
+          });
+
+          assert.equal(
+            result.format,
+            'interactive',
+          );
+
+          assert.equal(
+            result.productCents,
+            10500,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            2500,
+          );
+
+          assert.equal(
+            result.totalCents,
+            13000,
+          );
+
+          // Interativo Completo
+          // com todos os adicionais.
+          result = quote({
+            experience: 'full',
+            format: 'interactive',
+
+            addons: {
+              confirmation: true,
+              filter: true,
+              extraScene: 1,
+              extraPerson: 1,
+            },
+          });
+
+          assert.equal(
+            result.totalCents,
+            29500,
+          );
+
+          // Urgência de 30%
+          result = quote(
+            {
+              experience: 'full',
+              format: 'interactive',
+              addons: {},
+            },
+            {
+              urgencyEnabled: true,
+            },
+          );
+
+          assert.equal(
+            result.subtotalCents,
+            18000,
+          );
+
+          assert.equal(
+            result.urgencyPercent,
+            30,
+          );
+
+          assert.equal(
+            result.urgencyAmountCents,
+            5400,
+          );
+
+          assert.equal(
+            result.totalCents,
+            23400,
+          );
+
+          assert.equal(
+            result.depositCents,
+            11700,
+          );
+
+          // Valor comercial inválido
+          // deve cair no fallback seguro.
+          const safeCatalog =
+            catalogFromSettings({
+              ...settings,
+
+              price_video_full_cents:
+                '0',
+
+              price_interactive_full_cents:
+                '-10',
+
+              deposit_percent:
+                '999',
+            });
+
+          assert.equal(
+            safeCatalog.products
+              .video.full,
+            15000,
+          );
+
+          assert.equal(
+            safeCatalog.products
+              .interactive.full,
+            18000,
+          );
+
+          assert.equal(
+            safeCatalog.rules
+              .depositPercent,
+            50,
+          );
+
+          console.log(
+            '✓ Sintaxe e regras comerciais aprovadas.',
+          );
+          NODE
+
       - name: Aplicar migrations no D1
         run: npx wrangler d1 migrations apply libri-pedidos-db --remote
         env:

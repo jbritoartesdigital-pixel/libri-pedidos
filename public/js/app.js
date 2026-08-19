@@ -1,6 +1,8 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+const STEP_TITLES = ['Seu convite', 'A festa', 'A criança', 'Seu estilo', 'Recursos', 'Revisão'];
+
 const state = {
   step: 0,
   draftToken: null,
@@ -9,14 +11,36 @@ const state = {
   selection: {
     experience: '',
     format: '',
-    addons: { confirmation: false, filter: false, extraScene: 0, extraPerson: 0 },
+    addons: {
+      confirmation: false,
+      filter: false,
+      extraScene: 0,
+      extraPerson: 0,
+    },
   },
   briefing: {
-    customerName: '', whatsapp: '', honoreeName: '', displayName: '', age: '',
-    eventDate: '', eventTime: '', venueName: '', venueAddress: '', locationUrl: '', theme: '',
-    characterWanted: '', mustHave: '', avoid: '', specialInfo: '',
-    childStyle: 'libri', outfitChoice: 'libri', appearanceDetails: '',
-    colors: '', creativeIdea: '', speechPreference: 'libri', ownSpeech: '',
+    customerName: '',
+    whatsapp: '',
+    honoreeName: '',
+    displayName: '',
+    age: '',
+    eventDate: '',
+    eventTime: '',
+    venueName: '',
+    venueAddress: '',
+    locationUrl: '',
+    theme: '',
+    characterWanted: '',
+    mustHave: '',
+    avoid: '',
+    specialInfo: '',
+    childStyle: 'libri',
+    outfitChoice: 'libri',
+    appearanceDetails: '',
+    colors: '',
+    creativeIdea: '',
+    speechPreference: 'libri',
+    ownSpeech: '',
     confirmationMode: 'unsure',
   },
   portfolioConsent: null,
@@ -28,72 +52,198 @@ const landing = $('#landing');
 const flow = $('#flow');
 const stepCard = $('#stepCard');
 const finalScreen = $('#finalScreen');
+const newOrderBtn = $('#newOrder');
 const continueBtn = $('#continueOrder');
 const helpWhatsapp = $('#helpWhatsapp');
+const topHelpWhatsapp = $('#topHelpWhatsapp');
 
 function money(cents = 0) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format((Number(cents) || 0) / 100);
 }
-function esc(v = '') {
-  return String(v).replace(/[&<>'"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[c]));
+
+function esc(value = '') {
+  return String(value).replace(/[&<>'"]/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  }[char]));
 }
+
 function whatsappLink(number, text) {
   const digits = String(number || '').replace(/\D/g, '');
   if (!digits) return '#';
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }
-function setHelpLink() {
-  const number = state.catalog?.contact?.libriWhatsapp || '';
-  helpWhatsapp.href = whatsappLink(number, 'Oi! Preciso de ajuda para preencher meu pedido no Portal da Libri Convites.');
-  if (!number) helpWhatsapp.classList.add('hidden');
+
+function formatDate(value) {
+  if (!value) return '';
+  const parts = String(value).split('-');
+  if (parts.length !== 3) return value;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
+
+function formatWhatsappInput(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 13);
+  let local = digits;
+
+  if (local.startsWith('55') && local.length > 11) {
+    local = local.slice(2);
+  }
+
+  if (local.length <= 2) return local;
+  if (local.length <= 6) return `(${local.slice(0, 2)}) ${local.slice(2)}`;
+  if (local.length <= 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7, 11)}`;
+}
+
 function modal(title, html) {
   $('#modalTitle').textContent = title;
   $('#modalContent').innerHTML = html;
   $('#modalBackdrop').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
 }
-$('#closeModal').addEventListener('click', () => $('#modalBackdrop').classList.add('hidden'));
-$('#modalBackdrop').addEventListener('click', (e) => { if (e.target.id === 'modalBackdrop') e.currentTarget.classList.add('hidden'); });
+
+function closeModal() {
+  $('#modalBackdrop').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+$('#closeModal').addEventListener('click', closeModal);
+
+$('#modalBackdrop').addEventListener('click', (event) => {
+  if (event.target.id === 'modalBackdrop') closeModal();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (
+    event.key === 'Escape'
+    && !$('#modalBackdrop').classList.contains('hidden')
+  ) {
+    closeModal();
+  }
+});
+
+function showError(message) {
+  modal('Confira antes de continuar', `<p>${esc(message)}</p>`);
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(options.headers || {}),
+    },
   });
+
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(data.error || 'Não foi possível concluir.'), { data, status: response.status });
+
+  if (!response.ok) {
+    throw Object.assign(
+      new Error(data.error || 'Não foi possível concluir.'),
+      {
+        data,
+        status: response.status,
+      },
+    );
+  }
+
   return data;
 }
 
+function setHelpLinks() {
+  const number = state.catalog?.contact?.libriWhatsapp || '';
+
+  const href = whatsappLink(
+    number,
+    'Oi! Preciso de ajuda para preencher meu pedido no Portal da Libri Convites.',
+  );
+
+  [helpWhatsapp, topHelpWhatsapp].forEach((link) => {
+    if (!link) return;
+    link.href = href;
+    link.classList.toggle('hidden', !number);
+  });
+}
+
 async function bootstrap() {
-  const [catalogData, termsData] = await Promise.all([api('/api/catalog'), api('/api/terms/current')]);
+  const [catalogData, termsData] = await Promise.all([
+    api('/api/catalog'),
+    api('/api/terms/current'),
+  ]);
+
   state.catalog = catalogData.catalog;
   state.terms = termsData.terms;
-  setHelpLink();
+
+  setHelpLinks();
+
+  newOrderBtn.disabled = false;
+
   const savedToken = localStorage.getItem('libriDraftToken');
-  if (savedToken) continueBtn.classList.remove('hidden');
+
+  if (savedToken) {
+    continueBtn.classList.remove('hidden');
+    continueBtn.disabled = false;
+  }
 }
 
 async function createDraft() {
-  const data = await api('/api/drafts', { method: 'POST', body: '{}' });
+  const data = await api('/api/drafts', {
+    method: 'POST',
+    body: '{}',
+  });
+
   state.draftToken = data.draft.token;
-  localStorage.setItem('libriDraftToken', state.draftToken);
+
+  localStorage.setItem(
+    'libriDraftToken',
+    state.draftToken,
+  );
+
   state.step = 0;
+
   await saveDraft();
 }
 
 async function loadDraft() {
   const token = localStorage.getItem('libriDraftToken');
+
   if (!token) return false;
+
   try {
     const data = await api(`/api/drafts/${token}`);
-    const d = data.draft.data || {};
+    const draftData = data.draft.data || {};
+
     state.draftToken = token;
     state.step = Number(data.draft.step || 0);
-    state.selection = { ...state.selection, ...(d.selection || {}), addons: { ...state.selection.addons, ...(d.selection?.addons || {}) } };
-    state.briefing = { ...state.briefing, ...(d.briefing || {}) };
-    state.portfolioConsent = typeof d.portfolioConsent === 'boolean' ? d.portfolioConsent : null;
-    state.termsAccepted = Boolean(d.termsAccepted);
+
+    state.selection = {
+      ...state.selection,
+      ...(draftData.selection || {}),
+      addons: {
+        ...state.selection.addons,
+        ...(draftData.selection?.addons || {}),
+      },
+    };
+
+    state.briefing = {
+      ...state.briefing,
+      ...(draftData.briefing || {}),
+    };
+
+    state.portfolioConsent =
+      typeof draftData.portfolioConsent === 'boolean'
+        ? draftData.portfolioConsent
+        : null;
+
+    state.termsAccepted =
+      Boolean(draftData.termsAccepted);
+
     return true;
   } catch {
     localStorage.removeItem('libriDraftToken');
@@ -101,332 +251,2788 @@ async function loadDraft() {
   }
 }
 
+function setSaveStatus(text, className = '') {
+  const el = $('#saveStatus');
+
+  if (!el) return;
+
+  el.textContent = text;
+
+  el.classList.remove(
+    'is-saving',
+    'is-error',
+  );
+
+  if (className) {
+    el.classList.add(className);
+  }
+}
+
 async function saveDraft() {
   if (!state.draftToken) return;
-  $('#saveStatus').textContent = 'Salvando...';
-  await api(`/api/drafts/${state.draftToken}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      step: state.step,
-      data: {
-        selection: state.selection,
-        briefing: state.briefing,
-        portfolioConsent: state.portfolioConsent,
-        termsAccepted: state.termsAccepted,
+
+  setSaveStatus(
+    'Salvando...',
+    'is-saving',
+  );
+
+  try {
+    await api(
+      `/api/drafts/${state.draftToken}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          step: state.step,
+          data: {
+            selection: state.selection,
+            briefing: state.briefing,
+            portfolioConsent: state.portfolioConsent,
+            termsAccepted: state.termsAccepted,
+          },
+        }),
       },
-    }),
-  });
-  $('#saveStatus').textContent = 'Salvo automaticamente';
+    );
+
+    setSaveStatus(
+      'Salvo automaticamente',
+    );
+  } catch (error) {
+    setSaveStatus(
+      'Falha ao salvar',
+      'is-error',
+    );
+
+    throw error;
+  }
 }
 
 function startFlow() {
   landing.classList.add('hidden');
   finalScreen.classList.add('hidden');
   flow.classList.remove('hidden');
+
   render();
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
 }
 
 function progress() {
-  const label = `Etapa ${state.step + 1} de 6`;
-  $('#progressLabel').textContent = label;
-  $('#progressBar').style.width = `${((state.step + 1) / 6) * 100}%`;
+  const step = Math.max(
+    0,
+    Math.min(5, state.step),
+  );
+
+  $('#progressLabel').textContent =
+    `Etapa ${step + 1} de 6`;
+
+  $('#progressTitle').textContent =
+    STEP_TITLES[step];
+
+  $('#progressBar').style.width =
+    `${((step + 1) / 6) * 100}%`;
+
+  $('#stepDots').innerHTML =
+    STEP_TITLES
+      .map((_, index) => {
+        const cls =
+          index < step
+            ? 'done'
+            : index === step
+              ? 'current'
+              : '';
+
+        return `<span class="step-dot ${cls}"></span>`;
+      })
+      .join('');
 }
 
 async function refreshQuote() {
-  if (!state.selection.experience || !state.selection.format) {
+  if (
+    !state.selection.experience
+    || !state.selection.format
+  ) {
     state.quote = null;
     return;
   }
-  const data = await api('/api/quote', { method: 'POST', body: JSON.stringify({ selection: state.selection }) });
+
+  const data = await api(
+    '/api/quote',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        selection: state.selection,
+      }),
+    },
+  );
+
   state.quote = data.quote;
 }
 
-function exampleUrl(experience, format = 'interactive') {
-  const ex = state.catalog?.examples || {};
-  if (format === 'video') return experience === 'reduced' ? ex.videoReduced : ex.videoFull;
-  return experience === 'reduced' ? ex.interactiveReduced : ex.interactiveFull;
-}
-function openExample(url) {
-  if (!url) return modal('Exemplo', '<p class="muted">O exemplo ainda será configurado pela Libri.</p>');
-  window.open(url, '_blank', 'noopener');
+function exampleUrl(
+  experience,
+  format = 'interactive',
+) {
+  const examples =
+    state.catalog?.examples || {};
+
+  if (format === 'video') {
+    return experience === 'reduced'
+      ? examples.videoReduced
+      : examples.videoFull;
+  }
+
+  return experience === 'reduced'
+    ? examples.interactiveReduced
+    : examples.interactiveFull;
 }
 
-function choice(name, value, title, desc, checked, extra = '') {
-  return `<label class="choice"><input type="radio" name="${name}" value="${value}" ${checked ? 'checked' : ''}><strong>${title}</strong><p>${desc}</p>${extra}</label>`;
+function openExample(url) {
+  if (!url) {
+    modal(
+      'Exemplo',
+      '<p>Esse exemplo ainda será configurado pela Libri. Você pode continuar o pedido normalmente.</p>',
+    );
+    return;
+  }
+
+  window.open(
+    url,
+    '_blank',
+    'noopener',
+  );
+}
+
+function choice({
+  name,
+  value,
+  icon,
+  title,
+  desc,
+  checked,
+  tag = '',
+}) {
+  return `
+    <label class="choice">
+      <input
+        type="radio"
+        name="${name}"
+        value="${value}"
+        ${checked ? 'checked' : ''}
+      >
+
+      <span class="choice-top">
+        <span class="choice-icon">
+          ${icon}
+        </span>
+
+        <span class="choice-check">
+          ✓
+        </span>
+      </span>
+
+      <strong>${title}</strong>
+
+      <p>${desc}</p>
+
+      ${
+        tag
+          ? `<span class="tag">${tag}</span>`
+          : ''
+      }
+    </label>
+  `;
+}
+
+function stepHeader(
+  number,
+  title,
+  description,
+) {
+  return `
+    <div class="step-head">
+      <span class="step-number">
+        Etapa ${number} de 6
+      </span>
+
+      <h2>${title}</h2>
+
+      <p>${description}</p>
+    </div>
+  `;
+}
+
+function actionBar({
+  back = true,
+  nextId = 'nextBtn',
+  nextLabel = 'Continuar',
+  disabled = false,
+}) {
+  return `
+    <div class="step-actions">
+      ${
+        back
+          ? `
+            <button
+              class="btn btn-secondary"
+              id="backBtn"
+              type="button"
+            >
+              Voltar
+            </button>
+          `
+          : ''
+      }
+
+      <button
+        class="btn btn-primary"
+        id="${nextId}"
+        type="button"
+        ${disabled ? 'disabled' : ''}
+      >
+        ${nextLabel}
+      </button>
+    </div>
+  `;
+}
+
+function scrollIntoViewSoon(id) {
+  requestAnimationFrame(() => {
+    const el =
+      document.getElementById(id);
+
+    if (!el) return;
+
+    const top =
+      el.getBoundingClientRect().top
+      + window.scrollY
+      - 112;
+
+    window.scrollTo({
+      top,
+      behavior: 'smooth',
+    });
+  });
+}
+
+async function rerenderProductKeepingScroll() {
+  const y = window.scrollY;
+
+  await renderProduct();
+
+  window.scrollTo({
+    top: y,
+  });
 }
 
 async function renderProduct() {
   await refreshQuote();
-  const s = state.selection;
-  const q = state.quote;
-  const showPrice = Boolean(s.experience && s.format);
-  const fullUrl = exampleUrl('full', 'interactive');
-  const reducedUrl = exampleUrl('reduced', 'interactive');
+
+  const selection = state.selection;
+  const quote = state.quote;
+
+  const showFormat =
+    Boolean(selection.experience);
+
+  const showCommercial =
+    Boolean(
+      selection.experience
+      && selection.format,
+    );
+
+  const fullUrl =
+    exampleUrl(
+      'full',
+      'interactive',
+    );
+
+  const reducedUrl =
+    exampleUrl(
+      'reduced',
+      'interactive',
+    );
+
   stepCard.innerHTML = `
-    <h2>Escolha seu convite ✨</h2>
-    <p class="lead">Primeiro escolha a experiência. O valor aparece depois que você escolher também o formato.</p>
+    ${stepHeader(
+      1,
+      'Escolha a experiência',
+      'Primeiro você escolhe quanto de história quer no convite. Depois escolhe como quer receber.',
+    )}
 
-    <h3>Qual experiência você prefere?</h3>
-    <div class="choice-grid" id="experienceChoices">
-      ${choice('experience','full','✨ Experiência Completa','Mais cenas e mais momentos no convite.',s.experience==='full','<span class="tag">Mais escolhida</span>')}
-      ${choice('experience','reduced','💛 Experiência Reduzida','Uma versão mais curta, com menos cenas.',s.experience==='reduced')}
-    </div>
-    <div class="row">
-      <button class="btn btn-ghost btn-small" data-example="${esc(fullUrl)}">Ver exemplo completo</button>
-      <button class="btn btn-ghost btn-small" data-example="${esc(reducedUrl)}">Ver exemplo reduzido</button>
-    </div>
+    <div class="step-body">
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              1. Experiência
+            </span>
 
-    <div id="formatBlock" class="${s.experience ? '' : 'hidden'}">
-      <h3 style="margin-top:24px">Como você quer receber?</h3>
-      <div class="choice-grid" id="formatChoices">
-        ${choice('format','video','🎬 Em Vídeo','Você recebe o convite em vídeo para enviar pelo WhatsApp.',s.format==='video')}
-        ${choice('format','interactive','✨ Interativo','Um convite que abre pelo link e tem botões para tocar, como localização, presentes e confirmação.',s.format==='interactive')}
-      </div>
-      ${s.format ? `<button class="btn btn-ghost btn-small" id="formatExample">Ver exemplo</button>` : ''}
-    </div>
+            <h3>
+              Quanto você quer viver desse convite?
+            </h3>
 
-    <div id="commercialBlock" class="${showPrice ? '' : 'hidden'}">
-      <div class="summary">
-        <div class="muted small">Seu convite</div>
-        <div class="money-big">${showPrice ? money(q.productCents) : ''}</div>
-      </div>
-
-      <h3>Quer acrescentar algo?</h3>
-      <div>
-        <div class="addon">
-          <div><strong>✅ Confirmação de presença Libri</strong><p>Tenha uma lista organizada de quem vai à festa, sem precisar ficar perguntando pelo WhatsApp.</p><button class="btn btn-ghost btn-small" data-special-example="confirmation">Ver como funciona</button></div>
-          <div><div class="addon-price">+ ${money(state.catalog.addons.confirmation)}</div><label class="small"><input type="checkbox" id="addonConfirmation" ${s.addons.confirmation ? 'checked' : ''}> Adicionar</label></div>
+            <p>
+              O valor aparece só depois que você escolher também o formato.
+            </p>
+          </div>
         </div>
-        <div class="addon">
-          <div><strong>✨ Filtro personalizado da festa</strong><p>Um filtro feito para o evento, para os convidados usarem nas fotos.</p><button class="btn btn-ghost btn-small" data-special-example="filter">Ver exemplo</button></div>
-          <div><div class="addon-price">+ ${money(state.catalog.addons.filter)}</div><label class="small"><input type="checkbox" id="addonFilter" ${s.addons.filter ? 'checked' : ''}> Adicionar</label></div>
-        </div>
-        <div class="addon">
-          <div><strong>🎬 Cena extra</strong><p>Mais uma cena no convite.</p></div>
-          <div><div class="addon-price">+ ${money(state.catalog.addons.extraScene)} cada</div><div class="stepper"><button data-stepper="extraScene" data-delta="-1">−</button><span>${s.addons.extraScene || 0}</span><button data-stepper="extraScene" data-delta="1">+</button></div></div>
-        </div>
-        <div class="addon">
-          <div><strong>👧 Outra criança ou pessoa</strong><p>Inclua mais uma pessoa na criação.</p></div>
-          <div><div class="addon-price">+ ${money(state.catalog.addons.extraPerson)} cada</div><div class="stepper"><button data-stepper="extraPerson" data-delta="-1">−</button><span>${s.addons.extraPerson || 0}</span><button data-stepper="extraPerson" data-delta="1">+</button></div></div>
-        </div>
-      </div>
 
-      <div class="notice notice-warning" style="margin-top:14px">
-        <strong>Precisa antes de ${state.catalog.rules.deadlineBusinessDays} dias úteis?</strong><br>
-        A urgência depende da disponibilidade da Libri e, quando aprovada, acrescenta ${state.catalog.rules.urgencyPercent}% ao pedido.
-        <div><a id="urgencyLink" target="_blank" rel="noopener">Consultar urgência pelo WhatsApp</a></div>
-      </div>
+        <div
+          class="choice-grid"
+          id="experienceChoices"
+        >
+          ${choice({
+            name: 'experience',
+            value: 'full',
+            icon: '✦',
+            title: 'Experiência Completa',
+            desc: 'Mais cenas, mais momentos e uma experiência mais rica do começo ao fim.',
+            checked:
+              selection.experience === 'full',
+            tag: 'Mais escolhida',
+          })}
 
-      <div class="summary" id="quoteSummary">
-        <div class="summary-line"><span>Total até agora</span><strong>${money(q.totalCents)}</strong></div>
-        <div class="summary-line"><span>Entrada para começar (${q.depositPercent}%)</span><strong>${money(q.depositCents)}</strong></div>
-        <div class="summary-line"><span>Restante após aprovação</span><strong>${money(q.balanceCents)}</strong></div>
-      </div>
+          ${choice({
+            name: 'experience',
+            value: 'reduced',
+            icon: '♡',
+            title: 'Experiência Reduzida',
+            desc: 'Uma versão mais curta, com menos cenas, mantendo a identidade da festa.',
+            checked:
+              selection.experience === 'reduced',
+          })}
+        </div>
+
+        <div class="example-row">
+          <button
+            class="btn btn-ghost"
+            type="button"
+            data-example="${esc(fullUrl)}"
+          >
+            Ver exemplo completo
+          </button>
+
+          <button
+            class="btn btn-ghost"
+            type="button"
+            data-example="${esc(reducedUrl)}"
+          >
+            Ver exemplo reduzido
+          </button>
+        </div>
+      </section>
+
+      ${
+        showFormat
+          ? `
+        <section
+          class="section-block reveal-block"
+          id="formatBlock"
+        >
+          <div class="section-title">
+            <div>
+              <span class="section-kicker">
+                2. Formato
+              </span>
+
+              <h3>
+                Como você quer receber?
+              </h3>
+
+              <p>
+                Escolha a forma que combina melhor com a sua festa.
+              </p>
+            </div>
+          </div>
+
+          <div class="choice-grid">
+            ${choice({
+              name: 'format',
+              value: 'video',
+              icon: '▶',
+              title: 'Em Vídeo',
+              desc: 'Você recebe um arquivo em vídeo pronto para enviar pelo WhatsApp.',
+              checked:
+                selection.format === 'video',
+            })}
+
+            ${choice({
+              name: 'format',
+              value: 'interactive',
+              icon: '◇',
+              title: 'Interativo',
+              desc: 'Abre por link e pode ter botões como localização, presentes e confirmação.',
+              checked:
+                selection.format === 'interactive',
+            })}
+          </div>
+
+          ${
+            selection.format
+              ? `
+            <div class="example-row">
+              <button
+                class="btn btn-ghost"
+                type="button"
+                id="formatExample"
+              >
+                Ver exemplo deste formato
+              </button>
+            </div>
+          `
+              : ''
+          }
+        </section>
+      `
+          : ''
+      }
+
+      ${
+        showCommercial
+          ? `
+        <section
+          class="section-block reveal-block"
+          id="commercialBlock"
+        >
+          <div class="price-hero">
+            <div>
+              <div class="label">
+                Seu convite escolhido
+              </div>
+
+              <div class="product-name">
+                ${humanExperience(selection.experience)}
+                •
+                ${humanFormat(selection.format)}
+              </div>
+            </div>
+
+            <div class="money-big">
+              ${money(quote.productCents)}
+            </div>
+          </div>
+
+          <div class="section-title">
+            <div>
+              <span class="section-kicker">
+                3. Personalize mais
+              </span>
+
+              <h3>
+                Quer acrescentar algo?
+              </h3>
+
+              <p>
+                Todos os itens abaixo são opcionais.
+              </p>
+            </div>
+          </div>
+
+          <div class="addon-grid">
+            <article class="addon-card">
+              <div class="addon-icon">
+                ✓
+              </div>
+
+              <div class="addon-copy">
+                <strong>
+                  Confirmação de presença Libri
+                </strong>
+
+                <p>
+                  Organize quem vai à festa em uma lista própria, sem depender de mensagens soltas.
+                </p>
+
+                <button
+                  class="btn btn-ghost"
+                  type="button"
+                  data-special-example="confirmation"
+                >
+                  Ver como funciona
+                </button>
+              </div>
+
+              <div class="addon-control">
+                <div class="addon-price">
+                  + ${money(state.catalog.addons.confirmation)}
+                </div>
+
+                <label class="toggle-control">
+                  <input
+                    type="checkbox"
+                    id="addonConfirmation"
+                    ${
+                      selection.addons.confirmation
+                        ? 'checked'
+                        : ''
+                    }
+                  >
+
+                  <span>
+                    Adicionar
+                  </span>
+                </label>
+              </div>
+            </article>
+
+            <article class="addon-card">
+              <div class="addon-icon">
+                ✦
+              </div>
+
+              <div class="addon-copy">
+                <strong>
+                  Filtro personalizado da festa
+                </strong>
+
+                <p>
+                  Um filtro criado para os convidados usarem nas fotos do evento.
+                </p>
+
+                <button
+                  class="btn btn-ghost"
+                  type="button"
+                  data-special-example="filter"
+                >
+                  Ver exemplo
+                </button>
+              </div>
+
+              <div class="addon-control">
+                <div class="addon-price">
+                  + ${money(state.catalog.addons.filter)}
+                </div>
+
+                <label class="toggle-control">
+                  <input
+                    type="checkbox"
+                    id="addonFilter"
+                    ${
+                      selection.addons.filter
+                        ? 'checked'
+                        : ''
+                    }
+                  >
+
+                  <span>
+                    Adicionar
+                  </span>
+                </label>
+              </div>
+            </article>
+
+            <article class="addon-card">
+              <div class="addon-icon">
+                ＋
+              </div>
+
+              <div class="addon-copy">
+                <strong>
+                  Cena extra
+                </strong>
+
+                <p>
+                  Acrescente mais uma cena à experiência escolhida.
+                </p>
+              </div>
+
+              <div class="addon-control">
+                <div class="addon-price">
+                  + ${money(state.catalog.addons.extraScene)} cada
+                </div>
+
+                <div
+                  class="stepper"
+                  aria-label="Quantidade de cenas extras"
+                >
+                  <button
+                    type="button"
+                    data-stepper="extraScene"
+                    data-delta="-1"
+                    aria-label="Diminuir cena extra"
+                  >
+                    −
+                  </button>
+
+                  <span>
+                    ${selection.addons.extraScene || 0}
+                  </span>
+
+                  <button
+                    type="button"
+                    data-stepper="extraScene"
+                    data-delta="1"
+                    aria-label="Adicionar cena extra"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <article class="addon-card">
+              <div class="addon-icon">
+                ☺
+              </div>
+
+              <div class="addon-copy">
+                <strong>
+                  Outra criança ou pessoa
+                </strong>
+
+                <p>
+                  Inclua mais uma pessoa na criação do convite.
+                </p>
+              </div>
+
+              <div class="addon-control">
+                <div class="addon-price">
+                  + ${money(state.catalog.addons.extraPerson)} cada
+                </div>
+
+                <div
+                  class="stepper"
+                  aria-label="Quantidade de pessoas extras"
+                >
+                  <button
+                    type="button"
+                    data-stepper="extraPerson"
+                    data-delta="-1"
+                    aria-label="Diminuir pessoa extra"
+                  >
+                    −
+                  </button>
+
+                  <span>
+                    ${selection.addons.extraPerson || 0}
+                  </span>
+
+                  <button
+                    type="button"
+                    data-stepper="extraPerson"
+                    data-delta="1"
+                    aria-label="Adicionar pessoa extra"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="notice notice-warning">
+            <strong>
+              Precisa receber antes de ${state.catalog.rules.deadlineBusinessDays} dias úteis?
+            </strong>
+
+            <br>
+
+            A urgência depende da disponibilidade da Libri.
+            Quando aprovada, acrescenta
+            ${state.catalog.rules.urgencyPercent}%
+            ao valor do pedido.
+
+            <div>
+              <a
+                id="urgencyLink"
+                target="_blank"
+                rel="noopener"
+              >
+                Consultar urgência pelo WhatsApp
+              </a>
+            </div>
+          </div>
+
+          <div
+            class="quote-card"
+            id="quoteSummary"
+          >
+            <div class="quote-row total">
+              <span>
+                Total até agora
+              </span>
+
+              <strong>
+                ${money(quote.totalCents)}
+              </strong>
+            </div>
+
+            <div class="quote-row">
+              <span>
+                Entrada para começar (${quote.depositPercent}%)
+              </span>
+
+              <strong>
+                ${money(quote.depositCents)}
+              </strong>
+            </div>
+
+            <div class="quote-row">
+              <span>
+                Restante após aprovação
+              </span>
+
+              <strong>
+                ${money(quote.balanceCents)}
+              </strong>
+            </div>
+          </div>
+        </section>
+      `
+          : ''
+      }
+
+      ${actionBar({
+        back: false,
+        nextLabel: 'Continuar para os detalhes',
+        disabled: !showCommercial,
+      })}
     </div>
-
-    <div class="actions"><button class="btn btn-primary" id="nextBtn" ${showPrice ? '' : 'disabled'}>Continuar para o briefing</button></div>
   `;
 
-  $$('input[name="experience"]', stepCard).forEach((el) => el.addEventListener('change', async () => { s.experience = el.value; s.format = ''; await renderProduct(); }));
-  $$('input[name="format"]', stepCard).forEach((el) => el.addEventListener('change', async () => { s.format = el.value; await renderProduct(); }));
-  $$('[data-example]', stepCard).forEach((b) => b.addEventListener('click', () => openExample(b.dataset.example)));
-  $('#formatExample', stepCard)?.addEventListener('click', () => openExample(exampleUrl(s.experience, s.format)));
-  $$('[data-special-example]', stepCard).forEach((b) => b.addEventListener('click', () => openExample(state.catalog.examples[b.dataset.specialExample])));
-  $('#addonConfirmation', stepCard)?.addEventListener('change', async (e) => { s.addons.confirmation = e.target.checked; await renderProduct(); });
-  $('#addonFilter', stepCard)?.addEventListener('change', async (e) => { s.addons.filter = e.target.checked; await renderProduct(); });
-  $$('[data-stepper]', stepCard).forEach((b) => b.addEventListener('click', async () => {
-    const key = b.dataset.stepper; const delta = Number(b.dataset.delta); s.addons[key] = Math.max(0, Math.min(10, Number(s.addons[key] || 0) + delta)); await renderProduct();
-  }));
-  const urgency = $('#urgencyLink', stepCard);
-  if (urgency) urgency.href = whatsappLink(state.catalog.contact.libriWhatsapp, 'Oi! Estou montando meu pedido na Libri e preciso receber antes do prazo normal. Podemos verificar a possibilidade de urgência?');
-  $('#nextBtn', stepCard)?.addEventListener('click', () => nextStep());
+  $$(
+    'input[name="experience"]',
+    stepCard,
+  ).forEach((el) => {
+    el.addEventListener(
+      'change',
+      async () => {
+        selection.experience = el.value;
+        selection.format = '';
+
+        await renderProduct();
+
+        scrollIntoViewSoon(
+          'formatBlock',
+        );
+      },
+    );
+  });
+
+  $$(
+    'input[name="format"]',
+    stepCard,
+  ).forEach((el) => {
+    el.addEventListener(
+      'change',
+      async () => {
+        selection.format = el.value;
+
+        await renderProduct();
+
+        scrollIntoViewSoon(
+          'commercialBlock',
+        );
+      },
+    );
+  });
+
+  $$(
+    '[data-example]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      () => openExample(
+        button.dataset.example,
+      ),
+    );
+  });
+
+  $('#formatExample', stepCard)
+    ?.addEventListener(
+      'click',
+      () => openExample(
+        exampleUrl(
+          selection.experience,
+          selection.format,
+        ),
+      ),
+    );
+
+  $$(
+    '[data-special-example]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      () => openExample(
+        state.catalog.examples[
+          button.dataset.specialExample
+        ],
+      ),
+    );
+  });
+
+  $('#addonConfirmation', stepCard)
+    ?.addEventListener(
+      'change',
+      async (event) => {
+        selection.addons.confirmation =
+          event.target.checked;
+
+        await rerenderProductKeepingScroll();
+      },
+    );
+
+  $('#addonFilter', stepCard)
+    ?.addEventListener(
+      'change',
+      async (event) => {
+        selection.addons.filter =
+          event.target.checked;
+
+        await rerenderProductKeepingScroll();
+      },
+    );
+
+  $$(
+    '[data-stepper]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      async () => {
+        const key =
+          button.dataset.stepper;
+
+        const delta =
+          Number(button.dataset.delta);
+
+        selection.addons[key] =
+          Math.max(
+            0,
+            Math.min(
+              10,
+              Number(
+                selection.addons[key] || 0,
+              ) + delta,
+            ),
+          );
+
+        await rerenderProductKeepingScroll();
+      },
+    );
+  });
+
+  const urgency =
+    $('#urgencyLink', stepCard);
+
+  if (urgency) {
+    urgency.href =
+      whatsappLink(
+        state.catalog.contact.libriWhatsapp,
+        'Oi! Estou montando meu pedido na Libri e preciso receber antes do prazo normal. Podemos verificar a possibilidade de urgência?',
+      );
+  }
+
+  $('#nextBtn', stepCard)
+    ?.addEventListener(
+      'click',
+      nextStep,
+    );
 }
 
-function formValue(id) { return $(id, stepCard)?.value?.trim() || ''; }
-function checkedValue(name) { return $(`input[name="${name}"]:checked`, stepCard)?.value || ''; }
-function showError(msg) { modal('Confira antes de continuar', `<p>${esc(msg)}</p>`); }
+function formValue(id) {
+  return (
+    $(id, stepCard)
+      ?.value
+      ?.trim()
+    || ''
+  );
+}
+
+function checkedValue(name) {
+  return (
+    $(
+      `input[name="${name}"]:checked`,
+      stepCard,
+    )?.value
+    || ''
+  );
+}
 
 function renderParty() {
   const b = state.briefing;
+
   stepCard.innerHTML = `
-    <h2>Sobre a festa 🎈</h2><p class="lead">Só as informações que precisamos para preparar seu convite.</p>
-    <div class="field"><label>Seu nome *</label><input id="customerName" value="${esc(b.customerName)}" autocomplete="name"></div>
-    <div class="field"><label>Seu WhatsApp *</label><input id="whatsapp" value="${esc(b.whatsapp)}" inputmode="tel" placeholder="(00) 00000-0000"></div>
-    <div class="field"><label>Nome da criança ou homenageado(a) *</label><input id="honoreeName" value="${esc(b.honoreeName)}"></div>
-    <div class="field"><label>Como você quer que o nome apareça?</label><input id="displayName" value="${esc(b.displayName)}" placeholder="Se deixar vazio, usaremos o nome acima"></div>
-    <div class="field"><label>Quantos anos vai fazer? *</label><input id="age" value="${esc(b.age)}" type="number" min="0" max="120"></div>
-    <div class="row" style="align-items:flex-start"><div class="field" style="flex:1;min-width:170px"><label>Data da festa *</label><input id="eventDate" value="${esc(b.eventDate)}" type="date"></div><div class="field" style="flex:1;min-width:150px"><label>Horário *</label><input id="eventTime" value="${esc(b.eventTime)}" type="time"></div></div>
-    <div class="field"><label>Onde vai ser a festa? *</label><input id="venueName" value="${esc(b.venueName)}" placeholder="Nome do local"></div>
-    <div class="field"><label>Endereço *</label><input id="venueAddress" value="${esc(b.venueAddress)}"></div>
-    <div class="field"><label>Link da localização</label><input id="locationUrl" value="${esc(b.locationUrl)}" placeholder="Opcional"></div>
-    <div class="field"><label>Qual é o tema da festa? *</label><input id="theme" value="${esc(b.theme)}"></div>
-    <div class="field"><label>Tem algum personagem que você quer no convite?</label><input id="characterWanted" value="${esc(b.characterWanted)}" placeholder="Se não tiver, deixe em branco"></div>
-    <div class="field"><label>Tem alguma coisa que não pode faltar?</label><textarea id="mustHave">${esc(b.mustHave)}</textarea><span class="hint">Pode ser um personagem, objeto, flor, animal, brinquedo, cor ou detalhe importante.</span></div>
-    <div class="field"><label>Tem alguma coisa que você NÃO quer?</label><textarea id="avoid">${esc(b.avoid)}</textarea></div>
-    <div class="field"><label>Tem alguma informação especial que precisa aparecer?</label><textarea id="specialInfo">${esc(b.specialInfo)}</textarea><span class="hint">Ex.: traga sua bebida, use roupa confortável ou outro recado importante.</span></div>
-    <div class="actions"><button class="btn btn-secondary" id="backBtn">Voltar</button><button class="btn btn-primary" id="nextBtn">Continuar</button></div>`;
-  $('#backBtn', stepCard).onclick = () => prevStep();
-  $('#nextBtn', stepCard).onclick = async () => {
-    Object.assign(b, {
-      customerName: formValue('#customerName'), whatsapp: formValue('#whatsapp'), honoreeName: formValue('#honoreeName'), displayName: formValue('#displayName'), age: formValue('#age'),
-      eventDate: formValue('#eventDate'), eventTime: formValue('#eventTime'), venueName: formValue('#venueName'), venueAddress: formValue('#venueAddress'), locationUrl: formValue('#locationUrl'), theme: formValue('#theme'),
-      characterWanted: formValue('#characterWanted'), mustHave: formValue('#mustHave'), avoid: formValue('#avoid'), specialInfo: formValue('#specialInfo'),
-    });
-    const required = ['customerName','whatsapp','honoreeName','age','eventDate','eventTime','venueName','venueAddress','theme'];
-    if (required.some((k) => !String(b[k] || '').trim())) return showError('Preencha os campos marcados com * para continuar.');
-    nextStep();
-  };
+    ${stepHeader(
+      2,
+      'Conte sobre a festa',
+      'Agora entram os dados que fazem o convite ser realmente seu. Os campos com * são obrigatórios.',
+    )}
+
+    <div class="step-body">
+      <div class="form-panel">
+        <div class="form-panel-head">
+          <span class="panel-icon">
+            ♡
+          </span>
+
+          <div>
+            <h3>
+              Quem está comemorando
+            </h3>
+
+            <p>
+              Você e a criança ou homenageado(a).
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="customerName">
+              Seu nome
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="customerName"
+              value="${esc(b.customerName)}"
+              autocomplete="name"
+            >
+          </div>
+
+          <div class="field">
+            <label for="whatsapp">
+              Seu WhatsApp
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="whatsapp"
+              value="${esc(b.whatsapp)}"
+              inputmode="tel"
+              autocomplete="tel"
+              placeholder="(00) 00000-0000"
+            >
+          </div>
+
+          <div class="field">
+            <label for="honoreeName">
+              Nome da criança
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="honoreeName"
+              value="${esc(b.honoreeName)}"
+            >
+          </div>
+
+          <div class="field">
+            <label for="age">
+              Idade que vai fazer
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="age"
+              value="${esc(b.age)}"
+              type="number"
+              min="0"
+              max="120"
+              inputmode="numeric"
+            >
+          </div>
+
+          <div class="field full">
+            <label for="displayName">
+              Como você quer que o nome apareça?
+            </label>
+
+            <input
+              id="displayName"
+              value="${esc(b.displayName)}"
+              placeholder="Se deixar vazio, usaremos o nome acima"
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-head">
+          <span class="panel-icon">
+            ◷
+          </span>
+
+          <div>
+            <h3>
+              Quando
+            </h3>
+
+            <p>
+              Data e horário da comemoração.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="eventDate">
+              Data da festa
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="eventDate"
+              value="${esc(b.eventDate)}"
+              type="date"
+            >
+          </div>
+
+          <div class="field">
+            <label for="eventTime">
+              Horário
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="eventTime"
+              value="${esc(b.eventTime)}"
+              type="time"
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-head">
+          <span class="panel-icon">
+            ⌖
+          </span>
+
+          <div>
+            <h3>
+              Onde
+            </h3>
+
+            <p>
+              O local que vai aparecer no convite.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="venueName">
+              Nome do local
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="venueName"
+              value="${esc(b.venueName)}"
+              placeholder="Ex.: Salão de festas"
+            >
+          </div>
+
+          <div class="field">
+            <label for="locationUrl">
+              Link da localização
+            </label>
+
+            <input
+              id="locationUrl"
+              value="${esc(b.locationUrl)}"
+              placeholder="Opcional"
+            >
+          </div>
+
+          <div class="field full">
+            <label for="venueAddress">
+              Endereço
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="venueAddress"
+              value="${esc(b.venueAddress)}"
+            >
+          </div>
+        </div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-head">
+          <span class="panel-icon">
+            ✦
+          </span>
+
+          <div>
+            <h3>
+              O universo da festa
+            </h3>
+
+            <p>
+              Tema, personagens e detalhes importantes.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="theme">
+              Tema da festa
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="theme"
+              value="${esc(b.theme)}"
+              placeholder="Ex.: fundo do mar rosa"
+            >
+          </div>
+
+          <div class="field">
+            <label for="characterWanted">
+              Tem algum personagem específico?
+            </label>
+
+            <input
+              id="characterWanted"
+              value="${esc(b.characterWanted)}"
+              placeholder="Se não tiver, deixe em branco"
+            >
+          </div>
+
+          <div class="field full">
+            <label for="mustHave">
+              O que não pode faltar?
+            </label>
+
+            <textarea
+              id="mustHave"
+              placeholder="Pode ser personagem, objeto, flor, animal, brinquedo, cor..."
+            >${esc(b.mustHave)}</textarea>
+          </div>
+
+          <div class="field">
+            <label for="avoid">
+              Tem algo que você não quer?
+            </label>
+
+            <textarea
+              id="avoid"
+              placeholder="Opcional"
+            >${esc(b.avoid)}</textarea>
+          </div>
+
+          <div class="field">
+            <label for="specialInfo">
+              Algum recado especial precisa aparecer?
+            </label>
+
+            <textarea
+              id="specialInfo"
+              placeholder="Ex.: traga sua bebida, use roupa confortável..."
+            >${esc(b.specialInfo)}</textarea>
+          </div>
+        </div>
+      </div>
+
+      ${actionBar({
+        nextLabel: 'Continuar',
+      })}
+    </div>
+  `;
+
+  const whatsappInput =
+    $('#whatsapp', stepCard);
+
+  whatsappInput
+    ?.addEventListener(
+      'input',
+      () => {
+        whatsappInput.value =
+          formatWhatsappInput(
+            whatsappInput.value,
+          );
+      },
+    );
+
+  $('#backBtn', stepCard)
+    .addEventListener(
+      'click',
+      prevStep,
+    );
+
+  $('#nextBtn', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        Object.assign(
+          b,
+          {
+            customerName:
+              formValue('#customerName'),
+
+            whatsapp:
+              formValue('#whatsapp'),
+
+            honoreeName:
+              formValue('#honoreeName'),
+
+            displayName:
+              formValue('#displayName'),
+
+            age:
+              formValue('#age'),
+
+            eventDate:
+              formValue('#eventDate'),
+
+            eventTime:
+              formValue('#eventTime'),
+
+            venueName:
+              formValue('#venueName'),
+
+            venueAddress:
+              formValue('#venueAddress'),
+
+            locationUrl:
+              formValue('#locationUrl'),
+
+            theme:
+              formValue('#theme'),
+
+            characterWanted:
+              formValue('#characterWanted'),
+
+            mustHave:
+              formValue('#mustHave'),
+
+            avoid:
+              formValue('#avoid'),
+
+            specialInfo:
+              formValue('#specialInfo'),
+          },
+        );
+
+        const required = [
+          'customerName',
+          'whatsapp',
+          'honoreeName',
+          'age',
+          'eventDate',
+          'eventTime',
+          'venueName',
+          'venueAddress',
+          'theme',
+        ];
+
+        if (
+          required.some(
+            (key) =>
+              !String(
+                b[key] || '',
+              ).trim(),
+          )
+        ) {
+          showError(
+            'Preencha os campos marcados com * para continuar.',
+          );
+          return;
+        }
+
+        nextStep();
+      },
+    );
 }
 
 function renderChild() {
   const b = state.briefing;
+
   stepCard.innerHTML = `
-    <h2>Sobre a criança 👧</h2><p class="lead">As fotos serão enviadas pelo WhatsApp só no final. Agora precisamos apenas das suas escolhas.</p>
-    <h3>Como você prefere o estilo da criança no convite?</h3>
-    <div class="choice-grid">
-      ${choice('childStyle','drawing','Com aparência de desenho/bonequinho','Um visual mais suave, com jeitinho de animação.',b.childStyle==='drawing')}
-      ${choice('childStyle','real','Com aparência mais real e detalhada','Com mais detalhes naturais de pele, cabelo e traços.',b.childStyle==='real')}
-      ${choice('childStyle','libri','Quero que a Libri escolha','Escolhemos o estilo que combinar melhor com o convite.',b.childStyle==='libri')}
+    ${stepHeader(
+      3,
+      'Como você imagina a criança?',
+      'As fotos serão enviadas pelo WhatsApp só no final. Aqui você escolhe apenas a direção que prefere.',
+    )}
+
+    <div class="step-body">
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              Aparência
+            </span>
+
+            <h3>
+              Qual estilo você prefere?
+            </h3>
+          </div>
+        </div>
+
+        <div class="choice-grid three">
+          ${choice({
+            name: 'childStyle',
+            value: 'drawing',
+            icon: '✎',
+            title: 'Desenho / bonequinho',
+            desc: 'Um visual mais ilustrado, suave e com jeitinho de animação.',
+            checked:
+              b.childStyle === 'drawing',
+          })}
+
+          ${choice({
+            name: 'childStyle',
+            value: 'real',
+            icon: '◉',
+            title: 'Mais real e detalhado',
+            desc: 'Mais detalhes naturais de pele, cabelo e traços.',
+            checked:
+              b.childStyle === 'real',
+          })}
+
+          ${choice({
+            name: 'childStyle',
+            value: 'libri',
+            icon: '✦',
+            title: 'A Libri escolhe',
+            desc: 'Escolhemos o estilo que combinar melhor com o universo do convite.',
+            checked:
+              b.childStyle === 'libri',
+          })}
+        </div>
+
+        <div class="notice">
+          Usamos as fotos como referência para preservar as principais características da criança.
+
+          <button
+            id="mascotInfo"
+            class="btn btn-ghost"
+            type="button"
+          >
+            Entender melhor
+          </button>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              Roupa
+            </span>
+
+            <h3>
+              Como você quer o look?
+            </h3>
+          </div>
+        </div>
+
+        <div class="choice-grid three">
+          ${choice({
+            name: 'outfitChoice',
+            value: 'party',
+            icon: '♡',
+            title: 'Parecida com a roupa da festa',
+            desc: 'Você envia uma foto da roupa no WhatsApp ao finalizar.',
+            checked:
+              b.outfitChoice === 'party',
+          })}
+
+          ${choice({
+            name: 'outfitChoice',
+            value: 'specific',
+            icon: '⌁',
+            title: 'Tenho uma roupa específica',
+            desc: 'Você envia a referência exata pelo WhatsApp no final.',
+            checked:
+              b.outfitChoice === 'specific',
+          })}
+
+          ${choice({
+            name: 'outfitChoice',
+            value: 'libri',
+            icon: '✦',
+            title: 'Quero que a Libri crie',
+            desc: 'Criamos uma roupa pensada para combinar com o tema.',
+            checked:
+              b.outfitChoice === 'libri',
+          })}
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="form-panel">
+          <div class="field">
+            <label for="appearanceDetails">
+              Tem algum detalhe da aparência que devemos manter com atenção?
+            </label>
+
+            <textarea
+              id="appearanceDetails"
+              placeholder="Ex.: cachinhos, franja, laço, óculos ou outro acessório especial."
+            >${esc(b.appearanceDetails)}</textarea>
+
+            <span class="hint">
+              Opcional. Use este campo apenas para detalhes que são importantes para você.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      ${actionBar({
+        nextLabel: 'Continuar',
+      })}
     </div>
-    <div class="notice">Em qualquer opção, usamos as fotos como referência para manter as características da criança. <button id="mascotInfo" class="btn btn-ghost btn-small">Saiba mais</button></div>
-    <h3 style="margin-top:24px">Como você quer a roupa?</h3>
-    <div class="choice-grid">
-      ${choice('outfitChoice','party','Parecida com a roupa da festa','Você enviará uma foto da roupa no WhatsApp no final.',b.outfitChoice==='party')}
-      ${choice('outfitChoice','specific','Tenho uma roupa específica','Você enviará a referência no WhatsApp no final.',b.outfitChoice==='specific')}
-      ${choice('outfitChoice','libri','Quero que a Libri crie','Criamos uma roupa que combine com o tema.',b.outfitChoice==='libri')}
-    </div>
-    <div class="field"><label>Tem algum detalhe da aparência que quer que a gente mantenha com atenção?</label><textarea id="appearanceDetails">${esc(b.appearanceDetails)}</textarea><span class="hint">Ex.: cachinhos, franja, laço, óculos ou algum acessório especial.</span></div>
-    <div class="actions"><button class="btn btn-secondary" id="backBtn">Voltar</button><button class="btn btn-primary" id="nextBtn">Continuar</button></div>`;
-  $('#mascotInfo', stepCard).onclick = () => modal('Sobre o mascote', '<p>O mascote é criado pela Libri com base nas fotos enviadas. A intenção é manter as principais características da criança, mas, como se trata de uma criação artística, ele não será uma cópia exata da foto e pode ter pequenas diferenças. Antes de seguir com o convite, você poderá ver e aprovar o mascote.</p>');
-  $('#backBtn', stepCard).onclick = () => prevStep();
-  $('#nextBtn', stepCard).onclick = () => { b.childStyle = checkedValue('childStyle') || 'libri'; b.outfitChoice = checkedValue('outfitChoice') || 'libri'; b.appearanceDetails = formValue('#appearanceDetails'); nextStep(); };
+  `;
+
+  $('#mascotInfo', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        modal(
+          'Sobre o mascote',
+          '<p>O mascote é uma recriação artística feita a partir das fotos enviadas. A Libri busca preservar rosto, cabelo, tom de pele, idade e características marcantes, mas não se trata de uma cópia exata da fotografia e podem existir pequenas diferenças. Antes de seguir com o convite, você poderá ver e aprovar.</p>',
+        );
+      },
+    );
+
+  $('#backBtn', stepCard)
+    .addEventListener(
+      'click',
+      prevStep,
+    );
+
+  $('#nextBtn', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        b.childStyle =
+          checkedValue('childStyle')
+          || 'libri';
+
+        b.outfitChoice =
+          checkedValue('outfitChoice')
+          || 'libri';
+
+        b.appearanceDetails =
+          formValue(
+            '#appearanceDetails',
+          );
+
+        nextStep();
+      },
+    );
 }
 
 function renderStyle() {
   const b = state.briefing;
+
   stepCard.innerHTML = `
-    <h2>Seu estilo ✨</h2><p class="lead">Se não tiver preferência, pode deixar por conta da Libri.</p>
-    <div class="field"><label>Tem alguma cor que você quer ou não quer no convite?</label><textarea id="colors">${esc(b.colors)}</textarea></div>
-    <div class="field"><label>Tem alguma ideia ou detalhe que gostaria de ver?</label><textarea id="creativeIdea">${esc(b.creativeIdea)}</textarea><span class="hint">Se tiver referências, você poderá enviar pelo WhatsApp no final.</span></div>
-    <h3>E as falas?</h3>
-    <div class="choice-grid">
-      ${choice('speechPreference','libri','Pode deixar com a Libri','A Libri cria as falas de acordo com o convite.',b.speechPreference==='libri')}
-      ${choice('speechPreference','approve','Quero aprovar antes','A Libri prepara e você confere antes da produção dessa parte.',b.speechPreference==='approve')}
-      ${choice('speechPreference','own','Já tenho uma frase','Você escreve abaixo exatamente como deseja.',b.speechPreference==='own')}
+    ${stepHeader(
+      4,
+      'Agora, o seu gosto',
+      'Se você não tiver preferência, tudo bem. A Libri pode assumir a direção criativa por você.',
+    )}
+
+    <div class="step-body">
+      <div class="form-panel">
+        <div class="form-panel-head">
+          <span class="panel-icon">
+            ◌
+          </span>
+
+          <div>
+            <h3>
+              Cores e referências
+            </h3>
+
+            <p>
+              Só o que você realmente quiser orientar.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="colors">
+              Tem alguma cor que você quer ou não quer?
+            </label>
+
+            <textarea
+              id="colors"
+              placeholder="Opcional"
+            >${esc(b.colors)}</textarea>
+          </div>
+
+          <div class="field">
+            <label for="creativeIdea">
+              Tem alguma ideia ou detalhe que gostaria de ver?
+            </label>
+
+            <textarea
+              id="creativeIdea"
+              placeholder="Opcional"
+            >${esc(b.creativeIdea)}</textarea>
+
+            <span class="hint">
+              Se tiver imagens de referência, você enviará pelo WhatsApp no final.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              Falas
+            </span>
+
+            <h3>
+              Como prefere decidir os textos falados?
+            </h3>
+          </div>
+        </div>
+
+        <div class="choice-grid three">
+          ${choice({
+            name: 'speechPreference',
+            value: 'libri',
+            icon: '✦',
+            title: 'Pode deixar com a Libri',
+            desc: 'Criamos as falas de acordo com o convite.',
+            checked:
+              b.speechPreference === 'libri',
+          })}
+
+          ${choice({
+            name: 'speechPreference',
+            value: 'approve',
+            icon: '✓',
+            title: 'Quero aprovar antes',
+            desc: 'A Libri prepara e você confere antes da produção dessa parte.',
+            checked:
+              b.speechPreference === 'approve',
+          })}
+
+          ${choice({
+            name: 'speechPreference',
+            value: 'own',
+            icon: '“”',
+            title: 'Já tenho uma frase',
+            desc: 'Você escreve exatamente o que gostaria de usar.',
+            checked:
+              b.speechPreference === 'own',
+          })}
+        </div>
+
+        <div
+          class="form-panel ${
+            b.speechPreference === 'own'
+              ? ''
+              : 'hidden'
+          }"
+          id="ownSpeechWrap"
+        >
+          <div class="field">
+            <label for="ownSpeech">
+              Escreva a frase
+            </label>
+
+            <textarea
+              id="ownSpeech"
+              placeholder="Digite a frase exatamente como deseja."
+            >${esc(b.ownSpeech)}</textarea>
+          </div>
+        </div>
+      </section>
+
+      ${actionBar({
+        nextLabel: 'Continuar',
+      })}
     </div>
-    <div class="field ${b.speechPreference==='own' ? '' : 'hidden'}" id="ownSpeechWrap"><label>Escreva a frase</label><textarea id="ownSpeech">${esc(b.ownSpeech)}</textarea></div>
-    <div class="actions"><button class="btn btn-secondary" id="backBtn">Voltar</button><button class="btn btn-primary" id="nextBtn">Continuar</button></div>`;
-  $$('input[name="speechPreference"]', stepCard).forEach((el) => el.onchange = () => $('#ownSpeechWrap', stepCard).classList.toggle('hidden', el.value !== 'own'));
-  $('#backBtn', stepCard).onclick = () => prevStep();
-  $('#nextBtn', stepCard).onclick = () => {
-    b.colors = formValue('#colors'); b.creativeIdea = formValue('#creativeIdea'); b.speechPreference = checkedValue('speechPreference') || 'libri'; b.ownSpeech = b.speechPreference === 'own' ? formValue('#ownSpeech') : '';
-    if (b.speechPreference === 'own' && !b.ownSpeech) return showError('Escreva a frase que deseja usar.');
-    nextStep();
-  };
+  `;
+
+  $$(
+    'input[name="speechPreference"]',
+    stepCard,
+  ).forEach((el) => {
+    el.addEventListener(
+      'change',
+      () => {
+        $('#ownSpeechWrap', stepCard)
+          .classList
+          .toggle(
+            'hidden',
+            el.value !== 'own',
+          );
+      },
+    );
+  });
+
+  $('#backBtn', stepCard)
+    .addEventListener(
+      'click',
+      prevStep,
+    );
+
+  $('#nextBtn', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        b.colors =
+          formValue('#colors');
+
+        b.creativeIdea =
+          formValue('#creativeIdea');
+
+        b.speechPreference =
+          checkedValue(
+            'speechPreference',
+          )
+          || 'libri';
+
+        b.ownSpeech =
+          b.speechPreference === 'own'
+            ? formValue('#ownSpeech')
+            : '';
+
+        if (
+          b.speechPreference === 'own'
+          && !b.ownSpeech
+        ) {
+          showError(
+            'Escreva a frase que deseja usar.',
+          );
+          return;
+        }
+
+        nextStep();
+      },
+    );
 }
 
 function renderResources() {
   const b = state.briefing;
-  const hasConfirmation = Boolean(state.selection.addons.confirmation);
-  stepCard.innerHTML = `
-    <h2>Recursos do convite 🎁</h2>
-    <p class="lead">Só mostramos aqui o que faz parte do seu pedido.</p>
-    ${hasConfirmation ? `
-      <h3>Como você quer que funcione a confirmação?</h3>
-      <div class="choice-grid">
-        ${choice('confirmationMode','open','Qualquer convidado pode confirmar','Quem receber o link poderá preencher a confirmação.',b.confirmationMode==='open')}
-        ${choice('confirmationMode','list','Quero usar uma lista de convidados','Você poderá cadastrar e organizar seus convidados diretamente no seu painel.',b.confirmationMode==='list')}
-        ${choice('confirmationMode','unsure','Ainda não sei','Você poderá decidir depois com a Libri.',b.confirmationMode==='unsure')}
-      </div>` : '<div class="notice notice-success">Tudo certo. Não precisamos de nenhuma informação extra nesta etapa.</div>'}
-    <div class="actions"><button class="btn btn-secondary" id="backBtn">Voltar</button><button class="btn btn-primary" id="nextBtn">Continuar</button></div>`;
-  $('#backBtn', stepCard).onclick = () => prevStep();
-  $('#nextBtn', stepCard).onclick = () => { if (hasConfirmation) b.confirmationMode = checkedValue('confirmationMode') || 'unsure'; nextStep(); };
-}
 
-function humanExperience(v) { return v === 'reduced' ? 'Reduzida' : 'Completa'; }
-function humanFormat(v) { return v === 'interactive' ? 'Interativo' : 'Vídeo'; }
-function humanChildStyle(v) { return ({ drawing:'Desenho/bonequinho', real:'Mais real e detalhado', libri:'Libri escolhe' })[v] || 'Libri escolhe'; }
-function humanOutfit(v) { return ({ party:'Parecida com a roupa da festa', specific:'Roupa específica', libri:'Libri cria' })[v] || 'Libri cria'; }
-function humanSpeech(v) { return ({ libri:'Libri cria', approve:'Cliente quer aprovar', own:'Frase própria' })[v] || 'Libri cria'; }
+  const hasConfirmation =
+    Boolean(
+      state.selection
+        .addons
+        .confirmation,
+    );
 
-async function renderReview() {
-  await refreshQuote();
-  const b = state.briefing, q = state.quote;
-  const addonNames = [];
-  if (state.selection.addons.confirmation) addonNames.push('Confirmação Libri');
-  if (state.selection.addons.filter) addonNames.push('Filtro personalizado');
-  if (state.selection.addons.extraScene) addonNames.push(`${state.selection.addons.extraScene} cena(s) extra`);
-  if (state.selection.addons.extraPerson) addonNames.push(`${state.selection.addons.extraPerson} pessoa(s) extra`);
   stepCard.innerHTML = `
-    <h2>Confira e finalize ✅</h2><p class="lead">Dê uma última olhada. Se precisar, volte e corrija antes de enviar.</p>
-    <div class="review-section"><h3>Festa</h3><dl><dt>Nome</dt><dd>${esc(b.displayName || b.honoreeName)}</dd><dt>Idade</dt><dd>${esc(b.age)} ano(s)</dd><dt>Data e horário</dt><dd>${esc(b.eventDate)} • ${esc(b.eventTime)}</dd><dt>Local</dt><dd>${esc(b.venueName)}<br>${esc(b.venueAddress)}</dd><dt>Tema</dt><dd>${esc(b.theme)}</dd></dl></div>
-    <div class="review-section"><h3>Convite</h3><dl><dt>Experiência</dt><dd>${humanExperience(state.selection.experience)}</dd><dt>Formato</dt><dd>${humanFormat(state.selection.format)}</dd><dt>Adicionais</dt><dd>${addonNames.length ? esc(addonNames.join(', ')) : 'Nenhum'}</dd></dl></div>
-    <div class="review-section"><h3>Preferências</h3><dl><dt>Estilo da criança</dt><dd>${humanChildStyle(b.childStyle)}</dd><dt>Roupa</dt><dd>${humanOutfit(b.outfitChoice)}</dd><dt>Falas</dt><dd>${humanSpeech(b.speechPreference)}</dd><dt>Cores</dt><dd>${esc(b.colors || 'Sem preferência informada')}</dd></dl></div>
-    <div class="summary"><div class="summary-line"><span>Valor total</span><strong>${money(q.totalCents)}</strong></div><div class="summary-line"><span>Entrada para começar (${q.depositPercent}%)</span><strong>${money(q.depositCents)}</strong></div><div class="summary-line"><span>Restante após aprovação</span><strong>${money(q.balanceCents)}</strong></div></div>
-    <div class="notice"><strong>Antes de finalizar</strong><br>Prazo normal: até ${state.catalog.rules.deadlineBusinessDays} dias úteis. A produção começa depois da entrada, do briefing completo e das fotos adequadas. Você poderá conferir e aprovar as etapas.</div>
-    <p><button id="readTerms" class="btn btn-ghost btn-small">Ler todas as condições</button></p>
-    <label class="checkline"><input id="termsAccepted" type="checkbox" ${state.termsAccepted ? 'checked' : ''}><span><strong>Li e concordo com as condições do pedido.</strong></span></label>
-    <h3>Divulgação</h3><p class="muted small">A Libri pode mostrar seu convite em seu portfólio e redes sociais? Essa escolha não interfere na produção.</p>
-    <div class="choice-grid">
-      ${choice('portfolioConsent','yes','Sim, autorizo','A Libri poderá divulgar o convite conforme os termos.',state.portfolioConsent===true)}
-      ${choice('portfolioConsent','no','Não, prefiro que não seja divulgado','Seu convite será produzido normalmente.',state.portfolioConsent===false)}
+    ${stepHeader(
+      5,
+      'Últimos detalhes',
+      'Aqui aparecem apenas as escolhas extras que realmente fazem parte do seu pedido.',
+    )}
+
+    <div class="step-body">
+      ${
+        hasConfirmation
+          ? `
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <span class="section-kicker">
+                Confirmação Libri
+              </span>
+
+              <h3>
+                Como você quer que funcione?
+              </h3>
+            </div>
+          </div>
+
+          <div class="choice-grid three">
+            ${choice({
+              name: 'confirmationMode',
+              value: 'open',
+              icon: '◎',
+              title: 'Qualquer convidado pode confirmar',
+              desc: 'Quem receber o link poderá preencher a confirmação.',
+              checked:
+                b.confirmationMode === 'open',
+            })}
+
+            ${choice({
+              name: 'confirmationMode',
+              value: 'list',
+              icon: '☷',
+              title: 'Quero usar lista de convidados',
+              desc: 'Você poderá cadastrar e organizar os convidados no seu painel.',
+              checked:
+                b.confirmationMode === 'list',
+            })}
+
+            ${choice({
+              name: 'confirmationMode',
+              value: 'unsure',
+              icon: '?',
+              title: 'Ainda não sei',
+              desc: 'Você poderá decidir isso depois com a Libri.',
+              checked:
+                b.confirmationMode === 'unsure',
+            })}
+          </div>
+        </section>
+      `
+          : `
+        <div
+          class="notice notice-success"
+          style="margin-top:0"
+        >
+          <strong>
+            Tudo certo por aqui.
+          </strong>
+
+          <br>
+
+          Seu pedido não tem nenhum recurso que precise de configuração extra.
+          Pode seguir para a revisão.
+        </div>
+      `
+      }
+
+      ${actionBar({
+        nextLabel: 'Revisar meu pedido',
+      })}
     </div>
-    <div class="actions"><button class="btn btn-secondary" id="backBtn">Voltar e corrigir</button><button class="btn btn-primary" id="finishBtn">Finalizar pedido</button></div>`;
-  $('#readTerms', stepCard).onclick = () => modal(`Condições do pedido • versão ${esc(state.terms.version)}`, `<pre>${esc(state.terms.body)}</pre>`);
-  $('#termsAccepted', stepCard).onchange = (e) => state.termsAccepted = e.target.checked;
-  $$('input[name="portfolioConsent"]', stepCard).forEach((el) => el.onchange = () => state.portfolioConsent = el.value === 'yes');
-  $('#backBtn', stepCard).onclick = () => prevStep();
-  $('#finishBtn', stepCard).onclick = finishOrder;
+  `;
+
+  $('#backBtn', stepCard)
+    .addEventListener(
+      'click',
+      prevStep,
+    );
+
+  $('#nextBtn', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        if (hasConfirmation) {
+          b.confirmationMode =
+            checkedValue(
+              'confirmationMode',
+            )
+            || 'unsure';
+        }
+
+        nextStep();
+      },
+    );
 }
 
-async function finishOrder() {
-  state.termsAccepted = $('#termsAccepted', stepCard).checked;
-  const portfolio = checkedValue('portfolioConsent');
-  state.portfolioConsent = portfolio === 'yes' ? true : portfolio === 'no' ? false : null;
-  if (!state.termsAccepted) return showError('Marque que leu e concorda com as condições do pedido.');
-  if (state.portfolioConsent === null) return showError('Escolha se autoriza ou não a divulgação do convite.');
-  const btn = $('#finishBtn', stepCard); btn.disabled = true; btn.textContent = 'Salvando pedido...';
+function humanExperience(value) {
+  return value === 'reduced'
+    ? 'Reduzida'
+    : 'Completa';
+}
+
+function humanFormat(value) {
+  return value === 'interactive'
+    ? 'Interativo'
+    : 'Vídeo';
+}
+
+function humanChildStyle(value) {
+  return ({
+    drawing: 'Desenho / bonequinho',
+    real: 'Mais real e detalhado',
+    libri: 'A Libri escolhe',
+  })[value]
+    || 'A Libri escolhe';
+}
+
+function humanOutfit(value) {
+  return ({
+    party: 'Parecida com a roupa da festa',
+    specific: 'Roupa específica',
+    libri: 'A Libri cria',
+  })[value]
+    || 'A Libri cria';
+}
+
+function humanSpeech(value) {
+  return ({
+    libri: 'A Libri cria',
+    approve: 'Quero aprovar antes',
+    own: 'Frase própria',
+  })[value]
+    || 'A Libri cria';
+}
+
+function addonNames() {
+  const addons = [];
+
+  const selection =
+    state.selection.addons;
+
+  if (selection.confirmation) {
+    addons.push(
+      'Confirmação Libri',
+    );
+  }
+
+  if (selection.filter) {
+    addons.push(
+      'Filtro personalizado',
+    );
+  }
+
+  if (selection.extraScene) {
+    addons.push(
+      `${selection.extraScene} cena(s) extra`,
+    );
+  }
+
+  if (selection.extraPerson) {
+    addons.push(
+      `${selection.extraPerson} pessoa(s) extra`,
+    );
+  }
+
+  return addons;
+}
+
+async function goToStep(step) {
+  state.step =
+    Math.max(
+      0,
+      Math.min(
+        5,
+        Number(step),
+      ),
+    );
+
   try {
-    const data = await api('/api/orders', { method: 'POST', body: JSON.stringify({ draftToken: state.draftToken, selection: state.selection, briefing: state.briefing, termsAccepted: true, portfolioConsent: state.portfolioConsent }) });
-    localStorage.removeItem('libriDraftToken');
-    flow.classList.add('hidden');
-    renderFinal(data.order);
+    await saveDraft();
+
+    render();
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
   } catch (error) {
-    btn.disabled = false; btn.textContent = 'Finalizar pedido';
-    const missing = error.data?.details?.missing;
-    showError(missing?.length ? `Faltou conferir: ${missing.join(', ')}.` : error.message);
+    showError(
+      error.message,
+    );
   }
 }
 
-async function renderFinal(order) {
-  const data = await api(`/api/orders/${order.publicToken}/final`);
-  const f = data.final;
-  finalScreen.innerHTML = `
-    <h2>Pedido salvo com sucesso 💛</h2>
-    <div class="final-code">${esc(f.orderCode)}</div>
-    <p class="lead">Agora falta só enviar as fotos, referências e o comprovante pelo WhatsApp.</p>
-    <div class="summary"><div class="summary-line"><span>Valor total</span><strong>${money(f.totalCents)}</strong></div><div class="summary-line"><span>Entrada de 50%</span><strong>${money(f.depositCents)}</strong></div><div class="summary-line"><span>Restante após aprovação</span><strong>${money(f.balanceCents)}</strong></div></div>
-    <div class="pix-box"><strong>Pagamento via Pix</strong><p><span class="muted">Recebedor:</span><br>${esc(f.pixRecipientName || 'A configurar')}</p><p><span class="muted">Chave Pix:</span><br><strong id="pixKey">${esc(f.pixKey || 'A configurar')}</strong></p><button id="copyPix" class="btn btn-secondary btn-small" ${f.pixKey ? '' : 'disabled'}>Copiar chave Pix</button></div>
-    <div class="notice notice-success" style="text-align:left"><strong>Envie no WhatsApp:</strong><br>• fotos da criança;<br>• foto da roupa, se tiver;<br>• referências, se tiver;<br>• comprovante da entrada.</div>
-    <a class="btn btn-primary btn-wide" style="display:flex;align-items:center;justify-content:center;text-decoration:none;margin-top:18px" href="${whatsappLink(f.libriWhatsapp, `Oi! Finalizei meu pedido ${f.orderCode}. Vou enviar aqui as fotos, referências e o comprovante da entrada.`)}" target="_blank" rel="noopener">Finalizar e enviar tudo pelo WhatsApp</a>`;
-  $('#copyPix', finalScreen)?.addEventListener('click', async () => { await navigator.clipboard.writeText(f.pixKey); $('#copyPix', finalScreen).textContent = 'Chave copiada ✓'; });
-  finalScreen.classList.remove('hidden');
+async function renderReview() {
+  await refreshQuote();
+
+  const b = state.briefing;
+  const q = state.quote;
+  const addons = addonNames();
+
+  stepCard.innerHTML = `
+    ${stepHeader(
+      6,
+      'Confira seu pedido',
+      'Essa é a última etapa. Revise os dados, aceite as condições e finalize quando estiver tudo certo.',
+    )}
+
+    <div class="step-body">
+      <div class="review-grid">
+        <article class="review-card">
+          <div class="review-card-head">
+            <h3>
+              Festa
+            </h3>
+
+            <button
+              class="review-edit"
+              type="button"
+              data-go-step="1"
+            >
+              Editar
+            </button>
+          </div>
+
+          <dl class="review-list">
+            <div class="review-line">
+              <dt>Nome</dt>
+
+              <dd>
+                ${esc(
+                  b.displayName
+                  || b.honoreeName,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>Idade</dt>
+
+              <dd>
+                ${esc(b.age)} ano(s)
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Data e horário
+              </dt>
+
+              <dd>
+                ${esc(
+                  formatDate(
+                    b.eventDate,
+                  ),
+                )}
+                •
+                ${esc(b.eventTime)}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>Local</dt>
+
+              <dd>
+                ${esc(b.venueName)}
+                <br>
+                ${esc(b.venueAddress)}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>Tema</dt>
+
+              <dd>
+                ${esc(b.theme)}
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="review-card">
+          <div class="review-card-head">
+            <h3>
+              Convite
+            </h3>
+
+            <button
+              class="review-edit"
+              type="button"
+              data-go-step="0"
+            >
+              Editar
+            </button>
+          </div>
+
+          <dl class="review-list">
+            <div class="review-line">
+              <dt>
+                Experiência
+              </dt>
+
+              <dd>
+                ${humanExperience(
+                  state.selection.experience,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Formato
+              </dt>
+
+              <dd>
+                ${humanFormat(
+                  state.selection.format,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Adicionais
+              </dt>
+
+              <dd>
+                ${
+                  addons.length
+                    ? esc(
+                        addons.join(', '),
+                      )
+                    : 'Nenhum'
+                }
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="review-card">
+          <div class="review-card-head">
+            <h3>
+              Criança
+            </h3>
+
+            <button
+              class="review-edit"
+              type="button"
+              data-go-step="2"
+            >
+              Editar
+            </button>
+          </div>
+
+          <dl class="review-list">
+            <div class="review-line">
+              <dt>
+                Estilo
+              </dt>
+
+              <dd>
+                ${humanChildStyle(
+                  b.childStyle,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Roupa
+              </dt>
+
+              <dd>
+                ${humanOutfit(
+                  b.outfitChoice,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Detalhes
+              </dt>
+
+              <dd>
+                ${esc(
+                  b.appearanceDetails
+                  || 'Nenhum detalhe extra informado',
+                )}
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="review-card">
+          <div class="review-card-head">
+            <h3>
+              Preferências
+            </h3>
+
+            <button
+              class="review-edit"
+              type="button"
+              data-go-step="3"
+            >
+              Editar
+            </button>
+          </div>
+
+          <dl class="review-list">
+            <div class="review-line">
+              <dt>
+                Falas
+              </dt>
+
+              <dd>
+                ${humanSpeech(
+                  b.speechPreference,
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Cores
+              </dt>
+
+              <dd>
+                ${esc(
+                  b.colors
+                  || 'Sem preferência informada',
+                )}
+              </dd>
+            </div>
+
+            <div class="review-line">
+              <dt>
+                Ideia extra
+              </dt>
+
+              <dd>
+                ${esc(
+                  b.creativeIdea
+                  || 'Nenhuma ideia extra informada',
+                )}
+              </dd>
+            </div>
+          </dl>
+        </article>
+      </div>
+
+      <div
+        class="quote-card"
+        style="margin-top:16px"
+      >
+        <div class="quote-row total">
+          <span>
+            Valor total
+          </span>
+
+          <strong>
+            ${money(q.totalCents)}
+          </strong>
+        </div>
+
+        <div class="quote-row">
+          <span>
+            Entrada para começar (${q.depositPercent}%)
+          </span>
+
+          <strong>
+            ${money(q.depositCents)}
+          </strong>
+        </div>
+
+        <div class="quote-row">
+          <span>
+            Restante após aprovação
+          </span>
+
+          <strong>
+            ${money(q.balanceCents)}
+          </strong>
+        </div>
+      </div>
+
+      <div class="terms-box">
+        <strong>
+          Antes de finalizar
+        </strong>
+
+        <div
+          class="notice"
+          style="margin-top:10px"
+        >
+          Prazo normal:
+          até ${state.catalog.rules.deadlineBusinessDays} dias úteis.
+
+          A produção começa depois da entrada,
+          do briefing completo
+          e das fotos adequadas.
+
+          Você poderá conferir
+          e aprovar as etapas.
+        </div>
+
+        <button
+          id="readTerms"
+          class="btn btn-ghost"
+          type="button"
+        >
+          Ler todas as condições
+        </button>
+
+        <label class="checkline">
+          <input
+            id="termsAccepted"
+            type="checkbox"
+            ${
+              state.termsAccepted
+                ? 'checked'
+                : ''
+            }
+          >
+
+          <span>
+            <strong>
+              Li e concordo com as condições do pedido.
+            </strong>
+          </span>
+        </label>
+      </div>
+
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              Divulgação
+            </span>
+
+            <h3>
+              A Libri pode mostrar seu convite no portfólio e nas redes sociais?
+            </h3>
+
+            <p>
+              Essa escolha é opcional e não interfere na produção.
+            </p>
+          </div>
+        </div>
+
+        <div class="choice-grid">
+          ${choice({
+            name: 'portfolioConsent',
+            value: 'yes',
+            icon: '♡',
+            title: 'Sim, autorizo',
+            desc: 'A Libri poderá divulgar o convite conforme as condições do pedido.',
+            checked:
+              state.portfolioConsent === true,
+          })}
+
+          ${choice({
+            name: 'portfolioConsent',
+            value: 'no',
+            icon: '○',
+            title: 'Não, prefiro que não seja divulgado',
+            desc: 'Seu convite será produzido normalmente.',
+            checked:
+              state.portfolioConsent === false,
+          })}
+        </div>
+      </section>
+
+      ${actionBar({
+        nextId: 'finishBtn',
+        nextLabel: 'Finalizar pedido',
+      })}
+    </div>
+  `;
+
+  $('#readTerms', stepCard)
+    .addEventListener(
+      'click',
+      () => {
+        modal(
+          `Condições do pedido • versão ${esc(state.terms.version)}`,
+          `<pre>${esc(state.terms.body)}</pre>`,
+        );
+      },
+    );
+
+  $('#termsAccepted', stepCard)
+    .addEventListener(
+      'change',
+      (event) => {
+        state.termsAccepted =
+          event.target.checked;
+      },
+    );
+
+  $$(
+    'input[name="portfolioConsent"]',
+    stepCard,
+  ).forEach((el) => {
+    el.addEventListener(
+      'change',
+      () => {
+        state.portfolioConsent =
+          el.value === 'yes';
+      },
+    );
+  });
+
+  $$(
+    '[data-go-step]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      () => goToStep(
+        button.dataset.goStep,
+      ),
+    );
+  });
+
+  $('#backBtn', stepCard)
+    .addEventListener(
+      'click',
+      prevStep,
+    );
+
+  $('#finishBtn', stepCard)
+    .addEventListener(
+      'click',
+      finishOrder,
+    );
 }
 
-async function nextStep() { state.step = Math.min(5, state.step + 1); await saveDraft(); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-async function prevStep() { state.step = Math.max(0, state.step - 1); await saveDraft(); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+async function finishOrder() {
+  state.termsAccepted =
+    $('#termsAccepted', stepCard)
+      ?.checked === true;
+
+  const portfolio =
+    checkedValue(
+      'portfolioConsent',
+    );
+
+  state.portfolioConsent =
+    portfolio === 'yes'
+      ? true
+      : portfolio === 'no'
+        ? false
+        : null;
+
+  if (!state.termsAccepted) {
+    showError(
+      'Marque que leu e concorda com as condições do pedido.',
+    );
+    return;
+  }
+
+  if (
+    state.portfolioConsent === null
+  ) {
+    showError(
+      'Escolha se autoriza ou não a divulgação do convite.',
+    );
+    return;
+  }
+
+  const button =
+    $('#finishBtn', stepCard);
+
+  button.disabled = true;
+  button.textContent =
+    'Salvando pedido...';
+
+  try {
+    const data =
+      await api(
+        '/api/orders',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            draftToken:
+              state.draftToken,
+
+            selection:
+              state.selection,
+
+            briefing:
+              state.briefing,
+
+            termsAccepted:
+              true,
+
+            portfolioConsent:
+              state.portfolioConsent,
+          }),
+        },
+      );
+
+    localStorage.removeItem(
+      'libriDraftToken',
+    );
+
+    flow.classList.add(
+      'hidden',
+    );
+
+    await renderFinal(
+      data.order,
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  } catch (error) {
+    button.disabled = false;
+
+    button.textContent =
+      'Finalizar pedido';
+
+    const missing =
+      error
+        .data
+        ?.details
+        ?.missing;
+
+    showError(
+      missing?.length
+        ? `Faltou conferir: ${missing.join(', ')}.`
+        : error.message,
+    );
+  }
+}
+
+async function copyText(value) {
+  if (!value) return;
+
+  if (
+    navigator
+      .clipboard
+      ?.writeText
+  ) {
+    await navigator
+      .clipboard
+      .writeText(value);
+
+    return;
+  }
+
+  const area =
+    document.createElement(
+      'textarea',
+    );
+
+  area.value = value;
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+
+  document.body
+    .appendChild(area);
+
+  area.select();
+
+  document.execCommand(
+    'copy',
+  );
+
+  area.remove();
+}
+
+async function renderFinal(order) {
+  const data =
+    await api(
+      `/api/orders/${order.publicToken}/final`,
+    );
+
+  const f = data.final;
+
+  const hasPix =
+    Boolean(f.pixKey);
+
+  const hasWhatsapp =
+    Boolean(f.libriWhatsapp);
+
+  finalScreen.innerHTML = `
+    <div class="final-hero">
+      <div class="final-check">
+        ✓
+      </div>
+
+      <h2>
+        Pedido recebido 💛
+      </h2>
+
+      <p>
+        Seu briefing já está organizado.
+        Agora falta enviar as fotos,
+        referências e o comprovante pelo WhatsApp.
+      </p>
+
+      <div class="final-code">
+        ${esc(f.orderCode)}
+      </div>
+    </div>
+
+    <div class="final-body">
+      <div class="final-summary">
+        <div class="quote-row total">
+          <span>
+            Valor total
+          </span>
+
+          <strong>
+            ${money(f.totalCents)}
+          </strong>
+        </div>
+
+        <div class="quote-row">
+          <span>
+            Entrada para começar
+          </span>
+
+          <strong>
+            ${money(f.depositCents)}
+          </strong>
+        </div>
+
+        <div class="quote-row">
+          <span>
+            Restante após aprovação
+          </span>
+
+          <strong>
+            ${money(f.balanceCents)}
+          </strong>
+        </div>
+      </div>
+
+      <div class="pix-box">
+        <div class="pix-title">
+          <span>◇</span>
+          Pagamento via Pix
+        </div>
+
+        ${
+          hasPix
+            ? `
+          <div class="pix-data">
+            <div>
+              <span>
+                Recebedor
+              </span>
+
+              <strong>
+                ${esc(
+                  f.pixRecipientName
+                  || '',
+                )}
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Chave Pix
+              </span>
+
+              <strong id="pixKey">
+                ${esc(f.pixKey)}
+              </strong>
+            </div>
+          </div>
+
+          <button
+            id="copyPix"
+            class="btn btn-secondary"
+            type="button"
+            style="margin-top:13px"
+          >
+            Copiar chave Pix
+          </button>
+        `
+            : `
+          <div
+            class="notice notice-warning"
+            style="margin-top:0"
+          >
+            Os dados do Pix ainda não foram configurados no portal.
+            Fale com a Libri pelo WhatsApp antes de realizar o pagamento.
+          </div>
+        `
+        }
+      </div>
+
+      <div class="send-list">
+        <strong>
+          Separe para enviar no WhatsApp:
+        </strong>
+
+        <ul>
+          <li>
+            fotos da criança;
+          </li>
+
+          <li>
+            foto da roupa, se tiver;
+          </li>
+
+          <li>
+            referências, se tiver;
+          </li>
+
+          <li>
+            comprovante da entrada.
+          </li>
+        </ul>
+      </div>
+
+      ${
+        hasWhatsapp
+          ? `
+        <a
+          class="final-whatsapp"
+          href="${whatsappLink(
+            f.libriWhatsapp,
+            `Oi! Finalizei meu pedido ${f.orderCode}. Vou enviar aqui as fotos, referências e o comprovante da entrada.`,
+          )}"
+          target="_blank"
+          rel="noopener"
+        >
+          Finalizar e enviar tudo pelo WhatsApp
+        </a>
+      `
+          : `
+        <div class="notice notice-warning">
+          O WhatsApp da Libri ainda não foi configurado no portal.
+        </div>
+      `
+      }
+    </div>
+  `;
+
+  $('#copyPix', finalScreen)
+    ?.addEventListener(
+      'click',
+      async () => {
+        try {
+          await copyText(
+            f.pixKey,
+          );
+
+          $('#copyPix', finalScreen)
+            .textContent =
+              'Chave copiada ✓';
+        } catch {
+          modal(
+            'Chave Pix',
+            `<p>${esc(f.pixKey)}</p>`,
+          );
+        }
+      },
+    );
+
+  finalScreen.classList.remove(
+    'hidden',
+  );
+}
+
+async function nextStep() {
+  const previous = state.step;
+
+  state.step =
+    Math.min(
+      5,
+      state.step + 1,
+    );
+
+  try {
+    await saveDraft();
+
+    render();
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  } catch (error) {
+    state.step = previous;
+
+    showError(
+      `Não conseguimos salvar esta etapa. ${error.message}`,
+    );
+  }
+}
+
+async function prevStep() {
+  const previous = state.step;
+
+  state.step =
+    Math.max(
+      0,
+      state.step - 1,
+    );
+
+  try {
+    await saveDraft();
+
+    render();
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  } catch (error) {
+    state.step = previous;
+
+    showError(
+      `Não conseguimos salvar esta etapa. ${error.message}`,
+    );
+  }
+}
 
 async function render() {
   progress();
-  if (state.step === 0) return renderProduct();
-  if (state.step === 1) return renderParty();
-  if (state.step === 2) return renderChild();
-  if (state.step === 3) return renderStyle();
-  if (state.step === 4) return renderResources();
+
+  if (state.step === 0) {
+    return renderProduct();
+  }
+
+  if (state.step === 1) {
+    return renderParty();
+  }
+
+  if (state.step === 2) {
+    return renderChild();
+  }
+
+  if (state.step === 3) {
+    return renderStyle();
+  }
+
+  if (state.step === 4) {
+    return renderResources();
+  }
+
   return renderReview();
 }
 
-$('#newOrder').addEventListener('click', async () => { await createDraft(); startFlow(); });
-continueBtn.addEventListener('click', async () => { if (await loadDraft()) startFlow(); else modal('Pedido não encontrado', '<p>Esse rascunho não está mais disponível. Você pode iniciar um novo pedido.</p>'); });
+newOrderBtn
+  .addEventListener(
+    'click',
+    async () => {
+      newOrderBtn.disabled = true;
 
-bootstrap().catch((error) => modal('Ops', `<p>${esc(error.message)}</p>`));
+      try {
+        await createDraft();
+
+        startFlow();
+      } catch (error) {
+        newOrderBtn.disabled = false;
+
+        showError(
+          error.message,
+        );
+      }
+    },
+  );
+
+continueBtn
+  .addEventListener(
+    'click',
+    async () => {
+      continueBtn.disabled = true;
+
+      try {
+        if (
+          await loadDraft()
+        ) {
+          startFlow();
+          return;
+        }
+
+        continueBtn
+          .classList
+          .add('hidden');
+
+        modal(
+          'Pedido não encontrado',
+          '<p>Esse rascunho não está mais disponível. Você pode iniciar um novo pedido.</p>',
+        );
+      } finally {
+        continueBtn.disabled = false;
+      }
+    },
+  );
+
+bootstrap()
+  .catch((error) => {
+    modal(
+      'Não conseguimos carregar o portal',
+      `<p>${esc(error.message)}</p><p>Tente recarregar a página. Se continuar, fale com a Libri.</p>`,
+    );
+  });

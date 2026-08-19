@@ -1,16 +1,24 @@
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const $ = (selector, root = document) =>
+  root.querySelector(selector);
 
-const STEP_TITLES = ['Seu convite', 'A festa', 'A criança', 'Seu estilo', 'Recursos', 'Revisão'];
+const $$ = (selector, root = document) =>
+  Array.from(root.querySelectorAll(selector));
 
 const state = {
   step: 0,
+
   draftToken: null,
+
   catalog: null,
+
   terms: null,
+
+  quote: null,
+
   selection: {
     experience: '',
     format: '',
+
     addons: {
       confirmation: false,
       filter: false,
@@ -18,137 +26,384 @@ const state = {
       extraPerson: 0,
     },
   },
+
   briefing: {
     customerName: '',
     whatsapp: '',
+
     honoreeName: '',
     displayName: '',
     age: '',
+
     eventDate: '',
     eventTime: '',
+
     venueName: '',
     venueAddress: '',
     locationUrl: '',
+
     theme: '',
     characterWanted: '',
     mustHave: '',
     avoid: '',
     specialInfo: '',
+
     childStyle: 'libri',
     outfitChoice: 'libri',
     appearanceDetails: '',
+
     colors: '',
     creativeIdea: '',
+
     speechPreference: 'libri',
     ownSpeech: '',
+
     confirmationMode: 'unsure',
   },
+
   portfolioConsent: null,
+
   termsAccepted: false,
-  quote: null,
 };
 
-const landing = $('#landing');
-const flow = $('#flow');
-const stepCard = $('#stepCard');
-const finalScreen = $('#finalScreen');
-const newOrderBtn = $('#newOrder');
-const continueBtn = $('#continueOrder');
-const helpWhatsapp = $('#helpWhatsapp');
-const topHelpWhatsapp = $('#topHelpWhatsapp');
+const landing =
+  $('#landing');
+
+const flow =
+  $('#flow');
+
+const stepCard =
+  $('#stepCard');
+
+const finalScreen =
+  $('#finalScreen');
+
+const newOrderBtn =
+  $('#newOrder');
+
+const continueBtn =
+  $('#continueOrder');
+
+const helpWhatsapp =
+  $('#helpWhatsapp');
+
+const topHelpWhatsapp =
+  $('#topHelpWhatsapp');
+
+/* ==================================================
+   HELPERS
+================================================== */
 
 function money(cents = 0) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format((Number(cents) || 0) / 100);
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style: 'currency',
+      currency: 'BRL',
+    },
+  ).format(
+    (Number(cents) || 0) / 100,
+  );
 }
 
 function esc(value = '') {
-  return String(value).replace(/[&<>'"]/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;',
-  }[char]));
+  return String(value).replace(
+    /[&<>'"]/g,
+    (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+    }[char]),
+  );
 }
 
-function whatsappLink(number, text) {
-  const digits = String(number || '').replace(/\D/g, '');
-  if (!digits) return '#';
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+function whatsappLink(
+  number,
+  text,
+) {
+  let digits =
+    String(number || '')
+      .replace(/\D/g, '');
+
+  if (
+    (
+      digits.length === 10
+      || digits.length === 11
+    )
+    && !digits.startsWith('55')
+  ) {
+    digits =
+      `55${digits}`;
+  }
+
+  if (!digits) {
+    return '#';
+  }
+
+  return (
+    `https://wa.me/${digits}`
+    + `?text=${encodeURIComponent(text)}`
+  );
 }
 
 function formatDate(value) {
-  if (!value) return '';
-  const parts = String(value).split('-');
-  if (parts.length !== 3) return value;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function formatWhatsappInput(value) {
-  const digits = String(value || '').replace(/\D/g, '').slice(0, 13);
-  let local = digits;
-
-  if (local.startsWith('55') && local.length > 11) {
-    local = local.slice(2);
+  if (!value) {
+    return '';
   }
 
-  if (local.length <= 2) return local;
-  if (local.length <= 6) return `(${local.slice(0, 2)}) ${local.slice(2)}`;
-  if (local.length <= 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
-  return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7, 11)}`;
+  const parts =
+    String(value).split('-');
+
+  if (parts.length !== 3) {
+    return value;
+  }
+
+  return (
+    `${parts[2]}/`
+    + `${parts[1]}/`
+    + `${parts[0]}`
+  );
 }
 
-function modal(title, html) {
-  $('#modalTitle').textContent = title;
-  $('#modalContent').innerHTML = html;
-  $('#modalBackdrop').classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+function formatWhatsappInput(
+  value,
+) {
+  let digits =
+    String(value || '')
+      .replace(/\D/g, '');
+
+  if (
+    digits.startsWith('55')
+    && digits.length > 11
+  ) {
+    digits =
+      digits.slice(2);
+  }
+
+  digits =
+    digits.slice(0, 11);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return (
+      `(${digits.slice(0, 2)}) `
+      + `${digits.slice(2)}`
+    );
+  }
+
+  if (digits.length <= 10) {
+    return (
+      `(${digits.slice(0, 2)}) `
+      + `${digits.slice(2, 6)}`
+      + `-${digits.slice(6)}`
+    );
+  }
+
+  return (
+    `(${digits.slice(0, 2)}) `
+    + `${digits.slice(2, 7)}`
+    + `-${digits.slice(7)}`
+  );
+}
+
+function hasConfirmation() {
+  return Boolean(
+    state.selection
+      .addons
+      .confirmation,
+  );
+}
+
+function visualSteps() {
+  if (hasConfirmation()) {
+    return [
+      {
+        stateStep: 0,
+        title: 'Seu convite',
+      },
+      {
+        stateStep: 1,
+        title: 'A festa',
+      },
+      {
+        stateStep: 2,
+        title: 'A criança',
+      },
+      {
+        stateStep: 3,
+        title: 'Seu estilo',
+      },
+      {
+        stateStep: 4,
+        title: 'Confirmação',
+      },
+      {
+        stateStep: 5,
+        title: 'Revisão',
+      },
+    ];
+  }
+
+  return [
+    {
+      stateStep: 0,
+      title: 'Seu convite',
+    },
+    {
+      stateStep: 1,
+      title: 'A festa',
+    },
+    {
+      stateStep: 2,
+      title: 'A criança',
+    },
+    {
+      stateStep: 3,
+      title: 'Seu estilo',
+    },
+    {
+      stateStep: 5,
+      title: 'Revisão',
+    },
+  ];
+}
+
+function visualStepInfo() {
+  const steps =
+    visualSteps();
+
+  let index =
+    steps.findIndex(
+      (item) =>
+        item.stateStep === state.step,
+    );
+
+  if (index < 0) {
+    index = 0;
+  }
+
+  return {
+    steps,
+    index,
+    total: steps.length,
+    title: steps[index]?.title || '',
+  };
+}
+
+/* ==================================================
+   MODAL
+================================================== */
+
+function modal(
+  title,
+  html,
+) {
+  $('#modalTitle')
+    .textContent = title;
+
+  $('#modalContent')
+    .innerHTML = html;
+
+  $('#modalBackdrop')
+    .classList
+    .remove('hidden');
+
+  document.body.style.overflow =
+    'hidden';
 }
 
 function closeModal() {
-  $('#modalBackdrop').classList.add('hidden');
-  document.body.style.overflow = '';
+  $('#modalBackdrop')
+    .classList
+    .add('hidden');
+
+  document.body.style.overflow =
+    '';
 }
 
-$('#closeModal').addEventListener('click', closeModal);
+$('#closeModal')
+  .addEventListener(
+    'click',
+    closeModal,
+  );
 
-$('#modalBackdrop').addEventListener('click', (event) => {
-  if (event.target.id === 'modalBackdrop') closeModal();
-});
+$('#modalBackdrop')
+  .addEventListener(
+    'click',
+    (event) => {
+      if (
+        event.target.id
+        === 'modalBackdrop'
+      ) {
+        closeModal();
+      }
+    },
+  );
 
-document.addEventListener('keydown', (event) => {
-  if (
-    event.key === 'Escape'
-    && !$('#modalBackdrop').classList.contains('hidden')
-  ) {
-    closeModal();
-  }
-});
+document
+  .addEventListener(
+    'keydown',
+    (event) => {
+      if (
+        event.key === 'Escape'
+        && !$('#modalBackdrop')
+          .classList
+          .contains('hidden')
+      ) {
+        closeModal();
+      }
+    },
+  );
 
 function showError(message) {
-  modal('Confira antes de continuar', `<p>${esc(message)}</p>`);
+  modal(
+    'Confira antes de continuar',
+    `<p>${esc(message)}</p>`,
+  );
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      'content-type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
+/* ==================================================
+   API
+================================================== */
 
-  const data = await response.json().catch(() => ({}));
+async function api(
+  path,
+  options = {},
+) {
+  const response =
+    await fetch(
+      path,
+      {
+        ...options,
+
+        headers: {
+          'content-type':
+            'application/json',
+
+          ...(options.headers || {}),
+        },
+      },
+    );
+
+  const data =
+    await response
+      .json()
+      .catch(() => ({}));
 
   if (!response.ok) {
     throw Object.assign(
-      new Error(data.error || 'Não foi possível concluir.'),
+      new Error(
+        data.error
+        || 'Não foi possível concluir.',
+      ),
       {
-        data,
         status: response.status,
+        data,
       },
     );
   }
@@ -156,49 +411,92 @@ async function api(path, options = {}) {
   return data;
 }
 
+/* ==================================================
+   INICIALIZAÇÃO
+================================================== */
+
 function setHelpLinks() {
-  const number = state.catalog?.contact?.libriWhatsapp || '';
+  const number =
+    state.catalog
+      ?.contact
+      ?.libriWhatsapp
+    || '';
 
-  const href = whatsappLink(
-    number,
-    'Oi! Preciso de ajuda para preencher meu pedido no Portal da Libri Convites.',
-  );
+  const href =
+    whatsappLink(
+      number,
+      'Oi! Preciso de ajuda para preencher meu pedido no Portal da Libri Convites.',
+    );
 
-  [helpWhatsapp, topHelpWhatsapp].forEach((link) => {
-    if (!link) return;
+  [
+    helpWhatsapp,
+    topHelpWhatsapp,
+  ].forEach((link) => {
+    if (!link) {
+      return;
+    }
+
     link.href = href;
-    link.classList.toggle('hidden', !number);
+
+    link.classList.toggle(
+      'hidden',
+      !number,
+    );
   });
 }
 
 async function bootstrap() {
-  const [catalogData, termsData] = await Promise.all([
-    api('/api/catalog'),
-    api('/api/terms/current'),
-  ]);
+  const [
+    catalogData,
+    termsData,
+  ] =
+    await Promise.all([
+      api('/api/catalog'),
+      api('/api/terms/current'),
+    ]);
 
-  state.catalog = catalogData.catalog;
-  state.terms = termsData.terms;
+  state.catalog =
+    catalogData.catalog;
+
+  state.terms =
+    termsData.terms;
 
   setHelpLinks();
 
-  newOrderBtn.disabled = false;
+  newOrderBtn.disabled =
+    false;
 
-  const savedToken = localStorage.getItem('libriDraftToken');
+  const savedToken =
+    localStorage.getItem(
+      'libriDraftToken',
+    );
 
   if (savedToken) {
-    continueBtn.classList.remove('hidden');
-    continueBtn.disabled = false;
+    continueBtn
+      .classList
+      .remove('hidden');
+
+    continueBtn.disabled =
+      false;
   }
 }
 
-async function createDraft() {
-  const data = await api('/api/drafts', {
-    method: 'POST',
-    body: '{}',
-  });
+/* ==================================================
+   RASCUNHO
+================================================== */
 
-  state.draftToken = data.draft.token;
+async function createDraft() {
+  const data =
+    await api(
+      '/api/drafts',
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
+
+  state.draftToken =
+    data.draft.token;
 
   localStorage.setItem(
     'libriDraftToken',
@@ -211,65 +509,122 @@ async function createDraft() {
 }
 
 async function loadDraft() {
-  const token = localStorage.getItem('libriDraftToken');
+  const token =
+    localStorage.getItem(
+      'libriDraftToken',
+    );
 
-  if (!token) return false;
+  if (!token) {
+    return false;
+  }
 
   try {
-    const data = await api(`/api/drafts/${token}`);
-    const draftData = data.draft.data || {};
+    const data =
+      await api(
+        `/api/drafts/${token}`,
+      );
 
-    state.draftToken = token;
-    state.step = Number(data.draft.step || 0);
+    const draftData =
+      data.draft.data
+      || {};
+
+    state.draftToken =
+      token;
+
+    state.step =
+      Number(
+        data.draft.step
+        || 0,
+      );
 
     state.selection = {
       ...state.selection,
+
       ...(draftData.selection || {}),
+
       addons: {
         ...state.selection.addons,
-        ...(draftData.selection?.addons || {}),
+
+        ...(
+          draftData
+            .selection
+            ?.addons
+          || {}
+        ),
       },
     };
 
     state.briefing = {
       ...state.briefing,
+
       ...(draftData.briefing || {}),
     };
 
     state.portfolioConsent =
-      typeof draftData.portfolioConsent === 'boolean'
-        ? draftData.portfolioConsent
+      typeof draftData
+        .portfolioConsent
+        === 'boolean'
+
+        ? draftData
+            .portfolioConsent
+
         : null;
 
     state.termsAccepted =
-      Boolean(draftData.termsAccepted);
+      Boolean(
+        draftData
+          .termsAccepted,
+      );
+
+    if (
+      state.step === 4
+      && !hasConfirmation()
+    ) {
+      state.step = 5;
+    }
 
     return true;
   } catch {
-    localStorage.removeItem('libriDraftToken');
+    localStorage.removeItem(
+      'libriDraftToken',
+    );
+
     return false;
   }
 }
 
-function setSaveStatus(text, className = '') {
-  const el = $('#saveStatus');
+function setSaveStatus(
+  text,
+  className = '',
+) {
+  const element =
+    $('#saveStatus');
 
-  if (!el) return;
+  if (!element) {
+    return;
+  }
 
-  el.textContent = text;
+  element.textContent =
+    text;
 
-  el.classList.remove(
-    'is-saving',
-    'is-error',
-  );
+  element
+    .classList
+    .remove(
+      'is-saving',
+      'is-error',
+    );
 
   if (className) {
-    el.classList.add(className);
+    element
+      .classList
+      .add(className);
   }
 }
 
 async function saveDraft() {
-  if (!state.draftToken) return;
+  if (!state.draftToken) {
+    return;
+  }
 
   setSaveStatus(
     'Salvando...',
@@ -281,21 +636,31 @@ async function saveDraft() {
       `/api/drafts/${state.draftToken}`,
       {
         method: 'PUT',
-        body: JSON.stringify({
-          step: state.step,
-          data: {
-            selection: state.selection,
-            briefing: state.briefing,
-            portfolioConsent: state.portfolioConsent,
-            termsAccepted: state.termsAccepted,
-          },
-        }),
+
+        body:
+          JSON.stringify({
+            step: state.step,
+
+            data: {
+              selection:
+                state.selection,
+
+              briefing:
+                state.briefing,
+
+              portfolioConsent:
+                state
+                  .portfolioConsent,
+
+              termsAccepted:
+                state
+                  .termsAccepted,
+            },
+          }),
       },
     );
 
-    setSaveStatus(
-      'Salvo automaticamente',
-    );
+    setSaveStatus('Salvo');
   } catch (error) {
     setSaveStatus(
       'Falha ao salvar',
@@ -306,10 +671,22 @@ async function saveDraft() {
   }
 }
 
+/* ==================================================
+   FLUXO
+================================================== */
+
 function startFlow() {
-  landing.classList.add('hidden');
-  finalScreen.classList.add('hidden');
-  flow.classList.remove('hidden');
+  landing
+    .classList
+    .add('hidden');
+
+  finalScreen
+    .classList
+    .add('hidden');
+
+  flow
+    .classList
+    .remove('hidden');
 
   render();
 
@@ -320,33 +697,21 @@ function startFlow() {
 }
 
 function progress() {
-  const step = Math.max(
-    0,
-    Math.min(5, state.step),
-  );
+  const info =
+    visualStepInfo();
 
-  $('#progressLabel').textContent =
-    `Etapa ${step + 1} de 6`;
+  $('#progressLabel')
+    .textContent =
+      `Etapa ${info.index + 1} de ${info.total}`;
 
-  $('#progressTitle').textContent =
-    STEP_TITLES[step];
+  $('#progressTitle')
+    .textContent =
+      info.title;
 
-  $('#progressBar').style.width =
-    `${((step + 1) / 6) * 100}%`;
-
-  $('#stepDots').innerHTML =
-    STEP_TITLES
-      .map((_, index) => {
-        const cls =
-          index < step
-            ? 'done'
-            : index === step
-              ? 'current'
-              : '';
-
-        return `<span class="step-dot ${cls}"></span>`;
-      })
-      .join('');
+  $('#progressBar')
+    .style
+    .width =
+      `${((info.index + 1) / info.total) * 100}%`;
 }
 
 async function refreshQuote() {
@@ -358,51 +723,50 @@ async function refreshQuote() {
     return;
   }
 
-  const data = await api(
-    '/api/quote',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        selection: state.selection,
-      }),
-    },
-  );
+  const data =
+    await api(
+      '/api/quote',
+      {
+        method: 'POST',
 
-  state.quote = data.quote;
-}
-
-function exampleUrl(
-  experience,
-  format = 'interactive',
-) {
-  const examples =
-    state.catalog?.examples || {};
-
-  if (format === 'video') {
-    return experience === 'reduced'
-      ? examples.videoReduced
-      : examples.videoFull;
-  }
-
-  return experience === 'reduced'
-    ? examples.interactiveReduced
-    : examples.interactiveFull;
-}
-
-function openExample(url) {
-  if (!url) {
-    modal(
-      'Exemplo',
-      '<p>Esse exemplo ainda será configurado pela Libri. Você pode continuar o pedido normalmente.</p>',
+        body:
+          JSON.stringify({
+            selection:
+              state.selection,
+          }),
+      },
     );
-    return;
-  }
 
-  window.open(
-    url,
-    '_blank',
-    'noopener',
-  );
+  state.quote =
+    data.quote;
+}
+
+/* ==================================================
+   COMPONENTES
+================================================== */
+
+function stepHeader(
+  title,
+  description = '',
+) {
+  const info =
+    visualStepInfo();
+
+  return `
+    <div class="step-head">
+      <span class="step-number">
+        Etapa ${info.index + 1}
+      </span>
+
+      <h2>${title}</h2>
+
+      ${
+        description
+          ? `<p>${description}</p>`
+          : ''
+      }
+    </div>
+  `;
 }
 
 function choice({
@@ -410,8 +774,8 @@ function choice({
   value,
   icon,
   title,
-  desc,
-  checked,
+  desc = '',
+  checked = false,
   tag = '',
 }) {
   return `
@@ -435,7 +799,11 @@ function choice({
 
       <strong>${title}</strong>
 
-      <p>${desc}</p>
+      ${
+        desc
+          ? `<p>${desc}</p>`
+          : ''
+      }
 
       ${
         tag
@@ -443,24 +811,6 @@ function choice({
           : ''
       }
     </label>
-  `;
-}
-
-function stepHeader(
-  number,
-  title,
-  description,
-) {
-  return `
-    <div class="step-head">
-      <span class="step-number">
-        Etapa ${number} de 6
-      </span>
-
-      <h2>${title}</h2>
-
-      <p>${description}</p>
-    </div>
   `;
 }
 
@@ -475,14 +825,14 @@ function actionBar({
       ${
         back
           ? `
-            <button
-              class="btn btn-secondary"
-              id="backBtn"
-              type="button"
-            >
-              Voltar
-            </button>
-          `
+          <button
+            class="btn btn-secondary"
+            id="backBtn"
+            type="button"
+          >
+            Voltar
+          </button>
+        `
           : ''
       }
 
@@ -496,643 +846,6 @@ function actionBar({
       </button>
     </div>
   `;
-}
-
-function scrollIntoViewSoon(id) {
-  requestAnimationFrame(() => {
-    const el =
-      document.getElementById(id);
-
-    if (!el) return;
-
-    const top =
-      el.getBoundingClientRect().top
-      + window.scrollY
-      - 112;
-
-    window.scrollTo({
-      top,
-      behavior: 'smooth',
-    });
-  });
-}
-
-async function rerenderProductKeepingScroll() {
-  const y = window.scrollY;
-
-  await renderProduct();
-
-  window.scrollTo({
-    top: y,
-  });
-}
-
-async function renderProduct() {
-  await refreshQuote();
-
-  const selection = state.selection;
-  const quote = state.quote;
-
-  const showFormat =
-    Boolean(selection.experience);
-
-  const showCommercial =
-    Boolean(
-      selection.experience
-      && selection.format,
-    );
-
-  const fullUrl =
-    exampleUrl(
-      'full',
-      'interactive',
-    );
-
-  const reducedUrl =
-    exampleUrl(
-      'reduced',
-      'interactive',
-    );
-
-  stepCard.innerHTML = `
-    ${stepHeader(
-      1,
-      'Escolha a experiência',
-      'Primeiro você escolhe quanto de história quer no convite. Depois escolhe como quer receber.',
-    )}
-
-    <div class="step-body">
-      <section class="section-block">
-        <div class="section-title">
-          <div>
-            <span class="section-kicker">
-              1. Experiência
-            </span>
-
-            <h3>
-              Quanto você quer viver desse convite?
-            </h3>
-
-            <p>
-              O valor aparece só depois que você escolher também o formato.
-            </p>
-          </div>
-        </div>
-
-        <div
-          class="choice-grid"
-          id="experienceChoices"
-        >
-          ${choice({
-            name: 'experience',
-            value: 'full',
-            icon: '✦',
-            title: 'Experiência Completa',
-            desc: 'Mais cenas, mais momentos e uma experiência mais rica do começo ao fim.',
-            checked:
-              selection.experience === 'full',
-            tag: 'Mais escolhida',
-          })}
-
-          ${choice({
-            name: 'experience',
-            value: 'reduced',
-            icon: '♡',
-            title: 'Experiência Reduzida',
-            desc: 'Uma versão mais curta, com menos cenas, mantendo a identidade da festa.',
-            checked:
-              selection.experience === 'reduced',
-          })}
-        </div>
-
-        <div class="example-row">
-          <button
-            class="btn btn-ghost"
-            type="button"
-            data-example="${esc(fullUrl)}"
-          >
-            Ver exemplo completo
-          </button>
-
-          <button
-            class="btn btn-ghost"
-            type="button"
-            data-example="${esc(reducedUrl)}"
-          >
-            Ver exemplo reduzido
-          </button>
-        </div>
-      </section>
-
-      ${
-        showFormat
-          ? `
-        <section
-          class="section-block reveal-block"
-          id="formatBlock"
-        >
-          <div class="section-title">
-            <div>
-              <span class="section-kicker">
-                2. Formato
-              </span>
-
-              <h3>
-                Como você quer receber?
-              </h3>
-
-              <p>
-                Escolha a forma que combina melhor com a sua festa.
-              </p>
-            </div>
-          </div>
-
-          <div class="choice-grid">
-            ${choice({
-              name: 'format',
-              value: 'video',
-              icon: '▶',
-              title: 'Em Vídeo',
-              desc: 'Você recebe um arquivo em vídeo pronto para enviar pelo WhatsApp.',
-              checked:
-                selection.format === 'video',
-            })}
-
-            ${choice({
-              name: 'format',
-              value: 'interactive',
-              icon: '◇',
-              title: 'Interativo',
-              desc: 'Abre por link e pode ter botões como localização, presentes e confirmação.',
-              checked:
-                selection.format === 'interactive',
-            })}
-          </div>
-
-          ${
-            selection.format
-              ? `
-            <div class="example-row">
-              <button
-                class="btn btn-ghost"
-                type="button"
-                id="formatExample"
-              >
-                Ver exemplo deste formato
-              </button>
-            </div>
-          `
-              : ''
-          }
-        </section>
-      `
-          : ''
-      }
-
-      ${
-        showCommercial
-          ? `
-        <section
-          class="section-block reveal-block"
-          id="commercialBlock"
-        >
-          <div class="price-hero">
-            <div>
-              <div class="label">
-                Seu convite escolhido
-              </div>
-
-              <div class="product-name">
-                ${humanExperience(selection.experience)}
-                •
-                ${humanFormat(selection.format)}
-              </div>
-            </div>
-
-            <div class="money-big">
-              ${money(quote.productCents)}
-            </div>
-          </div>
-
-          <div class="section-title">
-            <div>
-              <span class="section-kicker">
-                3. Personalize mais
-              </span>
-
-              <h3>
-                Quer acrescentar algo?
-              </h3>
-
-              <p>
-                Todos os itens abaixo são opcionais.
-              </p>
-            </div>
-          </div>
-
-          <div class="addon-grid">
-            <article class="addon-card">
-              <div class="addon-icon">
-                ✓
-              </div>
-
-              <div class="addon-copy">
-                <strong>
-                  Confirmação de presença Libri
-                </strong>
-
-                <p>
-                  Organize quem vai à festa em uma lista própria, sem depender de mensagens soltas.
-                </p>
-
-                <button
-                  class="btn btn-ghost"
-                  type="button"
-                  data-special-example="confirmation"
-                >
-                  Ver como funciona
-                </button>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.confirmation)}
-                </div>
-
-                <label class="toggle-control">
-                  <input
-                    type="checkbox"
-                    id="addonConfirmation"
-                    ${
-                      selection.addons.confirmation
-                        ? 'checked'
-                        : ''
-                    }
-                  >
-
-                  <span>
-                    Adicionar
-                  </span>
-                </label>
-              </div>
-            </article>
-
-            <article class="addon-card">
-              <div class="addon-icon">
-                ✦
-              </div>
-
-              <div class="addon-copy">
-                <strong>
-                  Filtro personalizado da festa
-                </strong>
-
-                <p>
-                  Um filtro criado para os convidados usarem nas fotos do evento.
-                </p>
-
-                <button
-                  class="btn btn-ghost"
-                  type="button"
-                  data-special-example="filter"
-                >
-                  Ver exemplo
-                </button>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.filter)}
-                </div>
-
-                <label class="toggle-control">
-                  <input
-                    type="checkbox"
-                    id="addonFilter"
-                    ${
-                      selection.addons.filter
-                        ? 'checked'
-                        : ''
-                    }
-                  >
-
-                  <span>
-                    Adicionar
-                  </span>
-                </label>
-              </div>
-            </article>
-
-            <article class="addon-card">
-              <div class="addon-icon">
-                ＋
-              </div>
-
-              <div class="addon-copy">
-                <strong>
-                  Cena extra
-                </strong>
-
-                <p>
-                  Acrescente mais uma cena à experiência escolhida.
-                </p>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.extraScene)} cada
-                </div>
-
-                <div
-                  class="stepper"
-                  aria-label="Quantidade de cenas extras"
-                >
-                  <button
-                    type="button"
-                    data-stepper="extraScene"
-                    data-delta="-1"
-                    aria-label="Diminuir cena extra"
-                  >
-                    −
-                  </button>
-
-                  <span>
-                    ${selection.addons.extraScene || 0}
-                  </span>
-
-                  <button
-                    type="button"
-                    data-stepper="extraScene"
-                    data-delta="1"
-                    aria-label="Adicionar cena extra"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </article>
-
-            <article class="addon-card">
-              <div class="addon-icon">
-                ☺
-              </div>
-
-              <div class="addon-copy">
-                <strong>
-                  Outra criança ou pessoa
-                </strong>
-
-                <p>
-                  Inclua mais uma pessoa na criação do convite.
-                </p>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.extraPerson)} cada
-                </div>
-
-                <div
-                  class="stepper"
-                  aria-label="Quantidade de pessoas extras"
-                >
-                  <button
-                    type="button"
-                    data-stepper="extraPerson"
-                    data-delta="-1"
-                    aria-label="Diminuir pessoa extra"
-                  >
-                    −
-                  </button>
-
-                  <span>
-                    ${selection.addons.extraPerson || 0}
-                  </span>
-
-                  <button
-                    type="button"
-                    data-stepper="extraPerson"
-                    data-delta="1"
-                    aria-label="Adicionar pessoa extra"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="notice notice-warning">
-            <strong>
-              Precisa receber antes de ${state.catalog.rules.deadlineBusinessDays} dias úteis?
-            </strong>
-
-            <br>
-
-            A urgência depende da disponibilidade da Libri.
-            Quando aprovada, acrescenta
-            ${state.catalog.rules.urgencyPercent}%
-            ao valor do pedido.
-
-            <div>
-              <a
-                id="urgencyLink"
-                target="_blank"
-                rel="noopener"
-              >
-                Consultar urgência pelo WhatsApp
-              </a>
-            </div>
-          </div>
-
-          <div
-            class="quote-card"
-            id="quoteSummary"
-          >
-            <div class="quote-row total">
-              <span>
-                Total até agora
-              </span>
-
-              <strong>
-                ${money(quote.totalCents)}
-              </strong>
-            </div>
-
-            <div class="quote-row">
-              <span>
-                Entrada para começar (${quote.depositPercent}%)
-              </span>
-
-              <strong>
-                ${money(quote.depositCents)}
-              </strong>
-            </div>
-
-            <div class="quote-row">
-              <span>
-                Restante após aprovação
-              </span>
-
-              <strong>
-                ${money(quote.balanceCents)}
-              </strong>
-            </div>
-          </div>
-        </section>
-      `
-          : ''
-      }
-
-      ${actionBar({
-        back: false,
-        nextLabel: 'Continuar para os detalhes',
-        disabled: !showCommercial,
-      })}
-    </div>
-  `;
-
-  $$(
-    'input[name="experience"]',
-    stepCard,
-  ).forEach((el) => {
-    el.addEventListener(
-      'change',
-      async () => {
-        selection.experience = el.value;
-        selection.format = '';
-
-        await renderProduct();
-
-        scrollIntoViewSoon(
-          'formatBlock',
-        );
-      },
-    );
-  });
-
-  $$(
-    'input[name="format"]',
-    stepCard,
-  ).forEach((el) => {
-    el.addEventListener(
-      'change',
-      async () => {
-        selection.format = el.value;
-
-        await renderProduct();
-
-        scrollIntoViewSoon(
-          'commercialBlock',
-        );
-      },
-    );
-  });
-
-  $$(
-    '[data-example]',
-    stepCard,
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      () => openExample(
-        button.dataset.example,
-      ),
-    );
-  });
-
-  $('#formatExample', stepCard)
-    ?.addEventListener(
-      'click',
-      () => openExample(
-        exampleUrl(
-          selection.experience,
-          selection.format,
-        ),
-      ),
-    );
-
-  $$(
-    '[data-special-example]',
-    stepCard,
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      () => openExample(
-        state.catalog.examples[
-          button.dataset.specialExample
-        ],
-      ),
-    );
-  });
-
-  $('#addonConfirmation', stepCard)
-    ?.addEventListener(
-      'change',
-      async (event) => {
-        selection.addons.confirmation =
-          event.target.checked;
-
-        await rerenderProductKeepingScroll();
-      },
-    );
-
-  $('#addonFilter', stepCard)
-    ?.addEventListener(
-      'change',
-      async (event) => {
-        selection.addons.filter =
-          event.target.checked;
-
-        await rerenderProductKeepingScroll();
-      },
-    );
-
-  $$(
-    '[data-stepper]',
-    stepCard,
-  ).forEach((button) => {
-    button.addEventListener(
-      'click',
-      async () => {
-        const key =
-          button.dataset.stepper;
-
-        const delta =
-          Number(button.dataset.delta);
-
-        selection.addons[key] =
-          Math.max(
-            0,
-            Math.min(
-              10,
-              Number(
-                selection.addons[key] || 0,
-              ) + delta,
-            ),
-          );
-
-        await rerenderProductKeepingScroll();
-      },
-    );
-  });
-
-  const urgency =
-    $('#urgencyLink', stepCard);
-
-  if (urgency) {
-    urgency.href =
-      whatsappLink(
-        state.catalog.contact.libriWhatsapp,
-        'Oi! Estou montando meu pedido na Libri e preciso receber antes do prazo normal. Podemos verificar a possibilidade de urgência?',
-      );
-  }
-
-  $('#nextBtn', stepCard)
-    ?.addEventListener(
-      'click',
-      nextStep,
-    );
 }
 
 function formValue(id) {
@@ -1149,19 +862,757 @@ function checkedValue(name) {
     $(
       `input[name="${name}"]:checked`,
       stepCard,
-    )?.value
+    )
+      ?.value
     || ''
   );
 }
 
-function renderParty() {
-  const b = state.briefing;
+/* ==================================================
+   EXEMPLOS
+================================================== */
+
+function exampleUrl(
+  experience,
+  format = 'interactive',
+) {
+  const examples =
+    state.catalog
+      ?.examples
+    || {};
+
+  if (format === 'video') {
+    return (
+      experience === 'reduced'
+        ? examples.videoReduced
+        : examples.videoFull
+    );
+  }
+
+  return (
+    experience === 'reduced'
+      ? examples.interactiveReduced
+      : examples.interactiveFull
+  );
+}
+
+function openExample(url) {
+  if (!url) {
+    modal(
+      'Exemplo',
+      '<p>Esse exemplo ainda será configurado pela Libri.</p>',
+    );
+
+    return;
+  }
+
+  window.open(
+    url,
+    '_blank',
+    'noopener',
+  );
+}
+
+/* ==================================================
+   ETAPA 1 | PRODUTO
+================================================== */
+
+async function renderProduct() {
+  await refreshQuote();
+
+  const selection =
+    state.selection;
+
+  const quote =
+    state.quote;
+
+  const showFormat =
+    Boolean(
+      selection.experience,
+    );
+
+  const showCommercial =
+    Boolean(
+      selection.experience
+      && selection.format,
+    );
 
   stepCard.innerHTML = `
     ${stepHeader(
-      2,
+      'Escolha seu convite',
+      'Primeiro a experiência. Depois o formato.',
+    )}
+
+    <div class="step-body">
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">
+              Experiência
+            </span>
+
+            <h3>
+              Quanto de história você quer?
+            </h3>
+          </div>
+        </div>
+
+        <div class="choice-grid">
+          ${choice({
+            name: 'experience',
+            value: 'full',
+            icon: '✦',
+            title: 'Experiência Completa',
+            desc: 'Mais cenas, mais história, mais impacto.',
+            checked:
+              selection.experience
+              === 'full',
+            tag: 'Mais escolhida',
+          })}
+
+          ${choice({
+            name: 'experience',
+            value: 'reduced',
+            icon: '♡',
+            title: 'Experiência Reduzida',
+            desc: 'Mais curta, sem perder a magia.',
+            checked:
+              selection.experience
+              === 'reduced',
+          })}
+        </div>
+
+        <div class="example-row">
+          <button
+            class="btn btn-ghost"
+            type="button"
+            data-example="${esc(
+              exampleUrl(
+                'full',
+                'interactive',
+              ),
+            )}"
+          >
+            Ver exemplo completo
+          </button>
+
+          <button
+            class="btn btn-ghost"
+            type="button"
+            data-example="${esc(
+              exampleUrl(
+                'reduced',
+                'interactive',
+              ),
+            )}"
+          >
+            Ver exemplo reduzido
+          </button>
+        </div>
+      </section>
+
+      ${
+        showFormat
+          ? `
+          <section
+            class="section-block reveal-block"
+            id="formatBlock"
+          >
+            <div class="section-title">
+              <div>
+                <span class="section-kicker">
+                  Formato
+                </span>
+
+                <h3>
+                  Como quer receber?
+                </h3>
+              </div>
+            </div>
+
+            <div class="choice-grid">
+              ${choice({
+                name: 'format',
+                value: 'video',
+                icon: '▶',
+                title: 'Vídeo',
+                desc: 'Arquivo pronto para enviar pelo WhatsApp.',
+                checked:
+                  selection.format
+                  === 'video',
+              })}
+
+              ${choice({
+                name: 'format',
+                value: 'interactive',
+                icon: '◇',
+                title: 'Interativo',
+                desc: 'Abre por link e pode ter botões para tocar.',
+                checked:
+                  selection.format
+                  === 'interactive',
+              })}
+            </div>
+
+            ${
+              selection.format
+                ? `
+                <div class="example-row">
+                  <button
+                    id="formatExample"
+                    class="btn btn-ghost"
+                    type="button"
+                  >
+                    Ver exemplo
+                  </button>
+                </div>
+              `
+                : ''
+            }
+          </section>
+        `
+          : ''
+      }
+
+      ${
+        showCommercial
+          ? `
+          <section
+            class="section-block reveal-block"
+            id="commercialBlock"
+          >
+            <div class="price-hero">
+              <div>
+                <div class="label">
+                  Seu convite
+                </div>
+
+                <div class="product-name">
+                  ${humanExperience(
+                    selection.experience,
+                  )}
+                  •
+                  ${humanFormat(
+                    selection.format,
+                  )}
+                </div>
+              </div>
+
+              <div class="money-big">
+                ${money(
+                  quote.productCents,
+                )}
+              </div>
+            </div>
+
+            <div class="section-title">
+              <div>
+                <span class="section-kicker">
+                  Opcionais
+                </span>
+
+                <h3>
+                  Quer acrescentar algo?
+                </h3>
+              </div>
+            </div>
+
+            <div class="addon-grid">
+              <article class="addon-card">
+                <span class="addon-icon">
+                  ✓
+                </span>
+
+                <div class="addon-copy">
+                  <strong>
+                    Confirmação de presença Libri
+                  </strong>
+
+                  <p>
+                    Lista organizada de quem vai à festa.
+                  </p>
+
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    data-special-example="confirmation"
+                  >
+                    Ver como funciona
+                  </button>
+                </div>
+
+                <div class="addon-control">
+                  <div class="addon-price">
+                    + ${money(
+                      state.catalog
+                        .addons
+                        .confirmation,
+                    )}
+                  </div>
+
+                  <label class="toggle-control">
+                    <input
+                      id="addonConfirmation"
+                      type="checkbox"
+                      ${
+                        selection
+                          .addons
+                          .confirmation
+                          ? 'checked'
+                          : ''
+                      }
+                    >
+
+                    <span>
+                      Adicionar
+                    </span>
+                  </label>
+                </div>
+              </article>
+
+              <article class="addon-card">
+                <span class="addon-icon">
+                  ✦
+                </span>
+
+                <div class="addon-copy">
+                  <strong>
+                    Filtro personalizado
+                  </strong>
+
+                  <p>
+                    Filtro exclusivo para as fotos da festa.
+                  </p>
+
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    data-special-example="filter"
+                  >
+                    Ver exemplo
+                  </button>
+                </div>
+
+                <div class="addon-control">
+                  <div class="addon-price">
+                    + ${money(
+                      state.catalog
+                        .addons
+                        .filter,
+                    )}
+                  </div>
+
+                  <label class="toggle-control">
+                    <input
+                      id="addonFilter"
+                      type="checkbox"
+                      ${
+                        selection
+                          .addons
+                          .filter
+                          ? 'checked'
+                          : ''
+                      }
+                    >
+
+                    <span>
+                      Adicionar
+                    </span>
+                  </label>
+                </div>
+              </article>
+
+              <article class="addon-card">
+                <span class="addon-icon">
+                  ＋
+                </span>
+
+                <div class="addon-copy">
+                  <strong>
+                    Cena extra
+                  </strong>
+
+                  <p>
+                    Mais um momento no convite.
+                  </p>
+                </div>
+
+                <div class="addon-control">
+                  <div class="addon-price">
+                    + ${money(
+                      state.catalog
+                        .addons
+                        .extraScene,
+                    )} cada
+                  </div>
+
+                  <div class="stepper">
+                    <button
+                      type="button"
+                      data-stepper="extraScene"
+                      data-delta="-1"
+                    >
+                      −
+                    </button>
+
+                    <span>
+                      ${
+                        selection
+                          .addons
+                          .extraScene
+                        || 0
+                      }
+                    </span>
+
+                    <button
+                      type="button"
+                      data-stepper="extraScene"
+                      data-delta="1"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="addon-card">
+                <span class="addon-icon">
+                  ☺
+                </span>
+
+                <div class="addon-copy">
+                  <strong>
+                    Outra criança ou pessoa
+                  </strong>
+
+                  <p>
+                    Inclua mais alguém na criação.
+                  </p>
+                </div>
+
+                <div class="addon-control">
+                  <div class="addon-price">
+                    + ${money(
+                      state.catalog
+                        .addons
+                        .extraPerson,
+                    )} cada
+                  </div>
+
+                  <div class="stepper">
+                    <button
+                      type="button"
+                      data-stepper="extraPerson"
+                      data-delta="-1"
+                    >
+                      −
+                    </button>
+
+                    <span>
+                      ${
+                        selection
+                          .addons
+                          .extraPerson
+                        || 0
+                      }
+                    </span>
+
+                    <button
+                      type="button"
+                      data-stepper="extraPerson"
+                      data-delta="1"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="notice notice-warning">
+              <strong>
+                Precisa antes de
+                ${state.catalog.rules.deadlineBusinessDays}
+                dias úteis?
+              </strong>
+
+              <br>
+
+              Consulte a disponibilidade.
+              Se aprovada, a urgência acrescenta
+              ${state.catalog.rules.urgencyPercent}%.
+              
+              <div>
+                <a
+                  id="urgencyLink"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Consultar urgência
+                </a>
+              </div>
+            </div>
+
+            <div class="quote-card">
+              <div class="quote-row total">
+                <span>
+                  Total
+                </span>
+
+                <strong>
+                  ${money(
+                    quote.totalCents,
+                  )}
+                </strong>
+              </div>
+
+              <div class="quote-row">
+                <span>
+                  Entrada (${quote.depositPercent}%)
+                </span>
+
+                <strong>
+                  ${money(
+                    quote.depositCents,
+                  )}
+                </strong>
+              </div>
+
+              <div class="quote-row">
+                <span>
+                  Restante
+                </span>
+
+                <strong>
+                  ${money(
+                    quote.balanceCents,
+                  )}
+                </strong>
+              </div>
+            </div>
+          </section>
+        `
+          : ''
+      }
+
+      ${actionBar({
+        back: false,
+        nextLabel: 'Continuar',
+        disabled: !showCommercial,
+      })}
+    </div>
+  `;
+
+  $$(
+    'input[name="experience"]',
+    stepCard,
+  ).forEach((input) => {
+    input.addEventListener(
+      'change',
+      async () => {
+        selection.experience =
+          input.value;
+
+        selection.format = '';
+
+        await renderProduct();
+
+        scrollToElement(
+          'formatBlock',
+        );
+      },
+    );
+  });
+
+  $$(
+    'input[name="format"]',
+    stepCard,
+  ).forEach((input) => {
+    input.addEventListener(
+      'change',
+      async () => {
+        selection.format =
+          input.value;
+
+        await renderProduct();
+
+        scrollToElement(
+          'commercialBlock',
+        );
+      },
+    );
+  });
+
+  $$(
+    '[data-example]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      () => {
+        openExample(
+          button.dataset.example,
+        );
+      },
+    );
+  });
+
+  $('#formatExample', stepCard)
+    ?.addEventListener(
+      'click',
+      () => {
+        openExample(
+          exampleUrl(
+            selection.experience,
+            selection.format,
+          ),
+        );
+      },
+    );
+
+  $$(
+    '[data-special-example]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      () => {
+        openExample(
+          state.catalog
+            .examples[
+              button.dataset
+                .specialExample
+            ],
+        );
+      },
+    );
+  });
+
+  $('#addonConfirmation', stepCard)
+    ?.addEventListener(
+      'change',
+      async (event) => {
+        selection
+          .addons
+          .confirmation =
+            event.target.checked;
+
+        await rerenderProduct();
+      },
+    );
+
+  $('#addonFilter', stepCard)
+    ?.addEventListener(
+      'change',
+      async (event) => {
+        selection
+          .addons
+          .filter =
+            event.target.checked;
+
+        await rerenderProduct();
+      },
+    );
+
+  $$(
+    '[data-stepper]',
+    stepCard,
+  ).forEach((button) => {
+    button.addEventListener(
+      'click',
+      async () => {
+        const key =
+          button.dataset.stepper;
+
+        const delta =
+          Number(
+            button.dataset.delta,
+          );
+
+        selection.addons[key] =
+          Math.max(
+            0,
+            Math.min(
+              10,
+              Number(
+                selection.addons[key]
+                || 0,
+              ) + delta,
+            ),
+          );
+
+        await rerenderProduct();
+      },
+    );
+  });
+
+  const urgencyLink =
+    $('#urgencyLink', stepCard);
+
+  if (urgencyLink) {
+    urgencyLink.href =
+      whatsappLink(
+        state.catalog
+          .contact
+          .libriWhatsapp,
+
+        'Oi! Estou montando meu pedido na Libri e preciso receber antes do prazo normal. Podemos verificar a possibilidade de urgência?',
+      );
+  }
+
+  $('#nextBtn', stepCard)
+    ?.addEventListener(
+      'click',
+      nextStep,
+    );
+}
+
+async function rerenderProduct() {
+  const y =
+    window.scrollY;
+
+  await renderProduct();
+
+  window.scrollTo({
+    top: y,
+  });
+}
+
+function scrollToElement(id) {
+  requestAnimationFrame(() => {
+    const element =
+      document.getElementById(id);
+
+    if (!element) {
+      return;
+    }
+
+    const top =
+      element
+        .getBoundingClientRect()
+        .top
+      + window.scrollY
+      - 105;
+
+    window.scrollTo({
+      top,
+      behavior: 'smooth',
+    });
+  });
+}
+
+/* ==================================================
+   ETAPA 2 | FESTA
+================================================== */
+
+function renderParty() {
+  const b =
+    state.briefing;
+
+  stepCard.innerHTML = `
+    ${stepHeader(
       'Conte sobre a festa',
-      'Agora entram os dados que fazem o convite ser realmente seu. Os campos com * são obrigatórios.',
+      'Os campos com * são obrigatórios.',
     )}
 
     <div class="step-body">
@@ -1173,38 +1624,38 @@ function renderParty() {
 
           <div>
             <h3>
-              Quem está comemorando
+              Quem
             </h3>
-
-            <p>
-              Você e a criança ou homenageado(a).
-            </p>
           </div>
         </div>
 
         <div class="form-grid">
           <div class="field">
-            <label for="customerName">
+            <label>
               Seu nome
               <span class="required">*</span>
             </label>
 
             <input
               id="customerName"
-              value="${esc(b.customerName)}"
+              value="${esc(
+                b.customerName,
+              )}"
               autocomplete="name"
             >
           </div>
 
           <div class="field">
-            <label for="whatsapp">
+            <label>
               Seu WhatsApp
               <span class="required">*</span>
             </label>
 
             <input
               id="whatsapp"
-              value="${esc(b.whatsapp)}"
+              value="${esc(
+                b.whatsapp,
+              )}"
               inputmode="tel"
               autocomplete="tel"
               placeholder="(00) 00000-0000"
@@ -1212,20 +1663,22 @@ function renderParty() {
           </div>
 
           <div class="field">
-            <label for="honoreeName">
+            <label>
               Nome da criança
               <span class="required">*</span>
             </label>
 
             <input
               id="honoreeName"
-              value="${esc(b.honoreeName)}"
+              value="${esc(
+                b.honoreeName,
+              )}"
             >
           </div>
 
           <div class="field">
-            <label for="age">
-              Idade que vai fazer
+            <label>
+              Idade
               <span class="required">*</span>
             </label>
 
@@ -1235,19 +1688,20 @@ function renderParty() {
               type="number"
               min="0"
               max="120"
-              inputmode="numeric"
             >
           </div>
 
           <div class="field full">
-            <label for="displayName">
-              Como você quer que o nome apareça?
+            <label>
+              Como o nome deve aparecer?
             </label>
 
             <input
               id="displayName"
-              value="${esc(b.displayName)}"
-              placeholder="Se deixar vazio, usaremos o nome acima"
+              value="${esc(
+                b.displayName,
+              )}"
+              placeholder="Opcional"
             >
           </div>
         </div>
@@ -1263,37 +1717,37 @@ function renderParty() {
             <h3>
               Quando
             </h3>
-
-            <p>
-              Data e horário da comemoração.
-            </p>
           </div>
         </div>
 
         <div class="form-grid">
           <div class="field">
-            <label for="eventDate">
-              Data da festa
+            <label>
+              Data
               <span class="required">*</span>
             </label>
 
             <input
               id="eventDate"
-              value="${esc(b.eventDate)}"
               type="date"
+              value="${esc(
+                b.eventDate,
+              )}"
             >
           </div>
 
           <div class="field">
-            <label for="eventTime">
+            <label>
               Horário
               <span class="required">*</span>
             </label>
 
             <input
               id="eventTime"
-              value="${esc(b.eventTime)}"
               type="time"
+              value="${esc(
+                b.eventTime,
+              )}"
             >
           </div>
         </div>
@@ -1309,48 +1763,50 @@ function renderParty() {
             <h3>
               Onde
             </h3>
-
-            <p>
-              O local que vai aparecer no convite.
-            </p>
           </div>
         </div>
 
         <div class="form-grid">
           <div class="field">
-            <label for="venueName">
-              Nome do local
+            <label>
+              Local
               <span class="required">*</span>
             </label>
 
             <input
               id="venueName"
-              value="${esc(b.venueName)}"
+              value="${esc(
+                b.venueName,
+              )}"
               placeholder="Ex.: Salão de festas"
             >
           </div>
 
           <div class="field">
-            <label for="locationUrl">
+            <label>
               Link da localização
             </label>
 
             <input
               id="locationUrl"
-              value="${esc(b.locationUrl)}"
+              value="${esc(
+                b.locationUrl,
+              )}"
               placeholder="Opcional"
             >
           </div>
 
           <div class="field full">
-            <label for="venueAddress">
+            <label>
               Endereço
               <span class="required">*</span>
             </label>
 
             <input
               id="venueAddress"
-              value="${esc(b.venueAddress)}"
+              value="${esc(
+                b.venueAddress,
+              )}"
             >
           </div>
         </div>
@@ -1364,72 +1820,77 @@ function renderParty() {
 
           <div>
             <h3>
-              O universo da festa
+              Tema
             </h3>
-
-            <p>
-              Tema, personagens e detalhes importantes.
-            </p>
           </div>
         </div>
 
         <div class="form-grid">
           <div class="field">
-            <label for="theme">
+            <label>
               Tema da festa
               <span class="required">*</span>
             </label>
 
             <input
               id="theme"
-              value="${esc(b.theme)}"
-              placeholder="Ex.: fundo do mar rosa"
+              value="${esc(
+                b.theme,
+              )}"
             >
           </div>
 
           <div class="field">
-            <label for="characterWanted">
-              Tem algum personagem específico?
+            <label>
+              Personagem específico
             </label>
 
             <input
               id="characterWanted"
-              value="${esc(b.characterWanted)}"
-              placeholder="Se não tiver, deixe em branco"
+              value="${esc(
+                b.characterWanted,
+              )}"
+              placeholder="Opcional"
             >
           </div>
 
           <div class="field full">
-            <label for="mustHave">
+            <label>
               O que não pode faltar?
             </label>
 
             <textarea
               id="mustHave"
-              placeholder="Pode ser personagem, objeto, flor, animal, brinquedo, cor..."
-            >${esc(b.mustHave)}</textarea>
+              placeholder="Personagem, objeto, flor, animal, brinquedo, cor..."
+            >${esc(
+              b.mustHave,
+            )}</textarea>
           </div>
 
           <div class="field">
-            <label for="avoid">
+            <label>
               Tem algo que você não quer?
             </label>
 
             <textarea
               id="avoid"
               placeholder="Opcional"
-            >${esc(b.avoid)}</textarea>
+            >${esc(
+              b.avoid,
+            )}</textarea>
           </div>
 
           <div class="field">
-            <label for="specialInfo">
-              Algum recado especial precisa aparecer?
+            <label>
+              Recado especial
             </label>
 
             <textarea
               id="specialInfo"
               placeholder="Ex.: traga sua bebida, use roupa confortável..."
-            >${esc(b.specialInfo)}</textarea>
+            >${esc(
+              b.specialInfo,
+            )}</textarea>
           </div>
         </div>
       </div>
@@ -1468,49 +1929,79 @@ function renderParty() {
           b,
           {
             customerName:
-              formValue('#customerName'),
+              formValue(
+                '#customerName',
+              ),
 
             whatsapp:
-              formValue('#whatsapp'),
+              formValue(
+                '#whatsapp',
+              ),
 
             honoreeName:
-              formValue('#honoreeName'),
+              formValue(
+                '#honoreeName',
+              ),
 
             displayName:
-              formValue('#displayName'),
+              formValue(
+                '#displayName',
+              ),
 
             age:
-              formValue('#age'),
+              formValue(
+                '#age',
+              ),
 
             eventDate:
-              formValue('#eventDate'),
+              formValue(
+                '#eventDate',
+              ),
 
             eventTime:
-              formValue('#eventTime'),
+              formValue(
+                '#eventTime',
+              ),
 
             venueName:
-              formValue('#venueName'),
+              formValue(
+                '#venueName',
+              ),
 
             venueAddress:
-              formValue('#venueAddress'),
+              formValue(
+                '#venueAddress',
+              ),
 
             locationUrl:
-              formValue('#locationUrl'),
+              formValue(
+                '#locationUrl',
+              ),
 
             theme:
-              formValue('#theme'),
+              formValue(
+                '#theme',
+              ),
 
             characterWanted:
-              formValue('#characterWanted'),
+              formValue(
+                '#characterWanted',
+              ),
 
             mustHave:
-              formValue('#mustHave'),
+              formValue(
+                '#mustHave',
+              ),
 
             avoid:
-              formValue('#avoid'),
+              formValue(
+                '#avoid',
+              ),
 
             specialInfo:
-              formValue('#specialInfo'),
+              formValue(
+                '#specialInfo',
+              ),
           },
         );
 
@@ -1526,17 +2017,20 @@ function renderParty() {
           'theme',
         ];
 
-        if (
+        const missing =
           required.some(
             (key) =>
               !String(
-                b[key] || '',
+                b[key]
+                || '',
               ).trim(),
-          )
-        ) {
-          showError(
-            'Preencha os campos marcados com * para continuar.',
           );
+
+        if (missing) {
+          showError(
+            'Preencha os campos marcados com *.',
+          );
+
           return;
         }
 
@@ -1545,14 +2039,18 @@ function renderParty() {
     );
 }
 
+/* ==================================================
+   ETAPA 3 | CRIANÇA
+================================================== */
+
 function renderChild() {
-  const b = state.briefing;
+  const b =
+    state.briefing;
 
   stepCard.innerHTML = `
     ${stepHeader(
-      3,
       'Como você imagina a criança?',
-      'As fotos serão enviadas pelo WhatsApp só no final. Aqui você escolhe apenas a direção que prefere.',
+      'As fotos serão enviadas pelo WhatsApp no final.',
     )}
 
     <div class="step-body">
@@ -1575,9 +2073,9 @@ function renderChild() {
             value: 'drawing',
             icon: '✎',
             title: 'Desenho / bonequinho',
-            desc: 'Um visual mais ilustrado, suave e com jeitinho de animação.',
             checked:
-              b.childStyle === 'drawing',
+              b.childStyle
+              === 'drawing',
           })}
 
           ${choice({
@@ -1585,9 +2083,9 @@ function renderChild() {
             value: 'real',
             icon: '◉',
             title: 'Mais real e detalhado',
-            desc: 'Mais detalhes naturais de pele, cabelo e traços.',
             checked:
-              b.childStyle === 'real',
+              b.childStyle
+              === 'real',
           })}
 
           ${choice({
@@ -1595,21 +2093,21 @@ function renderChild() {
             value: 'libri',
             icon: '✦',
             title: 'A Libri escolhe',
-            desc: 'Escolhemos o estilo que combinar melhor com o universo do convite.',
             checked:
-              b.childStyle === 'libri',
+              b.childStyle
+              === 'libri',
           })}
         </div>
 
         <div class="notice">
-          Usamos as fotos como referência para preservar as principais características da criança.
+          Usamos as fotos como referência.
 
           <button
             id="mascotInfo"
             class="btn btn-ghost"
             type="button"
           >
-            Entender melhor
+            Saiba mais
           </button>
         </div>
       </section>
@@ -1622,7 +2120,7 @@ function renderChild() {
             </span>
 
             <h3>
-              Como você quer o look?
+              Como quer o look?
             </h3>
           </div>
         </div>
@@ -1633,9 +2131,9 @@ function renderChild() {
             value: 'party',
             icon: '♡',
             title: 'Parecida com a roupa da festa',
-            desc: 'Você envia uma foto da roupa no WhatsApp ao finalizar.',
             checked:
-              b.outfitChoice === 'party',
+              b.outfitChoice
+              === 'party',
           })}
 
           ${choice({
@@ -1643,19 +2141,19 @@ function renderChild() {
             value: 'specific',
             icon: '⌁',
             title: 'Tenho uma roupa específica',
-            desc: 'Você envia a referência exata pelo WhatsApp no final.',
             checked:
-              b.outfitChoice === 'specific',
+              b.outfitChoice
+              === 'specific',
           })}
 
           ${choice({
             name: 'outfitChoice',
             value: 'libri',
             icon: '✦',
-            title: 'Quero que a Libri crie',
-            desc: 'Criamos uma roupa pensada para combinar com o tema.',
+            title: 'A Libri cria',
             checked:
-              b.outfitChoice === 'libri',
+              b.outfitChoice
+              === 'libri',
           })}
         </div>
       </section>
@@ -1663,18 +2161,16 @@ function renderChild() {
       <section class="section-block">
         <div class="form-panel">
           <div class="field">
-            <label for="appearanceDetails">
-              Tem algum detalhe da aparência que devemos manter com atenção?
+            <label>
+              Algum detalhe importante da aparência?
             </label>
 
             <textarea
               id="appearanceDetails"
-              placeholder="Ex.: cachinhos, franja, laço, óculos ou outro acessório especial."
-            >${esc(b.appearanceDetails)}</textarea>
-
-            <span class="hint">
-              Opcional. Use este campo apenas para detalhes que são importantes para você.
-            </span>
+              placeholder="Ex.: cachinhos, franja, laço, óculos..."
+            >${esc(
+              b.appearanceDetails,
+            )}</textarea>
           </div>
         </div>
       </section>
@@ -1691,7 +2187,17 @@ function renderChild() {
       () => {
         modal(
           'Sobre o mascote',
-          '<p>O mascote é uma recriação artística feita a partir das fotos enviadas. A Libri busca preservar rosto, cabelo, tom de pele, idade e características marcantes, mas não se trata de uma cópia exata da fotografia e podem existir pequenas diferenças. Antes de seguir com o convite, você poderá ver e aprovar.</p>',
+          `
+            <p>
+              O mascote é uma recriação artística feita a partir das fotos enviadas.
+              A Libri busca preservar rosto, cabelo, tom de pele, idade e características marcantes,
+              mas não é uma cópia exata da fotografia e pode ter pequenas diferenças.
+            </p>
+
+            <p>
+              Antes de seguir com o convite, você poderá ver e aprovar.
+            </p>
+          `,
         );
       },
     );
@@ -1707,11 +2213,15 @@ function renderChild() {
       'click',
       () => {
         b.childStyle =
-          checkedValue('childStyle')
+          checkedValue(
+            'childStyle',
+          )
           || 'libri';
 
         b.outfitChoice =
-          checkedValue('outfitChoice')
+          checkedValue(
+            'outfitChoice',
+          )
           || 'libri';
 
         b.appearanceDetails =
@@ -1724,58 +2234,50 @@ function renderChild() {
     );
 }
 
+/* ==================================================
+   ETAPA 4 | ESTILO
+================================================== */
+
 function renderStyle() {
-  const b = state.briefing;
+  const b =
+    state.briefing;
 
   stepCard.innerHTML = `
     ${stepHeader(
-      4,
       'Agora, o seu gosto',
-      'Se você não tiver preferência, tudo bem. A Libri pode assumir a direção criativa por você.',
+      'Se não tiver preferência, pode deixar por conta da Libri.',
     )}
 
     <div class="step-body">
       <div class="form-panel">
-        <div class="form-panel-head">
-          <span class="panel-icon">
-            ◌
-          </span>
-
-          <div>
-            <h3>
-              Cores e referências
-            </h3>
-
-            <p>
-              Só o que você realmente quiser orientar.
-            </p>
-          </div>
-        </div>
-
         <div class="form-grid">
           <div class="field">
-            <label for="colors">
-              Tem alguma cor que você quer ou não quer?
+            <label>
+              Cores que quer ou não quer
             </label>
 
             <textarea
               id="colors"
               placeholder="Opcional"
-            >${esc(b.colors)}</textarea>
+            >${esc(
+              b.colors,
+            )}</textarea>
           </div>
 
           <div class="field">
-            <label for="creativeIdea">
-              Tem alguma ideia ou detalhe que gostaria de ver?
+            <label>
+              Alguma ideia ou detalhe?
             </label>
 
             <textarea
               id="creativeIdea"
               placeholder="Opcional"
-            >${esc(b.creativeIdea)}</textarea>
+            >${esc(
+              b.creativeIdea,
+            )}</textarea>
 
             <span class="hint">
-              Se tiver imagens de referência, você enviará pelo WhatsApp no final.
+              Referências podem ser enviadas pelo WhatsApp no final.
             </span>
           </div>
         </div>
@@ -1789,7 +2291,7 @@ function renderStyle() {
             </span>
 
             <h3>
-              Como prefere decidir os textos falados?
+              Como prefere?
             </h3>
           </div>
         </div>
@@ -1800,9 +2302,9 @@ function renderStyle() {
             value: 'libri',
             icon: '✦',
             title: 'Pode deixar com a Libri',
-            desc: 'Criamos as falas de acordo com o convite.',
             checked:
-              b.speechPreference === 'libri',
+              b.speechPreference
+              === 'libri',
           })}
 
           ${choice({
@@ -1810,9 +2312,9 @@ function renderStyle() {
             value: 'approve',
             icon: '✓',
             title: 'Quero aprovar antes',
-            desc: 'A Libri prepara e você confere antes da produção dessa parte.',
             checked:
-              b.speechPreference === 'approve',
+              b.speechPreference
+              === 'approve',
           })}
 
           ${choice({
@@ -1820,35 +2322,41 @@ function renderStyle() {
             value: 'own',
             icon: '“”',
             title: 'Já tenho uma frase',
-            desc: 'Você escreve exatamente o que gostaria de usar.',
             checked:
-              b.speechPreference === 'own',
+              b.speechPreference
+              === 'own',
           })}
         </div>
 
         <div
+          id="ownSpeechWrap"
           class="form-panel ${
-            b.speechPreference === 'own'
+            b.speechPreference
+            === 'own'
               ? ''
               : 'hidden'
           }"
-          id="ownSpeechWrap"
+          style="margin-top:12px"
         >
           <div class="field">
-            <label for="ownSpeech">
+            <label>
               Escreva a frase
             </label>
 
             <textarea
               id="ownSpeech"
-              placeholder="Digite a frase exatamente como deseja."
-            >${esc(b.ownSpeech)}</textarea>
+            >${esc(
+              b.ownSpeech,
+            )}</textarea>
           </div>
         </div>
       </section>
 
       ${actionBar({
-        nextLabel: 'Continuar',
+        nextLabel:
+          hasConfirmation()
+            ? 'Continuar'
+            : 'Revisar pedido',
       })}
     </div>
   `;
@@ -1856,15 +2364,16 @@ function renderStyle() {
   $$(
     'input[name="speechPreference"]',
     stepCard,
-  ).forEach((el) => {
-    el.addEventListener(
+  ).forEach((input) => {
+    input.addEventListener(
       'change',
       () => {
         $('#ownSpeechWrap', stepCard)
           .classList
           .toggle(
             'hidden',
-            el.value !== 'own',
+            input.value
+            !== 'own',
           );
       },
     );
@@ -1881,10 +2390,14 @@ function renderStyle() {
       'click',
       () => {
         b.colors =
-          formValue('#colors');
+          formValue(
+            '#colors',
+          );
 
         b.creativeIdea =
-          formValue('#creativeIdea');
+          formValue(
+            '#creativeIdea',
+          );
 
         b.speechPreference =
           checkedValue(
@@ -1893,17 +2406,24 @@ function renderStyle() {
           || 'libri';
 
         b.ownSpeech =
-          b.speechPreference === 'own'
-            ? formValue('#ownSpeech')
+          b.speechPreference
+          === 'own'
+
+            ? formValue(
+                '#ownSpeech',
+              )
+
             : '';
 
         if (
-          b.speechPreference === 'own'
+          b.speechPreference
+          === 'own'
           && !b.ownSpeech
         ) {
           showError(
             'Escreva a frase que deseja usar.',
           );
+
           return;
         }
 
@@ -1912,92 +2432,65 @@ function renderStyle() {
     );
 }
 
-function renderResources() {
-  const b = state.briefing;
+/* ==================================================
+   ETAPA 5 | CONFIRMAÇÃO
+================================================== */
 
-  const hasConfirmation =
-    Boolean(
-      state.selection
-        .addons
-        .confirmation,
-    );
+function renderResources() {
+  const b =
+    state.briefing;
+
+  if (!hasConfirmation()) {
+    state.step = 5;
+
+    render();
+
+    return;
+  }
 
   stepCard.innerHTML = `
     ${stepHeader(
-      5,
-      'Últimos detalhes',
-      'Aqui aparecem apenas as escolhas extras que realmente fazem parte do seu pedido.',
+      'Confirmação de presença',
     )}
 
     <div class="step-body">
-      ${
-        hasConfirmation
-          ? `
-        <section class="section-block">
-          <div class="section-title">
-            <div>
-              <span class="section-kicker">
-                Confirmação Libri
-              </span>
+      <div class="choice-grid three">
+        ${choice({
+          name: 'confirmationMode',
+          value: 'open',
+          icon: '◎',
+          title: 'Livre',
+          desc: 'Quem receber o link pode confirmar.',
+          checked:
+            b.confirmationMode
+            === 'open',
+        })}
 
-              <h3>
-                Como você quer que funcione?
-              </h3>
-            </div>
-          </div>
+        ${choice({
+          name: 'confirmationMode',
+          value: 'list',
+          icon: '☷',
+          title: 'Lista de convidados',
+          desc: 'Você organiza os convidados no seu painel.',
+          checked:
+            b.confirmationMode
+            === 'list',
+        })}
 
-          <div class="choice-grid three">
-            ${choice({
-              name: 'confirmationMode',
-              value: 'open',
-              icon: '◎',
-              title: 'Qualquer convidado pode confirmar',
-              desc: 'Quem receber o link poderá preencher a confirmação.',
-              checked:
-                b.confirmationMode === 'open',
-            })}
-
-            ${choice({
-              name: 'confirmationMode',
-              value: 'list',
-              icon: '☷',
-              title: 'Quero usar lista de convidados',
-              desc: 'Você poderá cadastrar e organizar os convidados no seu painel.',
-              checked:
-                b.confirmationMode === 'list',
-            })}
-
-            ${choice({
-              name: 'confirmationMode',
-              value: 'unsure',
-              icon: '?',
-              title: 'Ainda não sei',
-              desc: 'Você poderá decidir isso depois com a Libri.',
-              checked:
-                b.confirmationMode === 'unsure',
-            })}
-          </div>
-        </section>
-      `
-          : `
-        <div
-          class="notice notice-success"
-          style="margin-top:0"
-        >
-          <strong>
-            Tudo certo por aqui.
-          </strong>
-
-          <br>
-
-          Seu pedido não tem nenhum recurso que precise de configuração extra.
-          Pode seguir para a revisão.
-        </div>
-      `
-      }
+        ${choice({
+          name: 'confirmationMode',
+          value: 'unsure',
+          icon: '?',
+          title: 'Ainda não sei',
+          desc: 'Você decide depois com a Libri.',
+          checked:
+            b.confirmationMode
+            === 'unsure',
+        })}
+      </div>
 
       ${actionBar({
-        nextLabel: 'Revisar meu pedido',
+        nextLabel: 'Revisar pedido',
       })}
     </div>
   `;
@@ -2012,56 +2505,83 @@ function renderResources() {
     .addEventListener(
       'click',
       () => {
-        if (hasConfirmation) {
-          b.confirmationMode =
-            checkedValue(
-              'confirmationMode',
-            )
-            || 'unsure';
-        }
+        b.confirmationMode =
+          checkedValue(
+            'confirmationMode',
+          )
+          || 'unsure';
 
         nextStep();
       },
     );
 }
 
+/* ==================================================
+   HUMAN LABELS
+================================================== */
+
 function humanExperience(value) {
-  return value === 'reduced'
-    ? 'Reduzida'
-    : 'Completa';
+  return (
+    value === 'reduced'
+      ? 'Reduzida'
+      : 'Completa'
+  );
 }
 
 function humanFormat(value) {
-  return value === 'interactive'
-    ? 'Interativo'
-    : 'Vídeo';
+  return (
+    value === 'interactive'
+      ? 'Interativo'
+      : 'Vídeo'
+  );
 }
 
 function humanChildStyle(value) {
-  return ({
-    drawing: 'Desenho / bonequinho',
-    real: 'Mais real e detalhado',
-    libri: 'A Libri escolhe',
-  })[value]
-    || 'A Libri escolhe';
+  return (
+    {
+      drawing:
+        'Desenho / bonequinho',
+
+      real:
+        'Mais real e detalhado',
+
+      libri:
+        'A Libri escolhe',
+    }[value]
+    || 'A Libri escolhe'
+  );
 }
 
 function humanOutfit(value) {
-  return ({
-    party: 'Parecida com a roupa da festa',
-    specific: 'Roupa específica',
-    libri: 'A Libri cria',
-  })[value]
-    || 'A Libri cria';
+  return (
+    {
+      party:
+        'Parecida com a roupa da festa',
+
+      specific:
+        'Roupa específica',
+
+      libri:
+        'A Libri cria',
+    }[value]
+    || 'A Libri cria'
+  );
 }
 
 function humanSpeech(value) {
-  return ({
-    libri: 'A Libri cria',
-    approve: 'Quero aprovar antes',
-    own: 'Frase própria',
-  })[value]
-    || 'A Libri cria';
+  return (
+    {
+      libri:
+        'A Libri cria',
+
+      approve:
+        'Quero aprovar antes',
+
+      own:
+        'Frase própria',
+    }[value]
+    || 'A Libri cria'
+  );
 }
 
 function addonNames() {
@@ -2097,44 +2617,26 @@ function addonNames() {
   return addons;
 }
 
-async function goToStep(step) {
-  state.step =
-    Math.max(
-      0,
-      Math.min(
-        5,
-        Number(step),
-      ),
-    );
-
-  try {
-    await saveDraft();
-
-    render();
-
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth',
-    });
-  } catch (error) {
-    showError(
-      error.message,
-    );
-  }
-}
+/* ==================================================
+   REVISÃO
+================================================== */
 
 async function renderReview() {
   await refreshQuote();
 
-  const b = state.briefing;
-  const q = state.quote;
-  const addons = addonNames();
+  const b =
+    state.briefing;
+
+  const q =
+    state.quote;
+
+  const addons =
+    addonNames();
 
   stepCard.innerHTML = `
     ${stepHeader(
-      6,
       'Confira seu pedido',
-      'Essa é a última etapa. Revise os dados, aceite as condições e finalize quando estiver tudo certo.',
+      'Revise antes de finalizar.',
     )}
 
     <div class="step-body">
@@ -2175,9 +2677,7 @@ async function renderReview() {
             </div>
 
             <div class="review-line">
-              <dt>
-                Data e horário
-              </dt>
+              <dt>Quando</dt>
 
               <dd>
                 ${esc(
@@ -2186,17 +2686,23 @@ async function renderReview() {
                   ),
                 )}
                 •
-                ${esc(b.eventTime)}
+                ${esc(
+                  b.eventTime,
+                )}
               </dd>
             </div>
 
             <div class="review-line">
-              <dt>Local</dt>
+              <dt>Onde</dt>
 
               <dd>
-                ${esc(b.venueName)}
+                ${esc(
+                  b.venueName,
+                )}
                 <br>
-                ${esc(b.venueAddress)}
+                ${esc(
+                  b.venueAddress,
+                )}
               </dd>
             </div>
 
@@ -2204,7 +2710,9 @@ async function renderReview() {
               <dt>Tema</dt>
 
               <dd>
-                ${esc(b.theme)}
+                ${esc(
+                  b.theme,
+                )}
               </dd>
             </div>
           </dl>
@@ -2227,33 +2735,29 @@ async function renderReview() {
 
           <dl class="review-list">
             <div class="review-line">
-              <dt>
-                Experiência
-              </dt>
+              <dt>Experiência</dt>
 
               <dd>
                 ${humanExperience(
-                  state.selection.experience,
+                  state.selection
+                    .experience,
                 )}
               </dd>
             </div>
 
             <div class="review-line">
-              <dt>
-                Formato
-              </dt>
+              <dt>Formato</dt>
 
               <dd>
                 ${humanFormat(
-                  state.selection.format,
+                  state.selection
+                    .format,
                 )}
               </dd>
             </div>
 
             <div class="review-line">
-              <dt>
-                Adicionais
-              </dt>
+              <dt>Adicionais</dt>
 
               <dd>
                 ${
@@ -2285,9 +2789,7 @@ async function renderReview() {
 
           <dl class="review-list">
             <div class="review-line">
-              <dt>
-                Estilo
-              </dt>
+              <dt>Estilo</dt>
 
               <dd>
                 ${humanChildStyle(
@@ -2297,26 +2799,11 @@ async function renderReview() {
             </div>
 
             <div class="review-line">
-              <dt>
-                Roupa
-              </dt>
+              <dt>Roupa</dt>
 
               <dd>
                 ${humanOutfit(
                   b.outfitChoice,
-                )}
-              </dd>
-            </div>
-
-            <div class="review-line">
-              <dt>
-                Detalhes
-              </dt>
-
-              <dd>
-                ${esc(
-                  b.appearanceDetails
-                  || 'Nenhum detalhe extra informado',
                 )}
               </dd>
             </div>
@@ -2340,9 +2827,7 @@ async function renderReview() {
 
           <dl class="review-list">
             <div class="review-line">
-              <dt>
-                Falas
-              </dt>
+              <dt>Falas</dt>
 
               <dd>
                 ${humanSpeech(
@@ -2352,87 +2837,113 @@ async function renderReview() {
             </div>
 
             <div class="review-line">
-              <dt>
-                Cores
-              </dt>
+              <dt>Cores</dt>
 
               <dd>
                 ${esc(
                   b.colors
-                  || 'Sem preferência informada',
-                )}
-              </dd>
-            </div>
-
-            <div class="review-line">
-              <dt>
-                Ideia extra
-              </dt>
-
-              <dd>
-                ${esc(
-                  b.creativeIdea
-                  || 'Nenhuma ideia extra informada',
+                  || 'Sem preferência',
                 )}
               </dd>
             </div>
           </dl>
         </article>
+
+        ${
+          hasConfirmation()
+            ? `
+            <article class="review-card full">
+              <div class="review-card-head">
+                <h3>
+                  Confirmação Libri
+                </h3>
+
+                <button
+                  class="review-edit"
+                  type="button"
+                  data-go-step="4"
+                >
+                  Editar
+                </button>
+              </div>
+
+              <dl class="review-list">
+                <div class="review-line">
+                  <dt>Modo</dt>
+
+                  <dd>
+                    ${
+                      b.confirmationMode
+                      === 'open'
+                        ? 'Livre'
+
+                        : b.confirmationMode
+                          === 'list'
+                            ? 'Lista de convidados'
+                            : 'Ainda não definido'
+                    }
+                  </dd>
+                </div>
+              </dl>
+            </article>
+          `
+            : ''
+        }
       </div>
 
-      <div
-        class="quote-card"
-        style="margin-top:16px"
-      >
+      <div class="quote-card">
         <div class="quote-row total">
           <span>
             Valor total
           </span>
 
           <strong>
-            ${money(q.totalCents)}
+            ${money(
+              q.totalCents,
+            )}
           </strong>
         </div>
 
         <div class="quote-row">
           <span>
-            Entrada para começar (${q.depositPercent}%)
+            Entrada (${q.depositPercent}%)
           </span>
 
           <strong>
-            ${money(q.depositCents)}
+            ${money(
+              q.depositCents,
+            )}
           </strong>
         </div>
 
         <div class="quote-row">
           <span>
-            Restante após aprovação
+            Restante
           </span>
 
           <strong>
-            ${money(q.balanceCents)}
+            ${money(
+              q.balanceCents,
+            )}
           </strong>
         </div>
       </div>
 
       <div class="terms-box">
         <strong>
-          Antes de finalizar
+          Condições do pedido
         </strong>
 
-        <div
-          class="notice"
-          style="margin-top:10px"
-        >
+        <div class="notice">
           Prazo normal:
-          até ${state.catalog.rules.deadlineBusinessDays} dias úteis.
+          até
+          ${state.catalog.rules.deadlineBusinessDays}
+          dias úteis.
 
-          A produção começa depois da entrada,
-          do briefing completo
-          e das fotos adequadas.
-
-          Você poderá conferir
-          e aprovar as etapas.
+          A produção começa após
+          briefing completo,
+          fotos adequadas
+          e entrada.
         </div>
 
         <button
@@ -2456,7 +2967,7 @@ async function renderReview() {
 
           <span>
             <strong>
-              Li e concordo com as condições do pedido.
+              Li e concordo com as condições.
             </strong>
           </span>
         </label>
@@ -2470,11 +2981,11 @@ async function renderReview() {
             </span>
 
             <h3>
-              A Libri pode mostrar seu convite no portfólio e nas redes sociais?
+              A Libri pode mostrar seu convite no portfólio?
             </h3>
 
             <p>
-              Essa escolha é opcional e não interfere na produção.
+              Isso não interfere na produção.
             </p>
           </div>
         </div>
@@ -2485,19 +2996,19 @@ async function renderReview() {
             value: 'yes',
             icon: '♡',
             title: 'Sim, autorizo',
-            desc: 'A Libri poderá divulgar o convite conforme as condições do pedido.',
             checked:
-              state.portfolioConsent === true,
+              state.portfolioConsent
+              === true,
           })}
 
           ${choice({
             name: 'portfolioConsent',
             value: 'no',
             icon: '○',
-            title: 'Não, prefiro que não seja divulgado',
-            desc: 'Seu convite será produzido normalmente.',
+            title: 'Não, prefiro que não',
             checked:
-              state.portfolioConsent === false,
+              state.portfolioConsent
+              === false,
           })}
         </div>
       </section>
@@ -2514,8 +3025,12 @@ async function renderReview() {
       'click',
       () => {
         modal(
-          `Condições do pedido • versão ${esc(state.terms.version)}`,
-          `<pre>${esc(state.terms.body)}</pre>`,
+          `Condições • versão ${esc(
+            state.terms.version,
+          )}`,
+          `<pre>${esc(
+            state.terms.body,
+          )}</pre>`,
         );
       },
     );
@@ -2532,12 +3047,13 @@ async function renderReview() {
   $$(
     'input[name="portfolioConsent"]',
     stepCard,
-  ).forEach((el) => {
-    el.addEventListener(
+  ).forEach((input) => {
+    input.addEventListener(
       'change',
       () => {
         state.portfolioConsent =
-          el.value === 'yes';
+          input.value
+          === 'yes';
       },
     );
   });
@@ -2548,9 +3064,13 @@ async function renderReview() {
   ).forEach((button) => {
     button.addEventListener(
       'click',
-      () => goToStep(
-        button.dataset.goStep,
-      ),
+      () => {
+        goToStep(
+          Number(
+            button.dataset.goStep,
+          ),
+        );
+      },
     );
   });
 
@@ -2567,6 +3087,10 @@ async function renderReview() {
     );
 }
 
+/* ==================================================
+   FINALIZAR
+================================================== */
+
 async function finishOrder() {
   state.termsAccepted =
     $('#termsAccepted', stepCard)
@@ -2580,23 +3104,28 @@ async function finishOrder() {
   state.portfolioConsent =
     portfolio === 'yes'
       ? true
+
       : portfolio === 'no'
         ? false
+
         : null;
 
   if (!state.termsAccepted) {
     showError(
-      'Marque que leu e concorda com as condições do pedido.',
+      'Marque que leu e concorda com as condições.',
     );
+
     return;
   }
 
   if (
-    state.portfolioConsent === null
+    state.portfolioConsent
+    === null
   ) {
     showError(
-      'Escolha se autoriza ou não a divulgação do convite.',
+      'Escolha se autoriza ou não a divulgação.',
     );
+
     return;
   }
 
@@ -2604,8 +3133,9 @@ async function finishOrder() {
     $('#finishBtn', stepCard);
 
   button.disabled = true;
+
   button.textContent =
-    'Salvando pedido...';
+    'Salvando...';
 
   try {
     const data =
@@ -2613,22 +3143,24 @@ async function finishOrder() {
         '/api/orders',
         {
           method: 'POST',
-          body: JSON.stringify({
-            draftToken:
-              state.draftToken,
 
-            selection:
-              state.selection,
+          body:
+            JSON.stringify({
+              draftToken:
+                state.draftToken,
 
-            briefing:
-              state.briefing,
+              selection:
+                state.selection,
 
-            termsAccepted:
-              true,
+              briefing:
+                state.briefing,
 
-            portfolioConsent:
-              state.portfolioConsent,
-          }),
+              termsAccepted:
+                true,
+
+              portfolioConsent:
+                state.portfolioConsent,
+            }),
         },
       );
 
@@ -2636,9 +3168,9 @@ async function finishOrder() {
       'libriDraftToken',
     );
 
-    flow.classList.add(
-      'hidden',
-    );
+    flow
+      .classList
+      .add('hidden');
 
     await renderFinal(
       data.order,
@@ -2649,7 +3181,8 @@ async function finishOrder() {
       behavior: 'smooth',
     });
   } catch (error) {
-    button.disabled = false;
+    button.disabled =
+      false;
 
     button.textContent =
       'Finalizar pedido';
@@ -2668,41 +3201,9 @@ async function finishOrder() {
   }
 }
 
-async function copyText(value) {
-  if (!value) return;
-
-  if (
-    navigator
-      .clipboard
-      ?.writeText
-  ) {
-    await navigator
-      .clipboard
-      .writeText(value);
-
-    return;
-  }
-
-  const area =
-    document.createElement(
-      'textarea',
-    );
-
-  area.value = value;
-  area.style.position = 'fixed';
-  area.style.opacity = '0';
-
-  document.body
-    .appendChild(area);
-
-  area.select();
-
-  document.execCommand(
-    'copy',
-  );
-
-  area.remove();
-}
+/* ==================================================
+   TELA FINAL
+================================================== */
 
 async function renderFinal(order) {
   const data =
@@ -2710,13 +3211,18 @@ async function renderFinal(order) {
       `/api/orders/${order.publicToken}/final`,
     );
 
-  const f = data.final;
+  const final =
+    data.final;
 
   const hasPix =
-    Boolean(f.pixKey);
+    Boolean(
+      final.pixKey,
+    );
 
   const hasWhatsapp =
-    Boolean(f.libriWhatsapp);
+    Boolean(
+      final.libriWhatsapp,
+    );
 
   finalScreen.innerHTML = `
     <div class="final-hero">
@@ -2729,13 +3235,15 @@ async function renderFinal(order) {
       </h2>
 
       <p>
-        Seu briefing já está organizado.
-        Agora falta enviar as fotos,
-        referências e o comprovante pelo WhatsApp.
+        Agora envie as fotos,
+        referências
+        e o comprovante pelo WhatsApp.
       </p>
 
       <div class="final-code">
-        ${esc(f.orderCode)}
+        ${esc(
+          final.orderCode,
+        )}
       </div>
     </div>
 
@@ -2743,93 +3251,96 @@ async function renderFinal(order) {
       <div class="final-summary">
         <div class="quote-row total">
           <span>
-            Valor total
+            Total
           </span>
 
           <strong>
-            ${money(f.totalCents)}
+            ${money(
+              final.totalCents,
+            )}
           </strong>
         </div>
 
         <div class="quote-row">
           <span>
-            Entrada para começar
+            Entrada
           </span>
 
           <strong>
-            ${money(f.depositCents)}
+            ${money(
+              final.depositCents,
+            )}
           </strong>
         </div>
 
         <div class="quote-row">
           <span>
-            Restante após aprovação
+            Restante
           </span>
 
           <strong>
-            ${money(f.balanceCents)}
+            ${money(
+              final.balanceCents,
+            )}
           </strong>
         </div>
       </div>
 
       <div class="pix-box">
         <div class="pix-title">
-          <span>◇</span>
-          Pagamento via Pix
+          ◇ Pagamento via Pix
         </div>
 
         ${
           hasPix
             ? `
-          <div class="pix-data">
-            <div>
-              <span>
-                Recebedor
-              </span>
+            <div class="pix-data">
+              <div>
+                <span>
+                  Recebedor
+                </span>
 
-              <strong>
-                ${esc(
-                  f.pixRecipientName
-                  || '',
-                )}
-              </strong>
+                <strong>
+                  ${esc(
+                    final.pixRecipientName
+                    || '',
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Chave Pix
+                </span>
+
+                <strong id="pixKey">
+                  ${esc(
+                    final.pixKey,
+                  )}
+                </strong>
+              </div>
             </div>
 
-            <div>
-              <span>
-                Chave Pix
-              </span>
-
-              <strong id="pixKey">
-                ${esc(f.pixKey)}
-              </strong>
-            </div>
-          </div>
-
-          <button
-            id="copyPix"
-            class="btn btn-secondary"
-            type="button"
-            style="margin-top:13px"
-          >
-            Copiar chave Pix
-          </button>
-        `
+            <button
+              id="copyPix"
+              class="btn btn-secondary"
+              type="button"
+              style="margin-top:12px"
+            >
+              Copiar chave Pix
+            </button>
+          `
             : `
-          <div
-            class="notice notice-warning"
-            style="margin-top:0"
-          >
-            Os dados do Pix ainda não foram configurados no portal.
-            Fale com a Libri pelo WhatsApp antes de realizar o pagamento.
-          </div>
-        `
+            <div class="notice notice-warning">
+              Os dados do Pix ainda não foram configurados.
+            </div>
+          `
         }
       </div>
 
       <div class="send-list">
         <strong>
-          Separe para enviar no WhatsApp:
+          Envie:
         </strong>
 
         <ul>
@@ -2854,23 +3365,23 @@ async function renderFinal(order) {
       ${
         hasWhatsapp
           ? `
-        <a
-          class="final-whatsapp"
-          href="${whatsappLink(
-            f.libriWhatsapp,
-            `Oi! Finalizei meu pedido ${f.orderCode}. Vou enviar aqui as fotos, referências e o comprovante da entrada.`,
-          )}"
-          target="_blank"
-          rel="noopener"
-        >
-          Finalizar e enviar tudo pelo WhatsApp
-        </a>
-      `
+          <a
+            class="final-whatsapp"
+            href="${whatsappLink(
+              final.libriWhatsapp,
+              `Oi! Finalizei meu pedido ${final.orderCode}. Vou enviar aqui as fotos, referências e o comprovante da entrada.`,
+            )}"
+            target="_blank"
+            rel="noopener"
+          >
+            Finalizar e enviar tudo pelo WhatsApp
+          </a>
+        `
           : `
-        <div class="notice notice-warning">
-          O WhatsApp da Libri ainda não foi configurado no portal.
-        </div>
-      `
+          <div class="notice notice-warning">
+            O WhatsApp da Libri ainda não foi configurado.
+          </div>
+        `
       }
     </div>
   `;
@@ -2881,7 +3392,7 @@ async function renderFinal(order) {
       async () => {
         try {
           await copyText(
-            f.pixKey,
+            final.pixKey,
           );
 
           $('#copyPix', finalScreen)
@@ -2890,25 +3401,81 @@ async function renderFinal(order) {
         } catch {
           modal(
             'Chave Pix',
-            `<p>${esc(f.pixKey)}</p>`,
+            `<p>${esc(
+              final.pixKey,
+            )}</p>`,
           );
         }
       },
     );
 
-  finalScreen.classList.remove(
-    'hidden',
-  );
+  finalScreen
+    .classList
+    .remove('hidden');
 }
 
-async function nextStep() {
-  const previous = state.step;
+async function copyText(value) {
+  if (!value) {
+    return;
+  }
 
-  state.step =
-    Math.min(
-      5,
-      state.step + 1,
+  if (
+    navigator
+      .clipboard
+      ?.writeText
+  ) {
+    await navigator
+      .clipboard
+      .writeText(value);
+
+    return;
+  }
+
+  const area =
+    document.createElement(
+      'textarea',
     );
+
+  area.value = value;
+
+  area.style.position =
+    'fixed';
+
+  area.style.opacity =
+    '0';
+
+  document.body
+    .appendChild(area);
+
+  area.select();
+
+  document.execCommand(
+    'copy',
+  );
+
+  area.remove();
+}
+
+/* ==================================================
+   NAVEGAÇÃO
+================================================== */
+
+async function nextStep() {
+  const previous =
+    state.step;
+
+  if (
+    state.step === 3
+    && !hasConfirmation()
+  ) {
+    state.step = 5;
+  } else {
+    state.step =
+      Math.min(
+        5,
+        state.step + 1,
+      );
+  }
 
   try {
     await saveDraft();
@@ -2920,22 +3487,31 @@ async function nextStep() {
       behavior: 'smooth',
     });
   } catch (error) {
-    state.step = previous;
+    state.step =
+      previous;
 
     showError(
-      `Não conseguimos salvar esta etapa. ${error.message}`,
+      `Não foi possível salvar esta etapa. ${error.message}`,
     );
   }
 }
 
 async function prevStep() {
-  const previous = state.step;
+  const previous =
+    state.step;
 
-  state.step =
-    Math.max(
-      0,
-      state.step - 1,
-    );
+  if (
+    state.step === 5
+    && !hasConfirmation()
+  ) {
+    state.step = 3;
+  } else {
+    state.step =
+      Math.max(
+        0,
+        state.step - 1,
+      );
+  }
 
   try {
     await saveDraft();
@@ -2947,13 +3523,51 @@ async function prevStep() {
       behavior: 'smooth',
     });
   } catch (error) {
-    state.step = previous;
+    state.step =
+      previous;
 
     showError(
-      `Não conseguimos salvar esta etapa. ${error.message}`,
+      `Não foi possível salvar esta etapa. ${error.message}`,
     );
   }
 }
+
+async function goToStep(step) {
+  state.step =
+    Math.max(
+      0,
+      Math.min(
+        5,
+        Number(step),
+      ),
+    );
+
+  if (
+    state.step === 4
+    && !hasConfirmation()
+  ) {
+    state.step = 5;
+  }
+
+  try {
+    await saveDraft();
+
+    render();
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
+  } catch (error) {
+    showError(
+      error.message,
+    );
+  }
+}
+
+/* ==================================================
+   RENDER
+================================================== */
 
 async function render() {
   progress();
@@ -2981,18 +3595,24 @@ async function render() {
   return renderReview();
 }
 
+/* ==================================================
+   EVENTOS INICIAIS
+================================================== */
+
 newOrderBtn
   .addEventListener(
     'click',
     async () => {
-      newOrderBtn.disabled = true;
+      newOrderBtn.disabled =
+        true;
 
       try {
         await createDraft();
 
         startFlow();
       } catch (error) {
-        newOrderBtn.disabled = false;
+        newOrderBtn.disabled =
+          false;
 
         showError(
           error.message,
@@ -3005,12 +3625,14 @@ continueBtn
   .addEventListener(
     'click',
     async () => {
-      continueBtn.disabled = true;
+      continueBtn.disabled =
+        true;
 
       try {
-        if (
-          await loadDraft()
-        ) {
+        const loaded =
+          await loadDraft();
+
+        if (loaded) {
           startFlow();
           return;
         }
@@ -3024,7 +3646,8 @@ continueBtn
           '<p>Esse rascunho não está mais disponível. Você pode iniciar um novo pedido.</p>',
         );
       } finally {
-        continueBtn.disabled = false;
+        continueBtn.disabled =
+          false;
       }
     },
   );
@@ -3033,6 +3656,14 @@ bootstrap()
   .catch((error) => {
     modal(
       'Não conseguimos carregar o portal',
-      `<p>${esc(error.message)}</p><p>Tente recarregar a página. Se continuar, fale com a Libri.</p>`,
+      `
+        <p>
+          ${esc(error.message)}
+        </p>
+
+        <p>
+          Tente recarregar a página.
+        </p>
+      `,
     );
   });

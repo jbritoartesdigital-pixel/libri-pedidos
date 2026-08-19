@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "libri-pedidos-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      "database_id": "658c569d-60eb-4f59-8532-a321539dd073"
     }
   ]
 }

@@ -49,7 +49,6 @@ const DEFAULT_APPEARANCE = {
   interface_language: "pt-BR",
   invitation_url: "",
   calendar_location: "",
-  location_url: "",
   calendar_end_time: "",
   cover_url: "",
   logo_url: "",
@@ -71,7 +70,6 @@ const DEFAULT_PUBLIC_TEXTS = {
   decline_hint: "Tudo bem 💛 Se quiser, você ainda pode deixar uma mensagem carinhosa abaixo.",
   name_label: "Seu nome",
   calendar_button: "Adicionar à agenda",
-  location_button: "Abrir localização",
   back_button: "Voltar ao convite",
   closed_title: "Confirmações encerradas",
 };
@@ -92,7 +90,6 @@ const DEFAULT_PUBLIC_TEXTS_EN = {
   decline_hint: "That's okay 💛 If you'd like, you can still leave a message below.",
   name_label: "Your name",
   calendar_button: "Add to calendar",
-  location_button: "Open location",
   back_button: "Back to invitation",
   closed_title: "RSVP closed",
 };
@@ -3268,7 +3265,6 @@ function normalizeAppearance(value) {
     interface_language: source.interface_language === "en" ? "en" : "pt-BR",
     invitation_url: safeOptionalStoredUrl(source.invitation_url),
     calendar_location: cleanOptionalText(source.calendar_location, 300) || "",
-    location_url: safeOptionalStoredUrl(source.location_url),
     calendar_end_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(source.calendar_end_time || ""))
       ? String(source.calendar_end_time)
       : "",

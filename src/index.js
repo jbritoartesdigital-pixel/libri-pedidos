@@ -1,4 +1,5 @@
 import { fail, json } from './lib/http.js';
+import { handleAdminManualApi } from './routes/admin-manual.js';
 import { handleAdminApi } from './routes/admin.js';
 import { handlePublicApi } from './routes/public.js';
 
@@ -14,25 +15,72 @@ export default {
       try {
         if (url.pathname.startsWith('/api/admin/')) {
           // PRODUÇÃO: proteja /api/admin/* com Cloudflare Access, junto com /admin/*.
-          const response = await handleAdminApi(request, env, url);
-          return response || fail('Rota administrativa não encontrada.', 404);
+
+          const manualResponse =
+            await handleAdminManualApi(
+              request,
+              env,
+              url,
+            );
+
+          if (manualResponse) {
+            return manualResponse;
+          }
+
+          const response =
+            await handleAdminApi(
+              request,
+              env,
+              url,
+            );
+
+          return response
+            || fail(
+              'Rota administrativa não encontrada.',
+              404,
+            );
         }
 
-        const response = await handlePublicApi(request, env, url);
-        return response || fail('Rota não encontrada.', 404);
+        const response =
+          await handlePublicApi(
+            request,
+            env,
+            url,
+          );
+
+        return response
+          || fail(
+            'Rota não encontrada.',
+            404,
+          );
       } catch (error) {
-        console.error('API error', error);
+        console.error(
+          'API error',
+          error,
+        );
+
         return json(
           {
             ok: false,
-            error: 'Não foi possível concluir esta ação agora.',
-            devMessage: env.ENVIRONMENT === 'development' ? String(error?.stack || error) : undefined,
+            error:
+              'Não foi possível concluir esta ação agora.',
+
+            devMessage:
+              env.ENVIRONMENT
+                === 'development'
+                ? String(
+                  error?.stack
+                  || error,
+                )
+                : undefined,
           },
-          500
+          500,
         );
       }
     }
 
-    return env.ASSETS.fetch(request);
+    return env.ASSETS.fetch(
+      request,
+    );
   },
 };

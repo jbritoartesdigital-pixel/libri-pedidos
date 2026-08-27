@@ -163,7 +163,7 @@ export function catalogFromSettings(
           safePositiveInt(
             settings,
             'price_video_reduced_cents',
-            7500,
+            6500,
           ),
       },
 
@@ -179,7 +179,7 @@ export function catalogFromSettings(
           safePositiveInt(
             settings,
             'price_interactive_reduced_cents',
-            10500,
+            9500,
           ),
       },
     },
@@ -196,7 +196,7 @@ export function catalogFromSettings(
         safePositiveInt(
           settings,
           'addon_filter_cents',
-          3000,
+          3900,
         ),
 
       extraScene:

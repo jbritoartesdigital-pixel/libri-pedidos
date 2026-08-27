@@ -40,20 +40,38 @@ jobs:
           } from './src/lib/settings.js';
 
           const settings = {
-            price_video_full_cents: '15000',
-            price_video_reduced_cents: '7500',
+            price_video_full_cents:
+              '15000',
 
-            price_interactive_full_cents: '18000',
-            price_interactive_reduced_cents: '10500',
+            price_video_reduced_cents:
+              '6500',
 
-            addon_confirmation_cents: '2500',
-            addon_filter_cents: '3000',
-            addon_extra_scene_cents: '3000',
-            addon_extra_person_cents: '3000',
+            price_interactive_full_cents:
+              '18000',
 
-            deposit_percent: '50',
-            urgency_percent: '30',
-            deadline_business_days: '5',
+            price_interactive_reduced_cents:
+              '9500',
+
+            addon_confirmation_cents:
+              '2500',
+
+            addon_filter_cents:
+              '3900',
+
+            addon_extra_scene_cents:
+              '3000',
+
+            addon_extra_person_cents:
+              '3000',
+
+            deposit_percent:
+              '50',
+
+            urgency_percent:
+              '30',
+
+            deadline_business_days:
+              '5',
           };
 
           function quote(
@@ -67,12 +85,21 @@ jobs:
             );
           }
 
-          // Vídeo Completo
-          let result = quote({
-            experience: 'full',
-            format: 'video',
-            addons: {},
-          });
+          /* ==================================================
+             PRODUTOS
+          ================================================== */
+
+          let result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'video',
+
+              addons:
+                {},
+            });
 
           assert.equal(
             result.format,
@@ -80,20 +107,52 @@ jobs:
           );
 
           assert.equal(
+            result.productCents,
+            15000,
+          );
+
+          assert.equal(
             result.totalCents,
             15000,
           );
 
-          // Interativo Completo
-          result = quote({
-            experience: 'full',
-            format: 'interactive',
-            addons: {},
-          });
+          result =
+            quote({
+              experience:
+                'reduced',
+
+              format:
+                'video',
+
+              addons:
+                {},
+            });
 
           assert.equal(
-            result.format,
-            'interactive',
+            result.productCents,
+            6500,
+          );
+
+          assert.equal(
+            result.totalCents,
+            6500,
+          );
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons:
+                {},
+            });
+
+          assert.equal(
+            result.productCents,
+            18000,
           );
 
           assert.equal(
@@ -101,17 +160,47 @@ jobs:
             18000,
           );
 
-          // HARD LOCK:
-          // Vídeo + Confirmação
-          // deve virar Interativo.
-          result = quote({
-            experience: 'full',
-            format: 'video',
+          result =
+            quote({
+              experience:
+                'reduced',
 
-            addons: {
-              confirmation: true,
-            },
-          });
+              format:
+                'interactive',
+
+              addons:
+                {},
+            });
+
+          assert.equal(
+            result.productCents,
+            9500,
+          );
+
+          assert.equal(
+            result.totalCents,
+            9500,
+          );
+
+          /* ==================================================
+             CONFIRMAÇÃO LIBRI
+
+             Confirmação exige formato Interativo.
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'video',
+
+              addons: {
+                confirmation:
+                  true,
+              },
+            });
 
           assert.equal(
             result.requestedFormat,
@@ -143,15 +232,19 @@ jobs:
             20500,
           );
 
-          // Reduzido + Confirmação
-          result = quote({
-            experience: 'reduced',
-            format: 'video',
+          result =
+            quote({
+              experience:
+                'reduced',
 
-            addons: {
-              confirmation: true,
-            },
-          });
+              format:
+                'video',
+
+              addons: {
+                confirmation:
+                  true,
+              },
+            });
 
           assert.equal(
             result.format,
@@ -160,7 +253,7 @@ jobs:
 
           assert.equal(
             result.productCents,
-            10500,
+            9500,
           );
 
           assert.equal(
@@ -170,39 +263,331 @@ jobs:
 
           assert.equal(
             result.totalCents,
-            13000,
+            12000,
           );
 
-          // Interativo Completo
-          // com todos os adicionais.
-          result = quote({
-            experience: 'full',
-            format: 'interactive',
+          /* ==================================================
+             FILTRO AVULSO
+          ================================================== */
 
-            addons: {
-              confirmation: true,
-              filter: true,
-              extraScene: 1,
-              extraPerson: 1,
-            },
-          });
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                filter:
+                  true,
+              },
+            });
+
+          assert.equal(
+            result.productCents,
+            18000,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            3900,
+          );
 
           assert.equal(
             result.totalCents,
-            29500,
+            21900,
           );
 
-          // Urgência de 30%
-          result = quote(
-            {
-              experience: 'full',
-              format: 'interactive',
-              addons: {},
-            },
-            {
-              urgencyEnabled: true,
-            },
+          /* ==================================================
+             TODOS OS ADICIONAIS TRADICIONAIS
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                confirmation:
+                  true,
+
+                filter:
+                  true,
+
+                extraScene:
+                  1,
+
+                extraPerson:
+                  1,
+              },
+            });
+
+          assert.equal(
+            result.addonsCents,
+            12400,
           );
+
+          assert.equal(
+            result.totalCents,
+            30400,
+          );
+
+          /* ==================================================
+             LIBRI MOMENTS | FESTA
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                photoAlbumPlan:
+                  'festa',
+              },
+            });
+
+          assert.equal(
+            result.addons
+              .photoAlbumPlan,
+            'festa',
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .basePriceCents,
+            7900,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .photos,
+            200,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .days,
+            30,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .filterIncluded,
+            true,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            7900,
+          );
+
+          assert.equal(
+            result.totalCents,
+            25900,
+          );
+
+          /* ==================================================
+             LIBRI MOMENTS | PREMIUM
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                photoAlbumPlan:
+                  'premium',
+              },
+            });
+
+          assert.equal(
+            result.photoAlbum
+              .basePriceCents,
+            11900,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .photos,
+            400,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .days,
+            60,
+          );
+
+          assert.equal(
+            result.totalCents,
+            29900,
+          );
+
+          /* ==================================================
+             LIBRI MOMENTS | EXCLUSIVE
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                photoAlbumPlan:
+                  'exclusive',
+              },
+            });
+
+          assert.equal(
+            result.photoAlbum
+              .basePriceCents,
+            14900,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .photos,
+            700,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .days,
+            90,
+          );
+
+          assert.equal(
+            result.totalCents,
+            32900,
+          );
+
+          /* ==================================================
+             LIBRI MOMENTS | FOTOS EXTRAS
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                photoAlbumPlan:
+                  'festa',
+
+                photoAlbumExtra100:
+                  2,
+              },
+            });
+
+          assert.equal(
+            result.photoAlbum
+              .extra100,
+            2,
+          );
+
+          assert.equal(
+            result.photoAlbum
+              .photos,
+            400,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            10900,
+          );
+
+          assert.equal(
+            result.totalCents,
+            28900,
+          );
+
+          /* ==================================================
+             LIBRI MOMENTS NÃO COBRA FILTRO DUPLICADO
+          ================================================== */
+
+          result =
+            quote({
+              experience:
+                'full',
+
+              format:
+                'interactive',
+
+              addons: {
+                filter:
+                  true,
+
+                photoAlbumPlan:
+                  'festa',
+              },
+            });
+
+          assert.equal(
+            result.addons
+              .filter,
+            false,
+          );
+
+          assert.equal(
+            result.addonsCents,
+            7900,
+          );
+
+          assert.equal(
+            result.totalCents,
+            25900,
+          );
+
+          assert.equal(
+            result.addonLines
+              .some(
+                (line) =>
+                  line.key
+                  === 'filter',
+              ),
+            false,
+          );
+
+          /* ==================================================
+             URGÊNCIA
+          ================================================== */
+
+          result =
+            quote(
+              {
+                experience:
+                  'full',
+
+                format:
+                  'interactive',
+
+                addons:
+                  {},
+              },
+
+              {
+                urgencyEnabled:
+                  true,
+              },
+            );
 
           assert.equal(
             result.subtotalCents,
@@ -229,8 +614,15 @@ jobs:
             11700,
           );
 
-          // Valor comercial inválido
-          // deve cair no fallback seguro.
+          assert.equal(
+            result.balanceCents,
+            11700,
+          );
+
+          /* ==================================================
+             FALLBACKS DE SEGURANÇA
+          ================================================== */
+
           const safeCatalog =
             catalogFromSettings({
               ...settings,
@@ -238,27 +630,64 @@ jobs:
               price_video_full_cents:
                 '0',
 
+              price_video_reduced_cents:
+                '0',
+
               price_interactive_full_cents:
                 '-10',
+
+              price_interactive_reduced_cents:
+                '-10',
+
+              addon_filter_cents:
+                '0',
 
               deposit_percent:
                 '999',
             });
 
           assert.equal(
-            safeCatalog.products
-              .video.full,
+            safeCatalog
+              .products
+              .video
+              .full,
             15000,
           );
 
           assert.equal(
-            safeCatalog.products
-              .interactive.full,
+            safeCatalog
+              .products
+              .video
+              .reduced,
+            6500,
+          );
+
+          assert.equal(
+            safeCatalog
+              .products
+              .interactive
+              .full,
             18000,
           );
 
           assert.equal(
-            safeCatalog.rules
+            safeCatalog
+              .products
+              .interactive
+              .reduced,
+            9500,
+          );
+
+          assert.equal(
+            safeCatalog
+              .addons
+              .filter,
+            3900,
+          );
+
+          assert.equal(
+            safeCatalog
+              .rules
               .depositPercent,
             50,
           );

@@ -4,9 +4,6 @@
   const qs = (selector, root = document) =>
     root.querySelector(selector);
 
-  const qsa = (selector, root = document) =>
-    Array.from(root.querySelectorAll(selector));
-
   const money = (cents = 0) =>
     new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -15,21 +12,14 @@
 
   function centsFromReais(value) {
     const raw = String(value || '').trim();
+    if (!raw) return null;
 
-    if (!raw) {
-      return null;
-    }
-
-    const normalized =
-      raw.includes(',')
-        ? raw.replace(/\./g, '').replace(',', '.')
-        : raw;
+    const normalized = raw.includes(',')
+      ? raw.replace(/\./g, '').replace(',', '.')
+      : raw;
 
     const number = Number(normalized);
-
-    if (!Number.isFinite(number) || number <= 0) {
-      return null;
-    }
+    if (!Number.isFinite(number) || number <= 0) return null;
 
     return Math.round(number * 100);
   }
@@ -50,28 +40,21 @@
   async function api(path, options = {}) {
     const response = await fetch(path, {
       ...options,
-
       headers: {
-        'content-type':
-          'application/json',
-
+        'content-type': 'application/json',
         ...(options.headers || {}),
       },
     });
 
-    const data = await response
-      .json()
-      .catch(() => ({}));
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       const error = new Error(
-        data.error
-        || 'Erro ao concluir a ação.',
+        data.error || 'Erro ao concluir a ação.',
       );
 
       error.data = data;
       error.status = response.status;
-
       throw error;
     }
 
@@ -83,21 +66,10 @@
   ================================================== */
 
   function installStyles() {
-    if (
-      document.getElementById(
-        'adminManualStyles',
-      )
-    ) {
-      return;
-    }
+    if (document.getElementById('adminManualStyles')) return;
 
-    const style =
-      document.createElement(
-        'style',
-      );
-
-    style.id =
-      'adminManualStyles';
+    const style = document.createElement('style');
+    style.id = 'adminManualStyles';
 
     style.textContent = `
       .manual-order-modal {
@@ -126,10 +98,6 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
-      }
-
-      .manual-order-grid.three {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
       .manual-order-checks {
@@ -180,13 +148,23 @@
         font-size: 15px;
       }
 
-      .manual-order-note {
+      .manual-order-note,
+      .manual-order-info {
         margin-top: 10px;
         padding: 10px 12px;
         border-radius: 12px;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .manual-order-note {
         background: #fff7df;
         color: #70561a;
-        font-size: 13px;
+      }
+
+      .manual-order-info {
+        background: #f2eef7;
+        color: #614875;
       }
 
       .manual-order-success {
@@ -202,38 +180,41 @@
         font-size: 18px;
       }
 
+      .manual-order-hidden {
+        display: none !important;
+      }
+
       @media (max-width: 760px) {
         .manual-order-grid,
-        .manual-order-grid.three,
         .manual-order-price-grid {
           grid-template-columns: 1fr;
         }
       }
     `;
 
-    document.head.appendChild(
-      style,
-    );
+    document.head.appendChild(style);
   }
 
   /* ==================================================
-     MODAL
+     ESTADO
   ================================================== */
 
   let modalEl = null;
   let currentQuote = null;
-  let currentSettings = null;
+  let currentSettings = {};
   let quoteTimer = null;
 
   function closeModal() {
-    if (!modalEl) {
-      return;
-    }
+    if (!modalEl) return;
 
     modalEl.remove();
     modalEl = null;
     currentQuote = null;
   }
+
+  /* ==================================================
+     CAMPOS
+  ================================================== */
 
   function field(
     label,
@@ -244,6 +225,8 @@
       required = false,
       value = '',
       hint = '',
+      min = '',
+      max = '',
     } = {},
   ) {
     return `
@@ -259,15 +242,13 @@
           value="${esc(value)}"
           placeholder="${esc(placeholder)}"
           ${required ? 'required' : ''}
+          ${min !== '' ? `min="${esc(min)}"` : ''}
+          ${max !== '' ? `max="${esc(max)}"` : ''}
         >
 
         ${
           hint
-            ? `
-              <span class="hint">
-                ${esc(hint)}
-              </span>
-            `
+            ? `<span class="hint">${esc(hint)}</span>`
             : ''
         }
       </div>
@@ -285,9 +266,7 @@
   ) {
     return `
       <div class="field">
-        <label>
-          ${esc(label)}
-        </label>
+        <label>${esc(label)}</label>
 
         <textarea
           name="${esc(name)}"
@@ -297,11 +276,7 @@
 
         ${
           hint
-            ? `
-              <span class="hint">
-                ${esc(hint)}
-              </span>
-            `
+            ? `<span class="hint">${esc(hint)}</span>`
             : ''
         }
       </div>
@@ -316,9 +291,7 @@
   ) {
     return `
       <div class="field">
-        <label>
-          ${esc(label)}
-        </label>
+        <label>${esc(label)}</label>
 
         <select name="${esc(name)}">
           ${options.map(
@@ -336,6 +309,10 @@
     `;
   }
 
+  /* ==================================================
+     FORMULÁRIO
+  ================================================== */
+
   function formHtml() {
     return `
       <form
@@ -343,28 +320,17 @@
         class="manual-order-form"
       >
         <section class="manual-order-section">
-          <h3>
-            Cliente e evento
-          </h3>
+          <h3>Cliente e evento</h3>
 
           <div class="manual-order-grid">
-            ${field(
-              'Nome da cliente',
-              'customerName',
-              {
-                required: true,
-              },
-            )}
+            ${field('Nome da cliente', 'customerName', {
+              required: true,
+            })}
 
-            ${field(
-              'WhatsApp',
-              'whatsapp',
-              {
-                required: true,
-                placeholder:
-                  'Ex.: 5561999999999',
-              },
-            )}
+            ${field('WhatsApp', 'whatsapp', {
+              required: true,
+              placeholder: 'Ex.: 5561999999999',
+            })}
 
             ${field(
               'Nome da criança / homenageado(a)',
@@ -379,64 +345,36 @@
               'displayName',
             )}
 
-            ${field(
-              'Idade',
-              'age',
-              {
-                type: 'number',
-              },
-            )}
+            ${field('Idade', 'age', {
+              type: 'number',
+              min: '0',
+              max: '120',
+            })}
 
-            ${field(
-              'Tema',
-              'theme',
-              {
-                required: true,
-              },
-            )}
+            ${field('Tema', 'theme', {
+              required: true,
+            })}
 
-            ${field(
-              'Data da festa',
-              'eventDate',
-              {
-                type: 'date',
-              },
-            )}
+            ${field('Data da festa', 'eventDate', {
+              type: 'date',
+            })}
 
-            ${field(
-              'Horário',
-              'eventTime',
-              {
-                type: 'time',
-              },
-            )}
+            ${field('Horário', 'eventTime', {
+              type: 'time',
+            })}
 
-            ${field(
-              'Local',
-              'venueName',
-            )}
-
-            ${field(
-              'Endereço',
-              'venueAddress',
-            )}
+            ${field('Local', 'venueName')}
+            ${field('Endereço', 'venueAddress')}
           </div>
 
-          ${field(
-            'Link da localização',
-            'locationUrl',
-            {
-              type: 'url',
-              placeholder:
-                'https://maps.app.goo.gl/...',
-            },
-          )}
+          ${field('Link da localização', 'locationUrl', {
+            type: 'url',
+            placeholder: 'https://maps.app.goo.gl/...',
+          })}
         </section>
 
         <section class="manual-order-section">
-          <h3>
-            Produto contratado
-          </h3>
+          <h3>Produto contratado</h3>
 
           <div class="manual-order-grid">
             ${selectField(
@@ -474,7 +412,7 @@
                 name="filter"
                 type="checkbox"
               >
-              Filtro personalizado
+              Filtro personalizado avulso
             </label>
 
             <label class="manual-order-check">
@@ -487,14 +425,12 @@
           </div>
 
           <div class="manual-order-grid">
-            ${field(
-              'Cenas extras',
-              'extraScene',
-              {
-                type: 'number',
-                value: '0',
-              },
-            )}
+            ${field('Cenas extras', 'extraScene', {
+              type: 'number',
+              value: '0',
+              min: '0',
+              max: '10',
+            })}
 
             ${field(
               'Pessoas / crianças extras',
@@ -502,8 +438,48 @@
               {
                 type: 'number',
                 value: '0',
+                min: '0',
+                max: '10',
               },
             )}
+
+            ${selectField(
+              'Libri Moments',
+              'photoAlbumPlan',
+              [
+                ['', 'Sem álbum'],
+                ['festa', 'Festa - R$ 79'],
+                ['premium', 'Premium - R$ 119'],
+                ['exclusive', 'Exclusive - R$ 149'],
+              ],
+              '',
+            )}
+
+            <div
+              id="manualAlbumExtraWrap"
+              class="manual-order-hidden"
+            >
+              ${field(
+                'Pacotes de +100 fotos',
+                'photoAlbumExtra100',
+                {
+                  type: 'number',
+                  value: '0',
+                  min: '0',
+                  max: '20',
+                  hint:
+                    'Cada pacote acrescenta 100 fotos por R$ 15.',
+                },
+              )}
+            </div>
+          </div>
+
+          <div
+            id="manualAlbumNote"
+            class="manual-order-info manual-order-hidden"
+          >
+            Todo plano Libri Moments já inclui 1 filtro personalizado.
+            O filtro avulso não será cobrado junto com o álbum.
           </div>
 
           <div class="manual-order-grid">
@@ -511,8 +487,7 @@
               'Valor-base contratado (opcional)',
               'manualSubtotalReais',
               {
-                placeholder:
-                  'Ex.: 170,00',
+                placeholder: 'Ex.: 170,00',
                 hint:
                   'Deixe vazio para usar o preço atual do portal. Use apenas quando você fechou um valor especial pelo WhatsApp.',
               },
@@ -540,9 +515,39 @@
         </section>
 
         <section class="manual-order-section">
-          <h3>
-            Direção criativa
-          </h3>
+          <h3>Sugestões de presentes</h3>
+
+          <div class="manual-order-grid">
+            ${selectField(
+              'Incluir página de sugestões?',
+              'giftPage',
+              [
+                ['unsure', 'Ainda não sei'],
+                ['yes', 'Sim'],
+                ['no', 'Não'],
+              ],
+              'unsure',
+            )}
+          </div>
+
+          <div
+            id="manualGiftDetailsWrap"
+            class="manual-order-hidden"
+          >
+            ${textarea(
+              'O que gostaria de sugerir aos convidados?',
+              'giftDetails',
+              {
+                rows: 4,
+                placeholder:
+                  'Ex.: roupas tamanho 4, sapatos 26/27, brinquedos, perfume, Pix ou outras preferências.',
+              },
+            )}
+          </div>
+        </section>
+
+        <section class="manual-order-section">
+          <h3>Direção criativa</h3>
 
           <div class="manual-order-grid">
             ${field(
@@ -597,26 +602,12 @@
           )}
 
           <div class="manual-order-grid">
-            ${field(
-              'Cores desejadas',
-              'colors',
-            )}
-
-            ${field(
-              'Cores a evitar',
-              'colorsAvoided',
-            )}
+            ${field('Cores desejadas', 'colors')}
+            ${field('Cores a evitar', 'colorsAvoided')}
           </div>
 
-          ${textarea(
-            'Não pode faltar',
-            'mustHave',
-          )}
-
-          ${textarea(
-            'Não quer no convite',
-            'avoid',
-          )}
+          ${textarea('Não pode faltar', 'mustHave')}
+          ${textarea('Não quer no convite', 'avoid')}
 
           ${textarea(
             'Informações especiais',
@@ -628,20 +619,14 @@
             'creativeIdea',
           )}
 
-          ${textarea(
-            'Frase própria',
-            'ownSpeech',
-            {
-              hint:
-                'Use quando a cliente enviou uma fala obrigatória.',
-            },
-          )}
+          ${textarea('Frase própria', 'ownSpeech', {
+            hint:
+              'Use quando a cliente enviou uma fala obrigatória.',
+          })}
         </section>
 
         <section class="manual-order-section">
-          <h3>
-            Materiais e pagamento
-          </h3>
+          <h3>Materiais e pagamento</h3>
 
           <div class="manual-order-grid">
             ${selectField(
@@ -684,9 +669,7 @@
         </section>
 
         <section class="manual-order-section">
-          <h3>
-            Autorizações
-          </h3>
+          <h3>Autorizações</h3>
 
           <div class="manual-order-checks">
             <label class="manual-order-check">
@@ -734,16 +717,15 @@
     `;
   }
 
+  /* ==================================================
+     ABERTURA
+  ================================================== */
+
   async function openModal() {
     installStyles();
 
-    modalEl =
-      document.createElement(
-        'div',
-      );
-
-    modalEl.className =
-      'admin-modal-backdrop';
+    modalEl = document.createElement('div');
+    modalEl.className = 'admin-modal-backdrop';
 
     modalEl.innerHTML = `
       <section
@@ -779,29 +761,18 @@
       </section>
     `;
 
-    document.body.appendChild(
-      modalEl,
-    );
+    document.body.appendChild(modalEl);
 
-    qs(
-      '#closeManualOrder',
-      modalEl,
-    ).onclick =
+    qs('#closeManualOrder', modalEl).onclick =
       closeModal;
 
-    qs(
-      '#cancelManualOrder',
-      modalEl,
-    ).onclick =
+    qs('#cancelManualOrder', modalEl).onclick =
       closeModal;
 
     modalEl.addEventListener(
       'click',
       (event) => {
-        if (
-          event.target
-          === modalEl
-        ) {
+        if (event.target === modalEl) {
           closeModal();
         }
       },
@@ -815,8 +786,7 @@
           await api(
             '/api/admin/settings',
           )
-        ).settings
-        || {};
+        ).settings || {};
     } catch {
       currentSettings = {};
     }
@@ -825,71 +795,116 @@
   }
 
   /* ==================================================
+     UI DINÂMICA
+  ================================================== */
+
+  function syncAlbumUi(form) {
+    const hasAlbum = Boolean(
+      form.elements.photoAlbumPlan.value,
+    );
+
+    qs(
+      '#manualAlbumExtraWrap',
+      form,
+    )?.classList.toggle(
+      'manual-order-hidden',
+      !hasAlbum,
+    );
+
+    qs(
+      '#manualAlbumNote',
+      form,
+    )?.classList.toggle(
+      'manual-order-hidden',
+      !hasAlbum,
+    );
+
+    form.elements.filter.disabled =
+      hasAlbum;
+
+    if (hasAlbum) {
+      form.elements.filter.checked =
+        false;
+    } else {
+      form.elements.photoAlbumExtra100.value =
+        '0';
+    }
+  }
+
+  function syncGiftUi(form) {
+    const wantsGiftPage =
+      form.elements.giftPage.value
+      === 'yes';
+
+    qs(
+      '#manualGiftDetailsWrap',
+      form,
+    )?.classList.toggle(
+      'manual-order-hidden',
+      !wantsGiftPage,
+    );
+
+    if (!wantsGiftPage) {
+      form.elements.giftDetails.value =
+        '';
+    }
+  }
+
+  /* ==================================================
      ORÇAMENTO
   ================================================== */
 
-  function selectionFromForm(
-    form,
-  ) {
-    const data =
-      new FormData(
-        form,
-      );
+  function selectionFromForm(form) {
+    const data = new FormData(form);
+
+    const photoAlbumPlan =
+      data.get('photoAlbumPlan') || '';
 
     return {
-      experience:
-        data.get(
-          'experience',
-        ),
-
-      format:
-        data.get(
-          'format',
-        ),
+      experience: data.get('experience'),
+      format: data.get('format'),
 
       addons: {
         confirmation:
-          data.has(
-            'confirmation',
-          ),
+          data.has('confirmation'),
 
         filter:
-          data.has(
-            'filter',
-          ),
+          photoAlbumPlan
+            ? false
+            : data.has('filter'),
 
         extraScene:
           Number(
-            data.get(
-              'extraScene',
-            )
+            data.get('extraScene')
             || 0,
           ),
 
         extraPerson:
           Number(
-            data.get(
-              'extraPerson',
-            )
+            data.get('extraPerson')
             || 0,
           ),
+
+        photoAlbumPlan,
+
+        photoAlbumExtra100:
+          photoAlbumPlan
+            ? Number(
+              data.get(
+                'photoAlbumExtra100',
+              )
+              || 0,
+            )
+            : 0,
       },
     };
   }
 
-  function previewPrice(
-    form,
-  ) {
+  function previewPrice(form) {
     const root =
-      qs(
-        '#manualQuote',
-        form,
-      );
+      qs('#manualQuote', form);
 
-    if (
-      !root
-      || !currentQuote
-    ) {
+    if (!root || !currentQuote) {
       return;
     }
 
@@ -902,8 +917,7 @@
 
     const base =
       manual
-      ?? currentQuote
-        .subtotalCents;
+      ?? currentQuote.subtotalCents;
 
     const urgent =
       form.elements
@@ -915,6 +929,8 @@
         ? Number(
           currentSettings
             ?.urgency_percent
+          ?? currentQuote
+            ?.urgencyPercent
           ?? 30,
         )
         : 0;
@@ -929,13 +945,11 @@
         : 0;
 
     const total =
-      base
-      + urgencyAmount;
+      base + urgencyAmount;
 
     const depositPercent =
       Number(
-        currentQuote
-          .depositPercent
+        currentQuote.depositPercent
         || currentSettings
           ?.deposit_percent
         || 50,
@@ -949,28 +963,20 @@
       );
 
     const balance =
-      total
-      - deposit;
+      total - deposit;
 
     root.innerHTML = `
       <div class="manual-order-price-grid">
         <div class="manual-order-price-item">
-          <span>
-            Preço padrão
-          </span>
+          <span>Preço padrão</span>
 
           <strong>
-            ${money(
-              currentQuote
-                .subtotalCents,
-            )}
+            ${money(currentQuote.subtotalCents)}
           </strong>
         </div>
 
         <div class="manual-order-price-item">
-          <span>
-            Valor-base usado
-          </span>
+          <span>Valor-base usado</span>
 
           <strong>
             ${money(base)}
@@ -978,9 +984,7 @@
         </div>
 
         <div class="manual-order-price-item">
-          <span>
-            Total
-          </span>
+          <span>Total</span>
 
           <strong>
             ${money(total)}
@@ -988,9 +992,7 @@
         </div>
 
         <div class="manual-order-price-item">
-          <span>
-            Entrada / saldo
-          </span>
+          <span>Entrada / saldo</span>
 
           <strong>
             ${money(deposit)}
@@ -999,6 +1001,25 @@
           </strong>
         </div>
       </div>
+
+      ${
+        currentQuote.photoAlbum
+          ? `
+            <div class="manual-order-info">
+              Libri Moments ${esc(
+                currentQuote.photoAlbum.name,
+              )}:
+              até ${esc(
+                currentQuote.photoAlbum.photos,
+              )} fotos,
+              ${esc(
+                currentQuote.photoAlbum.days,
+              )} dias
+              e 1 filtro personalizado incluído.
+            </div>
+          `
+          : ''
+      }
 
       ${
         manual !== null
@@ -1013,8 +1034,7 @@
       }
 
       ${
-        currentQuote
-          .formatAdjusted
+        currentQuote.formatAdjusted
           ? `
             <div class="manual-order-note">
               Confirmação Libri exige convite Interativo.
@@ -1039,65 +1059,43 @@
   }
 
   async function refreshQuote() {
-    if (!modalEl) {
-      return;
-    }
+    if (!modalEl) return;
 
     const form =
-      qs(
-        '#manualOrderForm',
-        modalEl,
-      );
+      qs('#manualOrderForm', modalEl);
 
     const root =
-      qs(
-        '#manualQuote',
-        modalEl,
-      );
+      qs('#manualQuote', modalEl);
 
     try {
       root.textContent =
         'Calculando...';
 
-      const selection =
-        selectionFromForm(
-          form,
-        );
-
       const data =
         await api(
           '/api/quote',
           {
-            method:
-              'POST',
+            method: 'POST',
 
-            body:
-              JSON.stringify({
-                selection,
-              }),
+            body: JSON.stringify({
+              selection:
+                selectionFromForm(form),
+            }),
           },
         );
 
-      currentQuote =
-        data.quote;
+      currentQuote = data.quote;
 
       if (
-        currentQuote
-          .formatAdjusted
-        && form.elements
-          .format
-          .value
+        currentQuote.formatAdjusted
+        && form.elements.format.value
           !== 'interactive'
       ) {
-        form.elements
-          .format
-          .value =
-            'interactive';
+        form.elements.format.value =
+          'interactive';
       }
 
-      previewPrice(
-        form,
-      );
+      previewPrice(form);
     } catch (error) {
       root.textContent =
         `Não foi possível calcular: ${error.message}`;
@@ -1105,226 +1103,171 @@
   }
 
   function scheduleQuote() {
-    clearTimeout(
-      quoteTimer,
-    );
+    clearTimeout(quoteTimer);
 
-    quoteTimer =
-      setTimeout(
-        refreshQuote,
-        180,
-      );
+    quoteTimer = setTimeout(
+      refreshQuote,
+      180,
+    );
   }
 
   /* ==================================================
-     ENVIO
+     PAYLOAD
   ================================================== */
 
-  function payloadFromForm(
-    form,
-  ) {
-    const data =
-      new FormData(
-        form,
-      );
+  function payloadFromForm(form) {
+    const data = new FormData(form);
 
-    const manualSubtotalCents =
-      centsFromReais(
-        data.get(
-          'manualSubtotalReais',
-        ),
-      );
+    const photoAlbumPlan =
+      data.get('photoAlbumPlan') || '';
+
+    const giftPage =
+      data.get('giftPage') || 'unsure';
 
     return {
       customerName:
-        data.get(
-          'customerName',
-        ),
+        data.get('customerName'),
 
       whatsapp:
-        data.get(
-          'whatsapp',
-        ),
+        data.get('whatsapp'),
 
       honoreeName:
-        data.get(
-          'honoreeName',
-        ),
+        data.get('honoreeName'),
 
       displayName:
-        data.get(
-          'displayName',
-        ),
+        data.get('displayName'),
 
       age:
-        data.get(
-          'age',
-        ),
+        data.get('age'),
 
       eventDate:
-        data.get(
-          'eventDate',
-        ),
+        data.get('eventDate'),
 
       eventTime:
-        data.get(
-          'eventTime',
-        ),
+        data.get('eventTime'),
 
       venueName:
-        data.get(
-          'venueName',
-        ),
+        data.get('venueName'),
 
       venueAddress:
-        data.get(
-          'venueAddress',
-        ),
+        data.get('venueAddress'),
 
       locationUrl:
-        data.get(
-          'locationUrl',
-        ),
+        data.get('locationUrl'),
 
       theme:
-        data.get(
-          'theme',
-        ),
+        data.get('theme'),
 
       experience:
-        data.get(
-          'experience',
-        ),
+        data.get('experience'),
 
       format:
-        data.get(
-          'format',
-        ),
+        data.get('format'),
 
       addons: {
         confirmation:
-          data.has(
-            'confirmation',
-          ),
+          data.has('confirmation'),
 
         filter:
-          data.has(
-            'filter',
-          ),
+          photoAlbumPlan
+            ? false
+            : data.has('filter'),
 
         extraScene:
           Number(
-            data.get(
-              'extraScene',
-            )
+            data.get('extraScene')
             || 0,
           ),
 
         extraPerson:
           Number(
-            data.get(
-              'extraPerson',
-            )
+            data.get('extraPerson')
             || 0,
           ),
+
+        photoAlbumPlan,
+
+        photoAlbumExtra100:
+          photoAlbumPlan
+            ? Number(
+              data.get(
+                'photoAlbumExtra100',
+              )
+              || 0,
+            )
+            : 0,
       },
 
       urgencyEnabled:
-        data.has(
-          'urgencyEnabled',
+        data.has('urgencyEnabled'),
+
+      manualSubtotalCents:
+        centsFromReais(
+          data.get(
+            'manualSubtotalReais',
+          ),
         ),
 
-      manualSubtotalCents,
+      giftPage,
+
+      giftDetails:
+        giftPage === 'yes'
+          ? data.get('giftDetails')
+          : '',
 
       characterWanted:
-        data.get(
-          'characterWanted',
-        ),
+        data.get('characterWanted'),
 
       childStyle:
-        data.get(
-          'childStyle',
-        ),
+        data.get('childStyle'),
 
       outfitChoice:
-        data.get(
-          'outfitChoice',
-        ),
+        data.get('outfitChoice'),
 
       outfitDetails:
-        data.get(
-          'outfitDetails',
-        ),
+        data.get('outfitDetails'),
 
       appearanceDetails:
-        data.get(
-          'appearanceDetails',
-        ),
+        data.get('appearanceDetails'),
 
       colors:
-        data.get(
-          'colors',
-        ),
+        data.get('colors'),
 
       colorsAvoided:
-        data.get(
-          'colorsAvoided',
-        ),
+        data.get('colorsAvoided'),
 
       mustHave:
-        data.get(
-          'mustHave',
-        ),
+        data.get('mustHave'),
 
       avoid:
-        data.get(
-          'avoid',
-        ),
+        data.get('avoid'),
 
       specialInfo:
-        data.get(
-          'specialInfo',
-        ),
+        data.get('specialInfo'),
 
       creativeIdea:
-        data.get(
-          'creativeIdea',
-        ),
+        data.get('creativeIdea'),
 
       speechPreference:
-        data.get(
-          'speechPreference',
-        ),
+        data.get('speechPreference'),
 
       ownSpeech:
-        data.get(
-          'ownSpeech',
-        ),
+        data.get('ownSpeech'),
 
       confirmationMode:
-        data.get(
-          'confirmationMode',
-        ),
+        data.get('confirmationMode'),
 
       photosStatus:
-        data.get(
-          'photosStatus',
-        ),
+        data.get('photosStatus'),
 
       entryStatus:
-        data.get(
-          'entryStatus',
-        ),
+        data.get('entryStatus'),
 
       photosNote:
-        data.get(
-          'photosNote',
-        ),
+        data.get('photosNote'),
 
       manualNotes:
-        data.get(
-          'manualNotes',
-        ),
+        data.get('manualNotes'),
 
       termsAcceptedOnWhatsapp:
         data.has(
@@ -1332,18 +1275,17 @@
         ),
 
       portfolioConsent:
-        data.has(
-          'portfolioConsent',
-        ),
+        data.has('portfolioConsent'),
     };
   }
 
+  /* ==================================================
+     EVENTOS DO FORM
+  ================================================== */
+
   function bindForm() {
     const form =
-      qs(
-        '#manualOrderForm',
-        modalEl,
-      );
+      qs('#manualOrderForm', modalEl);
 
     const commercialFields = [
       'experience',
@@ -1352,53 +1294,58 @@
       'filter',
       'extraScene',
       'extraPerson',
+      'photoAlbumPlan',
+      'photoAlbumExtra100',
     ];
 
-    commercialFields
-      .forEach(
-        (name) => {
-          form.elements[name]
-            ?.addEventListener(
-              'change',
-              () => {
-                if (
-                  name
-                  === 'confirmation'
-                  && form.elements
-                    .confirmation
-                    .checked
-                ) {
-                  form.elements
-                    .format
-                    .value =
-                      'interactive';
-                }
+    commercialFields.forEach(
+      (name) => {
+        form.elements[name]
+          ?.addEventListener(
+            'change',
+            () => {
+              if (
+                name === 'confirmation'
+                && form.elements
+                  .confirmation
+                  .checked
+              ) {
+                form.elements.format.value =
+                  'interactive';
+              }
 
-                scheduleQuote();
-              },
-            );
-        },
-      );
+              if (
+                name === 'photoAlbumPlan'
+              ) {
+                syncAlbumUi(form);
+              }
 
-    form.elements
-      .manualSubtotalReais
-      .addEventListener(
-        'input',
-        () =>
-          previewPrice(
-            form,
-          ),
-      );
+              scheduleQuote();
+            },
+          );
+      },
+    );
 
-    form.elements
-      .urgencyEnabled
+    form.elements.giftPage
       .addEventListener(
         'change',
-        () =>
-          previewPrice(
-            form,
-          ),
+        () => syncGiftUi(form),
       );
+
+    form.elements.manualSubtotalReais
+      .addEventListener(
+        'input',
+        () => previewPrice(form),
+      );
+
+    form.elements.urgencyEnabled
+      .addEventListener(
+        'change',
+        () => previewPrice(form),
+      );
+
+    syncAlbumUi(form);
+    syncGiftUi(form);
 
     form.addEventListener(
       'submit',
@@ -1406,17 +1353,12 @@
         event.preventDefault();
 
         const button =
-          qs(
-            '#saveManualOrder',
-            form,
-          );
-
-        button.disabled =
-          true;
+          qs('#saveManualOrder', form);
 
         const originalText =
           button.textContent;
 
+        button.disabled = true;
         button.textContent =
           'Criando pedido...';
 
@@ -1425,15 +1367,11 @@
             await api(
               '/api/admin/orders/manual',
               {
-                method:
-                  'POST',
+                method: 'POST',
 
-                body:
-                  JSON.stringify(
-                    payloadFromForm(
-                      form,
-                    ),
-                  ),
+                body: JSON.stringify(
+                  payloadFromForm(form),
+                ),
               },
             );
 
@@ -1443,12 +1381,29 @@
               modalEl,
             );
 
+          const moments =
+            result.order
+              ?.photoAlbum
+              ?.name
+              ? `
+                <p>
+                  Libri Moments:
+                  <strong>
+                    ${esc(
+                      result.order
+                        .photoAlbum
+                        .name,
+                    )}
+                  </strong>
+                </p>
+              `
+              : '';
+
           body.innerHTML = `
             <div class="manual-order-success">
               <strong>
                 ${esc(
-                  result.order
-                    .orderCode,
+                  result.order.orderCode,
                 )}
                 criado ✅
               </strong>
@@ -1456,28 +1411,34 @@
               <p>
                 Pedido de
                 ${esc(
-                  result.order
-                    .displayName
-                  || result.order
-                    .honoreeName,
+                  result.order.displayName
+                  || result.order.honoreeName,
                 )}
                 registrado como
                 <b>
-                  ${result.order.format === 'interactive'
-                    ? 'Interativo'
-                    : 'Vídeo'}
-                  ${result.order.experience === 'reduced'
-                    ? 'Reduzido'
-                    : 'Completo'}
+                  ${
+                    result.order.format
+                    === 'interactive'
+                      ? 'Interativo'
+                      : 'Vídeo'
+                  }
+                  ${
+                    result.order.experience
+                    === 'reduced'
+                      ? 'Reduzido'
+                      : 'Completo'
+                  }
                 </b>.
               </p>
 
+              ${moments}
+
               <p>
                 Total contratado:
+
                 <strong>
                   ${money(
-                    result.order
-                      .totalCents,
+                    result.order.totalCents,
                   )}
                 </strong>
               </p>
@@ -1495,11 +1456,10 @@
           qs(
             '#finishManualOrder',
             modalEl,
-          ).onclick =
-            () => {
-              closeModal();
-              location.reload();
-            };
+          ).onclick = () => {
+            closeModal();
+            location.reload();
+          };
         } catch (error) {
           const missing =
             error.data
@@ -1512,13 +1472,9 @@
               ? `${error.message} ${missing.join(', ')}.`
               : error.message;
 
-          window.alert(
-            message,
-          );
+          window.alert(message);
 
-          button.disabled =
-            false;
-
+          button.disabled = false;
           button.textContent =
             originalText;
         }
@@ -1527,7 +1483,7 @@
   }
 
   /* ==================================================
-     BOTÃO DO PAINEL
+     BOTÃO NO PAINEL
   ================================================== */
 
   function installButton() {
@@ -1550,14 +1506,12 @@
         'button',
       );
 
-    button.id =
-      'newManualOrder';
+    button.id = 'newManualOrder';
 
     button.className =
       'btn btn-primary btn-small';
 
-    button.type =
-      'button';
+    button.type = 'button';
 
     button.textContent =
       '+ Novo pedido manual';

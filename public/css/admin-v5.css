@@ -1,0 +1,2053 @@
+/* ==================================================
+   LIBRI CONVITES
+   PAINEL ADMIN | V5
+
+   Camada adicional sobre admin.css.
+   Não substitui o CSS base.
+================================================== */
+
+/* ==================================================
+   TOKENS V5
+================================================== */
+
+:root {
+  --v5-bg:
+    #f7f4f1;
+
+  --v5-surface:
+    #ffffff;
+
+  --v5-soft:
+    #fbf8f6;
+
+  --v5-warm:
+    #fff4ef;
+
+  --v5-text:
+    #312725;
+
+  --v5-muted:
+    #776966;
+
+  --v5-faint:
+    #a69792;
+
+  --v5-border:
+    #e7deda;
+
+  --v5-border-strong:
+    #d7cac4;
+
+  --v5-primary:
+    #9d5960;
+
+  --v5-primary-dark:
+    #774148;
+
+  --v5-primary-soft:
+    #f5e3e3;
+
+  --v5-green:
+    #44745a;
+
+  --v5-green-soft:
+    #ebf5ef;
+
+  --v5-yellow:
+    #936a27;
+
+  --v5-yellow-soft:
+    #fff5df;
+
+  --v5-blue:
+    #426b83;
+
+  --v5-blue-soft:
+    #eaf3f8;
+
+  --v5-purple:
+    #715485;
+
+  --v5-purple-soft:
+    #f2ebf6;
+
+  --v5-red:
+    #994a4e;
+
+  --v5-red-soft:
+    #fceced;
+
+  --v5-shadow:
+    0 14px 38px
+    rgba(
+      57,
+      39,
+      35,
+      0.08
+    );
+
+  --v5-shadow-soft:
+    0 7px 22px
+    rgba(
+      57,
+      39,
+      35,
+      0.055
+    );
+}
+
+/* ==================================================
+   AJUSTES GERAIS
+================================================== */
+
+body.admin-locked {
+  overflow: hidden;
+}
+
+body.v5-admin-ready {
+  background:
+    radial-gradient(
+      circle at 4% 0%,
+      rgba(
+        230,
+        200,
+        191,
+        0.21
+      ),
+      transparent 27rem
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(
+        221,
+        204,
+        174,
+        0.13
+      ),
+      transparent 31rem
+    ),
+    var(--v5-bg);
+}
+
+/* ==================================================
+   LOGIN
+================================================== */
+
+.admin-auth-gate {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 5000;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(
+        221,
+        183,
+        179,
+        0.28
+      ),
+      transparent 32rem
+    ),
+    linear-gradient(
+      155deg,
+      #f9f6f3,
+      #f3eeea
+    );
+}
+
+.admin-auth-gate.hidden {
+  display: none !important;
+}
+
+.admin-auth-card {
+  width:
+    min(
+      410px,
+      100%
+    );
+
+  padding: 30px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 26px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.96
+    );
+
+  box-shadow:
+    0 28px 80px
+    rgba(
+      60,
+      41,
+      36,
+      0.13
+    );
+
+  text-align: center;
+}
+
+.admin-auth-mark {
+  width: 56px;
+  height: 56px;
+
+  margin:
+    0 auto
+    15px;
+
+  display: grid;
+
+  place-items: center;
+
+  border-radius: 18px;
+
+  color: #fff;
+
+  background:
+    linear-gradient(
+      145deg,
+      #b56e75,
+      var(--v5-primary-dark)
+    );
+
+  box-shadow:
+    0 10px 24px
+    rgba(
+      119,
+      65,
+      72,
+      0.2
+    );
+
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  font-size: 30px;
+}
+
+.admin-auth-kicker {
+  color:
+    var(--v5-primary-dark);
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 0.1em;
+
+  text-transform: uppercase;
+}
+
+.admin-auth-card h1 {
+  margin:
+    6px 0
+    7px;
+
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+
+  font-size: 31px;
+
+  font-weight: 500;
+
+  letter-spacing: -0.025em;
+}
+
+.admin-auth-card > p {
+  margin:
+    0 auto
+    21px;
+
+  max-width: 310px;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+.admin-auth-form {
+  display: grid;
+
+  gap: 11px;
+
+  text-align: left;
+}
+
+.admin-auth-form label {
+  color:
+    var(--v5-text);
+
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+.admin-auth-form input {
+  min-height: 49px;
+
+  border-radius: 14px;
+}
+
+.admin-auth-form .btn {
+  width: 100%;
+
+  min-height: 48px;
+
+  margin-top: 3px;
+}
+
+.admin-auth-message {
+  min-height: 18px;
+
+  margin-top: 12px;
+
+  color:
+    var(--v5-red);
+
+  font-size: 11px;
+}
+
+.admin-auth-message.success {
+  color:
+    var(--v5-green);
+}
+
+/* ==================================================
+   CABEÇALHO V5
+================================================== */
+
+.admin-top-v5 {
+  margin-bottom: 22px;
+}
+
+.admin-session-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.admin-session-badge {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  min-height: 34px;
+
+  padding:
+    7px
+    11px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 999px;
+
+  color:
+    var(--v5-muted);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.8
+    );
+
+  font-size: 10px;
+
+  font-weight: 800;
+}
+
+.admin-session-dot {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background:
+    var(--v5-green);
+}
+
+/* ==================================================
+   RESUMO DA FILA
+================================================== */
+
+.production-summary {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 10px;
+
+  margin:
+    0 0
+    18px;
+}
+
+.production-summary-card {
+  min-width: 0;
+
+  padding: 14px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 17px;
+
+  background:
+    var(--v5-surface);
+
+  box-shadow:
+    var(--v5-shadow-soft);
+}
+
+.production-summary-card span {
+  display: block;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 10px;
+
+  font-weight: 800;
+}
+
+.production-summary-card strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color:
+    var(--v5-text);
+
+  font-size: 25px;
+
+  line-height: 1;
+}
+
+.production-summary-card.new {
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #fff8f5
+    );
+}
+
+.production-summary-card.production {
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      var(--v5-blue-soft)
+    );
+}
+
+.production-summary-card.waiting {
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      var(--v5-yellow-soft)
+    );
+}
+
+.production-summary-card.archived {
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #f4f1ef
+    );
+}
+
+/* ==================================================
+   TOOLBAR NOVA
+================================================== */
+
+.production-toolbar {
+  display: grid;
+
+  grid-template-columns:
+    minmax(
+      0,
+      1fr
+    )
+    auto;
+
+  gap: 10px;
+
+  align-items: center;
+
+  margin-bottom: 16px;
+}
+
+.production-toolbar-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.btn-new-order {
+  white-space: nowrap;
+}
+
+/* ==================================================
+   FILA DE PRODUÇÃO
+================================================== */
+
+.production-queue {
+  display: grid;
+
+  gap: 18px;
+}
+
+.queue-group {
+  display: grid;
+
+  gap: 9px;
+}
+
+.queue-group-header {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding:
+    0
+    3px;
+}
+
+.queue-group-title {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.queue-group-title h3 {
+  margin: 0;
+
+  color:
+    var(--v5-text);
+
+  font-size: 13px;
+
+  font-weight: 900;
+}
+
+.queue-group-count {
+  min-width: 24px;
+  height: 24px;
+
+  padding:
+    0
+    7px;
+
+  border-radius: 999px;
+
+  display: inline-grid;
+
+  place-items: center;
+
+  color:
+    var(--v5-primary-dark);
+
+  background:
+    var(--v5-primary-soft);
+
+  font-size: 10px;
+
+  font-weight: 900;
+}
+
+.queue-group-subtitle {
+  color:
+    var(--v5-faint);
+
+  font-size: 10px;
+}
+
+/* ==================================================
+   CARD DE PEDIDO V5
+================================================== */
+
+.order-card-v5 {
+  position: relative;
+
+  overflow: hidden;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(
+      0,
+      1fr
+    )
+    auto;
+
+  gap: 18px;
+
+  align-items: center;
+
+  padding: 16px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 18px;
+
+  background:
+    var(--v5-surface);
+
+  box-shadow:
+    0 5px 18px
+    rgba(
+      57,
+      39,
+      35,
+      0.035
+    );
+
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.order-card-v5:hover {
+  transform:
+    translateY(-1px);
+
+  border-color:
+    var(--v5-border-strong);
+
+  box-shadow:
+    var(--v5-shadow-soft);
+}
+
+.order-card-v5.is-new {
+  border-left:
+    4px solid
+    var(--v5-primary);
+}
+
+.order-card-v5.is-production {
+  border-left:
+    4px solid
+    var(--v5-blue);
+}
+
+.order-card-v5.is-waiting {
+  border-left:
+    4px solid
+    var(--v5-yellow);
+}
+
+.order-card-v5.is-revision {
+  border-left:
+    4px solid
+    var(--v5-purple);
+}
+
+.order-card-v5.is-balance {
+  border-left:
+    4px solid
+    var(--v5-green);
+}
+
+.order-card-v5.is-urgent::after {
+  content: "";
+
+  position: absolute;
+
+  top: -28px;
+  right: -28px;
+
+  width: 72px;
+  height: 72px;
+
+  border-radius: 50%;
+
+  background:
+    rgba(
+      153,
+      74,
+      78,
+      0.08
+    );
+}
+
+.order-v5-main {
+  min-width: 0;
+}
+
+.order-v5-top {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 16px;
+}
+
+.order-v5-code {
+  color:
+    var(--v5-primary-dark);
+
+  font-size: 9px;
+
+  font-weight: 900;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+.order-v5-title {
+  margin-top: 2px;
+
+  color:
+    var(--v5-text);
+
+  font-size: 17px;
+
+  font-weight: 900;
+
+  line-height: 1.25;
+}
+
+.order-v5-theme {
+  margin-top: 4px;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 11px;
+}
+
+.order-v5-date {
+  flex: 0 0 auto;
+
+  text-align: right;
+}
+
+.order-v5-date strong {
+  display: block;
+
+  color:
+    var(--v5-text);
+
+  font-size: 12px;
+}
+
+.order-v5-date span {
+  display: block;
+
+  margin-top: 2px;
+
+  color:
+    var(--v5-faint);
+
+  font-size: 10px;
+}
+
+.order-v5-meta {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+
+  margin-top: 9px;
+}
+
+.meta-chip {
+  display: inline-flex;
+
+  align-items: center;
+
+  min-height: 25px;
+
+  padding:
+    5px
+    8px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 999px;
+
+  color:
+    var(--v5-muted);
+
+  background:
+    var(--v5-soft);
+
+  font-size: 9px;
+
+  font-weight: 750;
+}
+
+/* ==================================================
+   STATUS
+================================================== */
+
+.status-chip {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  min-height: 27px;
+
+  padding:
+    5px
+    9px;
+
+  border-radius: 999px;
+
+  font-size: 9px;
+
+  font-weight: 900;
+
+  white-space: nowrap;
+}
+
+.status-chip.new {
+  color:
+    var(--v5-primary-dark);
+
+  background:
+    var(--v5-primary-soft);
+}
+
+.status-chip.production {
+  color:
+    var(--v5-blue);
+
+  background:
+    var(--v5-blue-soft);
+}
+
+.status-chip.waiting {
+  color:
+    var(--v5-yellow);
+
+  background:
+    var(--v5-yellow-soft);
+}
+
+.status-chip.revisions {
+  color:
+    var(--v5-purple);
+
+  background:
+    var(--v5-purple-soft);
+}
+
+.status-chip.balance {
+  color:
+    var(--v5-green);
+
+  background:
+    var(--v5-green-soft);
+}
+
+.status-chip.finished {
+  color:
+    #716965;
+
+  background:
+    #f0ecea;
+}
+
+.status-chip.cancelled {
+  color:
+    var(--v5-red);
+
+  background:
+    var(--v5-red-soft);
+}
+
+/* ==================================================
+   PRÓXIMA AÇÃO
+================================================== */
+
+.next-action-v5 {
+  margin-top: 10px;
+
+  padding:
+    9px
+    11px;
+
+  border-radius: 11px;
+
+  color:
+    #574944;
+
+  background:
+    var(--v5-soft);
+
+  font-size: 10px;
+
+  line-height: 1.4;
+}
+
+.next-action-v5 span {
+  color:
+    var(--v5-faint);
+
+  font-weight: 700;
+}
+
+.next-action-v5 strong {
+  color:
+    var(--v5-text);
+
+  font-weight: 850;
+}
+
+/* ==================================================
+   AÇÕES DO CARD
+================================================== */
+
+.order-v5-actions {
+  position: relative;
+
+  z-index: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 7px;
+
+  min-width: 122px;
+}
+
+.order-v5-actions .btn {
+  width: 100%;
+}
+
+/* ==================================================
+   ARQUIVADOS
+================================================== */
+
+.archive-section {
+  margin-top: 25px;
+
+  padding-top: 19px;
+
+  border-top:
+    1px solid
+    var(--v5-border);
+}
+
+.archive-toggle {
+  width: 100%;
+
+  min-height: 47px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 15px;
+
+  padding:
+    10px
+    13px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 14px;
+
+  color:
+    var(--v5-text);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.66
+    );
+
+  text-align: left;
+
+  font-size: 11px;
+
+  font-weight: 850;
+}
+
+.archive-toggle:hover {
+  background:
+    var(--v5-surface);
+}
+
+.archive-body {
+  display: grid;
+
+  gap: 10px;
+
+  margin-top: 10px;
+}
+
+.archive-toolbar {
+  display: grid;
+
+  grid-template-columns:
+    minmax(
+      0,
+      1fr
+    )
+    auto;
+
+  gap: 8px;
+}
+
+.order-card-v5.archived {
+  opacity: 0.78;
+
+  background:
+    #fbfaf9;
+}
+
+.order-card-v5.archived:hover {
+  opacity: 1;
+}
+
+/* ==================================================
+   DETALHE DO PEDIDO
+================================================== */
+
+.detail-v5 {
+  display: grid;
+
+  gap: 15px;
+}
+
+.detail-v5-hero {
+  padding: 17px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #fff9f6
+    );
+}
+
+.detail-v5-top {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 18px;
+}
+
+.detail-v5-code {
+  color:
+    var(--v5-primary-dark);
+
+  font-size: 9px;
+
+  font-weight: 900;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+.detail-v5-name {
+  margin:
+    3px 0
+    0;
+
+  font-size: 23px;
+
+  font-weight: 900;
+
+  line-height: 1.15;
+}
+
+.detail-v5-theme {
+  margin-top: 5px;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 11px;
+}
+
+.detail-v5-price {
+  text-align: right;
+}
+
+.detail-v5-price span {
+  display: block;
+
+  color:
+    var(--v5-faint);
+
+  font-size: 9px;
+}
+
+.detail-v5-price strong {
+  display: block;
+
+  margin-top: 2px;
+
+  color:
+    var(--v5-primary-dark);
+
+  font-size: 20px;
+}
+
+.detail-v5-actions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 7px;
+
+  margin-top: 14px;
+}
+
+/* ==================================================
+   SEÇÕES DO DETALHE
+================================================== */
+
+.detail-section-v5 {
+  overflow: hidden;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 17px;
+
+  background:
+    var(--v5-surface);
+}
+
+.detail-section-v5-head {
+  padding:
+    13px
+    15px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  border-bottom:
+    1px solid
+    var(--v5-border);
+
+  background:
+    var(--v5-soft);
+}
+
+.detail-section-v5-head h3 {
+  margin: 0;
+
+  color:
+    var(--v5-text);
+
+  font-size: 13px;
+
+  font-weight: 900;
+}
+
+.detail-section-v5-body {
+  padding: 15px;
+}
+
+.detail-grid-v5 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 9px;
+}
+
+.detail-item-v5 {
+  min-width: 0;
+
+  padding:
+    10px
+    11px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 12px;
+
+  background:
+    var(--v5-soft);
+}
+
+.detail-item-v5.full {
+  grid-column:
+    1 / -1;
+}
+
+.detail-item-v5 span {
+  display: block;
+
+  color:
+    var(--v5-faint);
+
+  font-size: 9px;
+
+  font-weight: 750;
+}
+
+.detail-item-v5 strong,
+.detail-item-v5 p {
+  display: block;
+
+  margin:
+    3px 0
+    0;
+
+  overflow-wrap: anywhere;
+
+  color:
+    var(--v5-text);
+
+  font-size: 11px;
+
+  line-height: 1.45;
+}
+
+.detail-item-v5 p {
+  font-weight: 500;
+}
+
+/* ==================================================
+   ANDAMENTO SIMPLES
+================================================== */
+
+.workflow-v5 {
+  display: grid;
+
+  gap: 7px;
+}
+
+.workflow-v5-step {
+  position: relative;
+
+  min-height: 43px;
+
+  display: grid;
+
+  grid-template-columns:
+    26px
+    minmax(
+      0,
+      1fr
+    );
+
+  align-items: center;
+
+  gap: 9px;
+
+  padding:
+    8px
+    10px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 12px;
+
+  background:
+    var(--v5-soft);
+}
+
+.workflow-v5-index {
+  width: 26px;
+  height: 26px;
+
+  display: grid;
+
+  place-items: center;
+
+  border-radius: 50%;
+
+  color:
+    var(--v5-faint);
+
+  background:
+    #ece6e3;
+
+  font-size: 9px;
+
+  font-weight: 900;
+}
+
+.workflow-v5-step strong {
+  display: block;
+
+  font-size: 10px;
+}
+
+.workflow-v5-step span {
+  display: block;
+
+  margin-top: 1px;
+
+  color:
+    var(--v5-faint);
+
+  font-size: 9px;
+}
+
+.workflow-v5-step.done {
+  border-color:
+    #d4e5da;
+
+  background:
+    var(--v5-green-soft);
+}
+
+.workflow-v5-step.done
+.workflow-v5-index {
+  color: #fff;
+
+  background:
+    var(--v5-green);
+}
+
+.workflow-v5-step.active {
+  border-color:
+    #dab5b8;
+
+  background:
+    var(--v5-primary-soft);
+}
+
+.workflow-v5-step.active
+.workflow-v5-index {
+  color: #fff;
+
+  background:
+    var(--v5-primary);
+}
+
+/* ==================================================
+   DETALHES AVANÇADOS
+================================================== */
+
+.advanced-details-v5 {
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 14px;
+
+  overflow: hidden;
+}
+
+.advanced-details-v5 summary {
+  padding:
+    11px
+    13px;
+
+  color:
+    var(--v5-muted);
+
+  background:
+    var(--v5-soft);
+
+  font-size: 10px;
+
+  font-weight: 850;
+
+  cursor: pointer;
+}
+
+.advanced-details-v5 > div {
+  padding: 13px;
+}
+
+/* ==================================================
+   MODAL DE EDIÇÃO
+================================================== */
+
+.edit-order-v5 {
+  display: grid;
+
+  gap: 16px;
+}
+
+.edit-section-v5 {
+  padding: 15px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 16px;
+
+  background:
+    var(--v5-soft);
+}
+
+.edit-section-v5 h3 {
+  margin:
+    0 0
+    12px;
+
+  color:
+    var(--v5-text);
+
+  font-size: 13px;
+
+  font-weight: 900;
+}
+
+.edit-grid-v5 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 10px;
+}
+
+.edit-grid-v5 .field.full {
+  grid-column:
+    1 / -1;
+}
+
+.edit-commercial-warning {
+  margin-top: 11px;
+
+  padding:
+    10px
+    11px;
+
+  border:
+    1px solid
+    #ead8b6;
+
+  border-radius: 11px;
+
+  color:
+    #6e5420;
+
+  background:
+    var(--v5-yellow-soft);
+
+  font-size: 10px;
+
+  line-height: 1.45;
+}
+
+.edit-price-options {
+  display: grid;
+
+  gap: 7px;
+
+  margin-top: 10px;
+}
+
+.edit-price-option {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 8px;
+
+  padding:
+    9px
+    10px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 11px;
+
+  background:
+    #fff;
+}
+
+.edit-price-option input {
+  width: 16px;
+  height: 16px;
+
+  min-height: auto;
+
+  margin-top: 1px;
+
+  flex:
+    0 0
+    auto;
+}
+
+.edit-price-option strong {
+  display: block;
+
+  font-size: 10px;
+}
+
+.edit-price-option span {
+  display: block;
+
+  margin-top: 2px;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 9px;
+
+  line-height: 1.4;
+}
+
+/* ==================================================
+   LIBRI MOMENTS NO ADMIN
+================================================== */
+
+.moments-badge {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding:
+    5px
+    8px;
+
+  border-radius: 999px;
+
+  color:
+    var(--v5-purple);
+
+  background:
+    var(--v5-purple-soft);
+
+  font-size: 9px;
+
+  font-weight: 850;
+}
+
+.gifts-badge {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding:
+    5px
+    8px;
+
+  border-radius: 999px;
+
+  color:
+    var(--v5-primary-dark);
+
+  background:
+    var(--v5-primary-soft);
+
+  font-size: 9px;
+
+  font-weight: 850;
+}
+
+/* ==================================================
+   FINANCEIRO
+================================================== */
+
+.finance-v5 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 8px;
+}
+
+.finance-v5-item {
+  padding:
+    11px;
+
+  border:
+    1px solid
+    var(--v5-border);
+
+  border-radius: 12px;
+
+  background:
+    var(--v5-soft);
+}
+
+.finance-v5-item span {
+  display: block;
+
+  color:
+    var(--v5-faint);
+
+  font-size: 9px;
+}
+
+.finance-v5-item strong {
+  display: block;
+
+  margin-top: 4px;
+
+  color:
+    var(--v5-text);
+
+  font-size: 14px;
+}
+
+.finance-v5-item.total {
+  background:
+    var(--v5-primary-soft);
+}
+
+.finance-v5-item.total strong {
+  color:
+    var(--v5-primary-dark);
+}
+
+/* ==================================================
+   PEDIDO MANUAL
+================================================== */
+
+.manual-order-v5-marker {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 4px;
+
+  color:
+    var(--v5-blue);
+
+  font-size: 9px;
+
+  font-weight: 850;
+}
+
+.manual-order-v5-marker::before {
+  content: "●";
+
+  font-size: 6px;
+}
+
+/* ==================================================
+   ESTADO VAZIO
+================================================== */
+
+.queue-empty {
+  padding:
+    23px
+    18px;
+
+  border:
+    1px dashed
+    var(--v5-border-strong);
+
+  border-radius: 16px;
+
+  color:
+    var(--v5-muted);
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.48
+    );
+
+  text-align: center;
+
+  font-size: 11px;
+}
+
+/* ==================================================
+   TOAST
+================================================== */
+
+.admin-toast.v5-success {
+  color:
+    #24543b;
+
+  border:
+    1px solid
+    #cce1d4;
+
+  background:
+    var(--v5-green-soft);
+}
+
+.admin-toast.v5-error {
+  color:
+    #77373a;
+
+  border:
+    1px solid
+    #efcfd1;
+
+  background:
+    var(--v5-red-soft);
+}
+
+/* ==================================================
+   CARREGAMENTO
+================================================== */
+
+.v5-loading {
+  min-height: 120px;
+
+  display: grid;
+
+  place-items: center;
+
+  color:
+    var(--v5-muted);
+
+  font-size: 11px;
+}
+
+.v5-spinner {
+  width: 28px;
+  height: 28px;
+
+  margin:
+    0 auto
+    8px;
+
+  border:
+    3px solid
+    #eadfda;
+
+  border-top-color:
+    var(--v5-primary);
+
+  border-radius: 50%;
+
+  animation:
+    libriV5Spin
+    0.8s
+    linear
+    infinite;
+}
+
+@keyframes libriV5Spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+/* ==================================================
+   RESPONSIVO
+================================================== */
+
+@media (
+  max-width: 900px
+) {
+  .production-summary {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+  .production-toolbar {
+    grid-template-columns:
+      1fr;
+  }
+
+  .production-toolbar-actions {
+    justify-content:
+      flex-start;
+  }
+
+  .order-card-v5 {
+    grid-template-columns:
+      1fr;
+  }
+
+  .order-v5-actions {
+    min-width: 0;
+
+    flex-direction: row;
+
+    flex-wrap: wrap;
+  }
+
+  .order-v5-actions .btn {
+    width: auto;
+  }
+
+  .finance-v5 {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+/* ==================================================
+   CELULAR
+================================================== */
+
+@media (
+  max-width: 640px
+) {
+  .admin-auth-gate {
+    padding: 13px;
+  }
+
+  .admin-auth-card {
+    padding:
+      24px
+      17px;
+
+    border-radius: 21px;
+  }
+
+  .admin-auth-card h1 {
+    font-size: 27px;
+  }
+
+  .production-summary {
+    grid-template-columns:
+      1fr
+      1fr;
+
+    gap: 7px;
+  }
+
+  .production-summary-card {
+    padding: 11px;
+  }
+
+  .production-summary-card strong {
+    font-size: 21px;
+  }
+
+  .production-toolbar-actions {
+    display: grid;
+
+    grid-template-columns:
+      1fr
+      1fr;
+
+    width: 100%;
+  }
+
+  .production-toolbar-actions .btn {
+    width: 100%;
+  }
+
+  .queue-group-header {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 4px;
+  }
+
+  .order-card-v5 {
+    padding: 13px;
+  }
+
+  .order-v5-top {
+    flex-direction: column;
+
+    gap: 7px;
+  }
+
+  .order-v5-date {
+    text-align: left;
+  }
+
+  .order-v5-actions {
+    display: grid;
+
+    grid-template-columns:
+      1fr
+      1fr;
+  }
+
+  .order-v5-actions .btn {
+    width: 100%;
+  }
+
+  .detail-v5-top {
+    flex-direction: column;
+  }
+
+  .detail-v5-price {
+    text-align: left;
+  }
+
+  .detail-v5-actions {
+    display: grid;
+
+    grid-template-columns:
+      1fr
+      1fr;
+  }
+
+  .detail-v5-actions .btn {
+    width: 100%;
+  }
+
+  .detail-grid-v5,
+  .edit-grid-v5 {
+    grid-template-columns:
+      1fr;
+  }
+
+  .detail-item-v5.full,
+  .edit-grid-v5 .field.full {
+    grid-column:
+      auto;
+  }
+
+  .archive-toolbar {
+    grid-template-columns:
+      1fr;
+  }
+
+  .finance-v5 {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+/* ==================================================
+   TELAS MUITO PEQUENAS
+================================================== */
+
+@media (
+  max-width: 390px
+) {
+  .production-summary {
+    grid-template-columns:
+      1fr;
+  }
+
+  .production-toolbar-actions,
+  .order-v5-actions,
+  .detail-v5-actions {
+    grid-template-columns:
+      1fr;
+  }
+
+  .admin-session-badge {
+    display: none;
+  }
+}
+
+/* ==================================================
+   REDUÇÃO DE MOVIMENTO
+================================================== */
+
+@media (
+  prefers-reduced-motion: reduce
+) {
+  .v5-spinner {
+    animation:
+      none;
+  }
+
+  .order-card-v5 {
+    transition:
+      none;
+  }
+}

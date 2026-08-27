@@ -120,6 +120,33 @@
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
 
+  function todayISO() {
+    const now =
+      new Date();
+
+    const year =
+      now.getFullYear();
+
+    const month =
+      String(
+        now.getMonth()
+        + 1,
+      ).padStart(
+        2,
+        '0',
+      );
+
+    const day =
+      String(
+        now.getDate(),
+      ).padStart(
+        2,
+        '0',
+      );
+
+    return `${year}-${month}-${day}`;
+  }
+
   function centsFromReais(
     value,
   ) {
@@ -977,6 +1004,9 @@
     const orders =
       state.orders;
 
+    const today =
+      todayISO();
+
     const active =
       orders.filter(
         (order) =>
@@ -989,6 +1019,13 @@
       );
 
     const counts = {
+      today:
+        orders.filter(
+          (order) =>
+            order.eventDate
+            === today,
+        ).length,
+
       new:
         active.filter(
           (order) =>
@@ -1018,23 +1055,24 @@
               order.status,
             ),
         ).length,
-
-      archived:
-        orders.filter(
-          (order) =>
-            [
-              'finished',
-              'cancelled',
-            ].includes(
-              order.status,
-            ),
-        ).length,
     };
 
     kpis.className =
       'production-summary';
 
     kpis.innerHTML = `
+      <article
+        class="production-summary-card"
+      >
+        <span>
+          🎂 Festa hoje
+        </span>
+
+        <strong>
+          ${counts.today}
+        </strong>
+      </article>
+
       <article
         class="production-summary-card new"
       >
@@ -1068,18 +1106,6 @@
 
         <strong>
           ${counts.waiting}
-        </strong>
-      </article>
-
-      <article
-        class="production-summary-card archived"
-      >
-        <span>
-          Arquivados
-        </span>
-
-        <strong>
-          ${counts.archived}
         </strong>
       </article>
     `;
@@ -1239,6 +1265,53 @@
       card.classList.add(
         'archived',
       );
+    }
+
+    const badgeRow =
+      $('.order-meta-row.badges', card);
+
+    if (badgeRow) {
+      $('[data-v5-album-chip]', badgeRow)
+        ?.remove();
+
+      const plan =
+        order.photoAlbumPlan
+        || order.addons
+          ?.photoAlbumPlan
+        || '';
+
+      if (plan) {
+        const chip =
+          document.createElement(
+            'span',
+          );
+
+        chip.className =
+          'badge purple';
+
+        chip.dataset.v5AlbumChip =
+          '1';
+
+        const extraPacks =
+          Number(
+            order.photoAlbumExtra100
+            || order.addons
+              ?.photoAlbumExtra100
+            || 0,
+          );
+
+        const extraText =
+          extraPacks > 0
+            ? ` • +${extraPacks * 100} fotos`
+            : '';
+
+        chip.textContent =
+          `📷 ${albumLabel(plan)}${extraText}`;
+
+        badgeRow.appendChild(
+          chip,
+        );
+      }
     }
 
     const oldAction =
@@ -1630,12 +1703,12 @@
             </span>
 
             <span>
-              Mostrar
+              Ocultar
             </span>
           </button>
 
           <div
-            class="archive-body hidden"
+            class="archive-body"
             data-archive-body
           ></div>
         `;
@@ -3050,9 +3123,17 @@
 
     if (filter) {
       /*
-       * O V5 já separa os pedidos
-       * por andamento automaticamente.
+       * O V5 separa os pedidos
+       * automaticamente.
+       *
+       * Limpamos o filtro antigo antes
+       * de escondê-lo para que um valor
+       * preservado pelo navegador não
+       * faça pedidos desaparecerem.
        */
+      filter.value =
+        '';
+
       filter.classList.add(
         'hidden',
       );

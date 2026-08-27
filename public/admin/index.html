@@ -22,17 +22,29 @@
     Libri Convites | Painel de Pedidos
   </title>
 
+  <!-- CSS BASE DO ADMIN -->
   <link
     rel="stylesheet"
     href="/css/admin.css"
+  >
+
+  <!--
+    V5
+    Camada visual adicional.
+    Deve ficar depois do admin.css.
+  -->
+  <link
+    rel="stylesheet"
+    href="/css/admin-v5.css"
   >
 </head>
 
 <body>
   <main class="admin-shell">
+
     <!-- ==================================================
          CABEÇALHO
-    =================================================== -->
+    ================================================== -->
 
     <header class="admin-top">
       <div class="admin-brand">
@@ -86,7 +98,7 @@
 
     <!-- ==================================================
          PEDIDOS
-    =================================================== -->
+    ================================================== -->
 
     <section
       id="ordersTab"
@@ -95,12 +107,17 @@
       <div class="section-heading">
         <div>
           <span class="section-eyebrow">
-            Visão geral
+            Produção
           </span>
 
           <h2>
-            O que precisa da sua atenção
+            Fila de pedidos
           </h2>
+
+          <p>
+            Novos pedidos aparecem primeiro.
+            Finalizados ficam arquivados sem perder o histórico.
+          </p>
         </div>
 
         <button
@@ -112,6 +129,12 @@
         </button>
       </div>
 
+      <!--
+        O admin-v5.js transforma estes
+        indicadores na visão simplificada:
+        Novos / Em produção /
+        Aguardando / Arquivados.
+      -->
       <div
         id="kpis"
         class="kpis"
@@ -135,6 +158,13 @@
           >
         </div>
 
+        <!--
+          Mantido por compatibilidade
+          com o admin antigo.
+
+          O V5 oculta este filtro porque
+          organiza os pedidos por grupos.
+        -->
         <select
           id="statusFilter"
           aria-label="Filtrar pedidos por status"
@@ -190,7 +220,7 @@
 
     <!-- ==================================================
          CONFIGURAÇÕES
-    =================================================== -->
+    ================================================== -->
 
     <section
       id="settingsTab"
@@ -224,7 +254,7 @@
 
     <!-- ==================================================
          TERMOS
-    =================================================== -->
+    ================================================== -->
 
     <section
       id="termsTab"
@@ -247,6 +277,9 @@
       </div>
 
       <div class="terms-layout">
+
+        <!-- NOVA VERSÃO -->
+
         <section class="settings-card">
           <div class="card-heading">
             <div>
@@ -286,7 +319,9 @@
               ></textarea>
 
               <span class="hint">
-                Ao publicar uma nova versão, ela se torna a versão ativa para os próximos pedidos.
+                Ao publicar uma nova versão,
+                ela se torna a versão ativa
+                para os próximos pedidos.
               </span>
             </div>
 
@@ -301,6 +336,8 @@
             </div>
           </form>
         </section>
+
+        <!-- HISTÓRICO -->
 
         <section class="settings-card">
           <div class="card-heading">
@@ -338,7 +375,7 @@
 
   <!-- ==================================================
        DETALHE DO PEDIDO
-  =================================================== -->
+  ================================================== -->
 
   <div
     id="adminModal"
@@ -378,7 +415,10 @@
 
   <!-- ==================================================
        MODAL AUXILIAR
-  =================================================== -->
+
+       Também será reutilizado pelo
+       botão Editar pedido do V5.
+  ================================================== -->
 
   <div
     id="infoModal"
@@ -418,7 +458,7 @@
 
   <!-- ==================================================
        FEEDBACK
-  =================================================== -->
+  ================================================== -->
 
   <div
     id="adminToast"
@@ -426,6 +466,10 @@
     role="status"
     aria-live="polite"
   ></div>
+
+  <!-- ==================================================
+       SCRIPTS EXISTENTES
+  ================================================== -->
 
   <script
     type="module"
@@ -444,6 +488,21 @@
 
   <script
     src="/js/admin-manual.js"
+  ></script>
+
+  <!-- ==================================================
+       PAINEL V5
+
+       Fica por último para aplicar:
+       - login por senha
+       - organização da fila
+       - arquivados
+       - editar pedido
+       - Libri Moments
+  ================================================== -->
+
+  <script
+    src="/js/admin-v5.js"
   ></script>
 </body>
 </html>

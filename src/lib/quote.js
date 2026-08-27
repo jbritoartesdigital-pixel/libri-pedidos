@@ -1,77 +1,228 @@
-import { clampInt } from './http.js';
-import { catalogFromSettings } from './settings.js';
+import {
+  catalogFromSettings,
+} from './settings.js';
 
-export function normalizeCommercialSelection(
-  selection = {},
+/* ==================================================
+   LIBRI MOMENTS
+================================================== */
+
+const PHOTO_ALBUM_PLANS = {
+  festa: {
+    key: 'festa',
+    name: 'Festa',
+    priceCents: 7900,
+    photos: 200,
+    days: 30,
+  },
+
+  premium: {
+    key: 'premium',
+    name: 'Premium',
+    priceCents: 11900,
+    photos: 400,
+    days: 60,
+  },
+
+  exclusive: {
+    key: 'exclusive',
+    name: 'Exclusive',
+    priceCents: 14900,
+    photos: 700,
+    days: 90,
+  },
+};
+
+const PHOTO_ALBUM_EXTRA_100_CENTS =
+  1500;
+
+/* ==================================================
+   HELPERS
+================================================== */
+
+function clampInt(
+  value,
+  min,
+  max,
 ) {
-  const experience =
-    selection?.experience === 'reduced'
-      ? 'reduced'
-      : 'full';
+  const number =
+    Number.parseInt(
+      value,
+      10,
+    );
 
-  const requestedFormat =
-    selection?.format === 'interactive'
-      ? 'interactive'
-      : 'video';
+  if (
+    !Number.isFinite(number)
+  ) {
+    return min;
+  }
 
-  const rawAddons =
-    selection?.addons
-    || {};
+  return Math.min(
+    max,
+    Math.max(
+      min,
+      number,
+    ),
+  );
+}
 
-  const addons = {
+function safeCents(value) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+    || number < 0
+  ) {
+    return 0;
+  }
+
+  return Math.round(number);
+}
+
+function safePercent(
+  value,
+  fallback = 0,
+) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return fallback;
+  }
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      number,
+    ),
+  );
+}
+
+function normalizeExperience(
+  value,
+) {
+  return value === 'reduced'
+    ? 'reduced'
+    : 'full';
+}
+
+function normalizeFormat(
+  value,
+) {
+  return value === 'interactive'
+    ? 'interactive'
+    : 'video';
+}
+
+function normalizeAlbumPlan(
+  value,
+) {
+  return Object.prototype
+    .hasOwnProperty
+    .call(
+      PHOTO_ALBUM_PLANS,
+      value,
+    )
+    ? value
+    : '';
+}
+
+function normalizeAddons(
+  raw = {},
+) {
+  const photoAlbumPlan =
+    normalizeAlbumPlan(
+      raw.photoAlbumPlan,
+    );
+
+  const photoAlbumExtra100 =
+    photoAlbumPlan
+      ? clampInt(
+        raw.photoAlbumExtra100,
+        0,
+        20,
+      )
+      : 0;
+
+  return {
     confirmation:
-      rawAddons.confirmation === true,
+      raw.confirmation
+      === true,
 
+    /*
+     * Todo plano Libri Moments
+     * já inclui um filtro.
+     *
+     * Portanto, quando existe
+     * álbum, o filtro avulso
+     * deixa de ser cobrado.
+     */
     filter:
-      rawAddons.filter === true,
+      photoAlbumPlan
+        ? false
+        : raw.filter === true,
 
     extraScene:
       clampInt(
-        rawAddons.extraScene,
+        raw.extraScene,
         0,
         10,
-        0,
       ),
 
     extraPerson:
       clampInt(
-        rawAddons.extraPerson,
+        raw.extraPerson,
         0,
         10,
-        0,
       ),
-  };
 
-  /*
-   * HARD LOCK COMERCIAL
-   *
-   * A Confirmação Libri funciona dentro
-   * do convite Interativo.
-   *
-   * Portanto:
-   * Vídeo + Confirmação
-   * nunca pode existir como produto final.
-   */
-  const format =
-    addons.confirmation
-      ? 'interactive'
-      : requestedFormat;
+    photoAlbumPlan,
 
-  return {
-    experience,
-    requestedFormat,
-    format,
-
-    formatAdjusted:
-      format !== requestedFormat,
-
-    addons,
+    photoAlbumExtra100,
   };
 }
 
+function addonLine({
+  key,
+  qty,
+  unitCents,
+}) {
+  const safeQty =
+    Math.max(
+      0,
+      Number(qty) || 0,
+    );
+
+  const safeUnit =
+    safeCents(
+      unitCents,
+    );
+
+  return {
+    key,
+
+    qty:
+      safeQty,
+
+    unitCents:
+      safeUnit,
+
+    totalCents:
+      safeQty
+      * safeUnit,
+  };
+}
+
+/* ==================================================
+   COTAÇÃO
+================================================== */
+
 export function calculateQuote(
-  selection,
-  settings,
+  selection = {},
+  settings = {},
   options = {},
 ) {
   const catalog =
@@ -79,88 +230,208 @@ export function calculateQuote(
       settings,
     );
 
-  const normalized =
-    normalizeCommercialSelection(
-      selection,
+  const experience =
+    normalizeExperience(
+      selection.experience,
     );
 
-  const {
-    experience,
-    requestedFormat,
-    format,
-    formatAdjusted,
-    addons,
-  } = normalized;
+  const requestedFormat =
+    normalizeFormat(
+      selection.format,
+    );
+
+  const addons =
+    normalizeAddons(
+      selection.addons
+      || {},
+    );
+
+  /*
+   * HARD LOCK:
+   *
+   * Confirmação Libri só funciona
+   * no convite Interativo.
+   */
+  const format =
+    addons.confirmation
+      ? 'interactive'
+      : requestedFormat;
+
+  const formatAdjusted =
+    format
+    !== requestedFormat;
 
   const productCents =
-    catalog.products
-      [format]
-      [experience];
+    safeCents(
+      catalog
+        ?.products
+        ?.[format]
+        ?.[experience],
+    );
 
-  const confirmationQty =
+  const addonLines = [];
+
+  /* ==================================================
+     CONFIRMAÇÃO LIBRI
+  ================================================== */
+
+  if (
     addons.confirmation
-      ? 1
-      : 0;
+  ) {
+    addonLines.push(
+      addonLine({
+        key:
+          'confirmation',
 
-  const filterQty =
+        qty:
+          1,
+
+        unitCents:
+          catalog
+            ?.addons
+            ?.confirmation,
+      }),
+    );
+  }
+
+  /* ==================================================
+     FILTRO AVULSO
+  ================================================== */
+
+  if (
     addons.filter
-      ? 1
-      : 0;
+  ) {
+    addonLines.push(
+      addonLine({
+        key:
+          'filter',
 
-  const extraSceneQty =
-    addons.extraScene;
+        qty:
+          1,
 
-  const extraPersonQty =
-    addons.extraPerson;
+        unitCents:
+          catalog
+            ?.addons
+            ?.filter,
+      }),
+    );
+  }
 
-  const addonLines = [
-    [
-      'confirmation',
-      confirmationQty,
-      catalog.addons.confirmation,
-    ],
+  /* ==================================================
+     CENA EXTRA
+  ================================================== */
 
-    [
-      'filter',
-      filterQty,
-      catalog.addons.filter,
-    ],
+  if (
+    addons.extraScene
+    > 0
+  ) {
+    addonLines.push(
+      addonLine({
+        key:
+          'extraScene',
 
-    [
-      'extraScene',
-      extraSceneQty,
-      catalog.addons.extraScene,
-    ],
+        qty:
+          addons
+            .extraScene,
 
-    [
-      'extraPerson',
-      extraPersonQty,
-      catalog.addons.extraPerson,
-    ],
-  ].map(
-    (
-      [
-        key,
-        qty,
-        unitCents,
-      ],
-    ) => ({
-      key,
-      qty,
-      unitCents,
+        unitCents:
+          catalog
+            ?.addons
+            ?.extraScene,
+      }),
+    );
+  }
 
-      totalCents:
-        qty * unitCents,
-    }),
-  );
+  /* ==================================================
+     PESSOA EXTRA
+  ================================================== */
+
+  if (
+    addons.extraPerson
+    > 0
+  ) {
+    addonLines.push(
+      addonLine({
+        key:
+          'extraPerson',
+
+        qty:
+          addons
+            .extraPerson,
+
+        unitCents:
+          catalog
+            ?.addons
+            ?.extraPerson,
+      }),
+    );
+  }
+
+  /* ==================================================
+     LIBRI MOMENTS
+  ================================================== */
+
+  const albumPlan =
+    addons.photoAlbumPlan
+      ? PHOTO_ALBUM_PLANS[
+        addons.photoAlbumPlan
+      ]
+      : null;
+
+  if (
+    albumPlan
+  ) {
+    addonLines.push(
+      addonLine({
+        key:
+          addons.photoAlbumPlan
+          === 'festa'
+            ? 'photoAlbumFesta'
+            : addons.photoAlbumPlan
+            === 'premium'
+              ? 'photoAlbumPremium'
+              : 'photoAlbumExclusive',
+
+        qty:
+          1,
+
+        unitCents:
+          albumPlan
+            .priceCents,
+      }),
+    );
+
+    if (
+      addons.photoAlbumExtra100
+      > 0
+    ) {
+      addonLines.push(
+        addonLine({
+          key:
+            'photoAlbumExtra100',
+
+          qty:
+            addons
+              .photoAlbumExtra100,
+
+          unitCents:
+            PHOTO_ALBUM_EXTRA_100_CENTS,
+        }),
+      );
+    }
+  }
+
+  /* ==================================================
+     TOTAIS DOS ADICIONAIS
+  ================================================== */
 
   const addonsCents =
     addonLines.reduce(
       (
-        sum,
+        total,
         line,
       ) =>
-        sum
+        total
         + line.totalCents,
 
       0,
@@ -170,23 +441,30 @@ export function calculateQuote(
     productCents
     + addonsCents;
 
+  /* ==================================================
+     URGÊNCIA
+  ================================================== */
+
   const urgencyEnabled =
-    options.urgencyEnabled
+    options
+      ?.urgencyEnabled
     === true;
 
   const urgencyPercent =
     urgencyEnabled
-      ? catalog.rules
-          .urgencyPercent
+      ? safePercent(
+        catalog
+          ?.rules
+          ?.urgencyPercent,
+      )
       : 0;
 
   const urgencyAmountCents =
     urgencyEnabled
       ? Math.round(
-        (
-          subtotalCents
-          * urgencyPercent
-        ) / 100,
+        subtotalCents
+        * urgencyPercent
+        / 100,
       )
       : 0;
 
@@ -194,21 +472,33 @@ export function calculateQuote(
     subtotalCents
     + urgencyAmountCents;
 
+  /* ==================================================
+     ENTRADA
+  ================================================== */
+
   const depositPercent =
-    catalog.rules
-      .depositPercent;
+    safePercent(
+      catalog
+        ?.rules
+        ?.depositPercent,
+
+      50,
+    );
 
   const depositCents =
     Math.round(
-      (
-        totalCents
-        * depositPercent
-      ) / 100,
+      totalCents
+      * depositPercent
+      / 100,
     );
 
   const balanceCents =
     totalCents
     - depositCents;
+
+  /* ==================================================
+     RESULTADO
+  ================================================== */
 
   return {
     experience,
@@ -221,9 +511,9 @@ export function calculateQuote(
 
     addons,
 
-    productCents,
-
     addonLines,
+
+    productCents,
 
     addonsCents,
 
@@ -242,5 +532,56 @@ export function calculateQuote(
     depositCents,
 
     balanceCents,
+
+    photoAlbum:
+      albumPlan
+        ? {
+          plan:
+            albumPlan.key,
+
+          name:
+            albumPlan.name,
+
+          basePriceCents:
+            albumPlan
+              .priceCents,
+
+          photos:
+            albumPlan.photos
+            + (
+              addons
+                .photoAlbumExtra100
+              * 100
+            ),
+
+          basePhotos:
+            albumPlan.photos,
+
+          extra100:
+            addons
+              .photoAlbumExtra100,
+
+          extra100Cents:
+            PHOTO_ALBUM_EXTRA_100_CENTS,
+
+          days:
+            albumPlan.days,
+
+          filterIncluded:
+            true,
+        }
+        : null,
   };
 }
+
+/* ==================================================
+   EXPORTS ÚTEIS
+================================================== */
+
+export const libriMomentsCatalog = {
+  plans:
+    PHOTO_ALBUM_PLANS,
+
+  extra100Cents:
+    PHOTO_ALBUM_EXTRA_100_CENTS,
+};

@@ -47,6 +47,27 @@ function legacyCommercialIssue(
 function adminOrderSummary(
   row,
 ) {
+  const addons =
+    row.addons
+    || parseJson(
+      row.addons_json,
+      {},
+    );
+
+  const pricing =
+    row.pricing
+    || parseJson(
+      row.pricing_json,
+      {},
+    );
+
+  const briefing =
+    row.briefing
+    || parseJson(
+      row.briefing_json,
+      {},
+    );
+
   return {
     id:
       row.id,
@@ -107,6 +128,47 @@ function adminOrderSummary(
     productionDeadlineAt:
       row.deadline_override_at
       || row.production_deadline_at,
+
+    subtotalCents:
+      Number(
+        row.subtotal_cents
+        || 0,
+      ),
+
+    totalCents:
+      Number(
+        row.total_cents
+        || 0,
+      ),
+
+    addons,
+
+    photoAlbumPlan:
+      addons
+        ?.photoAlbumPlan
+      || '',
+
+    photoAlbumExtra100:
+      Number(
+        addons
+          ?.photoAlbumExtra100
+        || 0,
+      ),
+
+    photoAlbum:
+      pricing
+        ?.photoAlbum
+      || null,
+
+    giftPage:
+      briefing
+        ?.giftPage
+      || 'unsure',
+
+    giftDetails:
+      briefing
+        ?.giftDetails
+      || '',
 
     updatedAt:
       row.updated_at,

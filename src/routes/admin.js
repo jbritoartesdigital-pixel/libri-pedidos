@@ -503,19 +503,6 @@ export async function handleAdminApi(
       );
     }
 
-    /*
-     * ORDEM:
-     *
-     * 1. festas de hoje/futuras
-     * 2. pedidos sem data
-     * 3. festas passadas
-     *
-     * Dentro do futuro:
-     * mais próxima primeiro.
-     *
-     * Dentro do passado:
-     * mais recente primeiro.
-     */
     const sql = `
       SELECT *
       FROM orders
@@ -617,85 +604,6 @@ export async function handleAdminApi(
           nextActionFor(
             detail,
           ),
-      },
-    });
-  }
-
-  /* ==================================================
-     EXCLUIR
-  ================================================== */
-
-  if (
-    orderMatch
-    && method === 'DELETE'
-  ) {
-    const id =
-      Number(
-        orderMatch[1],
-      );
-
-    const order =
-      await env.DB
-        .prepare(
-          `
-            SELECT
-              id,
-              order_code,
-              honoree_name
-            FROM orders
-            WHERE id = ?
-          `,
-        )
-        .bind(id)
-        .first();
-
-    if (!order) {
-      return fail(
-        'Pedido não encontrado.',
-        404,
-      );
-    }
-
-    await env.DB.batch([
-      env.DB
-        .prepare(
-          `
-            DELETE FROM internal_notes
-            WHERE order_id = ?
-          `,
-        )
-        .bind(id),
-
-      env.DB
-        .prepare(
-          `
-            DELETE FROM order_history
-            WHERE order_id = ?
-          `,
-        )
-        .bind(id),
-
-      env.DB
-        .prepare(
-          `
-            DELETE FROM orders
-            WHERE id = ?
-          `,
-        )
-        .bind(id),
-    ]);
-
-    return json({
-      ok: true,
-
-      deleted: {
-        id,
-
-        orderCode:
-          order.order_code,
-
-        honoreeName:
-          order.honoree_name,
       },
     });
   }
@@ -1093,10 +1001,6 @@ export async function handleAdminApi(
       );
     }
 
-    /*
-     * Evita um segundo clique
-     * resetar o prazo.
-     */
     if (
       order
         .production_started_at

@@ -466,7 +466,6 @@
                   type: 'number',
                   value: '0',
                   min: '0',
-                  max: '20',
                   hint:
                     'Cada pacote acrescenta 100 fotos por R$ 15.',
                 },

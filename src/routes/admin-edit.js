@@ -121,6 +121,37 @@ function optInt(
   );
 }
 
+function optNonNegativeInt(
+  value,
+) {
+  if (
+    value === undefined
+    || value === null
+    || String(value).trim() === ''
+  ) {
+    return null;
+  }
+
+  const number =
+    Number.parseInt(
+      value,
+      10,
+    );
+
+  if (
+    !Number.isSafeInteger(
+      number,
+    )
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    number,
+  );
+}
+
 function optMoney(
   value,
 ) {
@@ -233,10 +264,8 @@ function normalizeAddons(
   const photoAlbumExtra100 =
     photoAlbumPlan
       ? (
-        optInt(
+        optNonNegativeInt(
           raw.photoAlbumExtra100,
-          0,
-          20,
         )
         || 0
       )

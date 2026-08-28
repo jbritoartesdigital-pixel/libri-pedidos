@@ -196,13 +196,13 @@ function money(cents = 0) {
 
 function esc(value = '') {
   return String(value).replace(
-    /[&<>'"]/g,
+    /[&<>'\"]/g,
     (char) => ({
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
       "'": '&#39;',
-      '"': '&quot;',
+      '\"': '&quot;',
     })[char],
   );
 }
@@ -794,21 +794,26 @@ function normalizeAlbumSelection() {
       .photoAlbumPlan = '';
   }
 
+  const extra100 =
+    Number.parseInt(
+      state.selection
+        .addons
+        .photoAlbumExtra100
+      || 0,
+      10,
+    );
+
   state.selection
     .addons
     .photoAlbumExtra100 =
-      Math.max(
-        0,
-        Math.min(
-          20,
-          Number(
-            state.selection
-              .addons
-              .photoAlbumExtra100
-            || 0,
-          ),
-        ),
-      );
+      Number.isSafeInteger(
+        extra100,
+      )
+        ? Math.max(
+          0,
+          extra100,
+        )
+        : 0;
 
   if (
     !hasPhotoAlbum()
@@ -4027,22 +4032,23 @@ function renderResources() {
                 .albumExtra,
             );
 
+          const currentExtra =
+            Number.parseInt(
+              state.selection
+                .addons
+                .photoAlbumExtra100
+              || 0,
+              10,
+            )
+            || 0;
+
           state.selection
             .addons
             .photoAlbumExtra100 =
               Math.max(
                 0,
-                Math.min(
-                  20,
-
-                  Number(
-                    state.selection
-                      .addons
-                      .photoAlbumExtra100
-                    || 0,
-                  )
-                  + delta,
-                ),
+                currentExtra
+                + delta,
               );
 
           syncAlbumBriefing();

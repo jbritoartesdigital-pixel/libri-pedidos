@@ -188,8 +188,60 @@ function addonLabelV4(key) {
 
       extraPerson:
         'Outra criança ou pessoa',
+
+      photoAlbumFesta:
+        'Libri Moments Festa',
+
+      photoAlbumPremium:
+        'Libri Moments Premium',
+
+      photoAlbumExclusive:
+        'Libri Moments Exclusive',
+
+      photoAlbumExtra100:
+        'Pacote de +100 fotos',
     }[key]
     || key
+  );
+}
+
+function albumPlanV4(value) {
+  return (
+    {
+      festa: {
+        name:
+          'Festa',
+
+        photos:
+          200,
+
+        days:
+          30,
+      },
+
+      premium: {
+        name:
+          'Premium',
+
+        photos:
+          400,
+
+        days:
+          60,
+      },
+
+      exclusive: {
+        name:
+          'Exclusive',
+
+        photos:
+          700,
+
+        days:
+          90,
+      },
+    }[value]
+    || null
   );
 }
 
@@ -377,13 +429,26 @@ function contractedResourcesV4(
     order.briefing
     || {};
 
+  const pricing =
+    order.pricing
+    || {};
+
   const resources = [];
+
+  const album =
+    pricing.photoAlbum
+    || null;
+
+  const photoAlbumPlan =
+    addons.photoAlbumPlan
+    || album?.plan
+    || '';
 
   if (
     addons.confirmation
   ) {
     resources.push(
-      `Confirmação Libri — ${confirmationModeV4(
+      `Confirmação Libri | ${confirmationModeV4(
         b.confirmationMode,
       )}`,
     );
@@ -391,9 +456,10 @@ function contractedResourcesV4(
 
   if (
     addons.filter
+    && !photoAlbumPlan
   ) {
     resources.push(
-      'Filtro personalizado — seguir a identidade visual aprovada do convite',
+      'Filtro personalizado',
     );
   }
 
@@ -416,6 +482,74 @@ function contractedResourcesV4(
   ) {
     resources.push(
       `${addons.extraPerson} pessoa(s) extra`,
+    );
+  }
+
+  if (
+    photoAlbumPlan
+  ) {
+    const fallback =
+      albumPlanV4(
+        photoAlbumPlan,
+      );
+
+    const extra100 =
+      Number(
+        addons.photoAlbumExtra100
+        ?? album?.extra100
+        ?? 0,
+      )
+      || 0;
+
+    const albumName =
+      album?.name
+      || fallback?.name
+      || photoAlbumPlan;
+
+    const photos =
+      Number(
+        album?.photos,
+      )
+      || (
+        Number(
+          fallback?.photos
+          || 0,
+        )
+        + (
+          extra100
+          * 100
+        )
+      );
+
+    const days =
+      Number(
+        album?.days,
+      )
+      || Number(
+        fallback?.days
+        || 0,
+      );
+
+    const details = [
+      photos > 0
+        ? `${photos} fotos`
+        : '',
+
+      days > 0
+        ? `${days} dias`
+        : '',
+
+      'filtro personalizado incluso',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    resources.push(
+      `Libri Moments ${albumName}${
+        details
+          ? ` | ${details}`
+          : ''
+      }`,
     );
   }
 
@@ -1065,4 +1199,3 @@ if (
 }
 
 scheduleLegacyRefreshV4();
-

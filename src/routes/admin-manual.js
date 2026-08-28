@@ -82,6 +82,37 @@ function optInt(
   );
 }
 
+function optNonNegativeInt(
+  value,
+) {
+  if (
+    value === undefined
+    || value === null
+    || String(value).trim() === ''
+  ) {
+    return null;
+  }
+
+  const number =
+    Number.parseInt(
+      value,
+      10,
+    );
+
+  if (
+    !Number.isSafeInteger(
+      number,
+    )
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    number,
+  );
+}
+
 function optMoney(
   value,
 ) {
@@ -409,12 +440,10 @@ export async function handleAdminManualApi(
   const selectedAlbumExtra100 =
     selectedAlbumPlan
       ? (
-        optInt(
+        optNonNegativeInt(
           body
             .addons
             ?.photoAlbumExtra100,
-          0,
-          20,
         )
         || 0
       )

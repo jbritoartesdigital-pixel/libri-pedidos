@@ -65,6 +65,43 @@ function clampInt(
   );
 }
 
+function safeAlbumExtraCount(
+  value,
+) {
+  const number =
+    Number.parseInt(
+      value,
+      10,
+    );
+
+  if (
+    !Number.isFinite(number)
+    || number <= 0
+  ) {
+    return 0;
+  }
+
+  /*
+   * Não existe limite comercial
+   * de pacotes definido.
+   *
+   * Este teto existe somente para
+   * manter o cálculo em centavos
+   * dentro do intervalo inteiro
+   * seguro do JavaScript.
+   */
+  const technicalMax =
+    Math.floor(
+      Number.MAX_SAFE_INTEGER
+      / PHOTO_ALBUM_EXTRA_100_CENTS,
+    );
+
+  return Math.min(
+    number,
+    technicalMax,
+  );
+}
+
 function safeCents(value) {
   const number =
     Number(value);
@@ -140,10 +177,8 @@ function normalizeAddons(
 
   const photoAlbumExtra100 =
     photoAlbumPlan
-      ? clampInt(
+      ? safeAlbumExtraCount(
         raw.photoAlbumExtra100,
-        0,
-        20,
       )
       : 0;
 

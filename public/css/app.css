@@ -2965,3 +2965,159 @@ a:focus-visible,
       0.01ms !important;
   }
 }
+/* ==================================================
+   AJUSTE MOBILE | CARDS DO MASCOTE
+   LIBRI CONVITES
+   Cole este bloco NO FINAL de public/css/app.css
+================================================== */
+
+@media (max-width: 640px) {
+  /*
+   * MantĆ©m as duas opĆ§Ćµes visuais
+   * lado a lado no celular.
+   */
+  .mascot-choice-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+
+    gap: 9px;
+  }
+
+  /*
+   * "A Libri escolhe" permanece abaixo,
+   * ocupando a largura inteira.
+   */
+  .mascot-choice-grid
+  > .choice:not(.choice-visual) {
+    grid-column:
+      1 / -1;
+
+    min-height: 105px;
+  }
+
+  /*
+   * Cards visuais menores.
+   */
+  .mascot-choice-grid
+  .choice-visual {
+    min-height: 0;
+
+    padding: 0;
+  }
+
+  /*
+   * Formato mais vertical para combinar
+   * com as imagens dos mascotes.
+   */
+  .mascot-choice-grid
+  .style-visual {
+    aspect-ratio:
+      4 / 5;
+  }
+
+  /*
+   * Mostra a imagem inteira.
+   * Evita cortar rosto/cabeĆ§a.
+   */
+  .mascot-choice-grid
+  .style-visual img {
+    width: 100%;
+    height: 100%;
+
+    object-fit: contain;
+    object-position:
+      center top;
+
+    transform:
+      none !important;
+  }
+
+  /*
+   * Remove o zoom de hover/touch
+   * apenas nesses cards.
+   */
+  .mascot-choice-grid
+  .choice-visual:hover
+  .style-visual img {
+    transform:
+      none;
+  }
+
+  /*
+   * SeleĆ§Ć£o menor para nĆ£o ocupar
+   * espaĆ§o demais sobre a imagem.
+   */
+  .mascot-choice-grid
+  .choice-visual
+  .choice-top {
+    top: 8px;
+    right: 8px;
+  }
+
+  .mascot-choice-grid
+  .choice-visual
+  .choice-check {
+    width: 20px;
+    height: 20px;
+
+    font-size: 11px;
+  }
+
+  /*
+   * Texto compacto para os dois cards
+   * continuarem confortĆ�veis lado a lado.
+   */
+  .mascot-choice-grid
+  .choice-visual
+  > strong {
+    padding:
+      10px 10px 0;
+
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .mascot-choice-grid
+  .choice-visual
+  > p {
+    margin-top: 4px;
+
+    padding:
+      0 10px 11px;
+
+    font-size: 10.5px;
+    line-height: 1.35;
+  }
+}
+
+/*
+ * Mesmo em celulares bem estreitos,
+ * as duas referĆŖncias continuam
+ * lado a lado para facilitar comparaĆ§Ć£o.
+ */
+@media (max-width: 390px) {
+  .mascot-choice-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+
+    gap: 8px;
+  }
+
+  .mascot-choice-grid
+  .choice-visual
+  > strong {
+    font-size: 12.5px;
+  }
+
+  .mascot-choice-grid
+  .choice-visual
+  > p {
+    font-size: 10px;
+  }
+}

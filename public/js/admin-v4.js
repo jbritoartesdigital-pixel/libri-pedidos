@@ -24,7 +24,7 @@ function escV4(value = '') {
 
 function valueV4(
   value,
-  fallback = 'NÃ£o informado',
+  fallback = 'N\u00e3o informado',
 ) {
   const text =
     String(value ?? '').trim();
@@ -46,7 +46,7 @@ function moneyV4(cents = 0) {
 
 function formatDateV4(value) {
   if (!value) {
-    return 'NÃ£o informado';
+    return 'N\u00e3o informado';
   }
 
   const parts =
@@ -75,7 +75,7 @@ function formatV4(value) {
   return (
     value === 'interactive'
       ? 'Interativo'
-      : 'VÃ­deo'
+      : 'V\u00eddeo'
   );
 }
 
@@ -99,7 +99,7 @@ function childStyleV4(value) {
         'A Libri escolhe',
     }[value]
     || value
-    || 'NÃ£o informado'
+    || 'N\u00e3o informado'
   );
 }
 
@@ -110,13 +110,13 @@ function outfitV4(value) {
         'Parecida com a roupa da festa',
 
       specific:
-        'Roupa especÃ­fica',
+        'Roupa espec\u00edfica',
 
       libri:
         'A Libri cria',
     }[value]
     || value
-    || 'NÃ£o informado'
+    || 'N\u00e3o informado'
   );
 }
 
@@ -130,10 +130,10 @@ function speechV4(value) {
         'Cliente quer aprovar antes',
 
       own:
-        'Cliente enviou frase prÃ³pria',
+        'Cliente enviou frase pr\u00f3pria',
     }[value]
     || value
-    || 'NÃ£o informado'
+    || 'N\u00e3o informado'
   );
 }
 
@@ -147,10 +147,10 @@ function confirmationModeV4(value) {
         'Lista de convidados',
 
       unsure:
-        'Ainda nÃ£o definido',
+        'Ainda n\u00e3o definido',
     }[value]
     || value
-    || 'Ainda nÃ£o definido'
+    || 'Ainda n\u00e3o definido'
   );
 }
 
@@ -161,7 +161,7 @@ function photoStatusV4(value) {
         'Aguardando',
 
       received:
-        'Recebidas, precisam de conferÃªncia',
+        'Recebidas, precisam de confer\u00eancia',
 
       approved:
         'Aprovadas',
@@ -170,7 +170,7 @@ function photoStatusV4(value) {
         'Precisa enviar novas fotos',
     }[value]
     || value
-    || 'NÃ£o informado'
+    || 'N\u00e3o informado'
   );
 }
 
@@ -181,7 +181,7 @@ function giftPageV4(value) {
         'Sim',
 
       no:
-        'NÃ£o',
+        'N\u00e3o',
 
       unsure:
         'A definir',
@@ -201,7 +201,7 @@ function financeStatusV4(value) {
         'Confirmado',
     }[value]
     || value
-    || 'NÃ£o informado'
+    || 'N\u00e3o informado'
   );
 }
 
@@ -221,7 +221,7 @@ function addonLabelV4(key) {
   return (
     {
       confirmation:
-        'ConfirmaÃ§Ã£o Libri',
+        'Confirma\u00e7\u00e3o Libri',
 
       filter:
         'Filtro personalizado',
@@ -230,7 +230,7 @@ function addonLabelV4(key) {
         'Cena extra',
 
       extraPerson:
-        'Outra crianÃ§a ou pessoa',
+        'Outra crian\u00e7a ou pessoa',
 
       photoAlbumFesta:
         'Libri Moments Festa',
@@ -310,7 +310,7 @@ async function apiV4(path) {
   if (!response.ok) {
     throw new Error(
       data.error
-      || 'NÃ£o foi possÃ­vel carregar os dados.',
+      || 'N\u00e3o foi poss\u00edvel carregar os dados.',
     );
   }
 
@@ -383,7 +383,7 @@ async function refreshLegacyBadgesV4() {
             'badge red';
 
           badge.textContent =
-            'âš ï¸ Conferir cobranÃ§a';
+            '\u26a0\ufe0f Conferir cobran\u00e7a';
 
           badges.appendChild(
             badge,
@@ -394,7 +394,7 @@ async function refreshLegacyBadgesV4() {
     /*
      * O painel principal continua
      * funcionando mesmo se este
-     * reforÃ§o visual falhar.
+     * refor\u00e7o visual falhar.
      */
   }
 }
@@ -412,7 +412,7 @@ function scheduleLegacyRefreshV4() {
 }
 
 /* ==================================================
-   RESUMO DE PRODUÃ‡ÃƒO
+   RESUMO DE PRODU\u00c7\u00c3O
 ================================================== */
 
 function addonPriceLinesV4(order) {
@@ -450,7 +450,7 @@ function addonPriceLinesV4(order) {
 
         const qtyText =
           qty > 1
-            ? ` Ã— ${qty}`
+            ? ` \u00d7 ${qty}`
             : '';
 
         return (
@@ -491,7 +491,7 @@ function contractedResourcesV4(
     addons.confirmation
   ) {
     resources.push(
-      `ConfirmaÃ§Ã£o Libri | ${confirmationModeV4(
+      `Confirma\u00e7\u00e3o Libri | ${confirmationModeV4(
         b.confirmationMode,
       )}`,
     );
@@ -626,7 +626,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('CRIANÃ‡A / HOMENAGEADO(A)');
+  lines.push('CRIAN\u00c7A / HOMENAGEADO(A)');
   lines.push(
     `Nome: ${valueV4(order.honoree_name)}`,
   );
@@ -646,26 +646,26 @@ function buildProductionSummaryV4(
     `Data: ${formatDateV4(order.event_date)}`,
   );
   lines.push(
-    `HorÃ¡rio: ${valueV4(order.event_time)}`,
+    `Hor\u00e1rio: ${valueV4(order.event_time)}`,
   );
   lines.push(
     `Local: ${valueV4(order.venue_name)}`,
   );
   lines.push(
-    `EndereÃ§o: ${valueV4(order.venue_address)}`,
+    `Endere\u00e7o: ${valueV4(order.venue_address)}`,
   );
   lines.push(
-    `LocalizaÃ§Ã£o: ${valueV4(
+    `Localiza\u00e7\u00e3o: ${valueV4(
       order.location_url
       || b.locationUrl,
-      'NÃ£o informada',
+      'N\u00e3o informada',
     )}`,
   );
 
   lines.push('');
-  lines.push('CONTRATAÃ‡ÃƒO');
+  lines.push('CONTRATA\u00c7\u00c3O');
   lines.push(
-    `ExperiÃªncia: ${experienceV4(order.experience)}`,
+    `Experi\u00eancia: ${experienceV4(order.experience)}`,
   );
   lines.push(
     `Formato: ${formatV4(order.format)}`,
@@ -693,12 +693,12 @@ function buildProductionSummaryV4(
 
   lines.push(
     urgencyEnabled
-      ? `UrgÃªncia: Sim${
+      ? `Urg\u00eancia: Sim${
         urgencyPercent > 0
           ? ` (+${urgencyPercent}%)`
           : ''
       }`
-      : 'UrgÃªncia: NÃ£o',
+      : 'Urg\u00eancia: N\u00e3o',
   );
 
   if (
@@ -731,7 +731,7 @@ function buildProductionSummaryV4(
   ) {
     lines.push('');
     lines.push(
-      'âš ï¸ ATENÃ‡ÃƒO COMERCIAL: este pedido legado estÃ¡ salvo como VÃ­deo + ConfirmaÃ§Ã£o Libri. Conferir o valor contratado antes de seguir.',
+      '\u26a0\ufe0f ATEN\u00c7\u00c3O COMERCIAL: este pedido legado est\u00e1 salvo como V\u00eddeo + Confirma\u00e7\u00e3o Libri. Conferir o valor contratado antes de seguir.',
     );
   }
 
@@ -744,7 +744,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('PERSONAGEM ESPECÃFICO');
+  lines.push('PERSONAGEM ESPEC\u00cdFICO');
   lines.push(
     valueV4(
       b.characterWanted,
@@ -753,7 +753,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('DIREÃ‡ÃƒO OBRIGATÃ“RIA');
+  lines.push('DIRE\u00c7\u00c3O OBRIGAT\u00d3RIA');
 
   const direction = [
     String(
@@ -771,16 +771,16 @@ function buildProductionSummaryV4(
   lines.push(
     direction.length
       ? direction.join(' | ')
-      : 'Nenhuma direÃ§Ã£o obrigatÃ³ria informada',
+      : 'Nenhuma dire\u00e7\u00e3o obrigat\u00f3ria informada',
   );
 
   lines.push('');
-  lines.push('NÃƒO QUER');
+  lines.push('N\u00c3O QUER');
   lines.push(
     valueV4(
       b.colorsAvoided
       || b.avoid,
-      'Nada especÃ­fico informado',
+      'Nada espec\u00edfico informado',
     ),
   );
 
@@ -789,12 +789,12 @@ function buildProductionSummaryV4(
     && b.avoid
   ) {
     lines.push(
-      `Outras restriÃ§Ãµes: ${b.avoid}`,
+      `Outras restri\u00e7\u00f5es: ${b.avoid}`,
     );
   }
 
   lines.push('');
-  lines.push('INFORMAÃ‡Ã•ES ESPECIAIS');
+  lines.push('INFORMA\u00c7\u00d5ES ESPECIAIS');
   lines.push(
     valueV4(
       b.specialInfo,
@@ -803,7 +803,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('CRIANÃ‡A | DIREÃ‡ÃƒO VISUAL');
+  lines.push('CRIAN\u00c7A | DIRE\u00c7\u00c3O VISUAL');
   lines.push(
     `Estilo: ${childStyleV4(
       b.childStyle,
@@ -815,24 +815,24 @@ function buildProductionSummaryV4(
     )}`,
   );
   lines.push(
-    `DireÃ§Ã£o da roupa: ${valueV4(
+    `Dire\u00e7\u00e3o da roupa: ${valueV4(
       b.outfitDetails,
-      'Nenhuma direÃ§Ã£o extra informada',
+      'Nenhuma dire\u00e7\u00e3o extra informada',
     )}`,
   );
   lines.push(
-    `Detalhes da aparÃªncia: ${valueV4(
+    `Detalhes da apar\u00eancia: ${valueV4(
       b.appearanceDetails,
       'Nenhum detalhe extra informado',
     )}`,
   );
 
   lines.push('');
-  lines.push('DIREÃ‡ÃƒO CRIATIVA');
+  lines.push('DIRE\u00c7\u00c3O CRIATIVA');
   lines.push(
     `Cores desejadas: ${valueV4(
       b.colors,
-      'NÃ£o informadas separadamente',
+      'N\u00e3o informadas separadamente',
     )}`,
   );
   lines.push(
@@ -842,7 +842,7 @@ function buildProductionSummaryV4(
     )}`,
   );
   lines.push(
-    `Ideia / referÃªncia: ${valueV4(
+    `Ideia / refer\u00eancia: ${valueV4(
       b.creativeIdea,
       'Nenhuma ideia extra informada',
     )}`,
@@ -867,7 +867,7 @@ function buildProductionSummaryV4(
   }
 
   lines.push('');
-  lines.push('SUGESTÃ•ES DE PRESENTES');
+  lines.push('SUGEST\u00d5ES DE PRESENTES');
 
   const giftPage =
     b.giftPage
@@ -896,7 +896,7 @@ function buildProductionSummaryV4(
     lines.push(
       `Detalhes: ${valueV4(
         b.giftDetails,
-        'NÃ£o informados',
+        'N\u00e3o informados',
       )}`,
     );
   }
@@ -915,7 +915,7 @@ function buildProductionSummaryV4(
     resources.forEach(
       (resource) =>
         lines.push(
-          `â€¢ ${resource}`,
+          `\u2022 ${resource}`,
         ),
     );
   } else {
@@ -925,7 +925,7 @@ function buildProductionSummaryV4(
   }
 
   lines.push('');
-  lines.push('MATERIAIS / OPERAÃ‡ÃƒO');
+  lines.push('MATERIAIS / OPERA\u00c7\u00c3O');
   lines.push(
     `Origem do pedido: ${orderSourceV4(
       b,
@@ -941,7 +941,7 @@ function buildProductionSummaryV4(
     order.photos_note
   ) {
     lines.push(
-      `ObservaÃ§Ã£o das fotos: ${order.photos_note}`,
+      `Observa\u00e7\u00e3o das fotos: ${order.photos_note}`,
     );
   }
 
@@ -968,12 +968,12 @@ function buildProductionSummaryV4(
     ).trim()
   ) {
     lines.push(
-      `ObservaÃ§Ãµes do pedido manual: ${b.manualNotes}`,
+      `Observa\u00e7\u00f5es do pedido manual: ${b.manualNotes}`,
     );
   }
 
   lines.push(
-    'Fotos, referÃªncias de roupa e referÃªncias visuais recebidas fora do portal devem ser conferidas na conversa da cliente no WhatsApp.',
+    'Fotos, refer\u00eancias de roupa e refer\u00eancias visuais recebidas fora do portal devem ser conferidas na conversa da cliente no WhatsApp.',
   );
 
   return lines.join(
@@ -1089,7 +1089,7 @@ async function enhanceDetailV4(
             margin-bottom:5px;
           "
         >
-          ProduÃ§Ã£o
+          Produ\u00e7\u00e3o
         </span>
 
         <h3
@@ -1097,7 +1097,7 @@ async function enhanceDetailV4(
             margin:0 0 5px;
           "
         >
-          Briefing de produÃ§Ã£o
+          Briefing de produ\u00e7\u00e3o
         </h3>
 
         <p
@@ -1106,7 +1106,7 @@ async function enhanceDetailV4(
             margin:0;
           "
         >
-          Resumo organizado para iniciar a criaÃ§Ã£o sem depender de procurar as respostas pelo painel.
+          Resumo organizado para iniciar a cria\u00e7\u00e3o sem depender de procurar as respostas pelo painel.
         </p>
       </div>
 
@@ -1115,7 +1115,7 @@ async function enhanceDetailV4(
         class="btn btn-secondary btn-small"
         type="button"
       >
-        Copiar briefing de produÃ§Ã£o
+        Copiar briefing de produ\u00e7\u00e3o
       </button>
     </div>
 
@@ -1133,8 +1133,8 @@ async function enhanceDetailV4(
               line-height:1.45;
             "
           >
-            âš ï¸ Pedido legado com combinaÃ§Ã£o comercial invÃ¡lida:
-            VÃ­deo + ConfirmaÃ§Ã£o Libri.
+            \u26a0\ufe0f Pedido legado com combina\u00e7\u00e3o comercial inv\u00e1lida:
+            V\u00eddeo + Confirma\u00e7\u00e3o Libri.
             Confira o valor contratado antes de seguir.
           </div>
         `
@@ -1185,7 +1185,7 @@ async function enhanceDetailV4(
             button.textContent;
 
           button.textContent =
-            'Copiado âœ“';
+            'Copiado \u2713';
 
           setTimeout(
             () => {
@@ -1223,7 +1223,7 @@ async function enhanceDetailV4(
           area.remove();
 
           button.textContent =
-            'Copiado âœ“';
+            'Copiado \u2713';
         }
       },
     );

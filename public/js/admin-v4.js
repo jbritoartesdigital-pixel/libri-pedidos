@@ -24,7 +24,7 @@ function escV4(value = '') {
 
 function valueV4(
   value,
-  fallback = 'Não informado',
+  fallback = 'NÃ£o informado',
 ) {
   const text =
     String(value ?? '').trim();
@@ -46,7 +46,7 @@ function moneyV4(cents = 0) {
 
 function formatDateV4(value) {
   if (!value) {
-    return 'Não informado';
+    return 'NÃ£o informado';
   }
 
   const parts =
@@ -75,7 +75,7 @@ function formatV4(value) {
   return (
     value === 'interactive'
       ? 'Interativo'
-      : 'Vídeo'
+      : 'VÃ­deo'
   );
 }
 
@@ -99,7 +99,7 @@ function childStyleV4(value) {
         'A Libri escolhe',
     }[value]
     || value
-    || 'Não informado'
+    || 'NÃ£o informado'
   );
 }
 
@@ -110,13 +110,13 @@ function outfitV4(value) {
         'Parecida com a roupa da festa',
 
       specific:
-        'Roupa específica',
+        'Roupa especÃ­fica',
 
       libri:
         'A Libri cria',
     }[value]
     || value
-    || 'Não informado'
+    || 'NÃ£o informado'
   );
 }
 
@@ -130,10 +130,10 @@ function speechV4(value) {
         'Cliente quer aprovar antes',
 
       own:
-        'Cliente enviou frase própria',
+        'Cliente enviou frase prÃ³pria',
     }[value]
     || value
-    || 'Não informado'
+    || 'NÃ£o informado'
   );
 }
 
@@ -147,10 +147,10 @@ function confirmationModeV4(value) {
         'Lista de convidados',
 
       unsure:
-        'Ainda não definido',
+        'Ainda nÃ£o definido',
     }[value]
     || value
-    || 'Ainda não definido'
+    || 'Ainda nÃ£o definido'
   );
 }
 
@@ -161,7 +161,7 @@ function photoStatusV4(value) {
         'Aguardando',
 
       received:
-        'Recebidas, precisam de conferência',
+        'Recebidas, precisam de conferÃªncia',
 
       approved:
         'Aprovadas',
@@ -170,15 +170,58 @@ function photoStatusV4(value) {
         'Precisa enviar novas fotos',
     }[value]
     || value
-    || 'Não informado'
+    || 'NÃ£o informado'
   );
+}
+
+function giftPageV4(value) {
+  return (
+    {
+      yes:
+        'Sim',
+
+      no:
+        'NÃ£o',
+
+      unsure:
+        'A definir',
+    }[value]
+    || value
+    || 'A definir'
+  );
+}
+
+function financeStatusV4(value) {
+  return (
+    {
+      waiting:
+        'Aguardando',
+
+      confirmed:
+        'Confirmado',
+    }[value]
+    || value
+    || 'NÃ£o informado'
+  );
+}
+
+function orderSourceV4(briefing = {}) {
+  if (
+    briefing.manualOrder
+    || briefing.source
+      === 'whatsapp_manual'
+  ) {
+    return 'WhatsApp manual';
+  }
+
+  return 'Portal de Pedidos';
 }
 
 function addonLabelV4(key) {
   return (
     {
       confirmation:
-        'Confirmação Libri',
+        'ConfirmaÃ§Ã£o Libri',
 
       filter:
         'Filtro personalizado',
@@ -187,7 +230,7 @@ function addonLabelV4(key) {
         'Cena extra',
 
       extraPerson:
-        'Outra criança ou pessoa',
+        'Outra crianÃ§a ou pessoa',
 
       photoAlbumFesta:
         'Libri Moments Festa',
@@ -267,7 +310,7 @@ async function apiV4(path) {
   if (!response.ok) {
     throw new Error(
       data.error
-      || 'Não foi possível carregar os dados.',
+      || 'NÃ£o foi possÃ­vel carregar os dados.',
     );
   }
 
@@ -340,7 +383,7 @@ async function refreshLegacyBadgesV4() {
             'badge red';
 
           badge.textContent =
-            '⚠️ Conferir cobrança';
+            'âš ï¸ Conferir cobranÃ§a';
 
           badges.appendChild(
             badge,
@@ -351,7 +394,7 @@ async function refreshLegacyBadgesV4() {
     /*
      * O painel principal continua
      * funcionando mesmo se este
-     * reforço visual falhar.
+     * reforÃ§o visual falhar.
      */
   }
 }
@@ -369,7 +412,7 @@ function scheduleLegacyRefreshV4() {
 }
 
 /* ==================================================
-   RESUMO DE PRODUÇÃO
+   RESUMO DE PRODUÃ‡ÃƒO
 ================================================== */
 
 function addonPriceLinesV4(order) {
@@ -407,7 +450,7 @@ function addonPriceLinesV4(order) {
 
         const qtyText =
           qty > 1
-            ? ` × ${qty}`
+            ? ` Ã— ${qty}`
             : '';
 
         return (
@@ -448,7 +491,7 @@ function contractedResourcesV4(
     addons.confirmation
   ) {
     resources.push(
-      `Confirmação Libri | ${confirmationModeV4(
+      `ConfirmaÃ§Ã£o Libri | ${confirmationModeV4(
         b.confirmationMode,
       )}`,
     );
@@ -583,7 +626,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('CRIANÇA / HOMENAGEADO(A)');
+  lines.push('CRIANÃ‡A / HOMENAGEADO(A)');
   lines.push(
     `Nome: ${valueV4(order.honoree_name)}`,
   );
@@ -603,32 +646,59 @@ function buildProductionSummaryV4(
     `Data: ${formatDateV4(order.event_date)}`,
   );
   lines.push(
-    `Horário: ${valueV4(order.event_time)}`,
+    `HorÃ¡rio: ${valueV4(order.event_time)}`,
   );
   lines.push(
     `Local: ${valueV4(order.venue_name)}`,
   );
   lines.push(
-    `Endereço: ${valueV4(order.venue_address)}`,
+    `EndereÃ§o: ${valueV4(order.venue_address)}`,
   );
   lines.push(
-    `Localização: ${valueV4(
+    `LocalizaÃ§Ã£o: ${valueV4(
       order.location_url
       || b.locationUrl,
-      'Não informada',
+      'NÃ£o informada',
     )}`,
   );
 
   lines.push('');
-  lines.push('CONTRATAÇÃO');
+  lines.push('CONTRATAÃ‡ÃƒO');
   lines.push(
-    `Experiência: ${experienceV4(order.experience)}`,
+    `ExperiÃªncia: ${experienceV4(order.experience)}`,
   );
   lines.push(
     `Formato: ${formatV4(order.format)}`,
   );
   lines.push(
     `Produto-base: ${productV4(order)}`,
+  );
+
+  const urgencyEnabled =
+    Boolean(
+      Number(
+        order.urgency_enabled
+        || 0,
+      ),
+    )
+    || pricing.urgencyEnabled
+      === true;
+
+  const urgencyPercent =
+    Number(
+      order.urgency_percent
+      || pricing.urgencyPercent
+      || 0,
+    );
+
+  lines.push(
+    urgencyEnabled
+      ? `UrgÃªncia: Sim${
+        urgencyPercent > 0
+          ? ` (+${urgencyPercent}%)`
+          : ''
+      }`
+      : 'UrgÃªncia: NÃ£o',
   );
 
   if (
@@ -661,7 +731,7 @@ function buildProductionSummaryV4(
   ) {
     lines.push('');
     lines.push(
-      '⚠️ ATENÇÃO COMERCIAL: este pedido legado está salvo como Vídeo + Confirmação Libri. Conferir o valor contratado antes de seguir.',
+      'âš ï¸ ATENÃ‡ÃƒO COMERCIAL: este pedido legado estÃ¡ salvo como VÃ­deo + ConfirmaÃ§Ã£o Libri. Conferir o valor contratado antes de seguir.',
     );
   }
 
@@ -674,7 +744,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('PERSONAGEM ESPECÍFICO');
+  lines.push('PERSONAGEM ESPECÃFICO');
   lines.push(
     valueV4(
       b.characterWanted,
@@ -683,7 +753,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('DIREÇÃO OBRIGATÓRIA');
+  lines.push('DIREÃ‡ÃƒO OBRIGATÃ“RIA');
 
   const direction = [
     String(
@@ -701,16 +771,16 @@ function buildProductionSummaryV4(
   lines.push(
     direction.length
       ? direction.join(' | ')
-      : 'Nenhuma direção obrigatória informada',
+      : 'Nenhuma direÃ§Ã£o obrigatÃ³ria informada',
   );
 
   lines.push('');
-  lines.push('NÃO QUER');
+  lines.push('NÃƒO QUER');
   lines.push(
     valueV4(
       b.colorsAvoided
       || b.avoid,
-      'Nada específico informado',
+      'Nada especÃ­fico informado',
     ),
   );
 
@@ -719,12 +789,12 @@ function buildProductionSummaryV4(
     && b.avoid
   ) {
     lines.push(
-      `Outras restrições: ${b.avoid}`,
+      `Outras restriÃ§Ãµes: ${b.avoid}`,
     );
   }
 
   lines.push('');
-  lines.push('INFORMAÇÕES ESPECIAIS');
+  lines.push('INFORMAÃ‡Ã•ES ESPECIAIS');
   lines.push(
     valueV4(
       b.specialInfo,
@@ -733,7 +803,7 @@ function buildProductionSummaryV4(
   );
 
   lines.push('');
-  lines.push('CRIANÇA | DIREÇÃO VISUAL');
+  lines.push('CRIANÃ‡A | DIREÃ‡ÃƒO VISUAL');
   lines.push(
     `Estilo: ${childStyleV4(
       b.childStyle,
@@ -745,24 +815,24 @@ function buildProductionSummaryV4(
     )}`,
   );
   lines.push(
-    `Direção da roupa: ${valueV4(
+    `DireÃ§Ã£o da roupa: ${valueV4(
       b.outfitDetails,
-      'Nenhuma direção extra informada',
+      'Nenhuma direÃ§Ã£o extra informada',
     )}`,
   );
   lines.push(
-    `Detalhes da aparência: ${valueV4(
+    `Detalhes da aparÃªncia: ${valueV4(
       b.appearanceDetails,
       'Nenhum detalhe extra informado',
     )}`,
   );
 
   lines.push('');
-  lines.push('DIREÇÃO CRIATIVA');
+  lines.push('DIREÃ‡ÃƒO CRIATIVA');
   lines.push(
     `Cores desejadas: ${valueV4(
       b.colors,
-      'Não informadas separadamente',
+      'NÃ£o informadas separadamente',
     )}`,
   );
   lines.push(
@@ -772,7 +842,7 @@ function buildProductionSummaryV4(
     )}`,
   );
   lines.push(
-    `Ideia / referência: ${valueV4(
+    `Ideia / referÃªncia: ${valueV4(
       b.creativeIdea,
       'Nenhuma ideia extra informada',
     )}`,
@@ -797,6 +867,41 @@ function buildProductionSummaryV4(
   }
 
   lines.push('');
+  lines.push('SUGESTÃ•ES DE PRESENTES');
+
+  const giftPage =
+    b.giftPage
+    || (
+      String(
+        b.giftDetails
+        || '',
+      ).trim()
+        ? 'yes'
+        : 'unsure'
+    );
+
+  lines.push(
+    `Deseja: ${giftPageV4(
+      giftPage,
+    )}`,
+  );
+
+  if (
+    giftPage === 'yes'
+    || String(
+      b.giftDetails
+      || '',
+    ).trim()
+  ) {
+    lines.push(
+      `Detalhes: ${valueV4(
+        b.giftDetails,
+        'NÃ£o informados',
+      )}`,
+    );
+  }
+
+  lines.push('');
   lines.push('RECURSOS CONTRATADOS');
 
   const resources =
@@ -810,7 +915,7 @@ function buildProductionSummaryV4(
     resources.forEach(
       (resource) =>
         lines.push(
-          `• ${resource}`,
+          `â€¢ ${resource}`,
         ),
     );
   } else {
@@ -820,7 +925,12 @@ function buildProductionSummaryV4(
   }
 
   lines.push('');
-  lines.push('MATERIAIS / OPERAÇÃO');
+  lines.push('MATERIAIS / OPERAÃ‡ÃƒO');
+  lines.push(
+    `Origem do pedido: ${orderSourceV4(
+      b,
+    )}`,
+  );
   lines.push(
     `Fotos: ${photoStatusV4(
       order.photos_status,
@@ -831,12 +941,39 @@ function buildProductionSummaryV4(
     order.photos_note
   ) {
     lines.push(
-      `Observação das fotos: ${order.photos_note}`,
+      `ObservaÃ§Ã£o das fotos: ${order.photos_note}`,
     );
   }
 
   lines.push(
-    'Fotos, referências de roupa e referências visuais recebidas fora do portal devem ser conferidas na conversa da cliente no WhatsApp.',
+    `Entrada: ${moneyV4(
+      order.deposit_cents,
+    )} | ${financeStatusV4(
+      order.entry_status,
+    )}`,
+  );
+
+  lines.push(
+    `Saldo: ${moneyV4(
+      order.balance_cents,
+    )} | ${financeStatusV4(
+      order.balance_status,
+    )}`,
+  );
+
+  if (
+    String(
+      b.manualNotes
+      || '',
+    ).trim()
+  ) {
+    lines.push(
+      `ObservaÃ§Ãµes do pedido manual: ${b.manualNotes}`,
+    );
+  }
+
+  lines.push(
+    'Fotos, referÃªncias de roupa e referÃªncias visuais recebidas fora do portal devem ser conferidas na conversa da cliente no WhatsApp.',
   );
 
   return lines.join(
@@ -952,7 +1089,7 @@ async function enhanceDetailV4(
             margin-bottom:5px;
           "
         >
-          Produção
+          ProduÃ§Ã£o
         </span>
 
         <h3
@@ -960,7 +1097,7 @@ async function enhanceDetailV4(
             margin:0 0 5px;
           "
         >
-          Briefing de produção
+          Briefing de produÃ§Ã£o
         </h3>
 
         <p
@@ -969,7 +1106,7 @@ async function enhanceDetailV4(
             margin:0;
           "
         >
-          Resumo organizado para iniciar a criação sem depender de procurar as respostas pelo painel.
+          Resumo organizado para iniciar a criaÃ§Ã£o sem depender de procurar as respostas pelo painel.
         </p>
       </div>
 
@@ -978,7 +1115,7 @@ async function enhanceDetailV4(
         class="btn btn-secondary btn-small"
         type="button"
       >
-        Copiar briefing de produção
+        Copiar briefing de produÃ§Ã£o
       </button>
     </div>
 
@@ -996,8 +1133,8 @@ async function enhanceDetailV4(
               line-height:1.45;
             "
           >
-            ⚠️ Pedido legado com combinação comercial inválida:
-            Vídeo + Confirmação Libri.
+            âš ï¸ Pedido legado com combinaÃ§Ã£o comercial invÃ¡lida:
+            VÃ­deo + ConfirmaÃ§Ã£o Libri.
             Confira o valor contratado antes de seguir.
           </div>
         `
@@ -1048,7 +1185,7 @@ async function enhanceDetailV4(
             button.textContent;
 
           button.textContent =
-            'Copiado ✓';
+            'Copiado âœ“';
 
           setTimeout(
             () => {
@@ -1086,7 +1223,7 @@ async function enhanceDetailV4(
           area.remove();
 
           button.textContent =
-            'Copiado ✓';
+            'Copiado âœ“';
         }
       },
     );

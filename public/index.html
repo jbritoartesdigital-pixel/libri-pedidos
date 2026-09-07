@@ -198,6 +198,200 @@
     </div>
   </div>
 
+  <!--
+    LIBRI PEDIDOS | FIX MOBILE DO HORÁRIO
+    Evita o seletor nativo type="time", que pode fechar a etapa
+    em alguns navegadores/WebViews mobile.
+  -->
+  <script>
+    (() => {
+      'use strict';
+
+      function digitsOnly(value) {
+        return String(value || '')
+          .replace(/\D/g, '')
+          .slice(0, 4);
+      }
+
+      function formatWhileTyping(value) {
+        const digits = digitsOnly(value);
+
+        if (digits.length <= 2) {
+          return digits;
+        }
+
+        if (digits.length === 3) {
+          const firstTwo = Number(
+            digits.slice(0, 2),
+          );
+
+          if (firstTwo <= 23) {
+            return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+          }
+
+          return `0${digits.slice(0, 1)}:${digits.slice(1)}`;
+        }
+
+        return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+      }
+
+      function normalizeTime(value) {
+        const digits = digitsOnly(value);
+
+        if (digits.length === 1) {
+          return `0${digits}:00`;
+        }
+
+        if (digits.length === 2) {
+          return `${digits}:00`;
+        }
+
+        if (digits.length === 3) {
+          const firstTwo = Number(
+            digits.slice(0, 2),
+          );
+
+          if (firstTwo <= 23) {
+            return `${digits.slice(0, 2)}:${digits.slice(2)}0`;
+          }
+
+          return `0${digits.slice(0, 1)}:${digits.slice(1)}`;
+        }
+
+        if (digits.length === 4) {
+          return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+        }
+
+        return '';
+      }
+
+      function isValidTime(value) {
+        const match =
+          /^(\d{2}):(\d{2})$/.exec(
+            String(value || ''),
+          );
+
+        if (!match) {
+          return false;
+        }
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+
+        return hours >= 0
+          && hours <= 23
+          && minutes >= 0
+          && minutes <= 59;
+      }
+
+      function enhanceTimeInput(input) {
+        if (
+          !input
+          || input.dataset.libriTimeFixed === 'true'
+        ) {
+          return;
+        }
+
+        input.dataset.libriTimeFixed = 'true';
+
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.maxLength = 5;
+        input.autocomplete = 'off';
+        input.placeholder = 'Ex.: 18:30';
+
+        input.setAttribute(
+          'aria-label',
+          'Horário da festa no formato horas e minutos',
+        );
+
+        if (input.value) {
+          const normalized =
+            normalizeTime(input.value);
+
+          if (
+            normalized
+            && isValidTime(normalized)
+          ) {
+            input.value = normalized;
+          }
+        }
+
+        input.addEventListener(
+          'input',
+          () => {
+            input.setCustomValidity('');
+            input.value =
+              formatWhileTyping(
+                input.value,
+              );
+          },
+        );
+
+        input.addEventListener(
+          'blur',
+          () => {
+            if (!input.value.trim()) {
+              input.setCustomValidity('');
+              return;
+            }
+
+            const normalized =
+              normalizeTime(
+                input.value,
+              );
+
+            if (
+              !normalized
+              || !isValidTime(normalized)
+            ) {
+              input.value = '';
+
+              input.setCustomValidity(
+                'Informe um horário válido. Ex.: 18:30.',
+              );
+
+              return;
+            }
+
+            input.value = normalized;
+            input.setCustomValidity('');
+          },
+        );
+
+        input.addEventListener(
+          'focus',
+          () => {
+            input.setCustomValidity('');
+          },
+        );
+      }
+
+      function scanTimeInput() {
+        enhanceTimeInput(
+          document.getElementById(
+            'eventTime',
+          ),
+        );
+      }
+
+      const observer =
+        new MutationObserver(
+          scanTimeInput,
+        );
+
+      observer.observe(
+        document.documentElement,
+        {
+          childList: true,
+          subtree: true,
+        },
+      );
+
+      scanTimeInput();
+    })();
+  </script>
+
   <script
     type="module"
     src="/js/app.js"

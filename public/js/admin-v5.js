@@ -653,6 +653,11 @@
       'adminWorkflowV5Styles';
 
     style.textContent = `
+      #kpis[style*="display: none"],
+      #ordersList[style*="display: none"]{
+        display:none !important;
+      }
+
       .v5-dashboard-grid{
         display:grid;
         grid-template-columns:repeat(4,minmax(0,1fr));
@@ -1279,7 +1284,7 @@
 
   function renderDashboard() {
     const kpis =
-      $('#kpis');
+      $('#v5Kpis');
 
     if (!kpis) {
       return;
@@ -1416,6 +1421,86 @@
           renderOrders();
         },
       );
+  }
+
+  /* ==================================================
+     CONTAINERS EXCLUSIVOS DO V5
+
+     O admin.js antigo continua carregado para
+     Configurações, Termos e funções legadas.
+     Por isso ele mantém #kpis e #ordersList.
+
+     O V5 NÃO escreve nesses elementos.
+  ================================================== */
+
+  function installV5Containers() {
+    const legacyKpis =
+      $('#kpis');
+
+    const legacyOrders =
+      $('#ordersList');
+
+    if (
+      legacyKpis
+      && !$('#v5Kpis')
+    ) {
+      legacyKpis.style
+        .display =
+          'none';
+
+      const v5Kpis =
+        document.createElement(
+          'div',
+        );
+
+      v5Kpis.id =
+        'v5Kpis';
+
+      v5Kpis.className =
+        'v5-dashboard-grid';
+
+      v5Kpis.setAttribute(
+        'aria-live',
+        'polite',
+      );
+
+      legacyKpis
+        .insertAdjacentElement(
+          'afterend',
+          v5Kpis,
+        );
+    }
+
+    if (
+      legacyOrders
+      && !$('#v5OrdersList')
+    ) {
+      legacyOrders.style
+        .display =
+          'none';
+
+      const v5Orders =
+        document.createElement(
+          'div',
+        );
+
+      v5Orders.id =
+        'v5OrdersList';
+
+      v5Orders.className =
+        'v5-orders-grid';
+
+      v5Orders.setAttribute(
+        'aria-live',
+        'polite',
+      );
+
+      legacyOrders
+        .insertAdjacentElement(
+          'afterend',
+          v5Orders,
+        );
+    }
   }
 
   /* ==================================================
@@ -2039,7 +2124,7 @@
 
   function renderOrders() {
     const list =
-      $('#ordersList');
+      $('#v5OrdersList');
 
     if (!list) {
       return;
@@ -2819,6 +2904,8 @@
     installStyles();
 
     installAuthGate();
+
+    installV5Containers();
 
     installToolbar();
 

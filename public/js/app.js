@@ -1064,23 +1064,21 @@ async function renderProduct() {
     const checked = event.target.checked;
 
     if (checked && selection.format === 'video') {
-      event.target.checked = false;
+      selection.format = 'interactive';
 
       modal(
         'Confirmação Libri',
         `
           <p>
-            A Confirmação Libri é um adicional disponível para
+            A Confirmação Libri funciona no
             <strong>Vídeo Interativo</strong>.
           </p>
           <p>
-            Volte na escolha do formato e selecione Vídeo Interativo
-            para adicionar este opcional.
+            Por isso, seu formato foi alterado automaticamente para
+            <strong>Vídeo Interativo</strong>.
           </p>
         `,
       );
-
-      return;
     }
 
     selection.addons.confirmation = checked;

@@ -1045,6 +1045,900 @@
     );
   }
 
+
+  /* ==================================================
+     CONFIGURAÇÕES V2 | PREÇOS POR CENA
+  ================================================== */
+
+  const CONFIG_DEFAULT_SCENE_PRICES =
+    Object.freeze({
+      video: {
+        1: 3500,
+        2: 5000,
+        3: 6500,
+        4: 8000,
+        5: 10500,
+        6: 13000,
+        7: 15500,
+        8: 18000,
+        9: 20500,
+        10: 23000,
+      },
+
+      interactive: {
+        1: 5000,
+        2: 7000,
+        3: 9500,
+        4: 12000,
+        5: 15000,
+        6: 18000,
+        7: 21000,
+        8: 24000,
+        9: 27000,
+        10: 30000,
+      },
+    });
+
+  const CONFIG_DEFAULT_MOMENTS =
+    Object.freeze({
+      festa:
+        7900,
+
+      premium:
+        11900,
+
+      exclusive:
+        14900,
+
+      extra100:
+        1500,
+    });
+
+  function configReaisFromCents(
+    value,
+  ) {
+    return (
+      (Number(value) || 0)
+      / 100
+    )
+      .toFixed(2)
+      .replace(
+        '.',
+        ',',
+      );
+  }
+
+  function configCentsFromReais(
+    value,
+  ) {
+    const raw =
+      String(
+        value || '',
+      ).trim();
+
+    if (!raw) {
+      return 0;
+    }
+
+    const normalized =
+      raw.includes(',')
+        ? raw
+          .replace(
+            /\./g,
+            '',
+          )
+          .replace(
+            ',',
+            '.',
+          )
+        : raw;
+
+    return Math.round(
+      (Number(normalized) || 0)
+      * 100,
+    );
+  }
+
+  function configCentsValue(
+    settings,
+    key,
+    fallback,
+  ) {
+    const value =
+      Number.parseInt(
+        settings?.[key],
+        10,
+      );
+
+    return (
+      Number.isInteger(value)
+      && value > 0
+    )
+      ? value
+      : fallback;
+  }
+
+  function configField({
+    label,
+    key,
+    value,
+    type = 'text',
+    hint = '',
+  }) {
+    return `
+      <div
+        class="field"
+      >
+        <label>
+          ${esc(label)}
+        </label>
+
+        <input
+          data-config-v2="${esc(key)}"
+          type="${esc(type)}"
+          value="${esc(value)}"
+        >
+
+        ${
+          hint
+            ? `
+              <span
+                class="hint"
+              >
+                ${esc(hint)}
+              </span>
+            `
+            : ''
+        }
+      </div>
+    `;
+  }
+
+  function configSceneFields(
+    settings,
+    format,
+    label,
+  ) {
+    return Array
+      .from(
+        {
+          length:
+            10,
+        },
+        (
+          _,
+          index,
+        ) => {
+          const scenes =
+            index + 1;
+
+          const key =
+            `price_${format}_scene_${scenes}_cents`;
+
+          const fallback =
+            CONFIG_DEFAULT_SCENE_PRICES
+              [format]
+              [scenes];
+
+          return configField({
+            label:
+              `${label} • ${scenes} ${
+                scenes === 1
+                  ? 'cena'
+                  : 'cenas'
+              }`,
+
+            key,
+
+            value:
+              configReaisFromCents(
+                configCentsValue(
+                  settings,
+                  key,
+                  fallback,
+                ),
+              ),
+          });
+        },
+      )
+      .join('');
+  }
+
+  function ensureConfigV2Form() {
+    const current =
+      $('#settingsForm');
+
+    if (!current) {
+      return null;
+    }
+
+    if (
+      current.dataset
+        .configV2Form
+      === 'true'
+    ) {
+      return current;
+    }
+
+    const replacement =
+      document.createElement(
+        'form',
+      );
+
+    replacement.id =
+      'settingsForm';
+
+    replacement.className =
+      current.className
+      || 'settings-card';
+
+    replacement.dataset
+      .configV2Form =
+        'true';
+
+    current.replaceWith(
+      replacement,
+    );
+
+    return replacement;
+  }
+
+  function showSettingsV2Tab() {
+    $('#ordersTab')
+      ?.classList
+      .add(
+        'hidden',
+      );
+
+    $('#settingsTab')
+      ?.classList
+      .remove(
+        'hidden',
+      );
+
+    $('#termsTab')
+      ?.classList
+      .add(
+        'hidden',
+      );
+
+    $$(
+      '[data-tab]',
+    ).forEach(
+      (button) => {
+        button.classList
+          .toggle(
+            'active',
+            button.dataset
+              .tab
+            === 'settings',
+          );
+      },
+    );
+  }
+
+  function renderSettingsV2(
+    settings,
+  ) {
+    const form =
+      ensureConfigV2Form();
+
+    if (!form) {
+      return;
+    }
+
+    const confirmation =
+      configCentsValue(
+        settings,
+        'addon_confirmation_cents',
+        2500,
+      );
+
+    const filter =
+      configCentsValue(
+        settings,
+        'addon_filter_cents',
+        3900,
+      );
+
+    const extraPerson =
+      configCentsValue(
+        settings,
+        'addon_extra_person_cents',
+        3000,
+      );
+
+    const momentsFesta =
+      configCentsValue(
+        settings,
+        'moments_festa_cents',
+        CONFIG_DEFAULT_MOMENTS
+          .festa,
+      );
+
+    const momentsPremium =
+      configCentsValue(
+        settings,
+        'moments_premium_cents',
+        CONFIG_DEFAULT_MOMENTS
+          .premium,
+      );
+
+    const momentsExclusive =
+      configCentsValue(
+        settings,
+        'moments_exclusive_cents',
+        CONFIG_DEFAULT_MOMENTS
+          .exclusive,
+      );
+
+    const momentsExtra100 =
+      configCentsValue(
+        settings,
+        'moments_extra_100_cents',
+        CONFIG_DEFAULT_MOMENTS
+          .extra100,
+      );
+
+    form.innerHTML = `
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Preços do Vídeo
+        </h3>
+
+        <p
+          class="hint"
+          style="margin-bottom:12px"
+        >
+          A abertura personalizada já está incluída
+          e não entra na contagem.
+        </p>
+
+        <div
+          class="settings-grid"
+        >
+          ${configSceneFields(
+            settings,
+            'video',
+            'Vídeo',
+          )}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Preços do Vídeo Interativo
+        </h3>
+
+        <p
+          class="hint"
+          style="margin-bottom:12px"
+        >
+          O Vídeo Interativo também inclui
+          o vídeo personalizado.
+        </p>
+
+        <div
+          class="settings-grid"
+        >
+          ${configSceneFields(
+            settings,
+            'interactive',
+            'Vídeo Interativo',
+          )}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Opcionais
+        </h3>
+
+        <div
+          class="settings-grid"
+        >
+          ${configField({
+            label:
+              'Confirmação Libri',
+
+            key:
+              'addon_confirmation_cents',
+
+            value:
+              configReaisFromCents(
+                confirmation,
+              ),
+          })}
+
+          ${configField({
+            label:
+              'Filtro personalizado',
+
+            key:
+              'addon_filter_cents',
+
+            value:
+              configReaisFromCents(
+                filter,
+              ),
+          })}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Libri Moments
+        </h3>
+
+        <div
+          class="settings-grid"
+        >
+          ${configField({
+            label:
+              'Festa • 200 fotos / 30 dias',
+
+            key:
+              'moments_festa_cents',
+
+            value:
+              configReaisFromCents(
+                momentsFesta,
+              ),
+          })}
+
+          ${configField({
+            label:
+              'Premium • 400 fotos / 60 dias',
+
+            key:
+              'moments_premium_cents',
+
+            value:
+              configReaisFromCents(
+                momentsPremium,
+              ),
+          })}
+
+          ${configField({
+            label:
+              'Exclusive • 700 fotos / 90 dias',
+
+            key:
+              'moments_exclusive_cents',
+
+            value:
+              configReaisFromCents(
+                momentsExclusive,
+              ),
+          })}
+
+          ${configField({
+            label:
+              '+100 fotos',
+
+            key:
+              'moments_extra_100_cents',
+
+            value:
+              configReaisFromCents(
+                momentsExtra100,
+              ),
+          })}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Regras e uso interno
+        </h3>
+
+        <div
+          class="settings-grid"
+        >
+          ${configField({
+            label:
+              'Entrada (%)',
+
+            key:
+              'deposit_percent',
+
+            type:
+              'number',
+
+            value:
+              settings.deposit_percent
+              || '50',
+          })}
+
+          ${configField({
+            label:
+              'Prazo padrão (dias úteis)',
+
+            key:
+              'deadline_business_days',
+
+            type:
+              'number',
+
+            value:
+              settings
+                .deadline_business_days
+              || '5',
+          })}
+
+          ${configField({
+            label:
+              'Urgência (%) • uso interno',
+
+            key:
+              'urgency_percent',
+
+            type:
+              'number',
+
+            value:
+              settings.urgency_percent
+              || '30',
+
+            hint:
+              'Não aparece no portal da cliente.',
+          })}
+
+          ${configField({
+            label:
+              'Pessoa extra • uso manual',
+
+            key:
+              'addon_extra_person_cents',
+
+            value:
+              configReaisFromCents(
+                extraPerson,
+              ),
+
+            hint:
+              'Não aparece no portal da cliente.',
+          })}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Pagamento e contato
+        </h3>
+
+        <div
+          class="settings-grid"
+        >
+          ${configField({
+            label:
+              'Chave Pix',
+
+            key:
+              'pix_key',
+
+            value:
+              settings.pix_key
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Nome do recebedor',
+
+            key:
+              'pix_recipient_name',
+
+            value:
+              settings
+                .pix_recipient_name
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'WhatsApp da Libri',
+
+            key:
+              'libri_whatsapp',
+
+            value:
+              settings.libri_whatsapp
+              || '',
+
+            hint:
+              'Use DDI + DDD + número.',
+          })}
+        </div>
+      </section>
+
+      <section
+        class="settings-section"
+      >
+        <h3>
+          Links de exemplos
+        </h3>
+
+        <div
+          class="settings-grid"
+        >
+          ${configField({
+            label:
+              'Vídeo • até 3 cenas',
+
+            key:
+              'example_video_reduced_url',
+
+            value:
+              settings
+                .example_video_reduced_url
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Vídeo • 4 a 10 cenas',
+
+            key:
+              'example_video_full_url',
+
+            value:
+              settings
+                .example_video_full_url
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Interativo • até 3 cenas',
+
+            key:
+              'example_interactive_reduced_url',
+
+            value:
+              settings
+                .example_interactive_reduced_url
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Interativo • 4 a 10 cenas',
+
+            key:
+              'example_interactive_full_url',
+
+            value:
+              settings
+                .example_interactive_full_url
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Exemplo da confirmação',
+
+            key:
+              'example_confirmation_url',
+
+            value:
+              settings
+                .example_confirmation_url
+              || '',
+          })}
+
+          ${configField({
+            label:
+              'Exemplo do filtro',
+
+            key:
+              'example_filter_url',
+
+            value:
+              settings
+                .example_filter_url
+              || '',
+          })}
+        </div>
+      </section>
+
+      <div
+        class="form-actions"
+      >
+        <button
+          class="btn btn-primary"
+          type="submit"
+        >
+          Salvar configurações
+        </button>
+      </div>
+    `;
+
+    form.addEventListener(
+      'submit',
+      saveSettingsV2,
+      {
+        once:
+          true,
+      },
+    );
+  }
+
+  async function loadSettingsV2() {
+    const form =
+      ensureConfigV2Form();
+
+    if (!form) {
+      return;
+    }
+
+    form.innerHTML = `
+      <div
+        class="empty-state"
+      >
+        Carregando configurações...
+      </div>
+    `;
+
+    try {
+      const data =
+        await api(
+          '/api/admin/settings',
+        );
+
+      renderSettingsV2(
+        data.settings
+        || {},
+      );
+    } catch (
+      error
+    ) {
+      form.innerHTML = `
+        <div
+          class="empty-state"
+        >
+          Não foi possível carregar as configurações.
+          <br>
+          ${esc(error.message)}
+        </div>
+      `;
+    }
+  }
+
+  async function saveSettingsV2(
+    event,
+  ) {
+    event.preventDefault();
+
+    const form =
+      event.currentTarget;
+
+    const settings = {};
+
+    $$(
+      '[data-config-v2]',
+      form,
+    ).forEach(
+      (input) => {
+        const key =
+          input.dataset
+            .configV2;
+
+        settings[key] =
+          key.endsWith(
+            '_cents',
+          )
+            ? configCentsFromReais(
+              input.value,
+            )
+            : input.value;
+      },
+    );
+
+    const button =
+      $('button[type="submit"]', form);
+
+    if (button) {
+      button.disabled =
+        true;
+
+      button.textContent =
+        'Salvando...';
+    }
+
+    try {
+      const data =
+        await api(
+          '/api/admin/settings',
+          {
+            method:
+              'PUT',
+
+            body:
+              JSON.stringify({
+                settings,
+              }),
+          },
+        );
+
+      renderSettingsV2(
+        data.settings
+        || settings,
+      );
+
+      toast(
+        'Configurações salvas.',
+      );
+    } catch (
+      error
+    ) {
+      toast(
+        error.message,
+        'error',
+      );
+
+      /*
+       * Reinstala o listener se o save falhar.
+       */
+      form.addEventListener(
+        'submit',
+        saveSettingsV2,
+        {
+          once:
+            true,
+        },
+      );
+
+      if (button) {
+        button.disabled =
+          false;
+
+        button.textContent =
+          'Salvar configurações';
+      }
+    }
+  }
+
+  function installSettingsV2() {
+    const tabButton =
+      $('[data-tab="settings"]');
+
+    if (!tabButton) {
+      return;
+    }
+
+    tabButton.addEventListener(
+      'click',
+      (
+        event,
+      ) => {
+        /*
+         * Intercepta apenas a aba Configurações.
+         * O admin antigo continua responsável
+         * por Pedidos/Termos legados.
+         */
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        showSettingsV2Tab();
+        loadSettingsV2();
+      },
+      true,
+    );
+  }
+
   /* ==================================================
      API
   ================================================== */
@@ -3550,6 +4444,8 @@
     installV5Containers();
 
     installToolbar();
+
+    installSettingsV2();
 
     installEvents();
 

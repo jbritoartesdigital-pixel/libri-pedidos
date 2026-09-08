@@ -673,6 +673,22 @@
     || 'Não informado';
   }
 
+  function portfolioConsentLabel(
+    order,
+  ) {
+    const value =
+      order.portfolio_consent
+      ?? order.portfolioConsent;
+
+    return (
+      value === 1
+      || value === true
+      || value === '1'
+    )
+      ? 'Autorizada'
+      : 'Não autorizada';
+  }
+
   function momentsLabel(
     plan,
   ) {
@@ -902,6 +918,10 @@
         order.total_cents
         ?? order.totalCents
         ?? 0,
+      )}`,
+
+      `DIVULGAÇÃO DO CONVITE: ${portfolioConsentLabel(
+        order,
       )}`,
     );
 
@@ -1269,6 +1289,8 @@
       .v5-badge.status-cancelled{background:#f4eeee}
       .v5-badge.payment-pending{background:#fff2e9}
       .v5-badge.payment-paid{background:#e9f7ef}
+      .v5-badge.portfolio-yes{background:#e9f7ef}
+      .v5-badge.portfolio-no{background:#f4eeee}
 
       .v5-card-grid{
         display:grid;
@@ -2433,6 +2455,22 @@
                 || payment,
               )}
             </span>
+
+            <span
+              class="v5-badge ${
+                portfolioConsentLabel(order)
+                === 'Autorizada'
+                  ? 'portfolio-yes'
+                  : 'portfolio-no'
+              }"
+            >
+              ${
+                portfolioConsentLabel(order)
+                === 'Autorizada'
+                  ? 'Divulgação autorizada'
+                  : 'Sem divulgação'
+              }
+            </span>
           </div>
         </div>
 
@@ -2956,6 +2994,13 @@
             'Pagamento',
             PAYMENT_LABELS[payment]
             || payment,
+          )}
+
+          ${detailField(
+            'Divulgação',
+            portfolioConsentLabel(
+              order,
+            ),
           )}
 
           ${detailField(

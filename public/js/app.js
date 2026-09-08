@@ -1,33 +1,6 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
-const SCENE_PRICES = Object.freeze({
-  video: Object.freeze({
-    1: 3500,
-    2: 5000,
-    3: 6500,
-    4: 8000,
-    5: 10500,
-    6: 13000,
-    7: 15500,
-    8: 18000,
-    9: 20500,
-    10: 23000,
-  }),
-  interactive: Object.freeze({
-    1: 5000,
-    2: 7000,
-    3: 9500,
-    4: 12000,
-    5: 15000,
-    6: 18000,
-    7: 21000,
-    8: 24000,
-    9: 27000,
-    10: 30000,
-  }),
-});
-
 const state = {
   step: 0,
   draftToken: null,
@@ -924,7 +897,7 @@ async function renderProduct() {
             value: 'video',
             icon: '▶',
             title: 'Vídeo',
-            desc: 'Convite personalizado em vídeo, com abertura e cenas criadas especialmente para a sua festa. A partir de R$ 35.',
+            desc: 'Convite personalizado em vídeo, com abertura e cenas criadas especialmente para a sua festa.',
             checked: selection.format === 'video',
           })}
 
@@ -933,7 +906,7 @@ async function renderProduct() {
             value: 'interactive',
             icon: '◇',
             title: 'Vídeo Interativo',
-            desc: 'Você recebe o vídeo personalizado + o convite final interativo, com opções como confirmação de presença e localização. A partir de R$ 50.',
+            desc: 'Você recebe o vídeo personalizado + o convite final interativo, com opções como confirmação de presença e localização.',
             checked: selection.format === 'interactive',
           })}
         </div>
@@ -998,7 +971,7 @@ async function renderProduct() {
             </div>
 
             <div class="scene-price">
-              ${money(SCENE_PRICES[selection.format][selectedScenes])}
+              ${money(quote.productCents)}
             </div>
 
             <div class="scene-range-hint">

@@ -1,401 +1,294 @@
-import { fail, json, normalizeWhatsapp, nowIso, randomToken, readJson } from '../lib/http.js';
-import { calculateQuote } from '../lib/quote.js';
-import { loadSettings } from '../lib/settings.js';
-import { addHistory } from '../lib/orders.js';
+// LIBRI PEDIDOS V2 | lib/quote.js
+// Nova precificação por quantidade de cenas.
+// Mantém compatibilidade com pedidos antigos por meio do campo experience.
 
-const text = (v, n = 3000) => String(v ?? '').trim().slice(0, n);
-const nullable = (v, n = 3000) => text(v, n) || null;
+export const SCENE_PRICES = Object.freeze({
+  video: Object.freeze({
+    1: 3500,
+    2: 5000,
+    3: 6500,
+    4: 8000,
+    5: 10500,
+    6: 13000,
+    7: 15500,
+    8: 18000,
+    9: 20500,
+    10: 23000,
+  }),
 
-function optInt(value, min, max) {
-  if (value === undefined || value === null || String(value).trim() === '') return null;
-  const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n)) return null;
-  return Math.min(max, Math.max(min, n));
-}
+  interactive: Object.freeze({
+    1: 5000,
+    2: 7000,
+    3: 9500,
+    4: 12000,
+    5: 15000,
+    6: 18000,
+    7: 21000,
+    8: 24000,
+    9: 27000,
+    10: 30000,
+  }),
+});
 
-function optMoney(value) {
-  if (value === undefined || value === null || String(value).trim() === '') return null;
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
+function clampScenes(value) {
+  const parsed = Number.parseInt(value, 10);
 
-function photosStatus(value) {
-  return ['waiting', 'received', 'approved', 'needs_new'].includes(value)
-    ? value
-    : 'waiting';
-}
-
-function entryStatus(value) {
-  return value === 'confirmed' ? 'confirmed' : 'waiting';
-}
-
-function speechMode(value) {
-  return ['libri', 'approve', 'own'].includes(value) ? value : 'libri';
-}
-
-function legacySceneCount(body) {
-  if (body.experience === 'reduced') return 3;
-  if (body.experience === 'full') return 6;
-  return null;
-}
-
-async function activeTerms(db) {
-  return db.prepare(`
-    SELECT version, body, created_at
-    FROM terms_versions
-    WHERE active = 1
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).first();
-}
-
-async function resolveInsertedId(db, result, publicToken) {
-  const metaId = Number(result?.meta?.last_row_id || 0);
-  if (Number.isInteger(metaId) && metaId > 0) return metaId;
-
-  const row = await db.prepare(`
-    SELECT id
-    FROM orders
-    WHERE public_token = ?
-    LIMIT 1
-  `).bind(publicToken).first();
-
-  return Number(row?.id || 0);
-}
-
-const orderCode = (id) => `LIBRI-${String(id).padStart(4, '0')}`;
-
-export async function handleAdminManualApi(request, env, url) {
-  if (url.pathname !== '/api/admin/orders/manual') return null;
-
-  if (request.method.toUpperCase() !== 'POST') {
-    return fail('Método não permitido.', 405);
+  if (!Number.isFinite(parsed)) {
+    return 6;
   }
 
-  const body = await readJson(request);
+  return Math.max(1, Math.min(10, parsed));
+}
 
-  const customerName = text(body.customerName, 160);
-  const whatsapp = normalizeWhatsapp(body.whatsapp);
-  const honoreeName = text(body.honoreeName, 160);
-  const theme = text(body.theme, 240);
+function normalizeFormat(value) {
+  return value === 'interactive'
+    ? 'interactive'
+    : 'video';
+}
 
-  // Fonte principal nova: scenes / sceneCount.
-  // Fallback temporário para formulários antigos que ainda enviem experience.
-  const sceneCount =
-    optInt(body.scenes ?? body.sceneCount, 1, 10)
-    ?? legacySceneCount(body);
+function legacyExperienceForScenes(scenes) {
+  // Somente para manter compatibilidade com pedidos antigos.
+  // A interface nova NÃO usa mais Reduzido / Completo.
+  return scenes <= 3
+    ? 'reduced'
+    : 'full';
+}
 
-  const missing = [];
+function asInt(value, fallback = 0) {
+  const number = Number(value);
 
-  if (!customerName) missing.push('Nome da cliente');
-  if (whatsapp.length < 10 || whatsapp.length > 15) missing.push('WhatsApp válido');
-  if (!honoreeName) missing.push('Nome da criança ou homenageado(a)');
-  if (!theme) missing.push('Tema');
-  if (!sceneCount) missing.push('Quantidade de cenas');
-  if (!['video', 'interactive'].includes(body.format)) missing.push('Formato');
+  return Number.isFinite(number)
+    ? Math.max(0, Math.round(number))
+    : fallback;
+}
 
-  // Pedido manual oficial só registra aceite que realmente ocorreu no WhatsApp.
-  if (body.termsAcceptedOnWhatsapp !== true) {
-    missing.push('Confirmação de aceite dos termos no WhatsApp');
-  }
-
-  if (missing.length) {
-    return fail(
-      'Confira os campos obrigatórios do pedido manual.',
-      422,
-      { missing },
+function getNested(object, path) {
+  return path
+    .split('.')
+    .reduce(
+      (current, key) => current?.[key],
+      object
     );
+}
+
+function firstInt(settings, paths, fallback = 0) {
+  for (const path of paths) {
+    const value = getNested(settings, path);
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
+      return asInt(value, fallback);
+    }
   }
 
-  const settings = await loadSettings(env.DB);
+  return fallback;
+}
 
-  const selection = {
-    scenes: sceneCount,
-    sceneCount,
-    format: body.format,
-    addons: {
-      confirmation: body.addons?.confirmation === true,
-      filter: body.addons?.filter === true,
-      extraPerson: optInt(body.addons?.extraPerson, 0, 10) || 0,
-    },
-  };
-
-  // Mantém a regra oficial: Confirmação Libri força Vídeo Interativo.
-  const standardQuote = calculateQuote(
-    selection,
-    settings,
-    { urgencyEnabled: body.urgencyEnabled === true },
+export function calculateQuote(
+  selection = {},
+  settings = {},
+  options = {}
+) {
+  const requestedFormat = normalizeFormat(
+    selection.format
   );
 
-  // Valor manual, quando usado, é o valor-base contratado antes da urgência.
-  const manualSubtotalCents = optMoney(body.manualSubtotalCents);
-  const subtotalCents = manualSubtotalCents ?? standardQuote.subtotalCents;
+  const scenes = clampScenes(
+    selection.scenes ??
+    selection.sceneCount ??
+    6
+  );
 
-  const urgencyEnabled = body.urgencyEnabled === true;
-  const urgencyPercent = urgencyEnabled ? standardQuote.urgencyPercent : 0;
-  const urgencyAmountCents = urgencyEnabled
-    ? Math.round(subtotalCents * urgencyPercent / 100)
-    : 0;
+  const addons = {
+    confirmation:
+      selection.addons?.confirmation === true,
 
-  const totalCents = subtotalCents + urgencyAmountCents;
-  const depositPercent = standardQuote.depositPercent;
-  const depositCents = Math.round(totalCents * depositPercent / 100);
-  const balanceCents = totalCents - depositCents;
+    filter:
+      selection.addons?.filter === true,
 
-  const terms = await activeTerms(env.DB);
-
-  if (!terms) {
-    return fail('Termos ainda não configurados.', 503);
-  }
-
-  const selectedSpeechMode = speechMode(body.speechPreference);
-  const age = optInt(body.age, 0, 120);
-  const portfolioConsent = body.portfolioConsent === true;
-
-  const briefing = {
-    source: 'whatsapp_manual',
-    manualOrder: true,
-
-    customerName,
-    whatsapp,
-    honoreeName,
-    displayName: text(body.displayName, 160),
-    age,
-
-    eventDate: text(body.eventDate, 20),
-    eventTime: text(body.eventTime, 20),
-    venueName: text(body.venueName, 240),
-    venueAddress: text(body.venueAddress, 500),
-    locationUrl: text(body.locationUrl, 1000),
-
-    theme,
-    characterWanted: text(body.characterWanted, 300),
-    mustHave: text(body.mustHave, 1000),
-    avoid: text(body.avoid, 1000),
-    specialInfo: text(body.specialInfo, 2000),
-
-    childStyle: text(body.childStyle, 80),
-    outfitChoice: text(body.outfitChoice, 80),
-    outfitDetails: text(body.outfitDetails, 1000),
-    appearanceDetails: text(body.appearanceDetails, 1200),
-
-    colors: text(body.colors, 500),
-    colorsAvoided: text(body.colorsAvoided, 500),
-    creativeIdea: text(body.creativeIdea, 1500),
-
-    speechPreference: selectedSpeechMode,
-    ownSpeech: text(body.ownSpeech, 1500),
-
-    confirmationMode:
-      text(body.confirmationMode, 80)
-      || (standardQuote.addons.confirmation ? 'unsure' : ''),
-
-    manualNotes: text(body.manualNotes, 3000),
-
-    sceneCount: standardQuote.scenes,
-    scenes: standardQuote.scenes,
-
-    termsAcceptedOnWhatsapp: true,
-    portfolioConsent,
+    extraPerson: Math.max(
+      0,
+      Math.min(
+        10,
+        Number.parseInt(
+          selection.addons?.extraPerson,
+          10
+        ) || 0
+      )
+    ),
   };
 
-  const pricing = {
-    ...standardQuote,
+  // Confirmação Libri depende do Vídeo Interativo.
+  const formatAdjusted =
+    addons.confirmation &&
+    requestedFormat === 'video';
 
-    source: 'whatsapp_manual',
-    manualOrder: true,
+  const format = formatAdjusted
+    ? 'interactive'
+    : requestedFormat;
 
-    standardProductCents: standardQuote.productCents,
-    standardAddonsCents: standardQuote.addonsCents,
-    standardSubtotalCents: standardQuote.subtotalCents,
+  const productCents =
+    SCENE_PRICES[format][scenes];
 
-    manualPriceOverride: manualSubtotalCents !== null,
-    manualSubtotalCents,
+  const confirmationUnit = firstInt(
+    settings,
+    [
+      'addons.confirmation',
+      'prices.addons.confirmation',
+      'catalog.addons.confirmation',
+    ],
+    2500
+  );
+
+  const filterUnit = firstInt(
+    settings,
+    [
+      'addons.filter',
+      'prices.addons.filter',
+      'catalog.addons.filter',
+    ],
+    3900
+  );
+
+  const extraPersonUnit = firstInt(
+    settings,
+    [
+      'addons.extraPerson',
+      'prices.addons.extraPerson',
+      'catalog.addons.extraPerson',
+    ],
+    0
+  );
+
+  const addonLines = [
+    {
+      key: 'confirmation',
+      qty: addons.confirmation ? 1 : 0,
+      unitCents: confirmationUnit,
+      totalCents:
+        addons.confirmation
+          ? confirmationUnit
+          : 0,
+    },
+
+    {
+      key: 'filter',
+      qty: addons.filter ? 1 : 0,
+      unitCents: filterUnit,
+      totalCents:
+        addons.filter
+          ? filterUnit
+          : 0,
+    },
+
+    {
+      key: 'extraPerson',
+      qty: addons.extraPerson,
+      unitCents: extraPersonUnit,
+      totalCents:
+        addons.extraPerson *
+        extraPersonUnit,
+    },
+  ].filter(
+    (line) => line.qty > 0
+  );
+
+  const addonsCents =
+    addonLines.reduce(
+      (total, line) =>
+        total + line.totalCents,
+      0
+    );
+
+  const subtotalCents =
+    productCents +
+    addonsCents;
+
+  const urgencyEnabled =
+    options.urgencyEnabled === true;
+
+  const urgencyPercent =
+    urgencyEnabled
+      ? firstInt(
+          settings,
+          [
+            'rules.urgencyPercent',
+            'urgencyPercent',
+            'catalog.rules.urgencyPercent',
+          ],
+          30
+        )
+      : 0;
+
+  const urgencyAmountCents =
+    urgencyEnabled
+      ? Math.round(
+          subtotalCents *
+          urgencyPercent /
+          100
+        )
+      : 0;
+
+  const totalCents =
+    subtotalCents +
+    urgencyAmountCents;
+
+  const depositPercent = firstInt(
+    settings,
+    [
+      'rules.depositPercent',
+      'depositPercent',
+      'catalog.rules.depositPercent',
+    ],
+    50
+  );
+
+  const depositCents =
+    Math.round(
+      totalCents *
+      depositPercent /
+      100
+    );
+
+  const balanceCents =
+    totalCents -
+    depositCents;
+
+  return {
+    scenes,
+    sceneCount: scenes,
+
+    requestedFormat,
+    format,
+    formatAdjusted,
+
+    // Compatibilidade com banco / rotas antigas.
+    experience:
+      legacyExperienceForScenes(scenes),
+
+    legacyExperience:
+      legacyExperienceForScenes(scenes),
+
+    productCents,
+
+    addons,
+    addonLines,
+    addonsCents,
 
     subtotalCents,
+
     urgencyEnabled,
     urgencyPercent,
     urgencyAmountCents,
+
     totalCents,
+
     depositPercent,
     depositCents,
     balanceCents,
   };
-
-  const stamp = nowIso();
-  const publicToken = randomToken('ord_');
-
-  const initialPhotosStatus = photosStatus(body.photosStatus);
-  const initialEntryStatus = entryStatus(body.entryStatus);
-
-  const valuesByColumn = {
-    public_token: publicToken,
-    draft_token: null,
-
-    customer_name: customerName,
-    whatsapp,
-    honoree_name: honoreeName,
-    display_name: nullable(body.displayName, 160),
-    age,
-
-    event_date: nullable(body.eventDate, 20),
-    event_time: nullable(body.eventTime, 20),
-    venue_name: nullable(body.venueName, 240),
-    venue_address: nullable(body.venueAddress, 500),
-    location_url: nullable(body.locationUrl, 1000),
-
-    theme,
-
-    // experience permanece temporariamente por compatibilidade com pedidos antigos.
-    experience: standardQuote.legacyExperience || standardQuote.experience,
-    format: standardQuote.format,
-    scene_count: standardQuote.scenes,
-
-    addons_json: JSON.stringify(standardQuote.addons),
-    briefing_json: JSON.stringify(briefing),
-    pricing_json: JSON.stringify(pricing),
-
-    subtotal_cents: subtotalCents,
-    urgency_enabled: urgencyEnabled ? 1 : 0,
-    urgency_percent: urgencyPercent,
-    urgency_amount_cents: urgencyAmountCents,
-    total_cents: totalCents,
-    deposit_percent: depositPercent,
-    deposit_cents: depositCents,
-    balance_cents: balanceCents,
-
-    terms_version: String(terms.version),
-    terms_accepted_at: stamp,
-    portfolio_consent: portfolioConsent ? 1 : 0,
-
-    status: 'new',
-    photos_status: initialPhotosStatus,
-    photos_note: nullable(body.photosNote, 1200),
-    entry_status: initialEntryStatus,
-
-    speech_mode: selectedSpeechMode,
-    speech_status: selectedSpeechMode === 'approve' ? 'waiting' : 'not_required',
-
-    created_at: stamp,
-    updated_at: stamp,
-    finalized_at: stamp,
-  };
-
-  const columns = Object.keys(valuesByColumn);
-  const placeholders = columns.map(() => '?');
-
-  const insertResult = await env.DB.prepare(`
-    INSERT INTO orders (
-      ${columns.join(', ')}
-    )
-    VALUES (
-      ${placeholders.join(', ')}
-    )
-  `).bind(
-    ...Object.values(valuesByColumn),
-  ).run();
-
-  const id = await resolveInsertedId(
-    env.DB,
-    insertResult,
-    publicToken,
-  );
-
-  if (!id) {
-    return fail(
-      'O pedido foi salvo, mas não foi possível identificar o número gerado.',
-      500,
-    );
-  }
-
-  const code = orderCode(id);
-
-  await env.DB.prepare(`
-    UPDATE orders
-    SET order_code = ?, updated_at = ?
-    WHERE id = ?
-  `).bind(
-    code,
-    nowIso(),
-    id,
-  ).run();
-
-  await addHistory(
-    env.DB,
-    id,
-    'manual_order_created',
-    'Pedido cadastrado manualmente a partir do WhatsApp.',
-    {
-      source: 'whatsapp_manual',
-      scenes: standardQuote.scenes,
-      standardSubtotalCents: standardQuote.subtotalCents,
-      contractedSubtotalCents: subtotalCents,
-      manualPriceOverride: manualSubtotalCents !== null,
-    },
-  );
-
-  const manualNotes = text(body.manualNotes, 3000);
-
-  if (manualNotes) {
-    await env.DB.prepare(`
-      INSERT INTO internal_notes (
-        order_id,
-        note,
-        created_at
-      )
-      VALUES (?, ?, ?)
-    `).bind(
-      id,
-      `Pedido manual via WhatsApp:\n${manualNotes}`,
-      nowIso(),
-    ).run();
-  }
-
-  return json(
-    {
-      ok: true,
-
-      order: {
-        id,
-        orderCode: code,
-        source: 'whatsapp_manual',
-
-        customerName,
-        whatsapp,
-        honoreeName,
-        displayName: briefing.displayName,
-        age,
-        theme,
-
-        scenes: standardQuote.scenes,
-        sceneCount: standardQuote.scenes,
-
-        // Legado temporário.
-        experience: standardQuote.legacyExperience || standardQuote.experience,
-
-        requestedFormat: standardQuote.requestedFormat,
-        format: standardQuote.format,
-        formatAdjusted: standardQuote.formatAdjusted,
-        addons: standardQuote.addons,
-
-        standardSubtotalCents: standardQuote.subtotalCents,
-        subtotalCents,
-
-        urgencyEnabled,
-        urgencyPercent,
-        urgencyAmountCents,
-
-        totalCents,
-        depositPercent,
-        depositCents,
-        balanceCents,
-
-        manualPriceOverride: manualSubtotalCents !== null,
-        photosStatus: initialPhotosStatus,
-        entryStatus: initialEntryStatus,
-      },
-    },
-    201,
-  );
 }
 

@@ -289,10 +289,13 @@ function normalizeLegacySelection(raw = {}) {
     addons: {
       confirmation: raw.addons?.confirmation === true,
       filter: raw.addons?.filter === true,
-      extraPerson: Math.max(
-        0,
-        Math.min(10, Number.parseInt(raw.addons?.extraPerson, 10) || 0),
-      ),
+
+      /*
+       * Pessoa extra não faz mais parte
+       * do portal da cliente.
+       * Continua disponível apenas no admin/manual.
+       */
+      extraPerson: 0,
     },
   };
 }
@@ -332,16 +335,17 @@ function humanSpeech(value) {
 function visualSteps() {
   const steps = [
     { stateStep: 0, title: 'Seu convite' },
-    { stateStep: 1, title: 'A festa' },
-    { stateStep: 2, title: 'A criança' },
-    { stateStep: 3, title: 'Seu estilo' },
+    { stateStep: 1, title: 'Opcionais' },
+    { stateStep: 2, title: 'A festa' },
+    { stateStep: 3, title: 'A criança' },
+    { stateStep: 4, title: 'Seu estilo' },
   ];
 
   if (hasConfirmation()) {
-    steps.push({ stateStep: 4, title: 'Confirmação' });
+    steps.push({ stateStep: 5, title: 'Confirmação' });
   }
 
-  steps.push({ stateStep: 5, title: 'Revisão' });
+  steps.push({ stateStep: 6, title: 'Revisão' });
   return steps;
 }
 
@@ -370,14 +374,9 @@ function productLabelFromQuote(quote = state.quote) {
   return `${humanFormat(quote.format)} • ${scenes} ${scenes === 1 ? 'cena' : 'cenas'}`;
 }
 
-function addonLabel(key, qty = 1) {
+function addonLabel(key) {
   if (key === 'confirmation') return 'Confirmação Libri';
   if (key === 'filter') return 'Filtro personalizado';
-  if (key === 'extraPerson') {
-    return qty > 1
-      ? `${qty} pessoas adicionais`
-      : 'Outra criança ou pessoa';
-  }
   return key;
 }
 
@@ -435,9 +434,6 @@ function addonNames() {
 
   if (selection.confirmation) addons.push('Confirmação Libri');
   if (selection.filter) addons.push('Filtro personalizado');
-  if (selection.extraPerson) {
-    addons.push(`${selection.extraPerson} pessoa(s) adicional(is)`);
-  }
 
   return addons;
 }
@@ -564,7 +560,43 @@ async function loadDraft() {
     const draftData = data.draft.data || {};
 
     state.draftToken = token;
-    state.step = Number(data.draft.step || 0);
+
+    const savedStep =
+      Number(data.draft.step || 0);
+
+    /*
+     * FLOW VERSION 2:
+     * 0 produto
+     * 1 opcionais
+     * 2 festa
+     * 3 criança
+     * 4 estilo
+     * 5 confirmação
+     * 6 revisão
+     *
+     * Rascunhos antigos são convertidos
+     * automaticamente para não cair
+     * na etapa errada.
+     */
+    if (Number(draftData.flowVersion) === 2) {
+      state.step = Math.max(
+        0,
+        Math.min(6, savedStep),
+      );
+    } else {
+      const legacyStepMap = {
+        0: 0,
+        1: 2,
+        2: 3,
+        3: 4,
+        4: 5,
+        5: 6,
+      };
+
+      state.step =
+        legacyStepMap[savedStep]
+        ?? 0;
+    }
 
     state.selection = normalizeLegacySelection(
       draftData.selection || {}
@@ -584,8 +616,8 @@ async function loadDraft() {
 
     state.termsAccepted = sameTermsVersion && Boolean(draftData.termsAccepted);
 
-    if (state.step === 4 && !hasConfirmation()) {
-      state.step = 5;
+    if (state.step === 5 && !hasConfirmation()) {
+      state.step = 6;
     }
 
     return true;
@@ -620,6 +652,7 @@ async function saveDraft() {
       body: JSON.stringify({
         step: state.step,
         data: {
+          flowVersion: 2,
           selection: state.selection,
           briefing: state.briefing,
           portfolioConsent: state.portfolioConsent,
@@ -775,13 +808,13 @@ async function renderProduct() {
   const selection = state.selection;
   const quote = state.quote;
   const showScenes = Boolean(selection.format);
-  const showCommercial = Boolean(selection.format && quote);
+  const canContinue = Boolean(selection.format && quote);
   const selectedScenes = normalizeScenes(selection.scenes);
 
   stepCard.innerHTML = `
     ${stepHeader(
       'Você prefere seu convite em Vídeo ou Vídeo Interativo?',
-      'Escolha o formato que combina mais com a sua festa.',
+      'Escolha o formato e a quantidade de cenas. O valor aparece na hora.',
     )}
 
     <div class="step-body">
@@ -870,157 +903,27 @@ async function renderProduct() {
               >+</button>
             </div>
 
+            <div class="product-name">
+              ${esc(humanFormat(selection.format))} •
+              ${selectedScenes}
+              ${selectedScenes === 1 ? 'cena' : 'cenas'}
+            </div>
+
             <div class="scene-price">
               ${money(SCENE_PRICES[selection.format][selectedScenes])}
             </div>
 
             <div class="scene-range-hint">
-              Escolha de 1 a 10 cenas
+              A abertura personalizada já está inclusa
             </div>
           </div>
-        </section>
-      ` : ''}
-
-      ${showCommercial ? `
-        <section class="section-block reveal-block" id="commercialBlock">
-          <div class="price-hero">
-            <div>
-              <div class="label">Seu convite</div>
-              <div class="product-name">${esc(productLabelFromQuote(quote))}</div>
-            </div>
-            <div class="money-big">${money(quote.productCents)}</div>
-          </div>
-
-          <div class="section-title">
-            <div>
-              <span class="section-kicker">Opcionais</span>
-              <h3>Quer deixar seu convite ainda mais completo?</h3>
-            </div>
-          </div>
-
-          <div class="addon-grid">
-            <article class="addon-card">
-              <span class="addon-icon">✓</span>
-              <div class="addon-copy">
-                <strong>Confirmação de presença Libri</strong>
-                <p>
-                  Uma página personalizada para organizar as confirmações
-                  e acompanhar a lista de convidados.
-                </p>
-                <span class="hint">Disponível para Vídeo Interativo.</span>
-
-                <button
-                  type="button"
-                  class="btn btn-ghost"
-                  data-special-example="confirmation"
-                >
-                  Ver como funciona
-                </button>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.confirmation)}
-                </div>
-
-                <label class="toggle-control">
-                  <input
-                    id="addonConfirmation"
-                    type="checkbox"
-                    ${selection.addons.confirmation ? 'checked' : ''}
-                  >
-                  <span>Adicionar</span>
-                </label>
-              </div>
-            </article>
-
-            <article class="addon-card">
-              <span class="addon-icon">✦</span>
-              <div class="addon-copy">
-                <strong>Filtro personalizado</strong>
-                <p>
-                  Filtro exclusivo para as fotos da festa,
-                  seguindo a identidade visual da criação.
-                </p>
-
-                <button
-                  type="button"
-                  class="btn btn-ghost"
-                  data-special-example="filter"
-                >
-                  Ver exemplo
-                </button>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.filter)}
-                </div>
-
-                <label class="toggle-control">
-                  <input
-                    id="addonFilter"
-                    type="checkbox"
-                    ${selection.addons.filter ? 'checked' : ''}
-                  >
-                  <span>Adicionar</span>
-                </label>
-              </div>
-            </article>
-
-            <article class="addon-card">
-              <span class="addon-icon">☺</span>
-              <div class="addon-copy">
-                <strong>Outra criança ou pessoa</strong>
-                <p>Inclua mais alguém na criação.</p>
-              </div>
-
-              <div class="addon-control">
-                <div class="addon-price">
-                  + ${money(state.catalog.addons.extraPerson)} cada
-                </div>
-
-                <div class="stepper">
-                  <button
-                    type="button"
-                    data-stepper="extraPerson"
-                    data-delta="-1"
-                  >−</button>
-
-                  <span>${selection.addons.extraPerson || 0}</span>
-
-                  <button
-                    type="button"
-                    data-stepper="extraPerson"
-                    data-delta="1"
-                  >+</button>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <div class="notice notice-warning">
-            <strong>
-              Precisa antes de ${state.catalog.rules.deadlineBusinessDays} dias úteis?
-            </strong><br>
-            Consulte a disponibilidade.
-            Se aprovada, a urgência acrescenta
-            ${state.catalog.rules.urgencyPercent}%.
-            <div>
-              <a id="urgencyLink" target="_blank" rel="noopener">
-                Consultar urgência
-              </a>
-            </div>
-          </div>
-
-          ${quoteBreakdownHtml(quote)}
         </section>
       ` : ''}
 
       ${actionBar({
         back: false,
         nextLabel: 'Continuar',
-        disabled: !showCommercial,
+        disabled: !canContinue,
       })}
     </div>
   `;
@@ -1029,7 +932,10 @@ async function renderProduct() {
     input.addEventListener('change', async () => {
       selection.format = input.value;
       selection.scenes = 6;
-      selection.addons.confirmation = false;
+
+      if (input.value === 'video') {
+        selection.addons.confirmation = false;
+      }
 
       await renderProduct();
       scrollToElement('scenesBlock');
@@ -1052,6 +958,151 @@ async function renderProduct() {
     );
   });
 
+  $('#nextBtn', stepCard)?.addEventListener('click', nextStep);
+}
+
+async function rerenderProduct() {
+  const y = window.scrollY;
+  await renderProduct();
+  window.scrollTo({ top: y });
+}
+
+/* ==================================================
+   ETAPA 2 | OPCIONAIS
+================================================== */
+
+async function renderExtras() {
+  await refreshQuote();
+
+  const selection = state.selection;
+  const quote = state.quote;
+
+  selection.addons.extraPerson = 0;
+
+  stepCard.innerHTML = `
+    ${stepHeader(
+      'Quer adicionar algo ao seu convite?',
+      'Os opcionais são totalmente facultativos. Você pode seguir sem adicionar nada.',
+    )}
+
+    <div class="step-body">
+      <div class="price-hero">
+        <div>
+          <div class="label">Seu convite</div>
+          <div class="product-name">
+            ${esc(productLabelFromQuote(quote))}
+          </div>
+        </div>
+
+        <div class="money-big">
+          ${money(quote.productCents)}
+        </div>
+      </div>
+
+      <div class="addon-grid">
+        <article class="addon-card">
+          <span class="addon-icon">✓</span>
+
+          <div class="addon-copy">
+            <strong>Confirmação de presença Libri</strong>
+            <p>
+              Página personalizada para organizar as confirmações
+              e acompanhar a lista de convidados.
+            </p>
+
+            <span class="hint">
+              Ao adicionar, o convite passa para Vídeo Interativo.
+            </span>
+
+            <button
+              type="button"
+              class="btn btn-ghost"
+              data-special-example="confirmation"
+            >
+              Ver como funciona
+            </button>
+          </div>
+
+          <div class="addon-control">
+            <div class="addon-price">
+              + ${money(state.catalog.addons.confirmation)}
+            </div>
+
+            <label class="toggle-control">
+              <input
+                id="addonConfirmation"
+                type="checkbox"
+                ${selection.addons.confirmation ? 'checked' : ''}
+              >
+              <span>Adicionar</span>
+            </label>
+          </div>
+        </article>
+
+        <article class="addon-card">
+          <span class="addon-icon">✦</span>
+
+          <div class="addon-copy">
+            <strong>Filtro personalizado</strong>
+            <p>
+              Filtro exclusivo para as fotos da festa,
+              seguindo a identidade visual da criação.
+            </p>
+
+            <button
+              type="button"
+              class="btn btn-ghost"
+              data-special-example="filter"
+            >
+              Ver exemplo
+            </button>
+          </div>
+
+          <div class="addon-control">
+            <div class="addon-price">
+              + ${money(state.catalog.addons.filter)}
+            </div>
+
+            <label class="toggle-control">
+              <input
+                id="addonFilter"
+                type="checkbox"
+                ${selection.addons.filter ? 'checked' : ''}
+              >
+              <span>Adicionar</span>
+            </label>
+          </div>
+        </article>
+      </div>
+
+      ${selection.addons.confirmation ? `
+        <div class="notice">
+          <strong>Confirmação adicionada.</strong>
+          Seu convite está em Vídeo Interativo, que também inclui o vídeo personalizado.
+        </div>
+      ` : ''}
+
+      <div class="price-hero" style="margin-top:18px;margin-bottom:0">
+        <div>
+          <div class="label">Total até aqui</div>
+          <div class="product-name">
+            ${addonNames().length
+              ? esc(addonNames().join(' + '))
+              : 'Sem opcionais'}
+          </div>
+        </div>
+
+        <div class="money-big">
+          ${money(quote.totalCents)}
+        </div>
+      </div>
+
+      ${actionBar({
+        nextLabel: 'Continuar',
+      })}
+    </div>
+  `;
+
   $$('[data-special-example]', stepCard).forEach((button) => {
     button.addEventListener('click', () => {
       openExample(
@@ -1063,70 +1114,34 @@ async function renderProduct() {
   $('#addonConfirmation', stepCard)?.addEventListener('change', async (event) => {
     const checked = event.target.checked;
 
+    selection.addons.confirmation = checked;
+
     if (checked && selection.format === 'video') {
       selection.format = 'interactive';
-
-      modal(
-        'Confirmação Libri',
-        `
-          <p>
-            A Confirmação Libri funciona no
-            <strong>Vídeo Interativo</strong>.
-          </p>
-          <p>
-            Por isso, seu formato foi alterado automaticamente para
-            <strong>Vídeo Interativo</strong>.
-          </p>
-        `,
-      );
     }
 
-    selection.addons.confirmation = checked;
-    await rerenderProduct();
+    await rerenderExtras();
   });
 
   $('#addonFilter', stepCard)?.addEventListener('change', async (event) => {
     selection.addons.filter = event.target.checked;
-    await rerenderProduct();
+    await rerenderExtras();
   });
 
-  $$('[data-stepper="extraPerson"]', stepCard).forEach((button) => {
-    button.addEventListener('click', async () => {
-      const delta = Number(button.dataset.delta);
-
-      selection.addons.extraPerson = Math.max(
-        0,
-        Math.min(
-          10,
-          Number(selection.addons.extraPerson || 0) + delta,
-        ),
-      );
-
-      await rerenderProduct();
-    });
-  });
-
-  const urgencyLink = $('#urgencyLink', stepCard);
-
-  if (urgencyLink) {
-    urgencyLink.href = whatsappLink(
-      state.catalog.contact.libriWhatsapp,
-      'Oi! Estou montando meu pedido na Libri e preciso receber antes do prazo normal. Podemos verificar a possibilidade de urgência?',
-    );
-  }
-
+  $('#backBtn', stepCard)?.addEventListener('click', prevStep);
   $('#nextBtn', stepCard)?.addEventListener('click', nextStep);
 }
 
-async function rerenderProduct() {
+async function rerenderExtras() {
   const y = window.scrollY;
-  await renderProduct();
+  await renderExtras();
   window.scrollTo({ top: y });
 }
 
 /* ==================================================
-   ETAPA 2 | FESTA
+   ETAPA 3 | FESTA
 ================================================== */
+
 
 function renderParty() {
   const b = state.briefing;
@@ -1381,7 +1396,7 @@ function renderParty() {
 }
 
 /* ==================================================
-   ETAPA 3 | CRIANÇA
+   ETAPA 4 | CRIANÇA
 ================================================== */
 
 function renderChild() {
@@ -1534,7 +1549,7 @@ function renderChild() {
 }
 
 /* ==================================================
-   ETAPA 4 | ESTILO
+   ETAPA 5 | ESTILO
 ================================================== */
 
 function renderStyle() {
@@ -1663,14 +1678,14 @@ function renderStyle() {
 }
 
 /* ==================================================
-   ETAPA 5 | CONFIRMAÇÃO
+   ETAPA 6 | CONFIRMAÇÃO
 ================================================== */
 
 function renderResources() {
   const b = state.briefing;
 
   if (!hasConfirmation()) {
-    state.step = 5;
+    state.step = 6;
     render();
     return;
   }
@@ -1754,7 +1769,7 @@ async function renderReview() {
             <button
               class="review-edit"
               type="button"
-              data-go-step="1"
+              data-go-step="2"
             >
               Editar
             </button>
@@ -1816,13 +1831,24 @@ async function renderReview() {
         <article class="review-card">
           <div class="review-card-head">
             <h3>Convite</h3>
-            <button
-              class="review-edit"
-              type="button"
-              data-go-step="0"
-            >
-              Editar
-            </button>
+
+            <div>
+              <button
+                class="review-edit"
+                type="button"
+                data-go-step="0"
+              >
+                Produto
+              </button>
+
+              <button
+                class="review-edit"
+                type="button"
+                data-go-step="1"
+              >
+                Opcionais
+              </button>
+            </div>
           </div>
 
           <dl class="review-list">
@@ -1861,7 +1887,7 @@ async function renderReview() {
             <button
               class="review-edit"
               type="button"
-              data-go-step="2"
+              data-go-step="3"
             >
               Editar
             </button>
@@ -1896,7 +1922,7 @@ async function renderReview() {
             <button
               class="review-edit"
               type="button"
-              data-go-step="3"
+              data-go-step="4"
             >
               Editar
             </button>
@@ -1932,7 +1958,7 @@ async function renderReview() {
               <button
                 class="review-edit"
                 type="button"
-                data-go-step="4"
+                data-go-step="5"
               >
                 Editar
               </button>
@@ -2296,11 +2322,11 @@ async function copyText(value) {
 async function nextStep() {
   const previous = state.step;
 
-  if (state.step === 3 && !hasConfirmation()) {
-    state.step = 5;
+  if (state.step === 4 && !hasConfirmation()) {
+    state.step = 6;
   } else {
     state.step = Math.min(
-      5,
+      6,
       state.step + 1,
     );
   }
@@ -2325,8 +2351,8 @@ async function nextStep() {
 async function prevStep() {
   const previous = state.step;
 
-  if (state.step === 5 && !hasConfirmation()) {
-    state.step = 3;
+  if (state.step === 6 && !hasConfirmation()) {
+    state.step = 4;
   } else {
     state.step = Math.max(
       0,
@@ -2354,14 +2380,14 @@ async function prevStep() {
 async function goToStep(step) {
   state.step = Math.max(
     0,
-    Math.min(5, Number(step)),
+    Math.min(6, Number(step)),
   );
 
   if (
-    state.step === 4
+    state.step === 5
     && !hasConfirmation()
   ) {
-    state.step = 5;
+    state.step = 6;
   }
 
   try {
@@ -2385,18 +2411,22 @@ async function render() {
   }
 
   if (state.step === 1) {
-    return renderParty();
+    return renderExtras();
   }
 
   if (state.step === 2) {
-    return renderChild();
+    return renderParty();
   }
 
   if (state.step === 3) {
-    return renderStyle();
+    return renderChild();
   }
 
   if (state.step === 4) {
+    return renderStyle();
+  }
+
+  if (state.step === 5) {
     return renderResources();
   }
 
@@ -2466,4 +2496,3 @@ bootstrap().catch((error) => {
     `,
   );
 });
-

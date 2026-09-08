@@ -202,6 +202,47 @@ function giftPageMode(
     : 'unsure';
 }
 
+/*
+ * Compatibilidade temporária:
+ * o formulário administrativo antigo
+ * ainda pode enviar experience
+ * e extraScene.
+ *
+ * Isso é convertido para a nova
+ * quantidade total de cenas.
+ */
+function legacySceneCount(
+  body,
+) {
+  const base =
+    body.experience === 'reduced'
+      ? 3
+      : body.experience === 'full'
+        ? 6
+        : null;
+
+  if (
+    base === null
+  ) {
+    return null;
+  }
+
+  const extra =
+    optInt(
+      body
+        .addons
+        ?.extraScene,
+      0,
+      10,
+    )
+    || 0;
+
+  return Math.min(
+    10,
+    base + extra,
+  );
+}
+
 /* ==================================================
    TERMOS
 ================================================== */
@@ -330,6 +371,17 @@ export async function handleAdminManualApi(
       240,
     );
 
+  const sceneCount =
+    optInt(
+      body.scenes
+      ?? body.sceneCount,
+      1,
+      10,
+    )
+    ?? legacySceneCount(
+      body,
+    );
+
   const missing = [];
 
   if (
@@ -366,15 +418,10 @@ export async function handleAdminManualApi(
   }
 
   if (
-    ![
-      'full',
-      'reduced',
-    ].includes(
-      body.experience,
-    )
+    !sceneCount
   ) {
     missing.push(
-      'Experiência',
+      'Quantidade de cenas',
     );
   }
 
@@ -454,8 +501,10 @@ export async function handleAdminManualApi(
   ================================================== */
 
   const selection = {
-    experience:
-      body.experience,
+    scenes:
+      sceneCount,
+
+    sceneCount,
 
     format:
       body.format,
@@ -478,15 +527,10 @@ export async function handleAdminManualApi(
           ?.filter
         === true,
 
-      extraScene:
-        optInt(
-          body
-            .addons
-            ?.extraScene,
-          0,
-          10,
-        )
-        || 0,
+      /*
+       * Cena extra foi removida.
+       * Não é enviada ao quote.js.
+       */
 
       extraPerson:
         optInt(
@@ -774,6 +818,18 @@ export async function handleAdminManualApi(
       ),
 
     /* ==================================================
+       NOVA QUANTIDADE DE CENAS
+    ================================================== */
+
+    scenes:
+      standardQuote
+        .scenes,
+
+    sceneCount:
+      standardQuote
+        .scenes,
+
+    /* ==================================================
        PÁGINA DE PRESENTES
     ================================================== */
 
@@ -950,6 +1006,10 @@ export async function handleAdminManualApi(
 
     theme,
 
+    /*
+     * Compatibilidade temporária
+     * com telas antigas.
+     */
     experience:
       standardQuote
         .experience,
@@ -957,6 +1017,10 @@ export async function handleAdminManualApi(
     format:
       standardQuote
         .format,
+
+    scene_count:
+      standardQuote
+        .scenes,
 
     addons_json:
       JSON.stringify(
@@ -1129,6 +1193,10 @@ export async function handleAdminManualApi(
       source:
         'whatsapp_manual',
 
+      scenes:
+        standardQuote
+          .scenes,
+
       standardSubtotalCents:
         standardQuote
           .subtotalCents,
@@ -1218,6 +1286,17 @@ export async function handleAdminManualApi(
 
         theme,
 
+        scenes:
+          standardQuote
+            .scenes,
+
+        sceneCount:
+          standardQuote
+            .scenes,
+
+        /*
+         * Compatibilidade temporária.
+         */
         experience:
           standardQuote
             .experience,
@@ -1282,3 +1361,4 @@ export async function handleAdminManualApi(
     201,
   );
 }
+

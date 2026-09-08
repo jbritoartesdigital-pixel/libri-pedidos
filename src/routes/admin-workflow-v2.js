@@ -326,6 +326,7 @@ async function dashboard(
     todayRow,
     upcomingRow,
     paymentRow,
+    newRow,
   ] =
     await Promise.all([
       db.prepare(`
@@ -371,6 +372,17 @@ async function dashboard(
           AND status != 'cancelled'
       `)
         .first(),
+
+      db.prepare(`
+        SELECT
+          COUNT(*) AS total
+        FROM orders
+        WHERE status IN (
+          'new',
+          'ready'
+        )
+      `)
+        .first(),
     ]);
 
   return {
@@ -400,6 +412,13 @@ async function dashboard(
     pendingPayments:
       Number(
         paymentRow
+          ?.total
+        || 0,
+      ),
+
+    newOrders:
+      Number(
+        newRow
           ?.total
         || 0,
       ),
@@ -452,6 +471,17 @@ async function listOrders(
   } else {
     clauses.push(
       `status != 'cancelled'`,
+    );
+  }
+
+  if (
+    filter === 'new'
+  ) {
+    clauses.push(
+      `status IN (
+        'new',
+        'ready'
+      )`,
     );
   }
 
@@ -549,6 +579,29 @@ async function listOrders(
       ? `WHERE ${clauses.join(' AND ')}`
       : '';
 
+  const orderBy =
+    filter === 'new'
+      ? 'created_at DESC'
+      : `
+        CASE
+          WHEN status IN (
+            'producing',
+            'revisions'
+          )
+          THEN COALESCE(
+            event_date,
+            '9999-12-31'
+          )
+          ELSE '9999-12-31'
+        END ASC,
+        CASE
+          WHEN event_date = ?
+          THEN 0
+          ELSE 1
+        END ASC,
+        created_at DESC
+      `;
+
   const rows =
     await db.prepare(`
       SELECT
@@ -572,28 +625,16 @@ async function listOrders(
       FROM orders
       ${where}
       ORDER BY
-        CASE
-          WHEN status IN (
-            'producing',
-            'revisions'
-          )
-          THEN COALESCE(
-            event_date,
-            '9999-12-31'
-          )
-          ELSE '9999-12-31'
-        END ASC,
-        CASE
-          WHEN event_date = ?
-          THEN 0
-          ELSE 1
-        END ASC,
-        created_at DESC
+        ${orderBy}
       LIMIT 500
     `)
       .bind(
         ...bindings,
-        today,
+        ...(
+          filter === 'new'
+            ? []
+            : [today]
+        ),
       )
       .all();
 
@@ -1136,4 +1177,3 @@ export async function handleAdminWorkflowV2Api(
 
   return null;
 }
-

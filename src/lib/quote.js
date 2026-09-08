@@ -345,7 +345,11 @@ export function calculateQuote(
     !== requestedFormat;
 
   const productCents =
-    SCENE_PRICES
+    catalog
+      ?.scenePrices
+      ?.[format]
+      ?.[scenes]
+    ?? SCENE_PRICES
       [format]
       [scenes];
 
@@ -426,12 +430,39 @@ export function calculateQuote(
      LIBRI MOMENTS
   ================================================== */
 
-  const albumPlan =
+  const defaultAlbumPlan =
     addons.photoAlbumPlan
       ? PHOTO_ALBUM_PLANS[
         addons.photoAlbumPlan
       ]
       : null;
+
+  const configuredAlbumPlan =
+    addons.photoAlbumPlan
+      ? catalog
+        ?.moments
+        ?.plans
+        ?.[addons.photoAlbumPlan]
+      : null;
+
+  const albumPlan =
+    defaultAlbumPlan
+      ? {
+        ...defaultAlbumPlan,
+
+        priceCents:
+          configuredAlbumPlan
+            ?.priceCents
+          ?? defaultAlbumPlan
+            .priceCents,
+      }
+      : null;
+
+  const photoAlbumExtra100Cents =
+    catalog
+      ?.moments
+      ?.extra100Cents
+    ?? PHOTO_ALBUM_EXTRA_100_CENTS;
 
   if (
     albumPlan
@@ -470,7 +501,7 @@ export function calculateQuote(
               .photoAlbumExtra100,
 
           unitCents:
-            PHOTO_ALBUM_EXTRA_100_CENTS,
+            photoAlbumExtra100Cents,
         }),
       );
     }
@@ -634,7 +665,7 @@ export function calculateQuote(
               .photoAlbumExtra100,
 
           extra100Cents:
-            PHOTO_ALBUM_EXTRA_100_CENTS,
+            photoAlbumExtra100Cents,
 
           days:
             albumPlan.days,
@@ -657,4 +688,3 @@ export const libriMomentsCatalog = {
   extra100Cents:
     PHOTO_ALBUM_EXTRA_100_CENTS,
 };
-

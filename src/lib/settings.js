@@ -4,20 +4,97 @@ import {
 } from './http.js';
 
 /* ==================================================
+   PADRÕES OFICIAIS
+================================================== */
+
+const DEFAULT_SCENE_PRICES = Object.freeze({
+  video: Object.freeze({
+    1: 3500,
+    2: 5000,
+    3: 6500,
+    4: 8000,
+    5: 10500,
+    6: 13000,
+    7: 15500,
+    8: 18000,
+    9: 20500,
+    10: 23000,
+  }),
+
+  interactive: Object.freeze({
+    1: 5000,
+    2: 7000,
+    3: 9500,
+    4: 12000,
+    5: 15000,
+    6: 18000,
+    7: 21000,
+    8: 24000,
+    9: 27000,
+    10: 30000,
+  }),
+});
+
+const DEFAULT_MOMENTS = Object.freeze({
+  festa: 7900,
+  premium: 11900,
+  exclusive: 14900,
+  extra100: 1500,
+});
+
+/* ==================================================
    CHAVES
 ================================================== */
 
+const SCENE_PRICE_KEYS =
+  new Set(
+    [
+      'video',
+      'interactive',
+    ].flatMap(
+      (format) =>
+        Array.from(
+          {
+            length: 10,
+          },
+          (
+            _,
+            index,
+          ) =>
+            `price_${format}_scene_${index + 1}_cents`,
+        ),
+    ),
+  );
+
 const COMMERCIAL_PRICE_KEYS =
   new Set([
+    /*
+     * Compatibilidade com versões antigas.
+     * Não comandam mais o preço por cenas.
+     */
     'price_video_full_cents',
     'price_video_reduced_cents',
     'price_interactive_full_cents',
     'price_interactive_reduced_cents',
 
+    ...SCENE_PRICE_KEYS,
+
     'addon_confirmation_cents',
     'addon_filter_cents',
+
+    /*
+     * Mantidos apenas para uso interno / legado.
+     */
     'addon_extra_scene_cents',
     'addon_extra_person_cents',
+
+    /*
+     * Libri Moments.
+     */
+    'moments_festa_cents',
+    'moments_premium_cents',
+    'moments_exclusive_cents',
+    'moments_extra_100_cents',
   ]);
 
 const EXAMPLE_URL_KEYS =
@@ -142,6 +219,41 @@ function safeBoundedInt(
   return value;
 }
 
+function scenePricesFromSettings(
+  settings,
+  format,
+) {
+  const defaults =
+    DEFAULT_SCENE_PRICES[
+      format
+    ];
+
+  return Object.fromEntries(
+    Array.from(
+      {
+        length: 10,
+      },
+      (
+        _,
+        index,
+      ) => {
+        const scenes =
+          index + 1;
+
+        return [
+          scenes,
+
+          safePositiveInt(
+            settings,
+            `price_${format}_scene_${scenes}_cents`,
+            defaults[scenes],
+          ),
+        ];
+      },
+    ),
+  );
+}
+
 /* ==================================================
    CATÁLOGO SEGURO
 ================================================== */
@@ -149,7 +261,25 @@ function safeBoundedInt(
 export function catalogFromSettings(
   settings,
 ) {
+  const scenePrices = {
+    video:
+      scenePricesFromSettings(
+        settings,
+        'video',
+      ),
+
+    interactive:
+      scenePricesFromSettings(
+        settings,
+        'interactive',
+      ),
+  };
+
   return {
+    /*
+     * Compatibilidade temporária com telas antigas.
+     * O motor novo usa scenePrices.
+     */
     products: {
       video: {
         full:
@@ -184,6 +314,8 @@ export function catalogFromSettings(
       },
     },
 
+    scenePrices,
+
     addons: {
       confirmation:
         safePositiveInt(
@@ -211,6 +343,80 @@ export function catalogFromSettings(
           settings,
           'addon_extra_person_cents',
           3000,
+        ),
+    },
+
+    moments: {
+      plans: {
+        festa: {
+          key:
+            'festa',
+
+          name:
+            'Festa',
+
+          priceCents:
+            safePositiveInt(
+              settings,
+              'moments_festa_cents',
+              DEFAULT_MOMENTS.festa,
+            ),
+
+          photos:
+            200,
+
+          days:
+            30,
+        },
+
+        premium: {
+          key:
+            'premium',
+
+          name:
+            'Premium',
+
+          priceCents:
+            safePositiveInt(
+              settings,
+              'moments_premium_cents',
+              DEFAULT_MOMENTS.premium,
+            ),
+
+          photos:
+            400,
+
+          days:
+            60,
+        },
+
+        exclusive: {
+          key:
+            'exclusive',
+
+          name:
+            'Exclusive',
+
+          priceCents:
+            safePositiveInt(
+              settings,
+              'moments_exclusive_cents',
+              DEFAULT_MOMENTS.exclusive,
+            ),
+
+          photos:
+            700,
+
+          days:
+            90,
+        },
+      },
+
+      extra100Cents:
+        safePositiveInt(
+          settings,
+          'moments_extra_100_cents',
+          DEFAULT_MOMENTS.extra100,
         ),
     },
 
@@ -431,8 +637,11 @@ function normalizeSettingEntry(
       value,
       'Preço',
       {
-        min: 1,
-        max: 100000000,
+        min:
+          1,
+
+        max:
+          100000000,
       },
     );
   }
@@ -445,8 +654,11 @@ function normalizeSettingEntry(
       value,
       'Percentual da entrada',
       {
-        min: 1,
-        max: 100,
+        min:
+          1,
+
+        max:
+          100,
       },
     );
   }
@@ -459,8 +671,11 @@ function normalizeSettingEntry(
       value,
       'Percentual de urgência',
       {
-        min: 1,
-        max: 100,
+        min:
+          1,
+
+        max:
+          100,
       },
     );
   }
@@ -473,8 +688,11 @@ function normalizeSettingEntry(
       value,
       'Prazo padrão',
       {
-        min: 1,
-        max: 365,
+        min:
+          1,
+
+        max:
+          365,
       },
     );
   }
@@ -524,6 +742,7 @@ export async function saveSettings(
       .map(
         ([key, value]) => [
           key,
+
           normalizeSettingEntry(
             key,
             value,

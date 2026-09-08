@@ -187,6 +187,105 @@ function injectV2Styles() {
       display: block;
       margin-bottom: 4px;
     }
+
+    /* ==================================================
+       MOBILE | ETAPA PRODUTO
+       CTA sempre visível após a escolha
+    ================================================== */
+
+    @media (max-width: 640px) {
+      #scenesBlock {
+        padding-bottom: 82px;
+      }
+
+      #scenesBlock + .step-actions {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 120;
+        margin: 0;
+        padding:
+          10px
+          calc(11px + env(safe-area-inset-right))
+          calc(10px + env(safe-area-inset-bottom))
+          calc(11px + env(safe-area-inset-left));
+        border-top:
+          1px solid
+          rgba(70, 55, 48, 0.10);
+        background:
+          rgba(255, 249, 245, 0.97);
+        box-shadow:
+          0 -10px 28px
+          rgba(55, 42, 36, 0.10);
+        backdrop-filter:
+          blur(12px);
+        -webkit-backdrop-filter:
+          blur(12px);
+      }
+
+      #scenesBlock + .step-actions .btn-primary {
+        width: min(100%, 620px);
+        min-height: 50px;
+        margin: 0 auto;
+      }
+
+      .scene-explanation {
+        margin-top: 9px;
+        padding: 10px 12px;
+        line-height: 1.4;
+      }
+
+      .scene-picker-card {
+        gap: 10px;
+        margin-top: 11px;
+        padding: 18px 14px 16px;
+        border-radius: 20px;
+      }
+
+      .scene-recommendation {
+        min-height: 24px;
+        padding: 4px 9px;
+        font-size: 10px;
+      }
+
+      .scene-stepper {
+        grid-template-columns:
+          42px
+          minmax(92px, 1fr)
+          42px;
+        gap: 8px;
+      }
+
+      .scene-step-button {
+        width: 42px;
+        height: 42px;
+        font-size: 23px;
+      }
+
+      .scene-count strong {
+        font-size: 34px;
+      }
+
+      .scene-count span {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      .scene-price {
+        font-size: 28px;
+      }
+
+      .scene-range-hint {
+        font-size: 11px;
+      }
+
+      .scene-picker-card .btn-ghost {
+        min-height: 32px;
+        padding-block: 5px;
+        font-size: 11px;
+      }
+    }
   `;
 
   document.head.appendChild(style);
@@ -846,13 +945,6 @@ async function renderProduct() {
           </div>
         ` : ''}
 
-        ${selection.format ? `
-          <div class="example-row">
-            <button id="formatExample" class="btn btn-ghost" type="button">
-              Ver exemplo deste formato
-            </button>
-          </div>
-        ` : ''}
       </section>
 
       ${showScenes ? `
@@ -866,13 +958,9 @@ async function renderProduct() {
 
           <div class="notice scene-explanation">
             <strong>O que é uma cena?</strong><br>
-            Cada cena é um momento diferente do vídeo, com cenário, ação ou parte da história própria.
-            <br><br>
-            A <strong>abertura personalizada já está inclusa</strong> e não entra nessa contagem.
-            <br>
-            <span class="hint">
-              Exemplo: 3 cenas = abertura + 3 momentos diferentes da história.
-            </span>
+            Cada cena é um momento diferente do vídeo.
+            A <strong>abertura personalizada já está inclusa</strong>
+            e não entra nessa contagem.
           </div>
 
           <div class="scene-picker-card">
@@ -916,6 +1004,14 @@ async function renderProduct() {
             <div class="scene-range-hint">
               A abertura personalizada já está inclusa
             </div>
+
+            <button
+              id="formatExample"
+              class="btn btn-ghost"
+              type="button"
+            >
+              Ver exemplo deste formato
+            </button>
           </div>
         </section>
       ` : ''}

@@ -103,6 +103,11 @@
     ],
 
     [
+      'new',
+      'Novos',
+    ],
+
+    [
       'today',
       'Hoje',
     ],
@@ -531,6 +536,495 @@
     return 'Conferir pedido e iniciar produção';
   }
 
+
+  function parseJsonObject(
+    value,
+  ) {
+    if (
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+    ) {
+      return value;
+    }
+
+    if (
+      typeof value !== 'string'
+      || !value.trim()
+    ) {
+      return {};
+    }
+
+    try {
+      const parsed =
+        JSON.parse(
+          value,
+        );
+
+      return (
+        parsed
+        && typeof parsed === 'object'
+        && !Array.isArray(parsed)
+      )
+        ? parsed
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function firstValue(
+    ...values
+  ) {
+    for (
+      const value
+      of values
+    ) {
+      const normalized =
+        normalizeText(
+          value,
+        );
+
+      if (
+        normalized
+      ) {
+        return normalized;
+      }
+    }
+
+    return '';
+  }
+
+  function valueOr(
+    value,
+    fallback = 'Não informado',
+  ) {
+    return firstValue(
+      value,
+    )
+    || fallback;
+  }
+
+  function childStyleLabel(
+    value,
+  ) {
+    return ({
+      drawing:
+        'Desenho / bonequinho',
+
+      real:
+        'Mais real e detalhado',
+
+      libri:
+        'A Libri escolhe',
+    })[value]
+    || value
+    || 'Não informado';
+  }
+
+  function outfitLabel(
+    value,
+  ) {
+    return ({
+      party:
+        'Parecida com a roupa da festa',
+
+      specific:
+        'Roupa específica',
+
+      libri:
+        'A Libri cria',
+    })[value]
+    || value
+    || 'Não informado';
+  }
+
+  function speechLabel(
+    value,
+  ) {
+    return ({
+      libri:
+        'A Libri cria',
+
+      approve:
+        'Cliente quer aprovar antes',
+
+      own:
+        'Cliente enviou frase própria',
+    })[value]
+    || value
+    || 'Não informado';
+  }
+
+  function confirmationModeLabel(
+    value,
+  ) {
+    return ({
+      open:
+        'Livre',
+
+      list:
+        'Lista de convidados',
+
+      unsure:
+        'Ainda não definido',
+    })[value]
+    || value
+    || 'Não informado';
+  }
+
+  function momentsLabel(
+    plan,
+  ) {
+    return ({
+      festa:
+        'Festa',
+
+      premium:
+        'Premium',
+
+      exclusive:
+        'Exclusive',
+    })[plan]
+    || '';
+  }
+
+  async function copyText(
+    value,
+  ) {
+    if (!value) {
+      return;
+    }
+
+    if (
+      navigator
+        .clipboard
+        ?.writeText
+    ) {
+      await navigator
+        .clipboard
+        .writeText(
+          value,
+        );
+
+      return;
+    }
+
+    const area =
+      document.createElement(
+        'textarea',
+      );
+
+    area.value =
+      value;
+
+    area.style.position =
+      'fixed';
+
+    area.style.opacity =
+      '0';
+
+    document.body
+      .appendChild(
+        area,
+      );
+
+    area.select();
+
+    document.execCommand(
+      'copy',
+    );
+
+    area.remove();
+  }
+
+  function buildProjectBriefing(
+    order,
+  ) {
+    const briefing =
+      parseJsonObject(
+        order.briefing
+        || order.briefing_json,
+      );
+
+    const addons =
+      parseJsonObject(
+        order.addons
+        || order.addons_json,
+      );
+
+    const code =
+      valueOr(
+        order.order_code,
+        `LIBRI-${order.id}`,
+      );
+
+    const honoree =
+      valueOr(
+        order.honoree_name
+        || briefing.honoreeName,
+      );
+
+    const displayName =
+      valueOr(
+        order.display_name
+        || briefing.displayName
+        || order.honoree_name
+        || briefing.honoreeName,
+      );
+
+    const customer =
+      valueOr(
+        order.customer_name
+        || briefing.customerName,
+      );
+
+    const whatsapp =
+      valueOr(
+        order.whatsapp
+        || briefing.whatsapp,
+      );
+
+    const age =
+      valueOr(
+        order.age
+        ?? briefing.age,
+      );
+
+    const eventDate =
+      order.event_date
+      || briefing.eventDate
+      || '';
+
+    const eventTime =
+      valueOr(
+        order.event_time
+        || briefing.eventTime,
+      );
+
+    const venueName =
+      valueOr(
+        order.venue_name
+        || briefing.venueName,
+      );
+
+    const venueAddress =
+      valueOr(
+        order.venue_address
+        || briefing.venueAddress,
+      );
+
+    const locationUrl =
+      firstValue(
+        briefing.locationUrl,
+        order.location_url,
+      )
+      || 'Não informada';
+
+    const theme =
+      valueOr(
+        order.theme
+        || briefing.theme,
+      );
+
+    const scenes =
+      sceneCount(
+        order,
+      );
+
+    const confirmation =
+      addons.confirmation
+      === true;
+
+    const filter =
+      addons.filter
+      === true;
+
+    const momentsPlan =
+      firstValue(
+        addons.photoAlbumPlan,
+      );
+
+    const momentsExtra =
+      Number(
+        addons.photoAlbumExtra100
+        || 0,
+      );
+
+    const lines = [
+      `${code} | ${displayName}`,
+
+      '',
+
+      'CLIENTE',
+      `${customer} | WhatsApp: ${whatsapp}`,
+
+      '',
+
+      'CRIANÇA / HOMENAGEADO(A)',
+      `Nome: ${honoree}`,
+      `Nome no convite: ${displayName}`,
+      `Idade: ${age}`,
+
+      '',
+
+      'EVENTO',
+      `Data: ${formatDate(eventDate)}`,
+      `Horário: ${eventTime}`,
+      `Local: ${venueName}`,
+      `Endereço: ${venueAddress}`,
+      `Localização: ${locationUrl}`,
+
+      '',
+
+      'CONTRATAÇÃO',
+      `Formato: ${formatLabel(order.format)}`,
+      `Cenas: ${scenes}`,
+      'Abertura: Inclusa e fora da contagem de cenas',
+      `Confirmação Libri: ${confirmation ? 'Sim' : 'Não'}`,
+      `Filtro personalizado: ${filter ? 'Sim' : 'Não'}`,
+    ];
+
+    if (
+      momentsPlan
+    ) {
+      lines.push(
+        `Libri Moments: ${momentsLabel(momentsPlan)}${
+          momentsExtra > 0
+            ? ` + ${momentsExtra} pacote(s) de +100 fotos`
+            : ''
+        }`,
+      );
+    }
+
+    lines.push(
+      `TOTAL CONTRATADO: ${money(
+        order.total_cents
+        ?? order.totalCents
+        ?? 0,
+      )}`,
+    );
+
+    lines.push(
+      '',
+      'TEMA',
+      theme,
+
+      '',
+      'PERSONAGEM ESPECÍFICO',
+      valueOr(
+        briefing.characterWanted,
+        'Nenhum informado',
+      ),
+
+      '',
+      'NÃO PODE FALTAR',
+      valueOr(
+        briefing.mustHave,
+        'Nada específico informado',
+      ),
+
+      '',
+      'NÃO QUER',
+      valueOr(
+        briefing.avoid,
+        'Nada específico informado',
+      ),
+
+      '',
+      'INFORMAÇÕES ESPECIAIS',
+      valueOr(
+        briefing.specialInfo,
+        'Nenhuma',
+      ),
+
+      '',
+      'DIREÇÃO VISUAL',
+      `Estilo da criança: ${childStyleLabel(
+        briefing.childStyle,
+      )}`,
+      `Roupa: ${outfitLabel(
+        briefing.outfitChoice,
+      )}`,
+      `Detalhes da roupa: ${valueOr(
+        briefing.outfitDetails,
+        'Nenhum detalhe extra informado',
+      )}`,
+      `Detalhes da aparência: ${valueOr(
+        briefing.appearanceDetails,
+        'Nenhum detalhe extra informado',
+      )}`,
+      `Cores desejadas: ${valueOr(
+        briefing.colors,
+        'Sem preferência informada',
+      )}`,
+      `Cores a evitar: ${valueOr(
+        briefing.colorsAvoided,
+        'Nenhuma',
+      )}`,
+      `Ideia / referência: ${valueOr(
+        briefing.creativeIdea,
+        'Nenhuma',
+      )}`,
+
+      '',
+      'FALAS',
+      speechLabel(
+        briefing.speechPreference,
+      ),
+    );
+
+    if (
+      briefing.speechPreference
+      === 'own'
+      && firstValue(
+        briefing.ownSpeech,
+      )
+    ) {
+      lines.push(
+        `Frase enviada: ${briefing.ownSpeech}`,
+      );
+    }
+
+    if (
+      confirmation
+    ) {
+      lines.push(
+        '',
+        'CONFIRMAÇÃO DE PRESENÇA',
+        `Modo: ${confirmationModeLabel(
+          briefing.confirmationMode,
+        )}`,
+      );
+    }
+
+    if (
+      firstValue(
+        briefing.giftPage,
+      )
+    ) {
+      const giftPage =
+        briefing.giftPage;
+
+      lines.push(
+        '',
+        'SUGESTÕES DE PRESENTES',
+        giftPage === 'yes'
+          ? valueOr(
+            briefing.giftDetails,
+            'Sim, sem detalhes informados',
+          )
+          : giftPage === 'no'
+            ? 'Não'
+            : 'A definir',
+      );
+    }
+
+    return lines.join(
+      '\n',
+    );
+  }
+
   /* ==================================================
      API
   ================================================== */
@@ -660,7 +1154,7 @@
 
       .v5-dashboard-grid{
         display:grid;
-        grid-template-columns:repeat(4,minmax(0,1fr));
+        grid-template-columns:repeat(5,minmax(0,1fr));
         gap:12px;
         margin:0 0 18px;
       }
@@ -854,6 +1348,15 @@
         gap:8px;
         flex-wrap:wrap;
         margin-top:16px;
+      }
+
+      .v5-copy-briefing{
+        min-width:170px;
+      }
+
+      .v5-dashboard-card.is-new-orders{
+        border-color:rgba(55,95,180,.20);
+        background:#f7f9ff;
       }
 
       .v5-cancel-box{
@@ -1300,6 +1803,27 @@
     kpis.innerHTML = `
       <button
         type="button"
+        class="v5-dashboard-card is-new-orders"
+        data-dashboard-filter="new"
+      >
+        <span>
+          Novos pedidos
+        </span>
+
+        <strong>
+          ${Number(
+            dashboard.newOrders
+            || 0,
+          )}
+        </strong>
+
+        <small>
+          Mais recentes primeiro
+        </small>
+      </button>
+
+      <button
+        type="button"
         class="v5-dashboard-card"
         data-dashboard-filter="today"
       >
@@ -1628,17 +2152,12 @@
 
     if (
       value === 'cancelled'
+      || value === 'new'
     ) {
       await loadOrders(
-        'cancelled',
+        value,
       );
-    } else if (
-      state.orders.some(
-        (order) =>
-          statusOf(order)
-          === 'cancelled',
-      )
-    ) {
+    } else {
       await loadOrders(
         '',
       );
@@ -1699,6 +2218,13 @@
     ) {
       return statusOf(order)
         === 'cancelled';
+    }
+
+    if (
+      filter === 'new'
+    ) {
+      return statusOf(order)
+        === 'new';
     }
 
     if (
@@ -2507,6 +3033,14 @@
         <div
           class="v5-detail-actions"
         >
+          <button
+            type="button"
+            class="btn btn-primary v5-copy-briefing"
+            data-detail-copy-briefing="${id}"
+          >
+            Copiar briefing
+          </button>
+
           ${
             status
             !== 'cancelled'
@@ -2550,6 +3084,51 @@
       modal.classList
         .remove(
           'hidden',
+        );
+
+      $('[data-detail-copy-briefing]', body)
+        ?.addEventListener(
+          'click',
+          async (
+            event,
+          ) => {
+            const button =
+              event.currentTarget;
+
+            try {
+              await copyText(
+                buildProjectBriefing(
+                  order,
+                ),
+              );
+
+              button.textContent =
+                'Briefing copiado ✓';
+
+              toast(
+                'Briefing copiado. Agora é só colar no ChatGPT.',
+              );
+
+              setTimeout(
+                () => {
+                  button.textContent =
+                    'Copiar briefing';
+                },
+                2200,
+              );
+            } catch (
+              error
+            ) {
+              toast(
+                'Não foi possível copiar o briefing.',
+                'error',
+              );
+
+              console.error(
+                error,
+              );
+            }
+          },
         );
 
       $('[data-detail-payment]', body)
@@ -2808,11 +3387,27 @@
   async function loadOrders(
     filter = '',
   ) {
-    const url =
+    const params =
+      new URLSearchParams();
+
+    if (
       filter
-      === 'cancelled'
-        ? '/api/admin/orders-v2?filter=cancelled'
-        : '/api/admin/orders-v2';
+    ) {
+      params.set(
+        'filter',
+        filter,
+      );
+    }
+
+    const query =
+      params.toString();
+
+    const url =
+      `/api/admin/orders-v2${
+        query
+          ? `?${query}`
+          : ''
+      }`;
 
     const data =
       await api(
@@ -2839,7 +3434,9 @@
         loadOrders(
           state.activeFilter
           === 'cancelled'
-            ? 'cancelled'
+          || state.activeFilter
+          === 'new'
+            ? state.activeFilter
             : '',
         ),
       ]);
@@ -2937,4 +3534,3 @@
     init();
   }
 })();
-

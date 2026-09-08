@@ -43,6 +43,22 @@ function publicCatalog(catalog) {
   };
 }
 
+function selectedSceneCount(data) {
+  const value =
+    data?.selection?.scenes
+    ?? data?.selection?.sceneCount;
+
+  const scenes =
+    Number.parseInt(
+      value,
+      10,
+    );
+
+  return Number.isInteger(scenes)
+    ? scenes
+    : null;
+}
+
 function validateFinalPayload(data) {
   const briefing =
     data?.briefing
@@ -112,17 +128,18 @@ function validateFinalPayload(data) {
           label,
       );
 
+  const scenes =
+    selectedSceneCount(
+      data,
+    );
+
   if (
-    ![
-      'full',
-      'reduced',
-    ].includes(
-      data?.selection
-        ?.experience,
-    )
+    scenes === null
+    || scenes < 1
+    || scenes > 10
   ) {
     missing.push(
-      'Experiência',
+      'Quantidade de cenas',
     );
   }
 
@@ -269,6 +286,15 @@ function existingOrderResponse(
       balanceCents:
         row.balance_cents,
 
+      scenes:
+        row.scene_count,
+
+      sceneCount:
+        row.scene_count,
+
+      // Mantido temporariamente
+      // para compatibilidade com
+      // pedidos antigos/admin atual.
       experience:
         row.experience,
 
@@ -675,6 +701,7 @@ export async function handlePublicApi(
                 total_cents,
                 deposit_cents,
                 balance_cents,
+                scene_count,
                 experience,
                 format
               FROM orders
@@ -932,6 +959,14 @@ export async function handlePublicApi(
       quote.addons
       || {};
 
+    const normalizedBriefing = {
+      ...b,
+      scenes:
+        quote.scenes,
+      sceneCount:
+        quote.scenes,
+    };
+
     const result =
       await env.DB
         .prepare(
@@ -955,6 +990,7 @@ export async function handlePublicApi(
 
               experience,
               format,
+              scene_count,
 
               addons_json,
               briefing_json,
@@ -1007,6 +1043,7 @@ export async function handlePublicApi(
               ?,
               ?,
 
+              ?,
               ?,
               ?,
 
@@ -1092,16 +1129,19 @@ export async function handlePublicApi(
             b.theme,
           ).trim(),
 
+          // Legado temporário.
           quote.experience,
 
           quote.format,
+
+          quote.scenes,
 
           JSON.stringify(
             normalizedAddons,
           ),
 
           JSON.stringify(
-            b,
+            normalizedBriefing,
           ),
 
           JSON.stringify(
@@ -1186,6 +1226,17 @@ export async function handlePublicApi(
         : 'Divulgação não autorizada',
     );
 
+    await addHistory(
+      env.DB,
+      orderId,
+      'scene_count_selected',
+      `${quote.scenes} cena(s) selecionada(s)`,
+      {
+        scenes:
+          quote.scenes,
+      },
+    );
+
     if (
       quote.formatAdjusted
     ) {
@@ -1226,6 +1277,13 @@ export async function handlePublicApi(
           balanceCents:
             quote.balanceCents,
 
+          scenes:
+            quote.scenes,
+
+          sceneCount:
+            quote.scenes,
+
+          // Legado temporário.
           experience:
             quote.experience,
 
@@ -1319,3 +1377,4 @@ export async function handlePublicApi(
 
   return null;
 }
+

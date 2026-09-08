@@ -33,6 +33,7 @@ jobs:
 
           import {
             calculateQuote,
+            SCENE_PRICES,
           } from './src/lib/quote.js';
 
           import {
@@ -40,6 +41,11 @@ jobs:
           } from './src/lib/settings.js';
 
           const settings = {
+            /*
+             * Mantidos porque settings.js ainda oferece
+             * compatibilidade com a tabela antiga no admin.
+             * O preço do produto novo vem de SCENE_PRICES.
+             */
             price_video_full_cents:
               '15000',
 
@@ -57,9 +63,6 @@ jobs:
 
             addon_filter_cents:
               '3900',
-
-            addon_extra_scene_cents:
-              '3000',
 
             addon_extra_person_cents:
               '3000',
@@ -86,13 +89,150 @@ jobs:
           }
 
           /* ==================================================
-             PRODUTOS
+             TABELA OFICIAL | 1 A 10 CENAS
+          ================================================== */
+
+          const expectedVideo = {
+            1: 3500,
+            2: 5000,
+            3: 6500,
+            4: 8000,
+            5: 10500,
+            6: 13000,
+            7: 15500,
+            8: 18000,
+            9: 20500,
+            10: 23000,
+          };
+
+          const expectedInteractive = {
+            1: 5000,
+            2: 7000,
+            3: 9500,
+            4: 12000,
+            5: 15000,
+            6: 18000,
+            7: 21000,
+            8: 24000,
+            9: 27000,
+            10: 30000,
+          };
+
+          assert.deepEqual(
+            SCENE_PRICES.video,
+            expectedVideo,
+          );
+
+          assert.deepEqual(
+            SCENE_PRICES.interactive,
+            expectedInteractive,
+          );
+
+          for (
+            let scenes = 1;
+            scenes <= 10;
+            scenes += 1
+          ) {
+            let result =
+              quote({
+                scenes,
+
+                format:
+                  'video',
+
+                addons:
+                  {},
+              });
+
+            assert.equal(
+              result.scenes,
+              scenes,
+            );
+
+            assert.equal(
+              result.sceneCount,
+              scenes,
+            );
+
+            assert.equal(
+              result.format,
+              'video',
+            );
+
+            assert.equal(
+              result.productCents,
+              expectedVideo[scenes],
+            );
+
+            assert.equal(
+              result.totalCents,
+              expectedVideo[scenes],
+            );
+
+            result =
+              quote({
+                scenes,
+
+                format:
+                  'interactive',
+
+                addons:
+                  {},
+              });
+
+            assert.equal(
+              result.scenes,
+              scenes,
+            );
+
+            assert.equal(
+              result.format,
+              'interactive',
+            );
+
+            assert.equal(
+              result.productCents,
+              expectedInteractive[scenes],
+            );
+
+            assert.equal(
+              result.totalCents,
+              expectedInteractive[scenes],
+            );
+          }
+
+          /* ==================================================
+             PADRÃO DE COMPATIBILIDADE | 6 CENAS
           ================================================== */
 
           let result =
             quote({
-              experience:
-                'full',
+              format:
+                'video',
+
+              addons:
+                {},
+            });
+
+          assert.equal(
+            result.scenes,
+            6,
+          );
+
+          assert.equal(
+            result.productCents,
+            13000,
+          );
+
+          assert.equal(
+            result.experience,
+            'full',
+          );
+
+          result =
+            quote({
+              scenes:
+                3,
 
               format:
                 'video',
@@ -102,96 +242,21 @@ jobs:
             });
 
           assert.equal(
-            result.format,
-            'video',
-          );
-
-          assert.equal(
-            result.productCents,
-            15000,
-          );
-
-          assert.equal(
-            result.totalCents,
-            15000,
-          );
-
-          result =
-            quote({
-              experience:
-                'reduced',
-
-              format:
-                'video',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.productCents,
-            6500,
-          );
-
-          assert.equal(
-            result.totalCents,
-            6500,
-          );
-
-          result =
-            quote({
-              experience:
-                'full',
-
-              format:
-                'interactive',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.productCents,
-            18000,
-          );
-
-          assert.equal(
-            result.totalCents,
-            18000,
-          );
-
-          result =
-            quote({
-              experience:
-                'reduced',
-
-              format:
-                'interactive',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.productCents,
-            9500,
-          );
-
-          assert.equal(
-            result.totalCents,
-            9500,
+            result.experience,
+            'reduced',
           );
 
           /* ==================================================
              CONFIRMAÇÃO LIBRI
 
-             Confirmação exige formato Interativo.
+             Confirmação exige formato Interativo
+             e deve converter Vídeo automaticamente.
           ================================================== */
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'video',
@@ -232,48 +297,14 @@ jobs:
             20500,
           );
 
-          result =
-            quote({
-              experience:
-                'reduced',
-
-              format:
-                'video',
-
-              addons: {
-                confirmation:
-                  true,
-              },
-            });
-
-          assert.equal(
-            result.format,
-            'interactive',
-          );
-
-          assert.equal(
-            result.productCents,
-            9500,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            2500,
-          );
-
-          assert.equal(
-            result.totalCents,
-            12000,
-          );
-
           /* ==================================================
              FILTRO AVULSO
           ================================================== */
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -300,40 +331,41 @@ jobs:
           );
 
           /* ==================================================
-             TODOS OS ADICIONAIS TRADICIONAIS
+             PESSOA EXTRA
           ================================================== */
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
 
               addons: {
-                confirmation:
-                  true,
-
-                filter:
-                  true,
-
-                extraScene:
-                  1,
-
                 extraPerson:
-                  1,
+                  2,
               },
             });
 
           assert.equal(
             result.addonsCents,
-            12400,
+            6000,
           );
 
           assert.equal(
             result.totalCents,
-            30400,
+            24000,
+          );
+
+          assert.equal(
+            result.addonLines
+              .some(
+                (line) =>
+                  line.key
+                  === 'extraScene',
+              ),
+            false,
           );
 
           /* ==================================================
@@ -342,8 +374,8 @@ jobs:
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -400,8 +432,8 @@ jobs:
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -441,8 +473,8 @@ jobs:
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -482,8 +514,8 @@ jobs:
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -525,8 +557,8 @@ jobs:
 
           result =
             quote({
-              experience:
-                'full',
+              scenes:
+                6,
 
               format:
                 'interactive',
@@ -573,8 +605,8 @@ jobs:
           result =
             quote(
               {
-                experience:
-                  'full',
+                scenes:
+                  6,
 
                 format:
                   'interactive',
@@ -620,7 +652,57 @@ jobs:
           );
 
           /* ==================================================
-             FALLBACKS DE SEGURANÇA
+             LIMITES DE CENAS
+          ================================================== */
+
+          result =
+            quote({
+              scenes:
+                0,
+
+              format:
+                'video',
+
+              addons:
+                {},
+            });
+
+          assert.equal(
+            result.scenes,
+            1,
+          );
+
+          assert.equal(
+            result.productCents,
+            3500,
+          );
+
+          result =
+            quote({
+              scenes:
+                99,
+
+              format:
+                'interactive',
+
+              addons:
+                {},
+            });
+
+          assert.equal(
+            result.scenes,
+            10,
+          );
+
+          assert.equal(
+            result.productCents,
+            30000,
+          );
+
+          /* ==================================================
+             FALLBACKS DE SETTINGS LEGADOS
+
+             O admin antigo ainda lê esses valores.
           ================================================== */
 
           const safeCatalog =
@@ -693,7 +775,7 @@ jobs:
           );
 
           console.log(
-            '✓ Sintaxe e regras comerciais aprovadas.',
+            '✓ Sintaxe e regras comerciais por cenas aprovadas.',
           );
           NODE
 
@@ -709,3 +791,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+

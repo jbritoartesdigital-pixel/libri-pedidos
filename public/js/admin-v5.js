@@ -1939,6 +1939,160 @@
     );
   }
 
+
+  function closeBriefingPreview() {
+    $('#v5BriefingBackdrop')
+      ?.remove();
+  }
+
+  async function openBriefingPreview(
+    order,
+  ) {
+    closeBriefingPreview();
+
+    const briefing =
+      buildProjectBriefing(
+        order,
+      );
+
+    document.body
+      .insertAdjacentHTML(
+        'beforeend',
+        `
+          <div
+            id="v5BriefingBackdrop"
+            class="v5-briefing-backdrop"
+          >
+            <section
+              class="v5-briefing-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="v5BriefingTitle"
+            >
+              <header
+                class="v5-briefing-head"
+              >
+                <div>
+                  <h3
+                    id="v5BriefingTitle"
+                  >
+                    Briefing completo
+                  </h3>
+
+                  <p>
+                    Confira tudo antes de copiar ou iniciar o projeto.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="v5-briefing-close"
+                  id="v5BriefingClose"
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+              </header>
+
+              <div
+                class="v5-briefing-body"
+              >
+                <pre
+                  class="v5-briefing-pre"
+                >${esc(briefing)}</pre>
+              </div>
+
+              <div
+                class="v5-briefing-actions"
+              >
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  id="v5BriefingCopy"
+                >
+                  Copiar briefing
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  id="v5BriefingDone"
+                >
+                  Fechar
+                </button>
+              </div>
+            </section>
+          </div>
+        `,
+      );
+
+    $('#v5BriefingClose')
+      ?.addEventListener(
+        'click',
+        closeBriefingPreview,
+      );
+
+    $('#v5BriefingDone')
+      ?.addEventListener(
+        'click',
+        closeBriefingPreview,
+      );
+
+    $('#v5BriefingBackdrop')
+      ?.addEventListener(
+        'click',
+        (
+          event,
+        ) => {
+          if (
+            event.target?.id
+            === 'v5BriefingBackdrop'
+          ) {
+            closeBriefingPreview();
+          }
+        },
+      );
+
+    $('#v5BriefingCopy')
+      ?.addEventListener(
+        'click',
+        async (
+          event,
+        ) => {
+          const button =
+            event.currentTarget;
+
+          try {
+            await copyText(
+              briefing,
+            );
+
+            button.textContent =
+              'Briefing copiado ✓';
+
+            toast(
+              'Briefing copiado. Agora é só colar no ChatGPT.',
+            );
+
+            setTimeout(
+              () => {
+                button.textContent =
+                  'Copiar briefing';
+              },
+              2200,
+            );
+          } catch (
+            error
+          ) {
+            toast(
+              'Não foi possível copiar o briefing.',
+              'error',
+            );
+          }
+        },
+      );
+  }
+
   /* ==================================================
      API
   ================================================== */
@@ -2270,9 +2424,92 @@
         min-width:170px;
       }
 
+      .v5-view-briefing{
+        min-width:160px;
+      }
+
       .v5-dashboard-card.is-new-orders{
         border-color:rgba(55,95,180,.20);
         background:#f7f9ff;
+      }
+
+      .v5-briefing-backdrop{
+        position:fixed;
+        inset:0;
+        z-index:9998;
+        background:rgba(20,16,14,.48);
+        display:grid;
+        place-items:center;
+        padding:16px;
+      }
+
+      .v5-briefing-modal{
+        width:min(920px,100%);
+        max-height:calc(100vh - 32px);
+        overflow:auto;
+        border-radius:22px;
+        background:#fffaf6;
+        box-shadow:0 24px 80px rgba(0,0,0,.22);
+        border:1px solid rgba(55,42,36,.08);
+      }
+
+      .v5-briefing-head{
+        position:sticky;
+        top:0;
+        z-index:2;
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:14px;
+        padding:18px 20px;
+        background:rgba(255,250,246,.96);
+        border-bottom:1px solid rgba(55,42,36,.08);
+        backdrop-filter:blur(10px);
+      }
+
+      .v5-briefing-head h3{
+        margin:0;
+      }
+
+      .v5-briefing-head p{
+        margin:6px 0 0;
+        color:#6e6158;
+        font-size:13px;
+      }
+
+      .v5-briefing-close{
+        width:38px;
+        height:38px;
+        border:none;
+        border-radius:999px;
+        background:#f0e7df;
+        cursor:pointer;
+        font-size:22px;
+        line-height:1;
+      }
+
+      .v5-briefing-body{
+        padding:18px 20px 20px;
+      }
+
+      .v5-briefing-pre{
+        margin:0;
+        white-space:pre-wrap;
+        word-break:break-word;
+        background:#fff;
+        border:1px solid rgba(55,42,36,.08);
+        border-radius:16px;
+        padding:16px;
+        font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        color:#332a24;
+      }
+
+      .v5-briefing-actions{
+        display:flex;
+        justify-content:flex-end;
+        gap:10px;
+        flex-wrap:wrap;
+        padding:0 20px 20px;
       }
 
       .v5-cancel-box{
@@ -3980,6 +4217,14 @@
             Copiar briefing
           </button>
 
+          <button
+            type="button"
+            class="btn btn-secondary v5-view-briefing"
+            data-detail-view-briefing="${id}"
+          >
+            Ver briefing
+          </button>
+
           ${
             status
             !== 'cancelled'
@@ -4023,6 +4268,16 @@
       modal.classList
         .remove(
           'hidden',
+        );
+
+      $('[data-detail-view-briefing]', body)
+        ?.addEventListener(
+          'click',
+          async () => {
+            await openBriefingPreview(
+              order,
+            );
+          },
         );
 
       $('[data-detail-copy-briefing]', body)

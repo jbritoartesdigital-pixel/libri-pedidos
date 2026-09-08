@@ -17,6 +17,10 @@ import {
 } from './routes/admin-manual.js';
 
 import {
+  handleAdminWorkflowV2Api,
+} from './routes/admin-workflow-v2.js';
+
+import {
   handleAdminApi,
 } from './routes/admin.js';
 
@@ -142,6 +146,24 @@ export default {
           }
 
           /* ==================================================
+             ADMIN V2
+             DASHBOARD + STATUS + PAGAMENTO + CANCELAMENTO
+          ================================================== */
+
+          const workflowV2Response =
+            await handleAdminWorkflowV2Api(
+              request,
+              env,
+              url,
+            );
+
+          if (
+            workflowV2Response
+          ) {
+            return workflowV2Response;
+          }
+
+          /* ==================================================
              ADMIN EXISTENTE
           ================================================== */
 
@@ -214,3 +236,4 @@ export default {
     );
   },
 };
+

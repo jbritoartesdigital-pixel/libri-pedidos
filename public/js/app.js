@@ -7,6 +7,7 @@ const state = {
   catalog: null,
   terms: null,
   quote: null,
+  momentsCatalog: null,
   selection: {
     format: '',
     scenes: 6,
@@ -14,6 +15,8 @@ const state = {
       confirmation: false,
       filter: false,
       extraPerson: 0,
+      photoAlbumPlan: '',
+      photoAlbumExtra100: 0,
     },
   },
   briefing: {
@@ -42,6 +45,8 @@ const state = {
     speechPreference: 'libri',
     ownSpeech: '',
     confirmationMode: 'unsure',
+    giftPage: 'unsure',
+    giftDetails: '',
   },
   portfolioConsent: null,
   termsAccepted: false,
@@ -161,6 +166,106 @@ function injectV2Styles() {
       margin-bottom: 4px;
     }
 
+    .style-reference-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .style-reference-choice {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .style-reference-choice > input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .style-reference-content {
+      display: block;
+      height: 100%;
+      overflow: hidden;
+      border: 2px solid var(--line, rgba(0,0,0,.12));
+      border-radius: 20px;
+      background: var(--card, #fff);
+      transition:
+        border-color .18s ease,
+        box-shadow .18s ease,
+        transform .18s ease;
+    }
+
+    .style-reference-choice:hover .style-reference-content {
+      transform: translateY(-1px);
+    }
+
+    .style-reference-choice > input:checked + .style-reference-content {
+      border-color: var(--brand, #6f584a);
+      box-shadow: 0 0 0 3px rgba(111, 88, 74, .10);
+    }
+
+    .style-reference-image {
+      position: relative;
+      aspect-ratio: 3 / 4;
+      overflow: hidden;
+      background: #f2ece7;
+    }
+
+    .style-reference-image img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+
+    .style-reference-check {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.92);
+      color: var(--brand, #6f584a);
+      font-weight: 900;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12);
+    }
+
+    .style-reference-copy {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+    }
+
+    .style-reference-copy strong {
+      font-size: 14px;
+    }
+
+    .style-reference-copy span {
+      color: var(--muted, #6f6863);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .style-libri-choice {
+      margin-top: 12px;
+    }
+
+    .moments-plans {
+      margin-top: 12px;
+    }
+
+    .moments-extra-box {
+      margin-top: 12px;
+    }
+
+    .moments-summary {
+      margin-top: 10px;
+    }
+
     /* ==================================================
        MOBILE | ETAPA PRODUTO
        CTA sempre visível após a escolha
@@ -258,6 +363,26 @@ function injectV2Styles() {
         padding-block: 5px;
         font-size: 11px;
       }
+
+      .style-reference-grid {
+        gap: 8px;
+      }
+
+      .style-reference-content {
+        border-radius: 16px;
+      }
+
+      .style-reference-copy {
+        padding: 10px;
+      }
+
+      .style-reference-copy strong {
+        font-size: 12px;
+      }
+
+      .style-reference-copy span {
+        font-size: 10px;
+      }
     }
   `;
 
@@ -343,6 +468,18 @@ function normalizeScenes(value) {
   return Math.max(1, Math.min(10, parsed));
 }
 
+function normalizeMomentsPlan(value) {
+  return ['festa', 'premium', 'exclusive'].includes(value)
+    ? value
+    : '';
+}
+
+function normalizeMomentsExtra100(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(20, parsed);
+}
+
 function normalizeLegacySelection(raw = {}) {
   const legacyBaseScenes = raw.experience === 'reduced' ? 3 : 6;
   const legacyExtraScenes = Number.parseInt(raw.addons?.extraScene, 10) || 0;
@@ -360,7 +497,16 @@ function normalizeLegacySelection(raw = {}) {
     ),
     addons: {
       confirmation: raw.addons?.confirmation === true,
-      filter: raw.addons?.filter === true,
+
+      /*
+       * O Libri Moments já inclui filtro.
+       * Em rascunhos antigos, o filtro avulso
+       * é desligado quando houver plano Moments.
+       */
+      filter:
+        normalizeMomentsPlan(raw.addons?.photoAlbumPlan)
+          ? false
+          : raw.addons?.filter === true,
 
       /*
        * Pessoa extra não faz mais parte
@@ -368,6 +514,18 @@ function normalizeLegacySelection(raw = {}) {
        * Continua disponível apenas no admin/manual.
        */
       extraPerson: 0,
+
+      photoAlbumPlan:
+        normalizeMomentsPlan(
+          raw.addons?.photoAlbumPlan,
+        ),
+
+      photoAlbumExtra100:
+        normalizeMomentsPlan(raw.addons?.photoAlbumPlan)
+          ? normalizeMomentsExtra100(
+              raw.addons?.photoAlbumExtra100,
+            )
+          : 0,
     },
   };
 }
@@ -402,6 +560,22 @@ function humanSpeech(value) {
     approve: 'Quero aprovar antes',
     own: 'Frase própria',
   })[value] || 'A Libri cria';
+}
+
+function humanGiftPage(value) {
+  return ({
+    yes: 'Sim',
+    no: 'Não',
+    unsure: 'Ainda não sei',
+  })[value] || 'Ainda não sei';
+}
+
+function momentsPlanName(value) {
+  return ({
+    festa: 'Libri Moments Festa',
+    premium: 'Libri Moments Premium',
+    exclusive: 'Libri Moments Exclusive',
+  })[value] || '';
 }
 
 function visualSteps() {
@@ -446,9 +620,17 @@ function productLabelFromQuote(quote = state.quote) {
   return `${humanFormat(quote.format)} • ${scenes} ${scenes === 1 ? 'cena' : 'cenas'}`;
 }
 
-function addonLabel(key) {
+function addonLabel(key, qty = 1) {
   if (key === 'confirmation') return 'Confirmação Libri';
   if (key === 'filter') return 'Filtro personalizado';
+  if (key === 'photoAlbumFesta') return 'Libri Moments Festa';
+  if (key === 'photoAlbumPremium') return 'Libri Moments Premium';
+  if (key === 'photoAlbumExclusive') return 'Libri Moments Exclusive';
+  if (key === 'photoAlbumExtra100') {
+    return qty > 1
+      ? `${qty} pacotes extras de +100 fotos`
+      : '+100 fotos no Libri Moments';
+  }
   return key;
 }
 
@@ -507,7 +689,153 @@ function addonNames() {
   if (selection.confirmation) addons.push('Confirmação Libri');
   if (selection.filter) addons.push('Filtro personalizado');
 
-  return addons;
+  if (selection.photoAlbumPlan) {
+    addons.push(
+      momentsPlanName(
+        selection.photoAlbumPlan,
+      ),
+    );
+
+    if (selection.photoAlbumExtra100 > 0) {
+      addons.push(
+        `${selection.photoAlbumExtra100} × +100 fotos`,
+      );
+    }
+  }
+
+  return addons.filter(Boolean);
+}
+
+async function loadMomentsCatalog() {
+  if (state.momentsCatalog) {
+    return state.momentsCatalog;
+  }
+
+  const fallback = {
+    plans: {
+      festa: {
+        key: 'festa',
+        name: 'Festa',
+        priceCents: 7900,
+        photos: 200,
+        days: 30,
+      },
+      premium: {
+        key: 'premium',
+        name: 'Premium',
+        priceCents: 11900,
+        photos: 400,
+        days: 60,
+      },
+      exclusive: {
+        key: 'exclusive',
+        name: 'Exclusive',
+        priceCents: 14900,
+        photos: 700,
+        days: 90,
+      },
+    },
+    extra100Cents: 1500,
+  };
+
+  try {
+    const keys = [
+      'festa',
+      'premium',
+      'exclusive',
+    ];
+
+    const results = await Promise.all(
+      keys.map(async (plan) => {
+        const data = await api('/api/quote', {
+          method: 'POST',
+          body: JSON.stringify({
+            selection: {
+              format: 'video',
+              scenes: 1,
+              addons: {
+                confirmation: false,
+                filter: false,
+                extraPerson: 0,
+                photoAlbumPlan: plan,
+                photoAlbumExtra100: 0,
+              },
+            },
+          }),
+        });
+
+        return data.quote?.photoAlbum || null;
+      }),
+    );
+
+    const plans = {};
+
+    results.forEach((album) => {
+      if (!album?.plan) return;
+
+      plans[album.plan] = {
+        key: album.plan,
+        name: album.name,
+        priceCents: album.basePriceCents,
+        photos: album.basePhotos,
+        days: album.days,
+      };
+    });
+
+    const firstAlbum =
+      results.find(Boolean);
+
+    state.momentsCatalog = {
+      plans: {
+        ...fallback.plans,
+        ...plans,
+      },
+      extra100Cents:
+        firstAlbum?.extra100Cents
+        ?? fallback.extra100Cents,
+    };
+  } catch {
+    state.momentsCatalog = fallback;
+  }
+
+  return state.momentsCatalog;
+}
+
+function visualStyleChoice({
+  name,
+  value,
+  title,
+  image,
+  alt,
+  checked = false,
+}) {
+  return `
+    <label class="style-reference-choice">
+      <input
+        type="radio"
+        name="${esc(name)}"
+        value="${esc(value)}"
+        ${checked ? 'checked' : ''}
+      >
+
+      <span class="style-reference-content">
+        <span class="style-reference-image">
+          <img
+            src="${esc(image)}"
+            alt="${esc(alt)}"
+            loading="lazy"
+            decoding="async"
+          >
+          <span class="style-reference-check">✓</span>
+        </span>
+
+        <span class="style-reference-copy">
+          <strong>${esc(title)}</strong>
+          <span>Toque na imagem para escolher.</span>
+        </span>
+      </span>
+    </label>
+  `;
 }
 
 /* ==================================================
@@ -1041,12 +1369,47 @@ async function rerenderProduct() {
 ================================================== */
 
 async function renderExtras() {
-  await refreshQuote();
-
   const selection = state.selection;
-  const quote = state.quote;
 
   selection.addons.extraPerson = 0;
+
+  if (selection.addons.photoAlbumPlan) {
+    selection.addons.filter = false;
+  }
+
+  await refreshQuote();
+
+  const quote = state.quote;
+  const moments = await loadMomentsCatalog();
+
+  const selectedMomentsPlan =
+    normalizeMomentsPlan(
+      selection.addons.photoAlbumPlan,
+    );
+
+  const momentsExtra100 =
+    selectedMomentsPlan
+      ? normalizeMomentsExtra100(
+          selection.addons.photoAlbumExtra100,
+        )
+      : 0;
+
+  selection.addons.photoAlbumPlan =
+    selectedMomentsPlan;
+
+  selection.addons.photoAlbumExtra100 =
+    momentsExtra100;
+
+  const selectedPlanData =
+    selectedMomentsPlan
+      ? moments.plans[selectedMomentsPlan]
+      : null;
+
+  const totalMomentsPhotos =
+    selectedPlanData
+      ? selectedPlanData.photos
+        + (momentsExtra100 * 100)
+      : 0;
 
   stepCard.innerHTML = `
     ${stepHeader(
@@ -1118,18 +1481,32 @@ async function renderExtras() {
               seguindo a identidade visual da criação.
             </p>
 
-            <button
-              type="button"
-              class="btn btn-ghost"
-              data-special-example="filter"
-            >
-              Ver exemplo
-            </button>
+            ${
+              selectedMomentsPlan
+                ? `
+                  <span class="hint">
+                    Já incluído no seu Libri Moments.
+                  </span>
+                `
+                : `
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    data-special-example="filter"
+                  >
+                    Ver exemplo
+                  </button>
+                `
+            }
           </div>
 
           <div class="addon-control">
             <div class="addon-price">
-              + ${money(state.catalog.addons.filter)}
+              ${
+                selectedMomentsPlan
+                  ? 'Incluído'
+                  : `+ ${money(state.catalog.addons.filter)}`
+              }
             </div>
 
             <label class="toggle-control">
@@ -1137,12 +1514,100 @@ async function renderExtras() {
                 id="addonFilter"
                 type="checkbox"
                 ${selection.addons.filter ? 'checked' : ''}
+                ${selectedMomentsPlan ? 'disabled' : ''}
               >
-              <span>Adicionar</span>
+              <span>
+                ${selectedMomentsPlan ? 'Incluído' : 'Adicionar'}
+              </span>
             </label>
           </div>
         </article>
       </div>
+
+      <section class="section-block moments-plans">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">Libri Moments</span>
+            <h3>Quer uma galeria da festa?</h3>
+            <p>
+              Escolha um plano para reunir as fotos do evento
+              em uma experiência personalizada.
+            </p>
+          </div>
+        </div>
+
+        <div class="choice-grid">
+          ${choice({
+            name: 'momentsPlan',
+            value: 'none',
+            icon: '○',
+            title: 'Não adicionar',
+            desc: 'Quero seguir sem Libri Moments.',
+            checked: !selectedMomentsPlan,
+          })}
+
+          ${choice({
+            name: 'momentsPlan',
+            value: 'festa',
+            icon: '♡',
+            title: `Festa • ${money(moments.plans.festa.priceCents)}`,
+            desc: `${moments.plans.festa.photos} fotos • ${moments.plans.festa.days} dias`,
+            checked: selectedMomentsPlan === 'festa',
+          })}
+
+          ${choice({
+            name: 'momentsPlan',
+            value: 'premium',
+            icon: '✦',
+            title: `Premium • ${money(moments.plans.premium.priceCents)}`,
+            desc: `${moments.plans.premium.photos} fotos • ${moments.plans.premium.days} dias`,
+            checked: selectedMomentsPlan === 'premium',
+          })}
+
+          ${choice({
+            name: 'momentsPlan',
+            value: 'exclusive',
+            icon: '◇',
+            title: `Exclusive • ${money(moments.plans.exclusive.priceCents)}`,
+            desc: `${moments.plans.exclusive.photos} fotos • ${moments.plans.exclusive.days} dias`,
+            checked: selectedMomentsPlan === 'exclusive',
+          })}
+        </div>
+
+        ${
+          selectedMomentsPlan
+            ? `
+              <div class="form-panel moments-extra-box">
+                <div class="form-grid">
+                  <div class="field">
+                    <label>Pacotes extras de +100 fotos</label>
+                    <input
+                      id="photoAlbumExtra100"
+                      type="number"
+                      min="0"
+                      max="20"
+                      step="1"
+                      value="${momentsExtra100}"
+                    >
+                    <span class="hint">
+                      Cada +100 fotos custa ${money(moments.extra100Cents)}.
+                    </span>
+                  </div>
+
+                  <div class="field">
+                    <label>Seu plano ficará com</label>
+                    <div class="notice moments-summary">
+                      <strong>${totalMomentsPhotos} fotos</strong>
+                      • ${selectedPlanData.days} dias
+                      • filtro personalizado incluído
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `
+            : ''
+        }
+      </section>
 
       ${selection.addons.confirmation ? `
         <div class="notice">
@@ -1193,7 +1658,40 @@ async function renderExtras() {
   });
 
   $('#addonFilter', stepCard)?.addEventListener('change', async (event) => {
-    selection.addons.filter = event.target.checked;
+    if (selection.addons.photoAlbumPlan) {
+      selection.addons.filter = false;
+    } else {
+      selection.addons.filter = event.target.checked;
+    }
+
+    await rerenderExtras();
+  });
+
+  $$('input[name="momentsPlan"]', stepCard).forEach((input) => {
+    input.addEventListener('change', async () => {
+      const plan =
+        input.value === 'none'
+          ? ''
+          : normalizeMomentsPlan(input.value);
+
+      selection.addons.photoAlbumPlan = plan;
+
+      if (plan) {
+        selection.addons.filter = false;
+      } else {
+        selection.addons.photoAlbumExtra100 = 0;
+      }
+
+      await rerenderExtras();
+    });
+  });
+
+  $('#photoAlbumExtra100', stepCard)?.addEventListener('change', async (event) => {
+    selection.addons.photoAlbumExtra100 =
+      normalizeMomentsExtra100(
+        event.target.value,
+      );
+
     await rerenderExtras();
   });
 
@@ -1486,28 +1984,33 @@ function renderChild() {
           </div>
         </div>
 
-        <div class="choice-grid three">
-          ${choice({
+        <div class="style-reference-grid">
+          ${visualStyleChoice({
             name: 'childStyle',
             value: 'drawing',
-            icon: '✎',
             title: 'Desenho / bonequinho',
+            image: '/images/exemplos/mascote-bonequinho.webp',
+            alt: 'Exemplo do estilo desenho ou bonequinho',
             checked: b.childStyle === 'drawing',
           })}
 
-          ${choice({
+          ${visualStyleChoice({
             name: 'childStyle',
             value: 'real',
-            icon: '◉',
             title: 'Mais real e detalhado',
+            image: '/images/exemplos/mascote-realista.webp',
+            alt: 'Exemplo do estilo mais real e detalhado',
             checked: b.childStyle === 'real',
           })}
+        </div>
 
+        <div class="choice-grid style-libri-choice">
           ${choice({
             name: 'childStyle',
             value: 'libri',
             icon: '✦',
             title: 'A Libri escolhe',
+            desc: 'Se preferir, nós escolhemos o estilo que melhor combina com o projeto.',
             checked: b.childStyle === 'libri',
           })}
         </div>
@@ -1709,6 +2212,63 @@ function renderStyle() {
         </div>
       </section>
 
+      <section class="section-block">
+        <div class="section-title">
+          <div>
+            <span class="section-kicker">Sugestões de Presentes</span>
+            <h3>Quer incluir sugestões de presentes?</h3>
+            <p>
+              Você pode informar tamanhos, preferências,
+              links ou outras orientações para os convidados.
+            </p>
+          </div>
+        </div>
+
+        <div class="choice-grid three">
+          ${choice({
+            name: 'giftPage',
+            value: 'yes',
+            icon: '♡',
+            title: 'Sim, quero incluir',
+            checked: b.giftPage === 'yes',
+          })}
+
+          ${choice({
+            name: 'giftPage',
+            value: 'no',
+            icon: '○',
+            title: 'Não quero',
+            checked: b.giftPage === 'no',
+          })}
+
+          ${choice({
+            name: 'giftPage',
+            value: 'unsure',
+            icon: '?',
+            title: 'Ainda não sei',
+            checked: !['yes', 'no'].includes(b.giftPage),
+          })}
+        </div>
+
+        <div
+          id="giftDetailsWrap"
+          class="form-panel ${b.giftPage === 'yes' ? '' : 'hidden'}"
+          style="margin-top:12px"
+        >
+          <div class="field">
+            <label>Quais sugestões gostaria de incluir?</label>
+            <textarea
+              id="giftDetails"
+              placeholder="Ex.: roupa tamanho 2, calçado 23, brinquedos, livros, links ou preferências..."
+            >${esc(b.giftDetails)}</textarea>
+
+            <span class="hint">
+              Você também pode complementar essas informações depois com a Libri.
+            </span>
+          </div>
+        </div>
+      </section>
+
       ${actionBar({
         nextLabel: hasConfirmation()
           ? 'Continuar'
@@ -1726,6 +2286,15 @@ function renderStyle() {
     });
   });
 
+  $$('input[name="giftPage"]', stepCard).forEach((input) => {
+    input.addEventListener('change', () => {
+      $('#giftDetailsWrap', stepCard).classList.toggle(
+        'hidden',
+        input.value !== 'yes',
+      );
+    });
+  });
+
   $('#backBtn', stepCard).addEventListener('click', prevStep);
 
   $('#nextBtn', stepCard).addEventListener('click', () => {
@@ -1736,6 +2305,15 @@ function renderStyle() {
     b.ownSpeech = b.speechPreference === 'own'
       ? formValue('#ownSpeech')
       : '';
+
+    b.giftPage =
+      checkedValue('giftPage')
+      || 'unsure';
+
+    b.giftDetails =
+      b.giftPage === 'yes'
+        ? formValue('#giftDetails')
+        : '';
 
     if (b.speechPreference === 'own' && !b.ownSpeech) {
       showError('Escreva a frase que deseja usar.');
@@ -2017,6 +2595,18 @@ async function renderReview() {
               <dt>Ideia / referência</dt>
               <dd>${esc(b.creativeIdea || 'Nenhuma ideia extra informada')}</dd>
             </div>
+
+            <div class="review-line">
+              <dt>Sugestões de presentes</dt>
+              <dd>${esc(humanGiftPage(b.giftPage))}</dd>
+            </div>
+
+            ${b.giftPage === 'yes' ? `
+              <div class="review-line">
+                <dt>Detalhes dos presentes</dt>
+                <dd>${esc(b.giftDetails || 'A combinar com a Libri')}</dd>
+              </div>
+            ` : ''}
           </dl>
         </article>
 
@@ -2565,3 +3155,4 @@ bootstrap().catch((error) => {
     `,
   );
 });
+

@@ -266,6 +266,58 @@ function injectV2Styles() {
       margin-top: 10px;
     }
 
+    @keyframes libriRequiredBlink {
+      0%,
+      100% {
+        border-color: #b33a3a;
+        box-shadow: 0 0 0 3px rgba(179, 58, 58, .10);
+        background: #fffafa;
+      }
+
+      50% {
+        border-color: #ff3b30;
+        box-shadow:
+          0 0 0 5px rgba(255, 59, 48, .18),
+          0 0 16px rgba(255, 59, 48, .20);
+        background: #fff3f2;
+      }
+    }
+
+    .field.is-required-missing input,
+    .field.is-required-missing textarea,
+    .field.is-required-missing select,
+    .checkline.is-required-missing,
+    .section-block.is-required-missing {
+      border-color: #b33a3a !important;
+      box-shadow: 0 0 0 3px rgba(179, 58, 58, .10);
+      animation: libriRequiredBlink .58s ease-in-out 3;
+    }
+
+    .field.is-required-missing input,
+    .field.is-required-missing textarea,
+    .field.is-required-missing select {
+      background: #fffafa;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .field.is-required-missing input,
+      .field.is-required-missing textarea,
+      .field.is-required-missing select,
+      .checkline.is-required-missing,
+      .section-block.is-required-missing {
+        animation: none;
+      }
+    }
+
+    .field-inline-error {
+      display: block;
+      margin-top: 6px;
+      color: #9f2f2f;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
     /* ==================================================
        MOBILE | ETAPA PRODUTO
        CTA sempre visível após a escolha
@@ -856,6 +908,308 @@ function closeModal() {
 
 function showError(message) {
   modal('Confira antes de continuar', `<p>${esc(message)}</p>`);
+}
+
+function clearRequiredHighlight(element) {
+  if (!element) return;
+
+  const container =
+    element.closest('.field')
+    || element.closest('.checkline')
+    || element.closest('.section-block');
+
+  if (!container) return;
+
+  container.classList.remove(
+    'is-required-missing',
+  );
+
+  container
+    .querySelector(
+      '.field-inline-error',
+    )
+    ?.remove();
+}
+
+function focusRequiredField(
+  selector,
+  message = 'Preencha este campo para continuar.',
+) {
+  const element =
+    $(selector, stepCard);
+
+  if (!element) {
+    showError(message);
+    return false;
+  }
+
+  const container =
+    element.closest('.field')
+    || element.closest('.checkline')
+    || element.closest('.section-block')
+    || element;
+
+  stepCard
+    .querySelectorAll(
+      '.is-required-missing',
+    )
+    .forEach(
+      (item) => {
+        item.classList.remove(
+          'is-required-missing',
+        );
+
+        item
+          .querySelector(
+            '.field-inline-error',
+          )
+          ?.remove();
+      },
+    );
+
+  container.classList
+    ?.add(
+      'is-required-missing',
+    );
+
+  if (
+    container instanceof Element
+    && !container.querySelector(
+      '.field-inline-error',
+    )
+  ) {
+    const note =
+      document.createElement(
+        'span',
+      );
+
+    note.className =
+      'field-inline-error';
+
+    note.textContent =
+      message;
+
+    container.appendChild(
+      note,
+    );
+  }
+
+  const top =
+    container
+      .getBoundingClientRect()
+      .top
+    + window.scrollY
+    - 120;
+
+  window.scrollTo({
+    top:
+      Math.max(
+        0,
+        top,
+      ),
+
+    behavior:
+      'smooth',
+  });
+
+  setTimeout(
+    () => {
+      try {
+        element.focus({
+          preventScroll:
+            true,
+        });
+      } catch {
+        element.focus();
+      }
+    },
+    380,
+  );
+
+  const clear =
+    () => {
+      clearRequiredHighlight(
+        element,
+      );
+
+      element.removeEventListener(
+        'input',
+        clear,
+      );
+
+      element.removeEventListener(
+        'change',
+        clear,
+      );
+    };
+
+  element.addEventListener(
+    'input',
+    clear,
+  );
+
+  element.addEventListener(
+    'change',
+    clear,
+  );
+
+  return true;
+}
+
+const SERVER_MISSING_FIELDS = {
+  'Seu nome': {
+    step:
+      2,
+
+    selector:
+      '#customerName',
+  },
+
+  'WhatsApp': {
+    step:
+      2,
+
+    selector:
+      '#whatsapp',
+  },
+
+  'Nome da criança ou homenageado(a)': {
+    step:
+      2,
+
+    selector:
+      '#honoreeName',
+  },
+
+  'Idade': {
+    step:
+      2,
+
+    selector:
+      '#age',
+  },
+
+  'Data da festa': {
+    step:
+      2,
+
+    selector:
+      '#eventDate',
+  },
+
+  'Horário': {
+    step:
+      2,
+
+    selector:
+      '#eventTime',
+  },
+
+  'Local': {
+    step:
+      2,
+
+    selector:
+      '#venueName',
+  },
+
+  'Endereço': {
+    step:
+      2,
+
+    selector:
+      '#venueAddress',
+  },
+
+  'Tema': {
+    step:
+      2,
+
+    selector:
+      '#theme',
+  },
+
+  'Quantidade de cenas': {
+    step:
+      0,
+
+    selector:
+      '#scenesBlock',
+  },
+
+  'Formato': {
+    step:
+      0,
+
+    selector:
+      'input[name="format"]',
+  },
+
+  'Aceite dos termos': {
+    step:
+      6,
+
+    selector:
+      '#termsAccepted',
+  },
+
+  'Autorização de divulgação': {
+    step:
+      6,
+
+    selector:
+      'input[name="portfolioConsent"]',
+  },
+};
+
+async function returnToFirstMissingField(
+  missing = [],
+) {
+  const first =
+    missing
+      .map(
+        (label) => ({
+          label,
+
+          target:
+            SERVER_MISSING_FIELDS[
+              label
+            ],
+        }),
+      )
+      .find(
+        (item) =>
+          item.target,
+      );
+
+  if (!first) {
+    return false;
+  }
+
+  state.step =
+    first.target.step;
+
+  try {
+    await saveDraft();
+  } catch {
+    /*
+     * Mesmo se o rascunho falhar,
+     * ainda levamos a cliente ao campo.
+     */
+  }
+
+  await render();
+
+  requestAnimationFrame(
+    () => {
+      focusRequiredField(
+        first.target.selector,
+        `${first.label} precisa ser preenchido para finalizar o pedido.`,
+      );
+    },
+  );
+
+  return true;
 }
 
 $('#closeModal').addEventListener('click', closeModal);
@@ -1937,24 +2291,77 @@ function renderParty() {
     }
 
     const required = [
-      'customerName',
-      'whatsapp',
-      'honoreeName',
-      'age',
-      'eventDate',
-      'eventTime',
-      'venueName',
-      'venueAddress',
-      'theme',
+      {
+        key: 'customerName',
+        selector: '#customerName',
+        label: 'Seu nome',
+      },
+      {
+        key: 'whatsapp',
+        selector: '#whatsapp',
+        label: 'Seu WhatsApp',
+      },
+      {
+        key: 'honoreeName',
+        selector: '#honoreeName',
+        label: 'Nome da criança',
+      },
+      {
+        key: 'age',
+        selector: '#age',
+        label: 'Idade',
+      },
+      {
+        key: 'eventDate',
+        selector: '#eventDate',
+        label: 'Data',
+      },
+      {
+        key: 'eventTime',
+        selector: '#eventTime',
+        label: 'Horário',
+      },
+      {
+        key: 'venueName',
+        selector: '#venueName',
+        label: 'Local',
+      },
+      {
+        key: 'venueAddress',
+        selector: '#venueAddress',
+        label: 'Endereço',
+      },
+      {
+        key: 'theme',
+        selector: '#theme',
+        label: 'Tema da festa',
+      },
     ];
 
-    if (required.some((key) => !String(b[key] || '').trim())) {
-      showError('Preencha os campos marcados com *.');
+    const firstMissing =
+      required.find(
+        (item) =>
+          !String(
+            b[item.key]
+            || '',
+          ).trim(),
+      );
+
+    if (firstMissing) {
+      focusRequiredField(
+        firstMissing.selector,
+        `${firstMissing.label} é obrigatório.`,
+      );
+
       return;
     }
 
     if (!validTime(b.eventTime)) {
-      showError('Informe um horário válido no formato HH:MM.');
+      focusRequiredField(
+        '#eventTime',
+        'Informe um horário válido no formato 18:30.',
+      );
+
       return;
     }
 
@@ -2316,7 +2723,11 @@ function renderStyle() {
         : '';
 
     if (b.speechPreference === 'own' && !b.ownSpeech) {
-      showError('Escreva a frase que deseja usar.');
+      focusRequiredField(
+        '#ownSpeech',
+        'Escreva a frase que deseja usar.',
+      );
+
       return;
     }
 
@@ -2754,12 +3165,20 @@ async function finishOrder() {
         : null;
 
   if (!state.termsAccepted) {
-    showError('Marque que leu e concorda com as condições.');
+    focusRequiredField(
+      '#termsAccepted',
+      'Marque que leu e concorda com as condições.',
+    );
+
     return;
   }
 
   if (state.portfolioConsent === null) {
-    showError('Escolha se autoriza ou não a divulgação.');
+    focusRequiredField(
+      'input[name="portfolioConsent"]',
+      'Escolha se autoriza ou não a divulgação.',
+    );
+
     return;
   }
 
@@ -2817,7 +3236,19 @@ async function finishOrder() {
       return;
     }
 
-    const missing = error.data?.details?.missing;
+    const missing =
+      error.data
+        ?.details
+        ?.missing;
+
+    if (
+      missing?.length
+      && await returnToFirstMissingField(
+        missing,
+      )
+    ) {
+      return;
+    }
 
     showError(
       missing?.length

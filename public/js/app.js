@@ -48,7 +48,7 @@ const state = {
     giftPage: 'unsure',
     giftDetails: '',
   },
-  portfolioConsent: null,
+  portfolioConsent: true,
   termsAccepted: false,
 };
 
@@ -1153,13 +1153,6 @@ const SERVER_MISSING_FIELDS = {
       '#termsAccepted',
   },
 
-  'Autorização de divulgação': {
-    step:
-      6,
-
-    selector:
-      'input[name="portfolioConsent"]',
-  },
 };
 
 async function returnToFirstMissingField(
@@ -1361,9 +1354,7 @@ async function loadDraft() {
       ...(draftData.briefing || {}),
     };
 
-    state.portfolioConsent = typeof draftData.portfolioConsent === 'boolean'
-      ? draftData.portfolioConsent
-      : null;
+    state.portfolioConsent = true;
 
     const sameTermsVersion =
       String(draftData.termsVersion || '') === String(state.terms?.version || '');
@@ -3085,34 +3076,6 @@ async function renderReview() {
         </label>
       </div>
 
-      <section class="section-block">
-        <div class="section-title">
-          <div>
-            <span class="section-kicker">Divulgação</span>
-            <h3>A Libri pode mostrar seu convite no portfólio?</h3>
-            <p>Isso não interfere na produção.</p>
-          </div>
-        </div>
-
-        <div class="choice-grid">
-          ${choice({
-            name: 'portfolioConsent',
-            value: 'yes',
-            icon: '♡',
-            title: 'Sim, autorizo',
-            checked: state.portfolioConsent === true,
-          })}
-
-          ${choice({
-            name: 'portfolioConsent',
-            value: 'no',
-            icon: '○',
-            title: 'Não, prefiro que não',
-            checked: state.portfolioConsent === false,
-          })}
-        </div>
-      </section>
-
       ${actionBar({
         nextId: 'finishBtn',
         nextLabel: 'Finalizar pedido',
@@ -3129,12 +3092,6 @@ async function renderReview() {
 
   $('#termsAccepted', stepCard).addEventListener('change', (event) => {
     state.termsAccepted = event.target.checked;
-  });
-
-  $$('input[name="portfolioConsent"]', stepCard).forEach((input) => {
-    input.addEventListener('change', () => {
-      state.portfolioConsent = input.value === 'yes';
-    });
   });
 
   $$('[data-go-step]', stepCard).forEach((button) => {
@@ -3155,15 +3112,6 @@ async function finishOrder() {
   state.termsAccepted =
     $('#termsAccepted', stepCard)?.checked === true;
 
-  const portfolio = checkedValue('portfolioConsent');
-
-  state.portfolioConsent =
-    portfolio === 'yes'
-      ? true
-      : portfolio === 'no'
-        ? false
-        : null;
-
   if (!state.termsAccepted) {
     focusRequiredField(
       '#termsAccepted',
@@ -3173,14 +3121,11 @@ async function finishOrder() {
     return;
   }
 
-  if (state.portfolioConsent === null) {
-    focusRequiredField(
-      'input[name="portfolioConsent"]',
-      'Escolha se autoriza ou não a divulgação.',
-    );
-
-    return;
-  }
+  /*
+   * A autorização de divulgação passa a fazer parte
+   * das Condições do Pedido aceitas pela cliente.
+   */
+  state.portfolioConsent = true;
 
   await refreshQuote();
 

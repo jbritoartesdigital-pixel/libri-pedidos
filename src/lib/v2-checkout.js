@@ -10,8 +10,8 @@ import {
 } from './v2-catalog.js';
 
 import {
-  calculateV2Quote,
-} from './v2-quote.js';
+  calculateCommercialV2Quote,
+} from './v2-commercial-pricing.js';
 
 import {
   findV2DeliveryOptions,
@@ -1345,10 +1345,36 @@ export async function startV2Checkout(
       paymentMethod,
     };
 
+    const existingCustomer =
+      await env.DB
+        .prepare(
+          `
+            SELECT id
+            FROM v2_customers
+            WHERE whatsapp = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          whatsapp,
+        )
+        .first();
+
     const quote =
-      await calculateV2Quote(
+      await calculateCommercialV2Quote(
         env.DB,
         selection,
+        {
+          customerId:
+            existingCustomer
+              ?.id
+            || null,
+
+          eventType,
+
+          urgencyApproved:
+            false,
+        },
       );
 
     const deliveryStart =

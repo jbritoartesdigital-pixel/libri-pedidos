@@ -178,6 +178,19 @@ export async function renderNotifications() {
 
                     <div style="display:flex;gap:6px;flex-wrap:wrap">
                       ${
+                        n.actionUrl
+                          ? `
+                            <a
+                              class="btn btn-secondary"
+                              href="${esc(n.actionUrl)}"
+                            >
+                              Abrir
+                            </a>
+                          `
+                          : ''
+                      }
+
+                      ${
                         !n.read
                           ? `
                             <button

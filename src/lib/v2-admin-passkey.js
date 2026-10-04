@@ -1423,4 +1423,487 @@ export async function verifyAdminPasskeyRegistration(
         `,
       )
       .bind(
-        crede
+        credential.id,
+      )
+      .first();
+
+  if (existing) {
+    const error =
+      new Error(
+        'Esta passkey já está cadastrada.',
+      );
+
+    error.status =
+      409;
+
+    error.code =
+      'passkey_already_registered';
+
+    throw error;
+  }
+
+  const stamp =
+    nowIso();
+
+  const result =
+    await env.DB
+      .prepare(
+        `
+          INSERT INTO v2_admin_passkeys(
+            credential_id,
+            public_key,
+            counter,
+            transports_json,
+            device_label,
+            credential_device_type,
+            backed_up,
+            created_at,
+            last_used_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        credential.id,
+
+        bytesToBase64Url(
+          credential.publicKey,
+        ),
+
+        Number(
+          credential.counter
+          || 0,
+        ),
+
+        JSON.stringify(
+          credential.transports
+          || response
+            ?.response
+            ?.transports
+          || [],
+        ),
+
+        ceremony.device_label
+        || 'Passkey',
+
+        credentialDeviceType
+        || null,
+
+        credentialBackedUp
+          ? 1
+          : 0,
+
+        stamp,
+        stamp,
+      )
+      .run();
+
+  const passkeyId =
+    Number(
+      result
+        ?.meta
+        ?.last_row_id,
+    );
+
+  await env.DB
+    .prepare(
+      `
+        INSERT INTO v2_notifications(
+          event_code,
+          order_id,
+          title,
+          body,
+          action_url,
+          priority,
+          push_eligible,
+          created_at
+        )
+        VALUES (
+          'ADMIN_PASSKEY_REGISTERED',
+          NULL,
+          'Novo acesso administrativo',
+          ?,
+          '/admin/configuracoes',
+          'high',
+          0,
+          ?
+        )
+      `,
+    )
+    .bind(
+      `${
+        ceremony.device_label
+        || 'Novo aparelho'
+      } cadastrado por ${
+        ceremony.authorization_mode
+        === 'recovery'
+          ? 'recuperação segura'
+          : 'sessão autenticada'
+      }.`,
+      stamp,
+    )
+    .run();
+
+  const session =
+    await createSession(
+      env,
+      passkeyId,
+    );
+
+  return json(
+    {
+      ok:
+        true,
+
+      registered:
+        true,
+
+      authenticated:
+        true,
+
+      device: {
+        id:
+          passkeyId,
+
+        label:
+          ceremony.device_label
+          || 'Passkey',
+
+        deviceType:
+          credentialDeviceType
+          || null,
+
+        backedUp:
+          Boolean(
+            credentialBackedUp,
+          ),
+      },
+
+      expiresAt:
+        session.expiresAt,
+    },
+    201,
+    {
+      'set-cookie':
+        sessionCookie(
+          session.rawToken,
+        ),
+    },
+  );
+}
+
+export async function listAdminPasskeyDevices(
+  request,
+  env,
+) {
+  const session =
+    await currentSession(
+      request,
+      env,
+    );
+
+  if (!session) {
+    return null;
+  }
+
+  const passkeys =
+    await activePasskeys(
+      env.DB,
+    );
+
+  return {
+    currentPasskeyId:
+      session.passkey_id,
+
+    devices:
+      passkeys.map(
+        (row) => ({
+          id:
+            row.id,
+
+          label:
+            row.device_label
+            || 'Passkey',
+
+          deviceType:
+            row.credential_device_type,
+
+          backedUp:
+            row.backed_up
+            === 1,
+
+          createdAt:
+            row.created_at,
+
+          lastUsedAt:
+            row.last_used_at,
+
+          current:
+            Number(
+              row.id,
+            )
+            === Number(
+              session.passkey_id,
+            ),
+        }),
+      ),
+  };
+}
+
+export async function revokeAdminPasskeyDevice(
+  request,
+  env,
+  passkeyId,
+) {
+  assertSameOrigin(
+    request,
+    env,
+  );
+
+  const session =
+    await currentSession(
+      request,
+      env,
+    );
+
+  if (!session) {
+    const error =
+      new Error(
+        'Sessão administrativa expirada.',
+      );
+
+    error.status =
+      401;
+
+    error.code =
+      'admin_auth_required';
+
+    throw error;
+  }
+
+  const passkeys =
+    await activePasskeys(
+      env.DB,
+    );
+
+  if (
+    passkeys.length
+    <= 1
+  ) {
+    const error =
+      new Error(
+        'Cadastre outra passkey antes de remover a última forma de acesso.',
+      );
+
+    error.status =
+      409;
+
+    error.code =
+      'last_passkey';
+
+    throw error;
+  }
+
+  const target =
+    passkeys.find(
+      (row) =>
+        Number(
+          row.id,
+        )
+        === Number(
+          passkeyId,
+        ),
+    );
+
+  if (!target) {
+    return null;
+  }
+
+  const stamp =
+    nowIso();
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_admin_passkeys
+          SET revoked_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        stamp,
+        target.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_admin_sessions
+          SET revoked_at = ?
+          WHERE
+            passkey_id = ?
+            AND revoked_at IS NULL
+        `,
+      )
+      .bind(
+        stamp,
+        target.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_notifications(
+            event_code,
+            order_id,
+            title,
+            body,
+            action_url,
+            priority,
+            push_eligible,
+            created_at
+          )
+          VALUES (
+            'ADMIN_PASSKEY_REVOKED',
+            NULL,
+            'Acesso administrativo removido',
+            ?,
+            '/admin/configuracoes',
+            'high',
+            0,
+            ?
+          )
+        `,
+      )
+      .bind(
+        `${
+          target.device_label
+          || 'Passkey'
+        } foi removida dos acessos administrativos.`,
+        stamp,
+      ),
+  ]);
+
+  const revokedCurrent =
+    Number(
+      target.id,
+    )
+    === Number(
+      session.passkey_id,
+    );
+
+  return {
+    revoked:
+      true,
+
+    id:
+      target.id,
+
+    revokedCurrent,
+  };
+}
+
+export async function logoutAdminPasskeySession(
+  request,
+  env,
+) {
+  assertSameOrigin(
+    request,
+    env,
+  );
+
+  const raw =
+    readCookie(
+      request,
+      SESSION_COOKIE,
+    );
+
+  if (
+    raw
+  ) {
+    const hash =
+      await sha256Hex(
+        raw,
+      );
+
+    await env.DB
+      .prepare(
+        `
+          UPDATE v2_admin_sessions
+          SET revoked_at = ?
+          WHERE
+            session_token_hash = ?
+            AND revoked_at IS NULL
+        `,
+      )
+      .bind(
+        nowIso(),
+        hash,
+      )
+      .run();
+  }
+
+  return json(
+    {
+      ok:
+        true,
+
+      authenticated:
+        false,
+    },
+    200,
+    {
+      'set-cookie':
+        clearSessionCookie(),
+    },
+  );
+}
+
+export async function requireAdminPasskeyAuth(
+  request,
+  env,
+) {
+  const session =
+    await currentSession(
+      request,
+      env,
+    );
+
+  if (
+    session
+  ) {
+    return null;
+  }
+
+  return fail(
+    'Não autorizado.',
+    401,
+    {
+      code:
+        'admin_passkey_required',
+    },
+  );
+}
+
+export async function isAdminPasskeyAuthenticated(
+  request,
+  env,
+) {
+  return Boolean(
+    await currentSession(
+      request,
+      env,
+    ),
+  );
+}

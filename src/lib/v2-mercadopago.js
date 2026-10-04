@@ -1314,9 +1314,11 @@ export async function syncMercadoPagoOrder(
           `${
             localPayment.order_code
           } • pagamento confirmado • briefing aguardando preenchimento`,
-          `/admin/pedidos/${
-            localPayment
-              .order_code
+          `/admin-v2?order=${
+            encodeURIComponent(
+              localPayment
+                .order_code,
+            )
           }`,
           nowIso(),
           localPayment

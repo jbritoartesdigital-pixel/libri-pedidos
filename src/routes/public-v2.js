@@ -9,8 +9,8 @@ import {
 } from '../lib/v2-catalog.js';
 
 import {
-  calculateV2Quote,
-} from '../lib/v2-quote.js';
+  calculateCommercialV2Quote,
+} from '../lib/v2-commercial-pricing.js';
 
 import {
   findV2DeliveryOptions,
@@ -25,6 +25,247 @@ import {
   syncMercadoPagoOrder,
   validateMercadoPagoWebhook,
 } from '../lib/v2-mercadopago.js';
+
+function cleanPublicGalleryCode(
+  value,
+) {
+  return String(
+    value
+    || '',
+  )
+    .trim()
+    .slice(
+      0,
+      120,
+    );
+}
+
+async function listPublicV2Gallery(
+  env,
+  url,
+) {
+  const productCode =
+    cleanPublicGalleryCode(
+      url.searchParams
+        .get(
+          'productCode',
+        ),
+    );
+
+  const eventType =
+    cleanPublicGalleryCode(
+      url.searchParams
+        .get(
+          'eventType',
+        ),
+    );
+
+  const result =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            product_code,
+            event_type,
+            theme_label,
+            preview_r2_key,
+            media_r2_key,
+            external_url,
+            media_type,
+            caption
+          FROM v2_gallery_items
+          WHERE
+            active = 1
+            AND (
+              ? = ''
+              OR product_code = ?
+            )
+            AND (
+              ? = ''
+              OR event_type IS NULL
+              OR event_type = ''
+              OR event_type = ?
+            )
+          ORDER BY
+            sort_order,
+            id
+          LIMIT 60
+        `,
+      )
+      .bind(
+        productCode,
+        productCode,
+        eventType,
+        eventType,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  )
+    .map(
+      (row) => ({
+        id:
+          row.id,
+
+        productCode:
+          row.product_code,
+
+        eventType:
+          row.event_type
+          || '',
+
+        themeLabel:
+          row.theme_label
+          || '',
+
+        mediaType:
+          row.media_type
+          || (
+            row.media_r2_key
+              ? 'image'
+              : 'external'
+          ),
+
+        caption:
+          row.caption
+          || '',
+
+        previewPath:
+          row.preview_r2_key
+            ? `/api/v2/gallery/${
+              row.id
+            }/preview`
+            : '',
+
+        mediaPath:
+          row.media_r2_key
+            ? `/api/v2/gallery/${
+              row.id
+            }/media`
+            : '',
+
+        externalUrl:
+          row.external_url
+          || '',
+
+        url:
+          row.external_url
+          || '',
+      }),
+    );
+}
+
+async function streamPublicV2Gallery(
+  env,
+  id,
+  kind,
+) {
+  if (!env.FILES) {
+    return fail(
+      'Galeria indisponível.',
+      503,
+    );
+  }
+
+  const numericId =
+    Number.parseInt(
+      id,
+      10,
+    );
+
+  if (
+    !Number.isInteger(
+      numericId,
+    )
+    || numericId <= 0
+  ) {
+    return fail(
+      'Item da galeria não encontrado.',
+      404,
+    );
+  }
+
+  const field =
+    kind
+    === 'preview'
+      ? 'preview_r2_key'
+      : 'media_r2_key';
+
+  const row =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            ${
+              field
+            } AS r2_key
+          FROM v2_gallery_items
+          WHERE
+            id = ?
+            AND active = 1
+          LIMIT 1
+        `,
+      )
+      .bind(
+        numericId,
+      )
+      .first();
+
+  if (
+    !row
+    || !row.r2_key
+  ) {
+    return fail(
+      'Mídia não encontrada.',
+      404,
+    );
+  }
+
+  const object =
+    await env.FILES
+      .get(
+        row.r2_key,
+      );
+
+  if (!object) {
+    return fail(
+      'Mídia não encontrada.',
+      404,
+    );
+  }
+
+  const headers =
+    new Headers();
+
+  object.writeHttpMetadata(
+    headers,
+  );
+
+  headers.set(
+    'cache-control',
+    'public, max-age=3600',
+  );
+
+  headers.set(
+    'content-disposition',
+    'inline',
+  );
+
+  headers.set(
+    'x-content-type-options',
+    'nosniff',
+  );
+
+  return new Response(
+    object.body,
+    {
+      headers,
+    },
+  );
+}
 
 async function readActiveV2Terms(
   db,
@@ -180,6 +421,43 @@ export async function handlePublicV2Api(
   }
 
   /* ==================================================
+     GALERIA PÚBLICA V2
+  ================================================== */
+
+  if (
+    method === 'GET'
+    && path
+      === '/api/v2/gallery'
+  ) {
+    return json({
+      ok:
+        true,
+
+      items:
+        await listPublicV2Gallery(
+          env,
+          url,
+        ),
+    });
+  }
+
+  const galleryContentMatch =
+    path.match(
+      /^\/api\/v2\/gallery\/(\d+)\/(media|preview)$/,
+    );
+
+  if (
+    method === 'GET'
+    && galleryContentMatch
+  ) {
+    return streamPublicV2Gallery(
+      env,
+      galleryContentMatch[1],
+      galleryContentMatch[2],
+    );
+  }
+
+  /* ==================================================
      CATÁLOGO V2
   ================================================== */
 
@@ -254,10 +532,15 @@ export async function handlePublicV2Api(
         );
 
       const quote =
-        await calculateV2Quote(
+        await calculateCommercialV2Quote(
           env.DB,
           body.selection
           || {},
+          {
+            eventType:
+              body.eventType
+              || null,
+          },
         );
 
       return json({
@@ -289,10 +572,15 @@ export async function handlePublicV2Api(
         );
 
       const quote =
-        await calculateV2Quote(
+        await calculateCommercialV2Quote(
           env.DB,
           body.selection
           || {},
+          {
+            eventType:
+              body.eventType
+              || null,
+          },
         );
 
       const delivery =

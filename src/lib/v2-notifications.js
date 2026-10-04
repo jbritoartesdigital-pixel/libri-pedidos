@@ -92,7 +92,7 @@ function safeActionUrl(
   if (
     !url
   ) {
-    return '/admin/';
+    return '/admin-v2';
   }
 
   if (
@@ -103,7 +103,7 @@ function safeActionUrl(
     return url;
   }
 
-  return '/admin/';
+  return '/admin-v2';
 }
 
 async function preferenceFor(
@@ -147,7 +147,7 @@ export async function createV2AdminNotification(
     orderId = null,
     title,
     body,
-    actionUrl = '/admin/',
+    actionUrl = '/admin-v2',
     priority = 'normal',
     pushEligible = true,
     dedupeKey = null,
@@ -1345,8 +1345,10 @@ export async function createTodayEventNotifications(
             }`,
 
           actionUrl:
-            `/admin/pedidos/${
-              row.order_code
+            `/admin-v2?order=${
+              encodeURIComponent(
+                row.order_code,
+              )
             }`,
 
           priority:
@@ -1417,7 +1419,7 @@ export async function sendV2TestPush(
         'As notificações deste aparelho estão ativas.',
 
       actionUrl:
-        '/admin/',
+        '/admin-v2',
 
       priority:
         'normal',

@@ -3,6 +3,10 @@ import {
   parseJson,
 } from './http.js';
 
+import {
+  finalizeV2OrderToCascadePool,
+} from './v2-agenda-admin.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -2264,66 +2268,6 @@ export async function markV2CongratulationsSent(
   };
 }
 
-async function releaseFutureCapacity(
-  db,
-  orderId,
-) {
-  const tomorrow =
-    addDays(
-      dateKeyInSaoPaulo(),
-      1,
-    );
-
-  const row =
-    await db
-      .prepare(
-        `
-          SELECT
-            COALESCE(
-              SUM(points_units),
-              0
-            ) AS total_units
-          FROM v2_agenda_allocations
-          WHERE
-            order_id = ?
-            AND day >= ?
-        `,
-      )
-      .bind(
-        orderId,
-        tomorrow,
-      )
-      .first();
-
-  const releasedUnits =
-    Number(
-      row
-        ?.total_units
-      || 0,
-    );
-
-  if (
-    releasedUnits > 0
-  ) {
-    await db
-      .prepare(
-        `
-          DELETE FROM v2_agenda_allocations
-          WHERE
-            order_id = ?
-            AND day >= ?
-        `,
-      )
-      .bind(
-        orderId,
-        tomorrow,
-      )
-      .run();
-  }
-
-  return releasedUnits;
-}
-
 export async function applyV2AdminAction(
   db,
   orderCode,
@@ -2636,86 +2580,10 @@ export async function applyV2AdminAction(
     action
     === 'finalize'
   ) {
-    const releasedUnits =
-      await releaseFutureCapacity(
-        db,
-        order.id,
-      );
-
-    await db
-      .prepare(
-        `
-          UPDATE v2_orders
-          SET
-            status = 'finalized',
-            next_action = 'Finalizado',
-            finalized_at = ?,
-            updated_at = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        stamp,
-        stamp,
-        order.id,
-      )
-      .run();
-
-    await insertHistory(
+    return finalizeV2OrderToCascadePool(
       db,
-      order.id,
-      'order_finalized',
-      'Pedido finalizado.',
-      {
-        releasedFutureCapacityUnits:
-          releasedUnits,
-      },
+      order,
     );
-
-    if (
-      releasedUnits > 0
-    ) {
-      await db
-        .prepare(
-          `
-            INSERT INTO v2_notifications(
-              event_code,
-              order_id,
-              title,
-              body,
-              action_url,
-              priority,
-              push_eligible,
-              created_at
-            )
-            VALUES (
-              'CAPACITY_RELEASED',
-              ?,
-              'Capacidade liberada',
-              ?,
-              '/admin/agenda',
-              'normal',
-              0,
-              ?
-            )
-          `,
-        )
-        .bind(
-          order.id,
-          `${order.order_code} liberou ${releasedUnits / 100} Points Libri futuros.`,
-          stamp,
-        )
-        .run();
-    }
-
-    return {
-      status:
-        'finalized',
-      nextAction:
-        'Finalizado',
-      releasedFutureCapacityUnits:
-        releasedUnits,
-    };
   }
 
   throw new Error(

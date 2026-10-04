@@ -58,7 +58,7 @@ self.addEventListener(
       event.notification
         .data
         ?.url
-      || '/admin/';
+      || '/admin-v2';
 
     const target =
       new URL(

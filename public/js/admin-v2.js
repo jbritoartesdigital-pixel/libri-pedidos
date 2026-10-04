@@ -139,6 +139,51 @@ async function ready() {
     );
 
   await renderCurrent();
+
+  const orderCode =
+    new URLSearchParams(
+      window.location.search,
+    )
+      .get(
+        'order',
+      );
+
+  if (
+    orderCode
+    && /^LIBRI-\d+$/
+      .test(
+        orderCode,
+      )
+  ) {
+    try {
+      await openOrder(
+        orderCode,
+        renderCurrent,
+      );
+    } finally {
+      const cleanUrl =
+        new URL(
+          window.location.href,
+        );
+
+      cleanUrl.searchParams
+        .delete(
+          'order',
+        );
+
+      history.replaceState(
+        {},
+        '',
+        `${
+          cleanUrl.pathname
+        }${
+          cleanUrl.search
+        }${
+          cleanUrl.hash
+        }`,
+      );
+    }
+  }
 }
 
 window.addEventListener(

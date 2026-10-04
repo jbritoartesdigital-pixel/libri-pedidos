@@ -55,6 +55,7 @@ export async function loadV2Catalog(db) {
     productsResult,
     variantsResult,
     addonsResult,
+    combosResult,
     settings,
   ] =
     await Promise.all([
@@ -117,6 +118,21 @@ export async function loadV2Catalog(db) {
             FROM v2_addons
             WHERE active = 1
             ORDER BY sort_order, id
+          `,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              code,
+              name,
+              description,
+              config_json
+            FROM v2_combos
+            WHERE active = 1
+            ORDER BY id
           `,
         )
         .all(),
@@ -225,9 +241,32 @@ export async function loadV2Catalog(db) {
         }),
       );
 
+  const combos =
+    (combosResult.results || [])
+      .map(
+        (row) => ({
+          code:
+            row.code,
+
+          name:
+            row.name,
+
+          description:
+            row.description
+            || '',
+
+          config:
+            parseJson(
+              row.config_json,
+              {},
+            ),
+        }),
+      );
+
   return {
     products,
     addons,
+    combos,
 
     rules: {
       pointsUnitScale:

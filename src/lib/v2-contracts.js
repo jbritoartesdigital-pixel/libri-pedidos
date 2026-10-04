@@ -1806,8 +1806,10 @@ export async function signV2ContractByLibri(
         }`,
 
       actionUrl:
-        `/admin/pedidos/${
-          contract.order_code
+        `/admin-v2?order=${
+          encodeURIComponent(
+            contract.order_code,
+          )
         }`,
 
       priority:
@@ -2399,8 +2401,10 @@ export async function signV2ContractByCustomer(
         }`,
 
       actionUrl:
-        `/admin/pedidos/${
-          contract.order_code
+        `/admin-v2?order=${
+          encodeURIComponent(
+            contract.order_code,
+          )
         }`,
 
       priority:

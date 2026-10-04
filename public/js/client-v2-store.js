@@ -1018,4 +1018,1514 @@ function renderConfiguration(
                   `,
                 ).join('')}
               </div>
-          
+            </div>
+          `
+          : ''
+      }
+
+      <div class="section-block">
+        <button
+          id="toggleCoupon"
+          class="btn btn-link"
+          type="button"
+        >
+          Adicionar cupom
+        </button>
+
+        <div
+          id="couponBox"
+          class="field ${
+            state.selection.couponCode
+              ? ''
+              : 'hidden'
+          }"
+          style="max-width:360px"
+        >
+          <label for="couponCode">Cupom</label>
+          <input
+            id="couponCode"
+            class="input"
+            value="${esc(state.selection.couponCode || '')}"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+
+      ${actionRow()}
+    </section>
+  `;
+
+  app
+    .querySelectorAll(
+      '[name="variant"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          () => {
+            state.selection.variantCode =
+              input.value;
+
+            persist(state);
+            renderConfiguration(
+              state,
+              render,
+            );
+          },
+        );
+      },
+    );
+
+  app
+    .querySelectorAll(
+      '[name="addon"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          () => {
+            const set =
+              new Set(
+                state.selection.addonCodes,
+              );
+
+            if (
+              input.checked
+            ) {
+              set.add(
+                input.value,
+              );
+            } else {
+              set.delete(
+                input.value,
+              );
+            }
+
+            state.selection.addonCodes =
+              [
+                ...set,
+              ];
+
+            persist(state);
+            renderConfiguration(
+              state,
+              render,
+            );
+          },
+        );
+      },
+    );
+
+  app
+    .querySelectorAll(
+      '[name="combo"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          () => {
+            state.selection.comboCode =
+              input.value;
+
+            persist(state);
+          },
+        );
+      },
+    );
+
+  document
+    .getElementById(
+      'toggleCoupon',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        document
+          .getElementById(
+            'couponBox',
+          )
+          .classList
+          .remove(
+            'hidden',
+          );
+
+        document
+          .getElementById(
+            'couponCode',
+          )
+          .focus();
+      },
+    );
+
+  document
+    .getElementById(
+      'couponCode',
+    )
+    ?.addEventListener(
+      'input',
+      (event) => {
+        state.selection.couponCode =
+          event.target.value
+            .trim()
+            .toUpperCase();
+
+        persist(state);
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        loading(
+          'Calculando seu pedido...',
+        );
+
+        try {
+          await updateQuote(state);
+          state.step = 3;
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderConfiguration(
+            state,
+            render,
+          );
+        }
+      },
+    );
+}
+
+function renderDetails(
+  state,
+  render,
+) {
+  const eventKnown =
+    Boolean(
+      state.event.type,
+    );
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Seus dados</span>
+        <h1 class="page-title">
+          Agora, só o essencial
+        </h1>
+        <p class="page-subtitle">
+          O briefing criativo completo vem depois do pagamento.
+        </p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="customerName">Seu nome</label>
+          <input
+            id="customerName"
+            class="input"
+            autocomplete="name"
+            value="${esc(state.customer.name)}"
+          >
+        </div>
+
+        <div class="field">
+          <label for="whatsapp">WhatsApp</label>
+          <input
+            id="whatsapp"
+            class="input"
+            inputmode="tel"
+            autocomplete="tel"
+            value="${esc(state.customer.whatsapp)}"
+          >
+        </div>
+
+        <div class="field">
+          <label for="email">E-mail <span class="muted">(opcional)</span></label>
+          <input
+            id="email"
+            class="input"
+            type="email"
+            autocomplete="email"
+            value="${esc(state.customer.email)}"
+          >
+        </div>
+
+        ${
+          !eventKnown
+            ? `
+              <div class="field">
+                <label for="eventType">Tipo de evento</label>
+                <select id="eventType" class="select">
+                  <option value="">Selecione</option>
+                  ${EVENT_TYPES.map(
+                    (item) => `
+                      <option
+                        value="${item.value}"
+                        ${
+                          state.event.type
+                          === item.value
+                            ? 'selected'
+                            : ''
+                        }
+                      >
+                        ${esc(item.label)}
+                      </option>
+                    `,
+                  ).join('')}
+                </select>
+              </div>
+            `
+            : ''
+        }
+
+        <div class="field">
+          <label for="honoreeName">
+            Nome da criança, casal ou evento
+          </label>
+          <input
+            id="honoreeName"
+            class="input"
+            value="${esc(state.event.honoreeName)}"
+          >
+        </div>
+
+        <div class="field">
+          <label for="eventDate">Data da festa</label>
+          <input
+            id="eventDate"
+            class="input"
+            type="date"
+            value="${esc(state.event.date)}"
+          >
+        </div>
+
+        <div class="field full">
+          <label for="eventSubtype">
+            Algum subtipo ou observação do evento?
+            <span class="muted">(opcional)</span>
+          </label>
+          <input
+            id="eventSubtype"
+            class="input"
+            placeholder="Ex.: chá revelação, bodas..."
+            value="${esc(state.event.subtype)}"
+          >
+        </div>
+      </div>
+
+      ${quoteHtml(state.quote)}
+
+      ${actionRow({
+        nextLabel:
+          'Ver datas de entrega',
+      })}
+    </section>
+  `;
+
+  const capture = () => {
+    state.customer.name =
+      document
+        .getElementById(
+          'customerName',
+        )
+        .value
+        .trim();
+
+    state.customer.whatsapp =
+      document
+        .getElementById(
+          'whatsapp',
+        )
+        .value
+        .trim();
+
+    state.customer.email =
+      document
+        .getElementById(
+          'email',
+        )
+        .value
+        .trim();
+
+    if (
+      !eventKnown
+    ) {
+      state.event.type =
+        document
+          .getElementById(
+            'eventType',
+          )
+          .value;
+    }
+
+    state.event.honoreeName =
+      document
+        .getElementById(
+          'honoreeName',
+        )
+        .value
+        .trim();
+
+    state.event.date =
+      document
+        .getElementById(
+          'eventDate',
+        )
+        .value;
+
+    state.event.subtype =
+      document
+        .getElementById(
+          'eventSubtype',
+        )
+        .value
+        .trim();
+
+    persist(state);
+  };
+
+  app
+    .querySelectorAll(
+      'input,select',
+    )
+    .forEach(
+      (element) => {
+        element.addEventListener(
+          'change',
+          capture,
+        );
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        capture();
+
+        if (
+          !state.customer.name
+          || !state.customer.whatsapp
+          || !state.event.type
+          || !state.event.honoreeName
+          || !state.event.date
+        ) {
+          showToast(
+            'Confira os campos obrigatórios.',
+          );
+
+          return;
+        }
+
+        loading(
+          'Procurando a melhor janela...',
+          'A agenda está sendo calculada.',
+        );
+
+        try {
+          const data =
+            await api(
+              '/api/v2/delivery-options',
+              {
+                method:
+                  'POST',
+                body:
+                  JSON.stringify({
+                    selection:
+                      state.selection,
+                    eventDate:
+                      state.event.date,
+                    limit:
+                      6,
+                  }),
+              },
+            );
+
+          state.delivery =
+            data.delivery;
+
+          state.deliveryWindow =
+            data.delivery.options
+              ?.find(
+                (option) =>
+                  option.recommended,
+              )
+            || data.delivery.options
+              ?.[0]
+            || null;
+
+          state.step = 4;
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderDetails(
+            state,
+            render,
+          );
+        }
+      },
+    );
+}
+
+function renderDelivery(
+  state,
+  render,
+) {
+  const options =
+    state.delivery?.options
+    || [];
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Entrega</span>
+        <h1 class="page-title">
+          Escolha uma janela
+        </h1>
+        <p class="page-subtitle">
+          A janela é o período prometido para entrega.
+          A produção pode começar antes.
+        </p>
+      </div>
+
+      ${
+        options.length
+          ? `
+            <div class="delivery-grid">
+              ${options.map(
+                (option) => {
+                  const selected =
+                    state.deliveryWindow?.start
+                    === option.start
+                    && state.deliveryWindow?.end
+                    === option.end;
+
+                  return `
+                    <label class="delivery-card ${
+                      selected
+                        ? 'selected'
+                        : ''
+                    }">
+                      <input
+                        type="radio"
+                        name="delivery"
+                        value="${esc(option.start)}|${esc(option.end)}"
+                        ${
+                          selected
+                            ? 'checked'
+                            : ''
+                        }
+                      >
+
+                      <span class="delivery-copy">
+                        <strong>
+                          ${dateBr(option.start)}
+                          a
+                          ${dateBr(option.end)}
+                        </strong>
+
+                        <small>
+                          ${
+                            option.recommended
+                              ? '⭐ Recomendado para sua data'
+                              : 'Disponível'
+                          }
+                        </small>
+                      </span>
+                    </label>
+                  `;
+                },
+              ).join('')}
+            </div>
+          `
+          : `
+            <div class="notice info">
+              Não encontramos uma janela normal disponível
+              antes da sua festa. A Libri precisa analisar
+              um possível encaixe.
+            </div>
+          `
+      }
+
+      ${actionRow({
+        nextLabel:
+          options.length
+            ? 'Continuar'
+            : 'Voltar',
+      })}
+    </section>
+  `;
+
+  app
+    .querySelectorAll(
+      '[name="delivery"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          () => {
+            const [
+              start,
+              end,
+            ] =
+              input.value.split('|');
+
+            state.deliveryWindow = {
+              start,
+              end,
+            };
+
+            persist(state);
+            renderDelivery(
+              state,
+              render,
+            );
+          },
+        );
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        if (!options.length) {
+          state.step = 3;
+          render();
+          return;
+        }
+
+        if (
+          !state.deliveryWindow
+        ) {
+          showToast(
+            'Escolha uma janela de entrega.',
+          );
+
+          return;
+        }
+
+        state.step = 5;
+        persist(state);
+        render();
+      },
+    );
+}
+
+async function renderPayment(
+  state,
+  render,
+) {
+  try {
+    await updateQuote(state);
+  } catch {
+    // mantém último quote válido
+  }
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Pagamento</span>
+        <h1 class="page-title">
+          Como você prefere pagar?
+        </h1>
+      </div>
+
+      <div class="grid two">
+        <label class="choice-card ${
+          state.selection.paymentMethod
+          === 'pix'
+            ? 'selected'
+            : ''
+        }">
+          <input
+            type="radio"
+            name="paymentMethod"
+            value="pix"
+            ${
+              state.selection.paymentMethod
+              === 'pix'
+                ? 'checked'
+                : ''
+            }
+          >
+
+          <span class="choice-main">
+            <strong>Pix</strong>
+            <small>
+              50% para confirmar o pedido.
+              O saldo é pago diretamente à Libri após a aprovação.
+            </small>
+          </span>
+        </label>
+
+        <label class="choice-card ${
+          state.selection.paymentMethod
+          === 'card'
+            ? 'selected'
+            : ''
+        }">
+          <input
+            type="radio"
+            name="paymentMethod"
+            value="card"
+            ${
+              state.selection.paymentMethod
+              === 'card'
+                ? 'checked'
+                : ''
+            }
+          >
+
+          <span class="choice-main">
+            <strong>Cartão</strong>
+            <small>
+              100% pelo Mercado Pago.
+              Parcelamento disponível conforme o checkout.
+            </small>
+          </span>
+        </label>
+      </div>
+
+      <div class="section-block">
+        ${quoteHtml(state.quote)}
+      </div>
+
+      ${actionRow({
+        nextLabel:
+          'Revisar pedido',
+      })}
+    </section>
+  `;
+
+  app
+    .querySelectorAll(
+      '[name="paymentMethod"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          async () => {
+            state.selection.paymentMethod =
+              input.value;
+
+            persist(state);
+
+            loading(
+              'Atualizando o valor...',
+            );
+
+            try {
+              await updateQuote(state);
+            } finally {
+              renderPayment(
+                state,
+                render,
+              );
+            }
+          },
+        );
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        state.step = 6;
+        persist(state);
+        render();
+      },
+    );
+}
+
+function renderReview(
+  state,
+  render,
+) {
+  const product =
+    productFor(state);
+
+  const variant =
+    variantFor(state);
+
+  const addons =
+    state.catalog.addons
+      ?.filter(
+        (addon) =>
+          state.selection.addonCodes
+            .includes(
+              addon.code,
+            ),
+      )
+    || [];
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Revisão</span>
+        <h1 class="page-title">
+          Tudo certo?
+        </h1>
+        <p class="page-subtitle">
+          Depois desta etapa você vai para o Mercado Pago.
+          O briefing criativo fica para depois da confirmação.
+        </p>
+      </div>
+
+      <dl class="review-list">
+        <div class="review-line">
+          <dt>Evento</dt>
+          <dd>
+            ${esc(eventLabel(state.event.type))}
+            •
+            ${esc(state.event.honoreeName)}
+            •
+            ${esc(dateBr(state.event.date))}
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Convite</dt>
+          <dd>
+            ${esc(product?.name || '')}
+            ${
+              variant?.label
+                ? ` • ${esc(variant.label)}`
+                : ''
+            }
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Adicionais</dt>
+          <dd>
+            ${
+              addons.length
+                ? addons.map(
+                  (addon) =>
+                    esc(addon.name),
+                ).join(', ')
+                : 'Nenhum'
+            }
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Entrega</dt>
+          <dd>
+            ${esc(dateBr(state.deliveryWindow?.start))}
+            a
+            ${esc(dateBr(state.deliveryWindow?.end))}
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Pagamento</dt>
+          <dd>
+            ${
+              state.selection.paymentMethod
+              === 'pix'
+                ? 'Pix • entrada de 50%'
+                : 'Cartão • pagamento integral'
+            }
+          </dd>
+        </div>
+      </dl>
+
+      <div class="section-block">
+        ${quoteHtml(state.quote)}
+      </div>
+
+      <div class="terms-box">
+        <strong>Condições do pedido</strong>
+
+        <p class="muted">
+          Versão ${esc(state.terms?.version || '')}
+        </p>
+
+        <button
+          id="readTerms"
+          class="btn btn-ghost"
+          type="button"
+        >
+          Ler todas as condições
+        </button>
+
+        <label class="checkline">
+          <input
+            id="termsAccepted"
+            type="checkbox"
+            ${
+              state.termsAccepted
+                ? 'checked'
+                : ''
+            }
+          >
+
+          <span>
+            Li e concordo com as Condições do Pedido.
+          </span>
+        </label>
+      </div>
+
+      ${actionRow({
+        nextId:
+          'payBtn',
+        nextLabel:
+          'Ir para o pagamento',
+      })}
+    </section>
+  `;
+
+  document
+    .getElementById(
+      'readTerms',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        modal(
+          `Condições • ${state.terms.version}`,
+          `<pre>${esc(state.terms.body)}</pre>`,
+        );
+      },
+    );
+
+  document
+    .getElementById(
+      'termsAccepted',
+    )
+    .addEventListener(
+      'change',
+      (event) => {
+        state.termsAccepted =
+          event.target.checked;
+
+        persist(state);
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'payBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        state.termsAccepted =
+          document
+            .getElementById(
+              'termsAccepted',
+            )
+            .checked;
+
+        if (
+          !state.termsAccepted
+        ) {
+          showToast(
+            'Leia e aceite as condições para continuar.',
+          );
+
+          return;
+        }
+
+        const button =
+          document
+            .getElementById(
+              'payBtn',
+            );
+
+        button.disabled =
+          true;
+
+        button.textContent =
+          'Abrindo pagamento...';
+
+        try {
+          const result =
+            await api(
+              '/api/v2/checkout/start',
+              {
+                method:
+                  'POST',
+                body:
+                  JSON.stringify({
+                    clientRequestId:
+                      state.clientRequestId,
+                    customer:
+                      state.customer,
+                    event:
+                      state.event,
+                    selection:
+                      state.selection,
+                    deliveryWindow:
+                      state.deliveryWindow,
+                    termsAccepted:
+                      true,
+                    termsVersion:
+                      state.terms.version,
+                  }),
+              },
+            );
+
+          if (
+            !result.payment
+              ?.checkoutUrl
+          ) {
+            throw new Error(
+              'O pagamento não ficou disponível. Tente novamente.',
+            );
+          }
+
+          localStorage.removeItem(
+            STORE_KEY,
+          );
+
+          window.location.href =
+            result.payment
+              .checkoutUrl;
+        } catch (error) {
+          button.disabled =
+            false;
+
+          button.textContent =
+            'Ir para o pagamento';
+
+          if (
+            error.data?.code
+            === 'terms_changed'
+          ) {
+            const termsData =
+              await api(
+                '/api/v2/terms/current',
+              );
+
+            state.terms =
+              termsData.terms;
+
+            state.termsAccepted =
+              false;
+
+            persist(state);
+            renderReview(
+              state,
+              render,
+            );
+
+            showToast(
+              'As condições foram atualizadas. Leia a nova versão.',
+            );
+
+            return;
+          }
+
+          if (
+            error.data?.code
+            === 'delivery_window_unavailable'
+          ) {
+            state.step = 3;
+            state.deliveryWindow =
+              null;
+            persist(state);
+            render();
+
+            showToast(
+              'Essa janela acabou de ficar indisponível. Escolha outra.',
+            );
+
+            return;
+          }
+
+          showToast(
+            error.message,
+          );
+        }
+      },
+    );
+}
+
+export async function startStore(
+  productSlug = '',
+) {
+  setSubtitle(
+    'Faça seu pedido',
+  );
+
+  const state =
+    readSaved(
+      productSlug,
+    );
+
+  loading(
+    'Carregando os convites...',
+  );
+
+  const [
+    catalogData,
+    termsData,
+  ] =
+    await Promise.all([
+      api(
+        '/api/v2/catalog',
+      ),
+      api(
+        '/api/v2/terms/current',
+      ),
+    ]);
+
+  state.catalog =
+    catalogData.catalog;
+
+  state.terms =
+    termsData.terms;
+
+  if (
+    productSlug
+  ) {
+    const product =
+      state.catalog.products
+        .find(
+          (item) =>
+            item.slug
+            === productSlug,
+        );
+
+    if (!product) {
+      throw new Error(
+        'Este formato de convite não foi encontrado.',
+      );
+    }
+
+    selectProduct(
+      state,
+      product,
+    );
+
+    state.step =
+      Math.max(
+        1,
+        state.step,
+      );
+  }
+
+  const render = () => {
+    persist(state);
+
+    if (
+      state.step === 0
+    ) {
+      renderEventGate(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 1
+    ) {
+      renderProducts(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 2
+    ) {
+      renderConfiguration(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 3
+    ) {
+      renderDetails(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 4
+    ) {
+      renderDelivery(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 5
+    ) {
+      renderPayment(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    renderReview(
+      state,
+      render,
+    );
+  };
+
+  render();
+}
+
+function manualTerms(
+  order,
+) {
+  return `
+    <div class="terms-box">
+      <strong>
+        Condições do pedido
+      </strong>
+
+      <p class="muted">
+        Versão ${esc(order.terms?.version || '')}
+      </p>
+
+      <button
+        id="manualReadTerms"
+        class="btn btn-ghost"
+        type="button"
+      >
+        Ler condições
+      </button>
+
+      <label class="checkline">
+        <input
+          id="manualAcceptTerms"
+          type="checkbox"
+        >
+
+        <span>
+          Li e concordo com as Condições do Pedido.
+        </span>
+      </label>
+    </div>
+  `;
+}
+
+export async function startManualOrder(
+  token,
+) {
+  setSubtitle(
+    'Pedido preparado para você',
+  );
+
+  loading(
+    'Abrindo seu pedido...',
+  );
+
+  const data =
+    await api(
+      `/api/v2/manual-order/${
+        token
+      }`,
+    );
+
+  const order =
+    data.order;
+
+  const render = () => {
+    const paymentPending =
+      order.payment
+      && order.payment.status
+      !== 'approved'
+      && order.payment.checkoutUrl;
+
+    app.innerHTML = `
+      <section class="page-card">
+        <div class="manual-hero">
+          <span class="eyebrow">
+            Pedido preparado pela Libri
+          </span>
+
+          <h1 class="page-title">
+            Oi, ${esc(order.customerName)} 💛
+          </h1>
+
+          <p class="page-subtitle">
+            Confira o que combinamos antes de seguir para o pagamento.
+          </p>
+
+          <span class="manual-code">
+            ${esc(order.code)}
+          </span>
+        </div>
+
+        <dl class="review-list">
+          <div class="review-line">
+            <dt>Evento</dt>
+            <dd>
+              ${esc(order.event.honoreeName)}
+              •
+              ${esc(dateBr(order.event.date))}
+            </dd>
+          </div>
+
+          <div class="review-line">
+            <dt>Itens</dt>
+            <dd>
+              ${order.items.map(
+                (item) =>
+                  esc(item.name_snapshot),
+              ).join(', ')}
+            </dd>
+          </div>
+
+          <div class="review-line">
+            <dt>Entrega</dt>
+            <dd>
+              ${esc(dateBr(order.deliveryWindow.start))}
+              a
+              ${esc(dateBr(order.deliveryWindow.end))}
+            </dd>
+          </div>
+
+          <div class="review-line">
+            <dt>Total</dt>
+            <dd>${money(order.pricing.totalCents)}</dd>
+          </div>
+
+          <div class="review-line">
+            <dt>Pagamento</dt>
+            <dd>
+              ${
+                order.pricing.paymentMethod
+                === 'pix'
+                  ? `Pix • ${money(order.pricing.depositCents)} agora`
+                  : 'Cartão • pagamento integral'
+              }
+            </dd>
+          </div>
+        </dl>
+
+        ${
+          order.alreadyPaid
+            ? `
+              <div class="notice success section-block">
+                Pagamento confirmado ✓
+              </div>
+
+              <div class="action-row">
+                <span></span>
+
+                <a
+                  class="btn btn-primary btn-large"
+                  href="${esc(order.customerAreaPath)}"
+                >
+                  Abrir meu pedido
+                </a>
+              </div>
+            `
+            : paymentPending
+              ? `
+                <div class="notice info section-block">
+                  Seu checkout já foi criado.
+                </div>
+
+                <div class="action-row">
+                  <span></span>
+
+                  <a
+                    class="btn btn-primary btn-large"
+                    href="${esc(order.payment.checkoutUrl)}"
+                  >
+                    Continuar pagamento
+                  </a>
+                </div>
+              `
+              : `
+                ${manualTerms(order)}
+
+                <div class="action-row">
+                  <span></span>
+
+                  <button
+                    id="manualPay"
+                    class="btn btn-primary btn-large"
+                    type="button"
+                  >
+                    Ir para o pagamento
+                  </button>
+                </div>
+              `
+        }
+      </section>
+    `;
+
+    document
+      .getElementById(
+        'manualReadTerms',
+      )
+      ?.addEventListener(
+        'click',
+        () => {
+          modal(
+            `Condições • ${order.terms.version}`,
+            `<pre>${esc(order.terms.body)}</pre>`,
+          );
+        },
+      );
+
+    document
+      .getElementById(
+        'manualPay',
+      )
+      ?.addEventListener(
+        'click',
+        async () => {
+          if (
+            !document
+              .getElementById(
+                'manualAcceptTerms',
+              )
+              .checked
+          ) {
+            showToast(
+              'Leia e aceite as condições para continuar.',
+            );
+
+            return;
+          }
+
+          const button =
+            document
+              .getElementById(
+                'manualPay',
+              );
+
+          button.disabled =
+            true;
+
+          button.textContent =
+            'Abrindo pagamento...';
+
+          try {
+            const result =
+              await api(
+                `/api/v2/manual-order/${
+                  token
+                }/start-payment`,
+                {
+                  method:
+                    'POST',
+                  body:
+                    JSON.stringify({
+                      termsAccepted:
+                        true,
+                      termsVersion:
+                        order.terms.version,
+                    }),
+                },
+              );
+
+            const checkoutUrl =
+              result.result
+                ?.payment
+                ?.checkoutUrl
+              || result.result
+                ?.checkoutUrl
+              || result.payment
+                ?.checkoutUrl;
+
+            if (!checkoutUrl) {
+              throw new Error(
+                'O pagamento não ficou disponível.',
+              );
+            }
+
+            window.location.href =
+              checkoutUrl;
+          } catch (error) {
+            button.disabled =
+              false;
+
+            button.textContent =
+              'Ir para o pagamento';
+
+            showToast(
+              error.message,
+            );
+          }
+        },
+      );
+  };
+
+  render();
+}

@@ -25,6 +25,10 @@ import {
 } from './routes/admin.js';
 
 import {
+  handlePublicV2Api,
+} from './routes/public-v2.js';
+
+import {
   handlePublicApi,
 } from './routes/public.js';
 
@@ -58,10 +62,6 @@ export default {
       try {
         /* ==================================================
            AUTENTICAÇÃO ADMIN
-
-           Login, logout e status precisam
-           funcionar antes do bloqueio geral
-           das rotas administrativas.
         ================================================== */
 
         if (
@@ -94,11 +94,6 @@ export default {
               '/api/admin/',
             )
         ) {
-          /*
-           * Todas as APIs administrativas,
-           * exceto login/logout/status,
-           * exigem sessão válida.
-           */
           const authFailure =
             await requireAdminAuth(
               request,
@@ -110,10 +105,6 @@ export default {
           ) {
             return authFailure;
           }
-
-          /* ==================================================
-             EDITAR PEDIDO
-          ================================================== */
 
           const editResponse =
             await handleAdminEditApi(
@@ -128,10 +119,6 @@ export default {
             return editResponse;
           }
 
-          /* ==================================================
-             PEDIDO MANUAL VIA WHATSAPP
-          ================================================== */
-
           const manualResponse =
             await handleAdminManualApi(
               request,
@@ -145,11 +132,6 @@ export default {
             return manualResponse;
           }
 
-          /* ==================================================
-             ADMIN V2
-             DASHBOARD + STATUS + PAGAMENTO + CANCELAMENTO
-          ================================================== */
-
           const workflowV2Response =
             await handleAdminWorkflowV2Api(
               request,
@@ -162,10 +144,6 @@ export default {
           ) {
             return workflowV2Response;
           }
-
-          /* ==================================================
-             ADMIN EXISTENTE
-          ================================================== */
 
           const adminResponse =
             await handleAdminApi(
@@ -182,7 +160,35 @@ export default {
         }
 
         /* ==================================================
-           API PÚBLICA
+           API PÚBLICA V2
+
+           As rotas novas ficam isoladas
+           em /api/v2/* e não interferem
+           com o checkout antigo.
+        ================================================== */
+
+        if (
+          url.pathname
+            .startsWith(
+              '/api/v2/',
+            )
+        ) {
+          const publicV2Response =
+            await handlePublicV2Api(
+              request,
+              env,
+              url,
+            );
+
+          return publicV2Response
+            || fail(
+              'Rota V2 não encontrada.',
+              404,
+            );
+        }
+
+        /* ==================================================
+           API PÚBLICA V1
         ================================================== */
 
         const publicResponse =
@@ -236,4 +242,3 @@ export default {
     );
   },
 };
-

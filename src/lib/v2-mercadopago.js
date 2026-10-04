@@ -8,6 +8,10 @@ import {
   v2IntSetting,
 } from './v2-catalog.js';
 
+import {
+  commitV2CouponUse,
+} from './v2-commercial-pricing.js';
+
 const MP_API_BASE =
   'https://api.mercadopago.com';
 
@@ -1042,11 +1046,17 @@ export async function syncMercadoPagoOrder(
             p.amount_cents,
 
             o.order_code,
+            o.customer_id,
             o.status AS local_order_status,
-            o.briefing_status
+            o.briefing_status,
+
+            pr.pricing_snapshot_json,
+            pr.coupon_discount_cents
           FROM v2_payments p
           INNER JOIN v2_orders o
             ON o.id = p.order_id
+          INNER JOIN v2_order_pricing pr
+            ON pr.order_id = o.id
           WHERE
             p.provider = 'mercado_pago'
             AND p.provider_order_id = ?
@@ -1174,6 +1184,27 @@ export async function syncMercadoPagoOrder(
     paymentStatus
     === 'approved'
   ) {
+    await commitV2CouponUse(
+      env.DB,
+      {
+        orderId:
+          localPayment
+            .order_id,
+
+        customerId:
+          localPayment
+            .customer_id,
+
+        pricingSnapshot:
+          localPayment
+            .pricing_snapshot_json,
+
+        discountCents:
+          localPayment
+            .coupon_discount_cents,
+      },
+    );
+
     await convertHoldToAgenda(
       env.DB,
       localPayment

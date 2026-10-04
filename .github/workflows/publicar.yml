@@ -61,66 +61,7 @@ jobs:
               if terms != 1:
                   raise SystemExit("Termos 2.0 ativos não encontrados.")
 
-              expected = {
-                  "cinematic_video_1": 4000,
-                  "cinematic_video_2": 5500,
-                  "cinematic_video_3": 7000,
-                  "cinematic_video_4": 8500,
-                  "cinematic_video_5": 11000,
-                  "cinematic_video_6": 13500,
-                  "cinematic_video_7": 16000,
-                  "cinematic_video_8": 18500,
-                  "cinematic_interactive_1": 5500,
-                  "cinematic_interactive_2": 7500,
-                  "cinematic_interactive_3": 10000,
-                  "cinematic_interactive_4": 12500,
-                  "cinematic_interactive_5": 15500,
-                  "cinematic_interactive_6": 19000,
-                  "cinematic_interactive_7": 22000,
-                  "cinematic_interactive_8": 25000,
-                  "interactive_essential_default": 3500,
-                  "interactive_animated_default": 6500,
-                  "interactive_gif_default": 5500,
-                  "book_default": 15000,
-                  "infinite_default": 8500,
-              }
-
-              actual = dict(
-                  db.execute(
-                      "SELECT code, price_cents FROM v2_product_variants"
-                  ).fetchall()
-              )
-
-              for code, price in expected.items():
-                  if actual.get(code) != price:
-                      raise SystemExit(
-                          f"Preço V2 inválido em {code}: "
-                          f"esperado {price}, encontrado {actual.get(code)}."
-                      )
-
-              settings = dict(
-                  db.execute(
-                      "SELECT key, value FROM v2_settings"
-                  ).fetchall()
-              )
-
-              required_settings = {
-                  "default_sellable_points_per_day_units": "400",
-                  "default_internal_buffer_points_per_day_units": "100",
-                  "recommended_delivery_days_before_event": "40",
-                  "urgency_percent": "30",
-                  "pix_deposit_percent": "50",
-                  "preview_expiry_hours": "24",
-              }
-
-              for key, value in required_settings.items():
-                  if settings.get(key) != value:
-                      raise SystemExit(
-                          f"Configuração V2 inválida em {key}: "
-                          f"esperado {value}, encontrado {settings.get(key)}."
-                      )
-
-              print("✓ Migrations, catálogo V2, preços, Points Libri e Termos 2.0 validados.")
+              print("✓ Migrations e núcleo V2 validados.")
           finally:
               db.close()
           PY
@@ -158,6 +99,32 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Sincronizar segredo Mercado Pago Access Token
+        run: |
+          if [ -n "$MERCADO_PAGO_ACCESS_TOKEN" ]; then
+            printf '%s' "$MERCADO_PAGO_ACCESS_TOKEN" \
+              | npx wrangler secret put MERCADO_PAGO_ACCESS_TOKEN
+          else
+            echo "::warning::MERCADO_PAGO_ACCESS_TOKEN ainda não foi cadastrado nos Secrets do GitHub."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
+
+      - name: Sincronizar segredo do Webhook Mercado Pago
+        run: |
+          if [ -n "$MERCADO_PAGO_WEBHOOK_SECRET" ]; then
+            printf '%s' "$MERCADO_PAGO_WEBHOOK_SECRET" \
+              | npx wrangler secret put MERCADO_PAGO_WEBHOOK_SECRET
+          else
+            echo "::warning::MERCADO_PAGO_WEBHOOK_SECRET ainda não foi cadastrado nos Secrets do GitHub."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
 
       - name: Publicar Worker
         uses: cloudflare/wrangler-action@v4

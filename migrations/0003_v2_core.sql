@@ -467,4 +467,169 @@ VALUES
 ('interactive_essential','interativo','Interativo Essencial','Uma composição personalizada com recursos interativos.','fixed',1,30,'{"includedInteractiveResources":3,"musicOptionalIncluded":true}'),
 ('interactive_animated','interativo-animado','Interativo com Abertura Animada','Abertura animada personalizada que revela a arte principal interativa.','fixed',1,40,'{"includedInteractiveResources":3,"musicOptionalIncluded":true}'),
 ('interactive_gif','interativo-gif','Interativo GIF','Composição principal personalizada com movimento contínuo e recursos interativos.','fixed',1,50,'{"includedInteractiveResources":3,"musicOptionalIncluded":true,"customerChoosesMotion":false}'),
-('book','livro','Convite em Livro','Experiência digital em formato de livro 
+('book','livro','Convite em Livro','Experiência digital em formato de livro com capa e páginas.','fixed',1,60,'{"maxInternalPages":6,"countdownDefault":false}'),
+('infinite','infinito','Convite Infinito','Experiência vertical contínua com seções conectadas.','fixed',1,70,'{"maxConnectedSections":6,"heroOutsideSectionCount":true,"countdownOptionalIncluded":true}');
+
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_1','1 cena',1,4000,200,1 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_2','2 cenas',2,5500,200,2 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_3','3 cenas',3,7000,300,3 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_4','4 cenas',4,8500,300,4 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_5','5 cenas',5,11000,400,5 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_6','6 cenas',6,13500,400,6 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_7','7 cenas',7,16000,500,7 FROM v2_products WHERE code='cinematic_video';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_video_8','8 cenas',8,18500,500,8 FROM v2_products WHERE code='cinematic_video';
+
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_1','1 cena',1,5500,300,1 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_2','2 cenas',2,7500,300,2 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_3','3 cenas',3,10000,400,3 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_4','4 cenas',4,12500,400,4 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_5','5 cenas',5,15500,500,5 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_6','6 cenas',6,19000,500,6 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_7','7 cenas',7,22000,600,7 FROM v2_products WHERE code='cinematic_interactive';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,sort_order)
+SELECT id,'cinematic_interactive_8','8 cenas',8,25000,600,8 FROM v2_products WHERE code='cinematic_interactive';
+
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,is_default,sort_order)
+SELECT id,'interactive_essential_default','Padrão',NULL,3500,100,1,1 FROM v2_products WHERE code='interactive_essential';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,is_default,sort_order)
+SELECT id,'interactive_animated_default','Padrão',NULL,6500,200,1,1 FROM v2_products WHERE code='interactive_animated';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,is_default,sort_order)
+SELECT id,'interactive_gif_default','Padrão',NULL,5500,150,1,1 FROM v2_products WHERE code='interactive_gif';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,is_default,sort_order)
+SELECT id,'book_default','Padrão',NULL,15000,300,1,1 FROM v2_products WHERE code='book';
+INSERT OR IGNORE INTO v2_product_variants(product_id,code,label,scene_count,price_cents,points_units,is_default,sort_order)
+SELECT id,'infinite_default','Padrão',NULL,8500,300,1,1 FROM v2_products WHERE code='infinite';
+
+INSERT OR IGNORE INTO v2_addons(code,name,addon_group,price_cents,points_units,sort_order,config_json) VALUES
+('confirmation_libri','Confirmação de Presença Libri','confirmation',3500,50,10,'{"modes":["free","guest_list","undecided"]}'),
+('custom_filter','Filtro Personalizado','filter',3500,50,20,'{"standalonePlatforms":["instagram","libri_app"],"includedWithMomentsPlatform":"libri_app"}'),
+('save_static','Save the Date Estático','save_the_date',2000,50,30,'{}'),
+('save_animated','Save the Date Animado','save_the_date',3500,100,31,'{}'),
+('reminder_static','Lembrete do Evento Estático','reminder',2000,50,40,'{}'),
+('reminder_animated','Lembrete do Evento Animado','reminder',3500,100,41,'{}'),
+('moments_festa','Libri Moments • Festa','moments',7900,50,50,'{"photoLimit":200,"availabilityDays":30,"filterIncluded":true,"filterPlatform":"libri_app"}'),
+('moments_premium','Libri Moments • Premium','moments',11900,50,51,'{"photoLimit":400,"availabilityDays":60,"filterIncluded":true,"filterPlatform":"libri_app"}'),
+('moments_exclusive','Libri Moments • Exclusive','moments',14900,50,52,'{"photoLimit":700,"availabilityDays":90,"filterIncluded":true,"filterPlatform":"libri_app"}'),
+('moments_extra_100','Libri Moments • +100 fotos','moments_extra',1500,0,53,'{"extraPhotos":100}');
+
+INSERT OR IGNORE INTO v2_terms_versions(version,body,active) VALUES (
+'2.0',
+'CONDIÇÕES DO PEDIDO | LIBRI CONVITES
+
+1. PAGAMENTO
+Nos pedidos pagos por Pix, é necessário o pagamento de 50% do valor total para confirmar a contratação, reservar a vaga e liberar o briefing. Os outros 50% serão pagos depois que o convite for aprovado e antes da entrega final.
+Nos pedidos pagos por cartão, o valor total da contratação será pago no momento do pedido.
+A produção somente será iniciada após a confirmação do pagamento aplicável e a conclusão das informações necessárias para produção.
+
+2. RESERVA E JANELA DE ENTREGA
+Durante a contratação, a cliente escolherá uma janela de entrega disponível conforme a agenda de produção da Libri Convites.
+A janela apresentada corresponde ao período previsto para entrega, e não necessariamente a um dia exato.
+A vaga somente será confirmada após a aprovação do pagamento. Reservas temporárias de checkout poderão expirar quando o pagamento não for concluído dentro do período informado.
+Se houver atraso no envio de informações, fotos, materiais ou aprovações necessárias por parte da cliente, a janela de entrega poderá precisar ser reajustada conforme a disponibilidade da agenda.
+
+3. PEDIDO URGENTE
+Quando não houver uma janela regular compatível com a data do evento, a cliente poderá solicitar análise de encaixe urgente.
+O encaixe depende exclusivamente da disponibilidade da Libri Convites e não é garantido.
+Quando aprovado, será aplicada uma taxa de urgência de 30% sobre o valor comercial do pedido após os descontos aplicáveis.
+A nova janela de entrega será informada antes do pagamento.
+
+4. BRIEFING E INÍCIO DA PRODUÇÃO
+O briefing completo é liberado após a confirmação do pagamento inicial aplicável.
+A produção começa depois que o pagamento necessário estiver confirmado, o briefing estiver concluído e as fotos, referências e demais materiais necessários tiverem sido enviados.
+Enquanto estivermos aguardando informações, arquivos, respostas ou aprovação da cliente, a produção poderá ficar pausada.
+
+5. REPRESENTAÇÃO DE PESSOAS E MASCOTES
+Quando o pedido incluir representação visual de criança, adulto, casal ou outra pessoa, a criação será feita a partir das fotos e informações fornecidas.
+A Libri busca preservar as principais características da pessoa, mas a representação artística não será uma cópia exata da fotografia e poderá apresentar pequenas diferenças decorrentes do processo criativo e das ferramentas utilizadas.
+Quando houver etapa específica de aprovação da representação, a produção seguirá utilizando a versão aprovada como referência.
+
+6. AJUSTES INCLUÍDOS
+Quando aplicável ao produto contratado, o pedido inclui até 2 rodadas de ajustes na representação/mascote, 1 rodada de ajustes nas falas quando a cliente escolher aprová-las previamente e até 2 rodadas de ajustes simples no convite, desde que não exijam refazer cenas, animações, personagem ou partes já produzidas.
+Erros da Libri em relação às informações corretamente enviadas pela cliente não contam como rodada de ajustes.
+
+7. DEPOIS DE APROVAR
+Quando uma etapa ou versão é aprovada, a produção continuará utilizando aquela aprovação como base.
+Alterações posteriores em partes já aprovadas podem exigir novo prazo e valor adicional, que serão informados antes da realização da mudança.
+
+8. MUDANÇAS MAIORES
+Troca de tema, mudança completa da direção visual, substituição de representação já aprovada, alteração significativa da estrutura do projeto ou refação de partes prontas não são consideradas ajustes simples.
+Essas alterações podem gerar novo orçamento e nova previsão de entrega.
+
+9. INFORMAÇÕES DO EVENTO
+A cliente é responsável por conferir os dados fornecidos, incluindo nomes, idade quando aplicável, data, horário, local, endereço, textos, frases, links, chave Pix e demais informações destinadas ao convite.
+Caso a Libri insira uma informação diferente da que foi corretamente enviada, a correção será realizada sem contar como alteração.
+
+10. FOTOS, ARQUIVOS E REFERÊNCIAS
+Fotos claras, atuais e com boa visualização das características importantes ajudam a alcançar melhor resultado.
+Quando os arquivos enviados não forem suficientes, a Libri poderá solicitar novos materiais antes de prosseguir.
+Referências fornecidas pela cliente são utilizadas como direção de conteúdo, estética ou inspiração e não significam reprodução obrigatória ou idêntica de trabalhos de terceiros.
+
+11. PRESENTES E PIX
+Quando a cliente optar por incluir sugestões de presentes, links ou chave Pix no convite, é responsabilidade da cliente fornecer e conferir corretamente essas informações.
+A Libri Convites não se responsabiliza por transferências realizadas com base em dados incorretos fornecidos pela própria contratante.
+
+12. CANCELAMENTO
+Depois que a produção tiver começado, caso a cliente decida cancelar o pedido, os valores relativos ao trabalho já iniciado poderão não ser devolvidos, incluindo a entrada paga, respeitados os casos em que a legislação aplicável determine cancelamento, estorno ou reembolso.
+Pedidos pagos integralmente serão analisados considerando a etapa de produção já executada e as disposições legais aplicáveis.
+
+13. CONVITES INTERATIVOS
+Convites interativos, incluindo formatos como Interativo Essencial, GIF, Abertura Animada, Livro, Infinito e Cinematográfico Interativo, funcionam pela internet e devem ser acessados através do link fornecido pela Libri.
+É necessário utilizar conexão com a internet e navegador ou dispositivo compatível e atualizado.
+Quando aplicável, o link ficará disponível até 1 dia após a data do evento e poderá ser retirado do ar após esse período.
+Recursos interativos disponíveis dependem especificamente do produto e dos adicionais contratados.
+
+14. CONVITES EM VÍDEO
+Quando o pedido incluir entrega em vídeo, a cliente receberá o arquivo final e deverá armazená-lo em seu próprio dispositivo ou serviço de armazenamento.
+A disponibilidade futura do arquivo nos sistemas da Libri não substitui a responsabilidade da cliente de guardar sua versão entregue.
+
+15. CONFIRMAÇÃO DE PRESENÇA LIBRI
+Quando contratada, a Confirmação de Presença Libri constitui um adicional específico e diferente de um simples botão de confirmação presente no convite.
+As funcionalidades disponibilizadas dependerão da modalidade contratada e poderão incluir acompanhamento das respostas e organização de convidados.
+Informações privadas relacionadas a confirmações ou listas de convidados não serão utilizadas como material público de portfólio.
+
+16. LIBRI MOMENTS
+Quando contratado, o Libri Moments seguirá o limite de fotos, período de disponibilidade e demais condições correspondentes ao plano escolhido.
+O filtro incluído no Libri Moments é destinado ao App Libri.
+Conteúdos enviados ou publicados pelos participantes deverão respeitar os direitos das pessoas retratadas e demais regras aplicáveis ao serviço.
+
+17. SAVE THE DATE E LEMBRETE
+Save the Date e Lembrete são peças próprias e independentes do convite principal, quando contratadas.
+A versão escolhida poderá ser estática ou animada conforme a opção adquirida.
+Alterações nesses materiais seguem as mesmas regras gerais de aprovação e ajustes previstas nestas condições.
+
+18. FOTOS E INFORMAÇÕES ENVIADAS
+As informações, fotografias e arquivos fornecidos serão utilizados para preparar, produzir e entregar os materiais contratados.
+Quando houver dados ou imagens de criança ou adolescente, a pessoa responsável pela contratação declara possuir legitimidade e autorização para fornecer essas informações e imagens à Libri Convites para a realização do pedido.
+
+19. DIVULGAÇÃO E PORTFÓLIO
+Ao aceitar estas Condições do Pedido e concluir a contratação, o responsável autoriza a Libri Convites a utilizar o trabalho produzido para fins de divulgação do portfólio da marca.
+Essa divulgação poderá incluir artes, representações, mascotes, imagens, trechos de vídeo, animações, cenas do convite e demais elementos criados durante o projeto, podendo ser publicados nas redes sociais, site, portfólio e materiais de apresentação da Libri Convites.
+Quando o trabalho utilizar imagem, fotografia ou representação identificável de criança ou adolescente, o aceite deverá ser realizado pelo pai, mãe ou responsável legal.
+A Libri Convites não divulgará telefone da cliente, links privados, lista de convidados, dados de confirmação de presença ou outros dados pessoais de contato que não façam parte da apresentação pública do trabalho.
+
+20. ACEITE DAS CONDIÇÕES
+Ao marcar “Li e concordo com as condições” e prosseguir com a contratação, o responsável declara ter lido e aceitado estas Condições do Pedido.
+O sistema poderá registrar a versão aceita, data e horário do aceite e sua vinculação ao respectivo pedido.
+Quando houver atualização das Condições antes da conclusão do pagamento, poderá ser solicitado novo aceite da versão vigente.
+
+21. CONTRATO ADICIONAL
+Estas Condições acompanham a contratação padrão da Libri Convites.
+Caso a cliente solicite um contrato específico, a Libri poderá gerar documento complementar relacionado ao pedido, contendo escopo, valores, condições e identificação das partes.
+Quando emitido, o contrato poderá exigir assinatura eletrônica das partes e ficará vinculado ao pedido correspondente.',
+1
+);

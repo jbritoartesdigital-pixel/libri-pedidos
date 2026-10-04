@@ -16,6 +16,11 @@ import {
   findV2DeliveryOptions,
 } from '../lib/v2-agenda.js';
 
+import {
+  startV2Checkout,
+  V2CheckoutError,
+} from '../lib/v2-checkout.js';
+
 async function readActiveV2Terms(
   db,
 ) {
@@ -39,6 +44,29 @@ async function readActiveV2Terms(
 function requestError(
   error,
 ) {
+  if (
+    error
+    instanceof V2CheckoutError
+  ) {
+    return fail(
+      error.message,
+      error.status,
+      {
+        code:
+          error.code,
+
+        ...(
+          error.details
+            ? {
+              details:
+                error.details,
+            }
+            : {}
+        ),
+      },
+    );
+  }
+
   return fail(
     String(
       error?.message
@@ -210,6 +238,45 @@ export async function handlePublicV2Api(
             quote.totalCents,
         },
       });
+    } catch (
+      error
+    ) {
+      return requestError(
+        error,
+      );
+    }
+  }
+
+  /* ==================================================
+     INICIAR CHECKOUT V2
+
+     Cria pedido aguardando pagamento,
+     registra termos e segura a capacidade.
+     Mercado Pago entra no próximo bloco.
+  ================================================== */
+
+  if (
+    method === 'POST'
+    && path
+      === '/api/v2/checkout/start'
+  ) {
+    try {
+      const body =
+        await readJson(
+          request,
+        );
+
+      const result =
+        await startV2Checkout(
+          request,
+          env,
+          body,
+        );
+
+      return json(
+        result,
+        201,
+      );
     } catch (
       error
     ) {

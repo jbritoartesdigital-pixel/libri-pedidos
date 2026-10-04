@@ -26,761 +26,135 @@ jobs:
           find src public/js -type f \( -name "*.js" -o -name "*.mjs" \) -print0 \
             | xargs -0 -n1 node --check
 
-      - name: Validar regras comerciais
+      - name: Validar migrations e catálogo V2 localmente
         run: |
-          node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-
-          import {
-            calculateQuote,
-            SCENE_PRICES,
-          } from './src/lib/quote.js';
-
-          import {
-            catalogFromSettings,
-          } from './src/lib/settings.js';
-
-          const settings = {
-            /*
-             * Mantidos porque settings.js ainda oferece
-             * compatibilidade com a tabela antiga no admin.
-             * O preço do produto novo vem de SCENE_PRICES.
-             */
-            price_video_full_cents:
-              '15000',
-
-            price_video_reduced_cents:
-              '6500',
-
-            price_interactive_full_cents:
-              '18000',
-
-            price_interactive_reduced_cents:
-              '9500',
-
-            addon_confirmation_cents:
-              '2500',
-
-            addon_filter_cents:
-              '3900',
-
-            addon_extra_person_cents:
-              '3000',
-
-            deposit_percent:
-              '50',
-
-            urgency_percent:
-              '30',
-
-            deadline_business_days:
-              '5',
-          };
-
-          function quote(
-            selection,
-            options = {},
-          ) {
-            return calculateQuote(
-              selection,
-              settings,
-              options,
-            );
-          }
-
-          /* ==================================================
-             TABELA OFICIAL | 1 A 10 CENAS
-          ================================================== */
-
-          const expectedVideo = {
-            1: 3500,
-            2: 5000,
-            3: 6500,
-            4: 8000,
-            5: 10500,
-            6: 13000,
-            7: 15500,
-            8: 18000,
-            9: 20500,
-            10: 23000,
-          };
-
-          const expectedInteractive = {
-            1: 5000,
-            2: 7000,
-            3: 9500,
-            4: 12000,
-            5: 15000,
-            6: 18000,
-            7: 21000,
-            8: 24000,
-            9: 27000,
-            10: 30000,
-          };
-
-          assert.deepEqual(
-            SCENE_PRICES.video,
-            expectedVideo,
-          );
-
-          assert.deepEqual(
-            SCENE_PRICES.interactive,
-            expectedInteractive,
-          );
-
-          for (
-            let scenes = 1;
-            scenes <= 10;
-            scenes += 1
-          ) {
-            let result =
-              quote({
-                scenes,
-
-                format:
-                  'video',
-
-                addons:
-                  {},
-              });
-
-            assert.equal(
-              result.scenes,
-              scenes,
-            );
-
-            assert.equal(
-              result.sceneCount,
-              scenes,
-            );
-
-            assert.equal(
-              result.format,
-              'video',
-            );
-
-            assert.equal(
-              result.productCents,
-              expectedVideo[scenes],
-            );
-
-            assert.equal(
-              result.totalCents,
-              expectedVideo[scenes],
-            );
-
-            result =
-              quote({
-                scenes,
-
-                format:
-                  'interactive',
-
-                addons:
-                  {},
-              });
-
-            assert.equal(
-              result.scenes,
-              scenes,
-            );
-
-            assert.equal(
-              result.format,
-              'interactive',
-            );
-
-            assert.equal(
-              result.productCents,
-              expectedInteractive[scenes],
-            );
-
-            assert.equal(
-              result.totalCents,
-              expectedInteractive[scenes],
-            );
-          }
-
-          /* ==================================================
-             PADRÃO DE COMPATIBILIDADE | 6 CENAS
-          ================================================== */
-
-          let result =
-            quote({
-              format:
-                'video',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.scenes,
-            6,
-          );
-
-          assert.equal(
-            result.productCents,
-            13000,
-          );
-
-          assert.equal(
-            result.experience,
-            'full',
-          );
-
-          result =
-            quote({
-              scenes:
-                3,
-
-              format:
-                'video',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.experience,
-            'reduced',
-          );
-
-          /* ==================================================
-             CONFIRMAÇÃO LIBRI
-
-             Confirmação exige formato Interativo
-             e deve converter Vídeo automaticamente.
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'video',
-
-              addons: {
-                confirmation:
-                  true,
-              },
-            });
-
-          assert.equal(
-            result.requestedFormat,
-            'video',
-          );
-
-          assert.equal(
-            result.format,
-            'interactive',
-          );
-
-          assert.equal(
-            result.formatAdjusted,
-            true,
-          );
-
-          assert.equal(
-            result.productCents,
-            18000,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            2500,
-          );
-
-          assert.equal(
-            result.totalCents,
-            20500,
-          );
-
-          /* ==================================================
-             FILTRO AVULSO
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                filter:
-                  true,
-              },
-            });
-
-          assert.equal(
-            result.productCents,
-            18000,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            3900,
-          );
-
-          assert.equal(
-            result.totalCents,
-            21900,
-          );
-
-          /* ==================================================
-             PESSOA EXTRA
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                extraPerson:
-                  2,
-              },
-            });
-
-          assert.equal(
-            result.addonsCents,
-            6000,
-          );
-
-          assert.equal(
-            result.totalCents,
-            24000,
-          );
-
-          assert.equal(
-            result.addonLines
-              .some(
-                (line) =>
-                  line.key
-                  === 'extraScene',
-              ),
-            false,
-          );
-
-          /* ==================================================
-             LIBRI MOMENTS | FESTA
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                photoAlbumPlan:
-                  'festa',
-              },
-            });
-
-          assert.equal(
-            result.addons
-              .photoAlbumPlan,
-            'festa',
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .basePriceCents,
-            7900,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .photos,
-            200,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .days,
-            30,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .filterIncluded,
-            true,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            7900,
-          );
-
-          assert.equal(
-            result.totalCents,
-            25900,
-          );
-
-          /* ==================================================
-             LIBRI MOMENTS | PREMIUM
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                photoAlbumPlan:
-                  'premium',
-              },
-            });
-
-          assert.equal(
-            result.photoAlbum
-              .basePriceCents,
-            11900,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .photos,
-            400,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .days,
-            60,
-          );
-
-          assert.equal(
-            result.totalCents,
-            29900,
-          );
-
-          /* ==================================================
-             LIBRI MOMENTS | EXCLUSIVE
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                photoAlbumPlan:
-                  'exclusive',
-              },
-            });
-
-          assert.equal(
-            result.photoAlbum
-              .basePriceCents,
-            14900,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .photos,
-            700,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .days,
-            90,
-          );
-
-          assert.equal(
-            result.totalCents,
-            32900,
-          );
-
-          /* ==================================================
-             LIBRI MOMENTS | FOTOS EXTRAS
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                photoAlbumPlan:
-                  'festa',
-
-                photoAlbumExtra100:
-                  2,
-              },
-            });
-
-          assert.equal(
-            result.photoAlbum
-              .extra100,
-            2,
-          );
-
-          assert.equal(
-            result.photoAlbum
-              .photos,
-            400,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            10900,
-          );
-
-          assert.equal(
-            result.totalCents,
-            28900,
-          );
-
-          /* ==================================================
-             LIBRI MOMENTS NÃO COBRA FILTRO DUPLICADO
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                6,
-
-              format:
-                'interactive',
-
-              addons: {
-                filter:
-                  true,
-
-                photoAlbumPlan:
-                  'festa',
-              },
-            });
-
-          assert.equal(
-            result.addons
-              .filter,
-            false,
-          );
-
-          assert.equal(
-            result.addonsCents,
-            7900,
-          );
-
-          assert.equal(
-            result.totalCents,
-            25900,
-          );
-
-          assert.equal(
-            result.addonLines
-              .some(
-                (line) =>
-                  line.key
-                  === 'filter',
-              ),
-            false,
-          );
-
-          /* ==================================================
-             URGÊNCIA
-          ================================================== */
-
-          result =
-            quote(
-              {
-                scenes:
-                  6,
-
-                format:
-                  'interactive',
-
-                addons:
-                  {},
-              },
-
-              {
-                urgencyEnabled:
-                  true,
-              },
-            );
-
-          assert.equal(
-            result.subtotalCents,
-            18000,
-          );
-
-          assert.equal(
-            result.urgencyPercent,
-            30,
-          );
-
-          assert.equal(
-            result.urgencyAmountCents,
-            5400,
-          );
-
-          assert.equal(
-            result.totalCents,
-            23400,
-          );
-
-          assert.equal(
-            result.depositCents,
-            11700,
-          );
-
-          assert.equal(
-            result.balanceCents,
-            11700,
-          );
-
-          /* ==================================================
-             LIMITES DE CENAS
-          ================================================== */
-
-          result =
-            quote({
-              scenes:
-                0,
-
-              format:
-                'video',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.scenes,
-            1,
-          );
-
-          assert.equal(
-            result.productCents,
-            3500,
-          );
-
-          result =
-            quote({
-              scenes:
-                99,
-
-              format:
-                'interactive',
-
-              addons:
-                {},
-            });
-
-          assert.equal(
-            result.scenes,
-            10,
-          );
-
-          assert.equal(
-            result.productCents,
-            30000,
-          );
-
-          /* ==================================================
-             FALLBACKS DE SETTINGS LEGADOS
-
-             O admin antigo ainda lê esses valores.
-          ================================================== */
-
-          const safeCatalog =
-            catalogFromSettings({
-              ...settings,
-
-              price_video_full_cents:
-                '0',
-
-              price_video_reduced_cents:
-                '0',
-
-              price_interactive_full_cents:
-                '-10',
-
-              price_interactive_reduced_cents:
-                '-10',
-
-              addon_filter_cents:
-                '0',
-
-              deposit_percent:
-                '999',
-            });
-
-          assert.equal(
-            safeCatalog
-              .products
-              .video
-              .full,
-            15000,
-          );
-
-          assert.equal(
-            safeCatalog
-              .products
-              .video
-              .reduced,
-            6500,
-          );
-
-          assert.equal(
-            safeCatalog
-              .products
-              .interactive
-              .full,
-            18000,
-          );
-
-          assert.equal(
-            safeCatalog
-              .products
-              .interactive
-              .reduced,
-            9500,
-          );
-
-          assert.equal(
-            safeCatalog
-              .addons
-              .filter,
-            3900,
-          );
-
-          assert.equal(
-            safeCatalog
-              .rules
-              .depositPercent,
-            50,
-          );
-
-          console.log(
-            '✓ Sintaxe e regras comerciais por cenas aprovadas.',
-          );
-          NODE
+          python3 <<'PY'
+          from pathlib import Path
+          import sqlite3
+
+          migration_files = sorted(Path("migrations").glob("*.sql"))
+
+          if not migration_files:
+              raise SystemExit("Nenhuma migration encontrada.")
+
+          db = sqlite3.connect(":memory:")
+
+          try:
+              for migration in migration_files:
+                  print(f"Aplicando localmente: {migration.name}")
+                  db.executescript(migration.read_text(encoding="utf-8"))
+
+              products = db.execute(
+                  "SELECT COUNT(*) FROM v2_products"
+              ).fetchone()[0]
+
+              if products != 7:
+                  raise SystemExit(
+                      f"Catálogo V2 inválido: esperados 7 produtos, encontrados {products}."
+                  )
+
+              terms = db.execute(
+                  "SELECT COUNT(*) FROM v2_terms_versions "
+                  "WHERE version = '2.0' AND active = 1"
+              ).fetchone()[0]
+
+              if terms != 1:
+                  raise SystemExit("Termos 2.0 ativos não encontrados.")
+
+              expected = {
+                  "cinematic_video_1": 4000,
+                  "cinematic_video_2": 5500,
+                  "cinematic_video_3": 7000,
+                  "cinematic_video_4": 8500,
+                  "cinematic_video_5": 11000,
+                  "cinematic_video_6": 13500,
+                  "cinematic_video_7": 16000,
+                  "cinematic_video_8": 18500,
+                  "cinematic_interactive_1": 5500,
+                  "cinematic_interactive_2": 7500,
+                  "cinematic_interactive_3": 10000,
+                  "cinematic_interactive_4": 12500,
+                  "cinematic_interactive_5": 15500,
+                  "cinematic_interactive_6": 19000,
+                  "cinematic_interactive_7": 22000,
+                  "cinematic_interactive_8": 25000,
+                  "interactive_essential_default": 3500,
+                  "interactive_animated_default": 6500,
+                  "interactive_gif_default": 5500,
+                  "book_default": 15000,
+                  "infinite_default": 8500,
+              }
+
+              actual = dict(
+                  db.execute(
+                      "SELECT code, price_cents FROM v2_product_variants"
+                  ).fetchall()
+              )
+
+              for code, price in expected.items():
+                  if actual.get(code) != price:
+                      raise SystemExit(
+                          f"Preço V2 inválido em {code}: "
+                          f"esperado {price}, encontrado {actual.get(code)}."
+                      )
+
+              settings = dict(
+                  db.execute(
+                      "SELECT key, value FROM v2_settings"
+                  ).fetchall()
+              )
+
+              required_settings = {
+                  "default_sellable_points_per_day_units": "400",
+                  "default_internal_buffer_points_per_day_units": "100",
+                  "recommended_delivery_days_before_event": "40",
+                  "urgency_percent": "30",
+                  "pix_deposit_percent": "50",
+                  "preview_expiry_hours": "24",
+              }
+
+              for key, value in required_settings.items():
+                  if settings.get(key) != value:
+                      raise SystemExit(
+                          f"Configuração V2 inválida em {key}: "
+                          f"esperado {value}, encontrado {settings.get(key)}."
+                      )
+
+              print("✓ Migrations, catálogo V2, preços, Points Libri e Termos 2.0 validados.")
+          finally:
+              db.close()
+          PY
+
+      - name: Ver migrations pendentes no D1
+        run: npx wrangler d1 migrations list libri-pedidos-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Criar backup do D1 antes das migrations
+        run: |
+          npx wrangler d1 export libri-pedidos-db \
+            --remote \
+            --output=backup-d1-before-deploy.sql
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Guardar backup do D1
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-d1-before-deploy
+          path: backup-d1-before-deploy.sql
+          retention-days: 14
 
       - name: Aplicar migrations no D1
         run: npx wrangler d1 migrations apply libri-pedidos-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Conferir migrations após aplicação
+        run: npx wrangler d1 migrations list libri-pedidos-db --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -791,4 +165,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-

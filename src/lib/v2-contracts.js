@@ -1432,3 +1432,1147 @@ export async function generateV2Contract(
       new Error(
         'Publique um modelo de contrato em Loja / Configurações antes de gerar o contrato.',
       );
+
+    error.code =
+      'contract_template_missing';
+
+    throw error;
+  }
+
+  const bodySnapshot =
+    renderTemplate(
+      template,
+      context,
+    );
+
+  const documentHash =
+    await sha256Hex(
+      bodySnapshot,
+    );
+
+  const version =
+    await nextContractVersion(
+      env.DB,
+      context.order.id,
+    );
+
+  const stamp =
+    nowIso();
+
+  await env.DB
+    .prepare(
+      `
+        UPDATE v2_contracts
+        SET
+          status = 'superseded',
+          updated_at = ?
+        WHERE
+          order_id = ?
+          AND status IN (
+            'draft',
+            'waiting_libri',
+            'waiting_customer'
+          )
+      `,
+    )
+    .bind(
+      stamp,
+      context.order.id,
+    )
+    .run();
+
+  const result =
+    await env.DB
+      .prepare(
+        `
+          INSERT INTO v2_contracts(
+            order_id,
+            version,
+            status,
+            body_snapshot,
+            document_hash,
+            template_version,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            'waiting_libri',
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        context.order.id,
+        version,
+        bodySnapshot,
+        documentHash,
+        template.version,
+        stamp,
+        stamp,
+      )
+      .run();
+
+  const contractId =
+    Number(
+      result
+        ?.meta
+        ?.last_row_id,
+    );
+
+  await env.DB
+    .prepare(
+      `
+        INSERT INTO v2_order_history(
+          order_id,
+          action_code,
+          description,
+          metadata_json,
+          created_at
+        )
+        VALUES (
+          ?,
+          'contract_generated',
+          'Contrato gerado sob solicitação administrativa.',
+          ?,
+          ?
+        )
+      `,
+    )
+    .bind(
+      context.order.id,
+      JSON.stringify({
+        contractId,
+        version,
+        templateVersion:
+          template.version,
+
+        documentHash,
+      }),
+      stamp,
+    )
+    .run();
+
+  return {
+    id:
+      contractId,
+
+    version,
+
+    status:
+      'waiting_libri',
+
+    templateVersion:
+      template.version,
+
+    body:
+      bodySnapshot,
+
+    documentHash,
+  };
+}
+
+export async function signV2ContractByLibri(
+  request,
+  env,
+  contractId,
+) {
+  const contract =
+    await contractById(
+      env.DB,
+      contractId,
+    );
+
+  if (!contract) {
+    return null;
+  }
+
+  if (
+    contract.status
+    === 'superseded'
+    || contract.status
+      === 'cancelled'
+  ) {
+    throw new Error(
+      'Esta versão do contrato não pode mais ser assinada.',
+    );
+  }
+
+  const existing =
+    await env.DB
+      .prepare(
+        `
+          SELECT id
+          FROM v2_contract_signatures
+          WHERE
+            contract_id = ?
+            AND party = 'libri'
+          LIMIT 1
+        `,
+      )
+      .bind(
+        contract.id,
+      )
+      .first();
+
+  const company =
+    await env.DB
+      .prepare(
+        `
+          SELECT value
+          FROM v2_settings
+          WHERE key = 'company_legal_name'
+          LIMIT 1
+        `,
+      )
+      .first();
+
+  const fallback =
+    await env.DB
+      .prepare(
+        `
+          SELECT value
+          FROM v2_settings
+          WHERE key = 'company_name'
+          LIMIT 1
+        `,
+      )
+      .first();
+
+  const signerName =
+    cleanText(
+      company
+        ?.value
+      || fallback
+        ?.value
+      || 'Libri Convites',
+      180,
+    );
+
+  const stamp =
+    nowIso();
+
+  if (!existing) {
+    await env.DB
+      .prepare(
+        `
+          INSERT INTO v2_contract_signatures(
+            contract_id,
+            party,
+            signer_name,
+            signed_at,
+            evidence_json
+          )
+          VALUES (
+            ?,
+            'libri',
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        contract.id,
+        signerName,
+        stamp,
+        JSON.stringify({
+          method:
+            'authenticated_admin_click',
+
+          adminAuth:
+            'passkey_session',
+
+          userAgent:
+            request.headers
+              .get(
+                'user-agent',
+              )
+            || '',
+
+          cfRay:
+            request.headers
+              .get(
+                'cf-ray',
+              )
+            || '',
+        }),
+      )
+      .run();
+  }
+
+  await env.DB
+    .prepare(
+      `
+        UPDATE v2_contracts
+        SET
+          status = 'waiting_customer',
+          sent_to_customer_at = COALESCE(
+            sent_to_customer_at,
+            ?
+          ),
+          updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      stamp,
+      stamp,
+      contract.id,
+    )
+    .run();
+
+  await env.DB
+    .prepare(
+      `
+        INSERT INTO v2_order_history(
+          order_id,
+          action_code,
+          description,
+          metadata_json,
+          created_at
+        )
+        VALUES (
+          ?,
+          'contract_signed_libri',
+          'Contrato assinado eletronicamente pela Libri e liberado para a cliente.',
+          ?,
+          ?
+        )
+      `,
+    )
+    .bind(
+      contract.order_id,
+      JSON.stringify({
+        contractId:
+          contract.id,
+
+        version:
+          contract.version,
+      }),
+      stamp,
+    )
+    .run();
+
+  const privatePath =
+    `/meu-pedido/${
+      contract.public_token
+    }`;
+
+  const origin =
+    new URL(
+      request.url,
+    )
+      .origin;
+
+  const privateUrl =
+    `${
+      origin
+    }${
+      privatePath
+    }`;
+
+  const message =
+    `Oi, ${
+      contract.customer_name
+    }! 💛 O contrato do pedido ${
+      contract.order_code
+    } já está disponível para leitura e assinatura eletrônica na sua área privada: ${
+      privateUrl
+    }`;
+
+  await createV2AdminNotification(
+    env,
+    {
+      eventCode:
+        'CONTRACT_READY_CUSTOMER',
+
+      orderId:
+        contract.order_id,
+
+      title:
+        'Contrato enviado para assinatura',
+
+      body:
+        `${
+          contract.order_code
+        } • ${
+          contract.customer_name
+        }`,
+
+      actionUrl:
+        `/admin/pedidos/${
+          contract.order_code
+        }`,
+
+      priority:
+        'normal',
+
+      pushEligible:
+        false,
+
+      dedupeKey:
+        `contract_ready:${
+          contract.id
+        }`,
+    },
+  );
+
+  return {
+    id:
+      contract.id,
+
+    status:
+      'waiting_customer',
+
+    customer: {
+      privatePath,
+
+      privateUrl,
+
+      whatsappUrl:
+        whatsappUrl(
+          contract.customer_whatsapp,
+          message,
+        ),
+
+      whatsappMessage:
+        message,
+    },
+  };
+}
+
+export async function cancelV2Contract(
+  env,
+  contractId,
+) {
+  const contract =
+    await contractById(
+      env.DB,
+      contractId,
+    );
+
+  if (!contract) {
+    return null;
+  }
+
+  if (
+    contract.status
+    === 'signed'
+  ) {
+    throw new Error(
+      'Contrato já assinado não pode ser cancelado por esta ação. Gere uma nova versão se necessário.',
+    );
+  }
+
+  if (
+    contract.status
+    === 'cancelled'
+  ) {
+    return {
+      id:
+        contract.id,
+
+      status:
+        'cancelled',
+    };
+  }
+
+  const stamp =
+    nowIso();
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_contracts
+          SET
+            status = 'cancelled',
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        stamp,
+        contract.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'contract_cancelled',
+            'Contrato cancelado antes da assinatura final.',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        contract.order_id,
+        JSON.stringify({
+          contractId:
+            contract.id,
+
+          version:
+            contract.version,
+        }),
+        stamp,
+      ),
+  ]);
+
+  return {
+    id:
+      contract.id,
+
+    status:
+      'cancelled',
+  };
+}
+
+export async function listV2ContractsForCustomer(
+  db,
+  token,
+) {
+  const order =
+    await orderByToken(
+      db,
+      token,
+    );
+
+  if (!order) {
+    return null;
+  }
+
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            id,
+            version,
+            status,
+            body_snapshot,
+            document_hash,
+            sent_to_customer_at,
+            pdf_hash,
+            pdf_r2_key,
+            created_at,
+            signed_at
+          FROM v2_contracts
+          WHERE
+            order_id = ?
+            AND status IN (
+              'waiting_customer',
+              'signed'
+            )
+          ORDER BY
+            version DESC,
+            id DESC
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  const contracts = [];
+
+  for (
+    const row
+    of result.results
+    || []
+  ) {
+    contracts.push({
+      id:
+        row.id,
+
+      version:
+        row.version,
+
+      status:
+        row.status,
+
+      body:
+        row.body_snapshot,
+
+      documentHash:
+        row.document_hash,
+
+      sentToCustomerAt:
+        row.sent_to_customer_at,
+
+      signedAt:
+        row.signed_at,
+
+      hasFinalPdf:
+        Boolean(
+          row.pdf_r2_key,
+      ),
+
+      pdfHash:
+        row.pdf_hash,
+
+      signatures:
+        (
+          await signaturesForContract(
+            db,
+            row.id,
+          )
+        )
+          .map(
+            (signature) => ({
+              party:
+                signature.party,
+
+              signerName:
+                signature.signerName,
+
+              signedAt:
+                signature.signedAt,
+            }),
+          ),
+    });
+  }
+
+  return {
+    order: {
+      code:
+        order.order_code,
+
+      honoreeName:
+        order.honoree_display_name,
+
+      customerName:
+        order.customer_name,
+    },
+
+    contracts,
+  };
+}
+
+export async function signV2ContractByCustomer(
+  request,
+  env,
+  token,
+  contractId,
+  body = {},
+) {
+  if (
+    body.accepted
+    !== true
+  ) {
+    throw new Error(
+      'Confirme a assinatura para continuar.',
+    );
+  }
+
+  const order =
+    await orderByToken(
+      env.DB,
+      token,
+    );
+
+  if (!order) {
+    return null;
+  }
+
+  const contract =
+    await contractById(
+      env.DB,
+      contractId,
+    );
+
+  if (
+    !contract
+    || Number(
+      contract.order_id,
+    )
+      !== Number(
+        order.id,
+      )
+  ) {
+    return null;
+  }
+
+  if (
+    contract.status
+    === 'signed'
+  ) {
+    return {
+      id:
+        contract.id,
+
+      status:
+        'signed',
+
+      alreadySigned:
+        true,
+    };
+  }
+
+  if (
+    contract.status
+    !== 'waiting_customer'
+  ) {
+    throw new Error(
+      'Este contrato não está disponível para assinatura.',
+    );
+  }
+
+  const libriSignature =
+    await env.DB
+      .prepare(
+        `
+          SELECT id
+          FROM v2_contract_signatures
+          WHERE
+            contract_id = ?
+            AND party = 'libri'
+          LIMIT 1
+        `,
+      )
+      .bind(
+        contract.id,
+      )
+      .first();
+
+  if (!libriSignature) {
+    throw new Error(
+      'A Libri ainda não assinou esta versão do contrato.',
+    );
+  }
+
+  const signerName =
+    cleanText(
+      body.signerName
+      || order.customer_name,
+      180,
+    );
+
+  if (!signerName) {
+    throw new Error(
+      'Nome da pessoa que está assinando é obrigatório.',
+    );
+  }
+
+  const stamp =
+    nowIso();
+
+  await env.DB
+    .prepare(
+      `
+        INSERT OR IGNORE INTO v2_contract_signatures(
+          contract_id,
+          party,
+          signer_name,
+          signed_at,
+          evidence_json
+        )
+        VALUES (
+          ?,
+          'customer',
+          ?,
+          ?,
+          ?
+        )
+      `,
+    )
+    .bind(
+      contract.id,
+      signerName,
+      stamp,
+      JSON.stringify({
+        method:
+          'private_order_link_click',
+
+        explicitAcceptance:
+          true,
+
+        userAgent:
+          request.headers
+            .get(
+              'user-agent',
+            )
+          || '',
+
+        cfRay:
+          request.headers
+            .get(
+              'cf-ray',
+            )
+          || '',
+
+        orderTokenBound:
+          true,
+      }),
+    )
+    .run();
+
+  const signatures =
+    await signaturesForContract(
+      env.DB,
+      contract.id,
+    );
+
+  const hasLibri =
+    signatures.some(
+      (signature) =>
+        signature.party
+        === 'libri',
+    );
+
+  const hasCustomer =
+    signatures.some(
+      (signature) =>
+        signature.party
+        === 'customer',
+    );
+
+  if (
+    !hasLibri
+    || !hasCustomer
+  ) {
+    throw new Error(
+      'Não foi possível concluir as duas assinaturas.',
+    );
+  }
+
+  if (!env.FILES) {
+    throw new Error(
+      'Armazenamento R2 ainda não configurado.',
+    );
+  }
+
+  const pdfBytes =
+    await buildSignedContractPdf(
+      contract,
+      signatures,
+    );
+
+  const pdfHash =
+    await sha256Hex(
+      pdfBytes,
+    );
+
+  const r2Key =
+    `orders/${
+      contract.order_id
+    }/documents/contract-v${
+      contract.version
+    }-${
+      pdfHash.slice(
+        0,
+        16,
+      )
+    }.pdf`;
+
+  await env.FILES.put(
+    r2Key,
+    pdfBytes,
+    {
+      httpMetadata: {
+        contentType:
+          'application/pdf',
+
+        contentDisposition:
+          'attachment',
+
+        cacheControl:
+          'private, no-store',
+      },
+
+      customMetadata: {
+        orderCode:
+          contract.order_code,
+
+        contractVersion:
+          String(
+            contract.version,
+          ),
+
+        documentHash:
+          contract.document_hash,
+
+        pdfHash,
+      },
+    },
+  );
+
+  try {
+    await env.DB.batch([
+      env.DB
+        .prepare(
+          `
+            UPDATE v2_contracts
+            SET
+              status = 'signed',
+              pdf_r2_key = ?,
+              pdf_hash = ?,
+              signed_at = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          r2Key,
+          pdfHash,
+          stamp,
+          stamp,
+          contract.id,
+        ),
+
+      env.DB
+        .prepare(
+          `
+            INSERT INTO v2_order_history(
+              order_id,
+              action_code,
+              description,
+              metadata_json,
+              created_at
+            )
+            VALUES (
+              ?,
+              'contract_signed_customer',
+              'Contrato concluído com assinatura eletrônica da cliente.',
+              ?,
+              ?
+            )
+          `,
+        )
+        .bind(
+          contract.order_id,
+          JSON.stringify({
+            contractId:
+              contract.id,
+
+            version:
+              contract.version,
+
+            pdfHash,
+          }),
+          stamp,
+        ),
+    ]);
+  } catch (
+    error
+  ) {
+    await env.FILES
+      .delete(
+        r2Key,
+      );
+
+    throw error;
+  }
+
+  await createV2AdminNotification(
+    env,
+    {
+      eventCode:
+        'CONTRACT_SIGNED',
+
+      orderId:
+        contract.order_id,
+
+      title:
+        'Contrato assinado ✓',
+
+      body:
+        `${
+          contract.order_code
+        } • ${
+          contract.customer_name
+        }`,
+
+      actionUrl:
+        `/admin/pedidos/${
+          contract.order_code
+        }`,
+
+      priority:
+        'high',
+
+      pushEligible:
+        true,
+
+      dedupeKey:
+        `contract_signed:${
+          contract.id
+        }`,
+    },
+  );
+
+  return {
+    id:
+      contract.id,
+
+    status:
+      'signed',
+
+    signedAt:
+      stamp,
+
+    pdfHash,
+
+    pdfPath:
+      `/api/v2/customer-area/${
+        token
+      }/contracts/${
+        contract.id
+      }/pdf`,
+  };
+}
+
+async function contractPdfResponse(
+  env,
+  contract,
+) {
+  if (
+    !contract
+    || !contract.pdf_r2_key
+    || contract.status
+      !== 'signed'
+  ) {
+    return fail(
+      'PDF final ainda não está disponível.',
+      404,
+    );
+  }
+
+  if (!env.FILES) {
+    return fail(
+      'Armazenamento R2 ainda não configurado.',
+      503,
+    );
+  }
+
+  const object =
+    await env.FILES.get(
+      contract.pdf_r2_key,
+    );
+
+  if (!object) {
+    return fail(
+      'PDF do contrato não encontrado.',
+      404,
+    );
+  }
+
+  const filename =
+    `contrato-${
+      contract.order_code
+    }-v${
+      contract.version
+    }-assinado.pdf`;
+
+  const headers =
+    new Headers();
+
+  object.writeHttpMetadata(
+    headers,
+  );
+
+  headers.set(
+    'content-type',
+    'application/pdf',
+  );
+
+  headers.set(
+    'content-disposition',
+    `attachment; filename="${
+      filename
+    }"`,
+  );
+
+  headers.set(
+    'cache-control',
+    'private, no-store, max-age=0',
+  );
+
+  headers.set(
+    'x-content-type-options',
+    'nosniff',
+  );
+
+  return new Response(
+    object.body,
+    {
+      headers,
+    },
+  );
+}
+
+export async function downloadV2ContractPdfForAdmin(
+  env,
+  contractId,
+) {
+  const contract =
+    await contractById(
+      env.DB,
+      contractId,
+    );
+
+  return contractPdfResponse(
+    env,
+    contract,
+  );
+}
+
+export async function downloadV2ContractPdfForCustomer(
+  env,
+  token,
+  contractId,
+) {
+  const order =
+    await orderByToken(
+      env.DB,
+      token,
+    );
+
+  if (!order) {
+    return fail(
+      'Pedido não encontrado.',
+      404,
+    );
+  }
+
+  const contract =
+    await contractById(
+      env.DB,
+      contractId,
+    );
+
+  if (
+    !contract
+    || Number(
+      contract.order_id,
+    )
+      !== Number(
+        order.id,
+      )
+  ) {
+    return fail(
+      'Contrato não encontrado.',
+      404,
+    );
+  }
+
+  return contractPdfResponse(
+    env,
+    contract,
+  );
+}

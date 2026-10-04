@@ -19,6 +19,10 @@ import {
   validateV2DeliveryWindow,
 } from './v2-agenda.js';
 
+import {
+  createMercadoPagoCheckout,
+} from './v2-mercadopago.js';
+
 export class V2CheckoutError extends Error {
   constructor(
     message,
@@ -1077,15 +1081,23 @@ async function completedCheckoutResponse(
             p.balance_cents,
 
             h.token AS hold_token,
-            h.expires_at AS hold_expires_at
+            h.expires_at AS hold_expires_at,
+
+            pay.provider_order_id,
+            pay.checkout_url
           FROM v2_orders o
           INNER JOIN v2_order_pricing p
             ON p.order_id = o.id
           LEFT JOIN v2_checkout_holds h
             ON h.order_id = o.id
             AND h.status = 'active'
+          LEFT JOIN v2_payments pay
+            ON pay.order_id = o.id
+            AND pay.provider = 'mercado_pago'
           WHERE o.id = ?
-          ORDER BY h.id DESC
+          ORDER BY
+            h.id DESC,
+            pay.id DESC
           LIMIT 1
         `,
       )
@@ -1149,8 +1161,16 @@ async function completedCheckoutResponse(
       provider:
         'mercado_pago',
 
+      providerOrderId:
+        row.provider_order_id,
+
+      checkoutUrl:
+        row.checkout_url,
+
       ready:
-        false,
+        Boolean(
+          row.checkout_url,
+        ),
     },
   };
 }
@@ -1235,4 +1255,531 @@ export async function startV2Checkout(
 
     const whatsapp =
       normalizeWhatsapp(
-       
+        body.customer
+          ?.whatsapp,
+      );
+
+    if (
+      whatsapp.length < 10
+      || whatsapp.length > 15
+    ) {
+      throw new V2CheckoutError(
+        'Confira o número do WhatsApp.',
+      );
+    }
+
+    const email =
+      optionalText(
+        body.customer
+          ?.email,
+        240,
+      );
+
+    const honoreeName =
+      requireText(
+        body.event
+          ?.honoreeName,
+        'Nome do aniversariante, casal ou evento',
+        180,
+      );
+
+    const eventDate =
+      requireText(
+        body.event
+          ?.date,
+        'Data do evento',
+        10,
+      );
+
+    if (
+      !validIsoDate(
+        eventDate,
+      )
+    ) {
+      throw new V2CheckoutError(
+        'Confira a data do evento.',
+      );
+    }
+
+    const eventType =
+      optionalText(
+        body.event
+          ?.type,
+        80,
+      )
+      || 'unspecified';
+
+    const eventSubtype =
+      optionalText(
+        body.event
+          ?.subtype,
+        120,
+      );
+
+    const paymentMethod =
+      cleanText(
+        body.selection
+          ?.paymentMethod,
+        20,
+      );
+
+    if (
+      ![
+        'pix',
+        'card',
+      ].includes(
+        paymentMethod,
+      )
+    ) {
+      throw new V2CheckoutError(
+        'Escolha Pix ou cartão.',
+      );
+    }
+
+    const selection = {
+      ...(
+        body.selection
+        || {}
+      ),
+
+      paymentMethod,
+    };
+
+    const quote =
+      await calculateV2Quote(
+        env.DB,
+        selection,
+      );
+
+    const deliveryStart =
+      requireText(
+        body.deliveryWindow
+          ?.start,
+        'Início da janela de entrega',
+        10,
+      );
+
+    const deliveryEnd =
+      requireText(
+        body.deliveryWindow
+          ?.end,
+        'Fim da janela de entrega',
+        10,
+      );
+
+    await validateV2DeliveryWindow(
+      env.DB,
+      {
+        eventDate,
+        start:
+          deliveryStart,
+
+        end:
+          deliveryEnd,
+      },
+    );
+
+    const plan =
+      await planV2AllocationForWindow(
+        env.DB,
+        {
+          start:
+            deliveryStart,
+
+          end:
+            deliveryEnd,
+
+          pointsUnits:
+            quote.pointsUnits,
+        },
+      );
+
+    if (!plan.fits) {
+      throw new V2CheckoutError(
+        'Essa janela não está mais disponível. Escolha outra opção de entrega.',
+        {
+          status:
+            409,
+
+          code:
+            'delivery_window_unavailable',
+        },
+      );
+    }
+
+    if (
+      body.termsAccepted
+      !== true
+    ) {
+      throw new V2CheckoutError(
+        'Leia e aceite as Condições do Pedido para continuar.',
+        {
+          code:
+            'terms_required',
+        },
+      );
+    }
+
+    const terms =
+      await activeV2Terms(
+        env.DB,
+      );
+
+    if (!terms) {
+      throw new V2CheckoutError(
+        'As Condições do Pedido ainda não estão disponíveis.',
+        {
+          status:
+            503,
+
+          code:
+            'terms_unavailable',
+        },
+      );
+    }
+
+    const acceptedVersion =
+      cleanText(
+        body.termsVersion,
+        40,
+      );
+
+    if (
+      acceptedVersion
+      !== terms.version
+    ) {
+      throw new V2CheckoutError(
+        'As Condições do Pedido foram atualizadas. Leia a nova versão antes de continuar.',
+        {
+          status:
+            409,
+
+          code:
+            'terms_changed',
+
+          details: {
+            currentVersion:
+              terms.version,
+          },
+        },
+      );
+    }
+
+    const termsHash =
+      terms.content_hash
+      || await sha256Hex(
+        terms.body,
+      );
+
+    if (
+      !terms
+        .content_hash
+    ) {
+      await env.DB
+        .prepare(
+          `
+            UPDATE v2_terms_versions
+            SET content_hash = ?
+            WHERE
+              version = ?
+              AND content_hash IS NULL
+          `,
+        )
+        .bind(
+          termsHash,
+          terms.version,
+        )
+        .run();
+    }
+
+    const ip =
+      request.headers
+        .get(
+          'CF-Connecting-IP',
+        )
+      || '';
+
+    const termsEvidence = {
+      userAgent:
+        request.headers
+          .get(
+            'user-agent',
+          )
+        || '',
+
+      cfRay:
+        request.headers
+          .get(
+            'cf-ray',
+          )
+        || '',
+
+      connectionIpHash:
+        ip
+          ? await sha256Hex(
+            ip,
+          )
+          : null,
+    };
+
+    const delivery =
+      await findV2DeliveryOptions(
+        env.DB,
+        {
+          eventDate,
+          pointsUnits:
+            quote.pointsUnits,
+
+          limit:
+            10,
+        },
+      );
+
+    const recommendedTargetDate =
+      delivery
+        .recommendedTargetDate;
+
+    const settings =
+      await loadV2Settings(
+        env.DB,
+      );
+
+    const holdMinutes =
+      v2IntSetting(
+        settings,
+        'checkout_hold_minutes',
+        30,
+      );
+
+    const defaultCapacityUnits =
+      v2IntSetting(
+        settings,
+        'default_sellable_points_per_day_units',
+        400,
+      );
+
+    const orderCode =
+      await nextOrderCode(
+        env.DB,
+      );
+
+    const publicToken =
+      randomToken(
+        'ord_',
+      );
+
+    const customerId =
+      await upsertCustomer(
+        env.DB,
+        {
+          name:
+            customerName,
+
+          whatsapp,
+          email,
+        },
+      );
+
+    orderId =
+      await createOrderRecords(
+        env.DB,
+        {
+          orderCode,
+          publicToken,
+          customerId,
+
+          eventType,
+          eventSubtype,
+          honoreeName,
+          eventDate,
+
+          deliveryStart,
+          deliveryEnd,
+          recommendedTargetDate,
+
+          quote,
+
+          terms,
+          termsHash,
+          termsEvidence,
+        },
+      );
+
+    const expiresAt =
+      new Date(
+        Date.now()
+        + (
+          holdMinutes
+          * 60
+          * 1000
+        ),
+      )
+        .toISOString();
+
+    const hold =
+      await createCapacityHold(
+        env.DB,
+        {
+          orderId,
+          allocation:
+            plan.allocation,
+
+          expiresAt,
+
+          defaultCapacityUnits,
+        },
+      );
+
+    const mpCheckout =
+      await createMercadoPagoCheckout(
+        request,
+        env,
+        {
+          orderId,
+          orderCode,
+          publicToken,
+
+          paymentMethod,
+
+          amountDueNowCents:
+            quote.payment
+              .depositCents,
+
+          customerEmail:
+            email,
+        },
+      );
+
+    await env.DB
+      .prepare(
+        `
+          UPDATE v2_checkout_requests
+          SET
+            order_id = ?,
+            status = 'completed',
+            updated_at = ?
+          WHERE request_key = ?
+        `,
+      )
+      .bind(
+        orderId,
+        nowIso(),
+        requestKey,
+      )
+      .run();
+
+    return {
+      ok: true,
+
+      recovered:
+        false,
+
+      order: {
+        code:
+          orderCode,
+
+        publicToken,
+
+        customerAreaPath:
+          `/meu-pedido/${
+            publicToken
+          }`,
+
+        deliveryWindow: {
+          start:
+            deliveryStart,
+
+          end:
+            deliveryEnd,
+        },
+      },
+
+      hold: {
+        token:
+          hold.holdToken,
+
+        expiresAt:
+          hold.expiresAt,
+      },
+
+      payment: {
+        method:
+          paymentMethod,
+
+        totalCents:
+          quote.totalCents,
+
+        amountDueNowCents:
+          quote.payment
+            .depositCents,
+
+        balanceCents:
+          quote.payment
+            .balanceCents,
+
+        provider:
+          'mercado_pago',
+
+        providerOrderId:
+          mpCheckout
+            .providerOrderId,
+
+        checkoutUrl:
+          mpCheckout
+            .checkoutUrl,
+
+        ready:
+          true,
+      },
+    };
+  } catch (
+    error
+  ) {
+    if (orderId) {
+      await env.DB
+        .prepare(
+          `
+            DELETE FROM v2_orders
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          orderId,
+        )
+        .run();
+    }
+
+    await releaseCheckoutRequest(
+      env.DB,
+      requestKey,
+    );
+
+    if (
+      error
+      instanceof V2CheckoutError
+    ) {
+      throw error;
+    }
+
+    throw new V2CheckoutError(
+      error
+        ?.message
+      || 'Não foi possível iniciar o pagamento.',
+      {
+        status:
+          Number(
+            error
+              ?.status,
+          )
+          || 502,
+
+        code:
+          'payment_provider_error',
+
+        details:
+          error
+            ?.details,
+      },
+    );
+  }
+}

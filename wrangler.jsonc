@@ -3,14 +3,26 @@
   "name": "libri-pedidos",
   "main": "src/index.js",
   "compatibility_date": "2026-08-18",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
 
   "workers_dev": false,
   "preview_urls": false,
 
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ADMIN_PASSKEY_ORIGIN": "https://pedidos.libriconvites.com.br",
+    "ADMIN_PASSKEY_RP_ID": "pedidos.libriconvites.com.br",
+    "VAPID_SUBJECT": "https://pedidos.libriconvites.com.br"
+  },
+
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
 
   "d1_databases": [
@@ -18,6 +30,13 @@
       "binding": "DB",
       "database_name": "libri-pedidos-db",
       "database_id": "658c569d-60eb-4f59-8532-a321539dd073"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "libri-pedidos-files"
     }
   ]
 }

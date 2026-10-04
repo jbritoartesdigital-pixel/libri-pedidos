@@ -19,12 +19,10 @@ jobs:
           package-manager-cache: false
 
       - name: Instalar dependências
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Validar sintaxe JavaScript
-        run: |
-          find src public/js -type f \( -name "*.js" -o -name "*.mjs" \) -print0 \
-            | xargs -0 -n1 node --check
+        run: npm run check
 
       - name: Validar migrations e catálogo V2 localmente
         run: |
@@ -42,7 +40,9 @@ jobs:
           try:
               for migration in migration_files:
                   print(f"Aplicando localmente: {migration.name}")
-                  db.executescript(migration.read_text(encoding="utf-8"))
+                  db.executescript(
+                      migration.read_text(encoding="utf-8")
+                  )
 
               products = db.execute(
                   "SELECT COUNT(*) FROM v2_products"
@@ -50,7 +50,8 @@ jobs:
 
               if products != 7:
                   raise SystemExit(
-                      f"Catálogo V2 inválido: esperados 7 produtos, encontrados {products}."
+                      f"Catálogo V2 inválido: "
+                      f"esperados 7 produtos, encontrados {products}."
                   )
 
               terms = db.execute(
@@ -59,12 +60,26 @@ jobs:
               ).fetchone()[0]
 
               if terms != 1:
-                  raise SystemExit("Termos 2.0 ativos não encontrados.")
+                  raise SystemExit(
+                      "Termos 2.0 ativos não encontrados."
+                  )
 
               print("✓ Migrations e núcleo V2 validados.")
           finally:
               db.close()
           PY
+
+      - name: Garantir bucket R2 privado
+        run: |
+          if npx wrangler r2 bucket info libri-pedidos-files >/dev/null 2>&1; then
+            echo "✓ Bucket libri-pedidos-files já existe."
+          else
+            echo "Criando bucket privado libri-pedidos-files..."
+            npx wrangler r2 bucket create libri-pedidos-files
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Ver migrations pendentes no D1
         run: npx wrangler d1 migrations list libri-pedidos-db --remote
@@ -100,31 +115,51 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Sincronizar segredo Mercado Pago Access Token
+      - name: Sincronizar secrets do Worker
+        shell: bash
         run: |
-          if [ -n "$MERCADO_PAGO_ACCESS_TOKEN" ]; then
-            printf '%s' "$MERCADO_PAGO_ACCESS_TOKEN" \
-              | npx wrangler secret put MERCADO_PAGO_ACCESS_TOKEN
-          else
-            echo "::warning::MERCADO_PAGO_ACCESS_TOKEN ainda não foi cadastrado nos Secrets do GitHub."
-          fi
+          set -euo pipefail
+
+          put_secret() {
+            name="$1"
+            value="$2"
+
+            if [ -n "$value" ]; then
+              printf '%s' "$value" \
+                | npx wrangler secret put "$name"
+              echo "✓ $name sincronizado."
+            else
+              echo "::warning::$name ainda não foi cadastrado nos Secrets do GitHub."
+            fi
+          }
+
+          put_secret \
+            "MERCADO_PAGO_ACCESS_TOKEN" \
+            "$MERCADO_PAGO_ACCESS_TOKEN"
+
+          put_secret \
+            "MERCADO_PAGO_WEBHOOK_SECRET" \
+            "$MERCADO_PAGO_WEBHOOK_SECRET"
+
+          put_secret \
+            "ADMIN_PASSKEY_RECOVERY_SECRET" \
+            "$ADMIN_PASSKEY_RECOVERY_SECRET"
+
+          put_secret \
+            "VAPID_PUBLIC_KEY" \
+            "$VAPID_PUBLIC_KEY"
+
+          put_secret \
+            "VAPID_PRIVATE_KEY" \
+            "$VAPID_PRIVATE_KEY"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
-
-      - name: Sincronizar segredo do Webhook Mercado Pago
-        run: |
-          if [ -n "$MERCADO_PAGO_WEBHOOK_SECRET" ]; then
-            printf '%s' "$MERCADO_PAGO_WEBHOOK_SECRET" \
-              | npx wrangler secret put MERCADO_PAGO_WEBHOOK_SECRET
-          else
-            echo "::warning::MERCADO_PAGO_WEBHOOK_SECRET ainda não foi cadastrado nos Secrets do GitHub."
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
+          ADMIN_PASSKEY_RECOVERY_SECRET: ${{ secrets.ADMIN_PASSKEY_RECOVERY_SECRET }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
       - name: Publicar Worker
         uses: cloudflare/wrangler-action@v4

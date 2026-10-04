@@ -1286,4 +1286,90 @@ export async function syncMercadoPagoOrder(
           `/admin/pedidos/${
             localPayment
               .order_code
-          }`
+          }`,
+          nowIso(),
+          localPayment
+            .order_id,
+        ),
+    ]);
+
+    return {
+      found:
+        true,
+
+      approved:
+        true,
+
+      alreadyUnlocked,
+
+      orderId:
+        localPayment
+          .order_id,
+
+      orderCode:
+        localPayment
+          .order_code,
+
+      paymentStatus,
+    };
+  }
+
+  if (
+    [
+      'expired',
+      'cancelled',
+      'rejected',
+    ].includes(
+      paymentStatus,
+    )
+  ) {
+    await releaseHold(
+      env.DB,
+      localPayment
+        .order_id,
+      paymentStatus
+      === 'expired'
+        ? 'expired'
+        : 'cancelled',
+    );
+
+    await env.DB
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            next_action = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        paymentStatus
+        === 'expired'
+          ? 'Pagamento expirado'
+          : 'Pagamento não concluído',
+        nowIso(),
+        localPayment
+          .order_id,
+      )
+      .run();
+  }
+
+  return {
+    found:
+      true,
+
+    approved:
+      false,
+
+    orderId:
+      localPayment
+        .order_id,
+
+    orderCode:
+      localPayment
+        .order_code,
+
+    paymentStatus,
+  };
+}

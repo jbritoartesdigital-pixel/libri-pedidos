@@ -1,0 +1,1210 @@
+import {
+  normalizeWhatsapp,
+  nowIso,
+  randomToken,
+} from './http.js';
+
+import {
+  calculateCommercialV2Quote,
+} from './v2-commercial-pricing.js';
+
+import {
+  findV2DeliveryOptions,
+  planV2AllocationForWindow,
+  validateV2DeliveryWindow,
+} from './v2-agenda.js';
+
+import {
+  loadV2Settings,
+  v2IntSetting,
+} from './v2-catalog.js';
+
+import {
+  createMercadoPagoCheckout,
+} from './v2-mercadopago.js';
+
+const TOKEN_PATTERN =
+  /^ord_[a-f0-9]{36}$/;
+
+function cleanText(
+  value,
+  maxLength = 500,
+) {
+  return String(
+    value
+    ?? '',
+  )
+    .trim()
+    .slice(
+      0,
+      maxLength,
+    );
+}
+
+function requiredText(
+  value,
+  label,
+  maxLength = 500,
+) {
+  const text =
+    cleanText(
+      value,
+      maxLength,
+    );
+
+  if (!text) {
+    throw new Error(
+      `${label} é obrigatório.`,
+    );
+  }
+
+  return text;
+}
+
+function validIsoDate(
+  value,
+) {
+  return /^\d{4}-\d{2}-\d{2}$/
+    .test(
+      String(
+        value
+        || '',
+      ),
+    );
+}
+
+async function nextOrderCode(
+  db,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          UPDATE v2_sequences
+          SET value = value + 1
+          WHERE name = 'order_number'
+          RETURNING value
+        `,
+      )
+      .first();
+
+  if (!row) {
+    throw new Error(
+      'Não foi possível gerar o número do pedido.',
+    );
+  }
+
+  return `LIBRI-${
+    String(
+      row.value,
+    )
+      .padStart(
+        4,
+        '0',
+      )
+  }`;
+}
+
+async function findCustomerByWhatsapp(
+  db,
+  whatsapp,
+) {
+  return db
+    .prepare(
+      `
+        SELECT
+          id,
+          name,
+          whatsapp,
+          email
+        FROM v2_customers
+        WHERE whatsapp = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+    )
+    .bind(
+      whatsapp,
+    )
+    .first();
+}
+
+async function upsertCustomer(
+  db,
+  {
+    name,
+    whatsapp,
+    email,
+  },
+) {
+  const existing =
+    await findCustomerByWhatsapp(
+      db,
+      whatsapp,
+    );
+
+  if (existing) {
+    await db
+      .prepare(
+        `
+          UPDATE v2_customers
+          SET
+            name = ?,
+            email = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        name,
+        email,
+        nowIso(),
+        existing.id,
+      )
+      .run();
+
+    return Number(
+      existing.id,
+    );
+  }
+
+  const result =
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_customers(
+            name,
+            whatsapp,
+            email,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        name,
+        whatsapp,
+        email,
+        nowIso(),
+        nowIso(),
+      )
+      .run();
+
+  return Number(
+    result
+      ?.meta
+      ?.last_row_id,
+  );
+}
+
+function orderItemRows(
+  quote,
+) {
+  return [
+    {
+      type:
+        'product',
+
+      code:
+        quote.variant
+          .code,
+
+      name:
+        quote.product
+          .pricingMode
+        === 'scene_count'
+          ? `${
+            quote.product
+              .name
+          } • ${
+            quote.variant
+              .label
+          }`
+          : quote.product
+            .name,
+
+      priceCents:
+        quote.variant
+          .priceCents,
+
+      pointsUnits:
+        quote.variant
+          .pointsUnits,
+
+      configuration: {
+        productCode:
+          quote.product
+            .code,
+
+        productSlug:
+          quote.product
+            .slug,
+
+        variantCode:
+          quote.variant
+            .code,
+
+        sceneCount:
+          quote.variant
+            .sceneCount,
+      },
+    },
+
+    ...quote.addons.map(
+      (addon) => ({
+        type:
+          'addon',
+
+        code:
+          addon.code,
+
+        name:
+          addon.name,
+
+        priceCents:
+          addon.priceCents,
+
+        pointsUnits:
+          addon.pointsUnits,
+
+        configuration:
+          addon.config
+          || {},
+      }),
+    ),
+  ];
+}
+
+async function createManualOrderRecords(
+  db,
+  {
+    customerId,
+    event,
+    quote,
+    deliveryWindow,
+    urgencyApproved,
+    orderCode,
+    publicToken,
+  },
+) {
+  const stamp =
+    nowIso();
+
+  const orderResult =
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_orders(
+            order_code,
+            public_token,
+            customer_id,
+
+            event_type,
+            event_subtype,
+            honoree_display_name,
+            event_date,
+
+            status,
+            next_action,
+
+            delivery_start,
+            delivery_end,
+            recommended_target_date,
+
+            urgency_enabled,
+            briefing_status,
+            source,
+
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?,
+            ?,
+            ?,
+
+            'awaiting_payment',
+            'Aguardando pagamento',
+
+            ?,
+            ?,
+            ?,
+
+            ?,
+            'locked',
+            'manual_whatsapp',
+
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderCode,
+        publicToken,
+        customerId,
+
+        event.type,
+        event.subtype,
+        event.honoreeName,
+        event.date,
+
+        deliveryWindow.start,
+        deliveryWindow.end,
+        deliveryWindow.recommendedTargetDate,
+
+        urgencyApproved
+          ? 1
+          : 0,
+
+        stamp,
+        stamp,
+      )
+      .run();
+
+  const orderId =
+    Number(
+      orderResult
+        ?.meta
+        ?.last_row_id,
+    );
+
+  const itemStatements =
+    orderItemRows(
+      quote,
+    )
+      .map(
+        (item) =>
+          db
+            .prepare(
+              `
+                INSERT INTO v2_order_items(
+                  order_id,
+                  item_type,
+                  item_code,
+                  name_snapshot,
+                  quantity,
+                  unit_price_cents,
+                  points_units,
+                  configuration_json,
+                  created_at
+                )
+                VALUES (
+                  ?,
+                  ?,
+                  ?,
+                  ?,
+                  1,
+                  ?,
+                  ?,
+                  ?,
+                  ?
+                )
+              `,
+            )
+            .bind(
+              orderId,
+              item.type,
+              item.code,
+              item.name,
+              item.priceCents,
+              item.pointsUnits,
+              JSON.stringify(
+                item.configuration,
+              ),
+              stamp,
+            ),
+      );
+
+  await db.batch([
+    ...itemStatements,
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_order_pricing(
+            order_id,
+            subtotal_cents,
+            combo_discount_cents,
+            coupon_discount_cents,
+            urgency_percent,
+            urgency_amount_cents,
+            total_cents,
+            payment_method,
+            deposit_percent,
+            deposit_cents,
+            balance_cents,
+            currency,
+            pricing_snapshot_json,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'BRL',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        quote.subtotalCents,
+        quote.comboDiscountCents,
+        quote.couponDiscountCents,
+        quote.urgency
+          .percent,
+        quote.urgency
+          .amountCents,
+        quote.totalCents,
+        quote.payment
+          .method,
+        quote.payment
+          .depositPercent,
+        quote.payment
+          .depositCents,
+        quote.payment
+          .balanceCents,
+        JSON.stringify(
+          quote,
+        ),
+        stamp,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_briefings(
+            order_id,
+            schema_version,
+            data_json,
+            current_section,
+            completion_percent,
+            updated_at
+          )
+          VALUES (
+            ?,
+            '2.0',
+            '{}',
+            NULL,
+            0,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        stamp,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'manual_order_created',
+            'Pedido criado manualmente a partir do atendimento.',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        JSON.stringify({
+          source:
+            'manual_whatsapp',
+
+          totalCents:
+            quote.totalCents,
+
+          paymentMethod:
+            quote.payment
+              .method,
+
+          comboCode:
+            quote.combo
+              ?.code
+            || null,
+
+          couponCode:
+            quote.coupon
+              ?.code
+            || null,
+
+          urgencyApproved,
+        }),
+        stamp,
+      ),
+  ]);
+
+  return orderId;
+}
+
+async function publicManualOrder(
+  db,
+  token,
+) {
+  if (
+    !TOKEN_PATTERN
+      .test(
+        String(
+          token
+          || '',
+        ),
+      )
+  ) {
+    return null;
+  }
+
+  const order =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.id,
+            o.order_code,
+            o.public_token,
+            o.event_type,
+            o.event_subtype,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            o.delivery_start,
+            o.delivery_end,
+            o.urgency_enabled,
+            o.briefing_status,
+
+            c.name AS customer_name,
+            c.email,
+
+            p.total_cents,
+            p.payment_method,
+            p.deposit_cents,
+            p.balance_cents,
+            p.pricing_snapshot_json
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          INNER JOIN v2_order_pricing p
+            ON p.order_id = o.id
+          WHERE
+            o.public_token = ?
+            AND o.source = 'manual_whatsapp'
+          LIMIT 1
+        `,
+      )
+      .bind(
+        token,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  const itemsResult =
+    await db
+      .prepare(
+        `
+          SELECT
+            item_type,
+            item_code,
+            name_snapshot,
+            quantity,
+            unit_price_cents
+          FROM v2_order_items
+          WHERE order_id = ?
+          ORDER BY id
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  const terms =
+    await db
+      .prepare(
+        `
+          SELECT
+            version,
+            body,
+            content_hash,
+            published_at
+          FROM v2_terms_versions
+          WHERE active = 1
+          ORDER BY published_at DESC
+          LIMIT 1
+        `,
+      )
+      .first();
+
+  const payment =
+    await db
+      .prepare(
+        `
+          SELECT
+            status,
+            checkout_url,
+            provider_order_id,
+            created_at
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+          ORDER BY id DESC
+          LIMIT 1
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  return {
+    id:
+      order.id,
+
+    code:
+      order.order_code,
+
+    token:
+      order.public_token,
+
+    customerName:
+      order.customer_name,
+
+    event: {
+      type:
+        order.event_type,
+
+      subtype:
+        order.event_subtype,
+
+      honoreeName:
+        order.honoree_display_name,
+
+      date:
+        order.event_date,
+    },
+
+    status:
+      order.status,
+
+    deliveryWindow: {
+      start:
+        order.delivery_start,
+
+      end:
+        order.delivery_end,
+    },
+
+    urgencyApproved:
+      order.urgency_enabled
+      === 1,
+
+    pricing: {
+      totalCents:
+        Number(
+          order.total_cents
+          || 0,
+        ),
+
+      paymentMethod:
+        order.payment_method,
+
+      depositCents:
+        Number(
+          order.deposit_cents
+          || 0,
+        ),
+
+      balanceCents:
+        Number(
+          order.balance_cents
+          || 0,
+        ),
+
+      snapshot:
+        JSON.parse(
+          order.pricing_snapshot_json
+          || '{}',
+        ),
+    },
+
+    items:
+      itemsResult.results
+      || [],
+
+    terms:
+      terms
+      ? {
+        version:
+          terms.version,
+
+        body:
+          terms.body,
+
+        contentHash:
+          terms.content_hash,
+
+        publishedAt:
+          terms.published_at,
+      }
+      : null,
+
+    payment: payment
+      ? {
+        status:
+          payment.status,
+
+        checkoutUrl:
+          payment.checkout_url,
+
+        providerOrderId:
+          payment.provider_order_id,
+      }
+      : null,
+
+    alreadyPaid:
+      payment
+        ?.status
+      === 'approved',
+
+    customerAreaPath:
+      `/meu-pedido/${
+        order.public_token
+      }`,
+  };
+}
+
+async function sha256Hex(
+  value,
+) {
+  const digest =
+    await crypto
+      .subtle
+      .digest(
+        'SHA-256',
+        new TextEncoder()
+          .encode(
+            String(
+              value
+              ?? '',
+            ),
+          ),
+      );
+
+  return Array.from(
+    new Uint8Array(
+      digest,
+    ),
+    (byte) =>
+      byte
+        .toString(16)
+        .padStart(
+          2,
+          '0',
+        ),
+  )
+    .join('');
+}
+
+async function createManualHold(
+  db,
+  {
+    orderId,
+    allocation,
+    expiresAt,
+    defaultCapacityUnits,
+  },
+) {
+  await db
+    .prepare(
+      `
+        UPDATE v2_checkout_holds
+        SET
+          status = 'expired',
+          updated_at = ?
+        WHERE
+          order_id = ?
+          AND status = 'active'
+          AND expires_at <= ?
+      `,
+    )
+    .bind(
+      nowIso(),
+      orderId,
+      nowIso(),
+    )
+    .run();
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT
+            id,
+            token,
+            expires_at
+          FROM v2_checkout_holds
+          WHERE
+            order_id = ?
+            AND status = 'active'
+            AND expires_at > ?
+          ORDER BY id DESC
+          LIMIT 1
+        `,
+      )
+      .bind(
+        orderId,
+        nowIso(),
+      )
+      .first();
+
+  if (existing) {
+    return {
+      holdId:
+        existing.id,
+
+      holdToken:
+        existing.token,
+
+      expiresAt:
+        existing.expires_at,
+
+      reused:
+        true,
+    };
+  }
+
+  const holdToken =
+    randomToken(
+      'hold_',
+    );
+
+  const result =
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_checkout_holds(
+            token,
+            order_id,
+            status,
+            expires_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            'active',
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        holdToken,
+        orderId,
+        expiresAt,
+        nowIso(),
+        nowIso(),
+      )
+      .run();
+
+  const holdId =
+    Number(
+      result
+        ?.meta
+        ?.last_row_id,
+    );
+
+  const stamp =
+    nowIso();
+
+  const statements =
+    allocation.map(
+      ({
+        day,
+        pointsUnits,
+      }) =>
+        db
+          .prepare(
+            `
+              INSERT INTO v2_checkout_hold_allocations(
+                hold_id,
+                day,
+                points_units,
+                created_at
+              )
+              SELECT
+                ?,
+                ?,
+                ?,
+                ?
+              WHERE
+                ? <=
+                (
+                  CASE
+                    WHEN COALESCE(
+                      (
+                        SELECT blocked
+                        FROM v2_agenda_days
+                        WHERE day = ?
+                      ),
+                      0
+                    ) = 1
+                    THEN 0
+                    ELSE COALESCE(
+                      (
+                        SELECT sellable_capacity_units
+                        FROM v2_agenda_days
+                        WHERE day = ?
+                      ),
+                      ?
+                    )
+                  END
+
+                  - COALESCE(
+                    (
+                      SELECT SUM(points_units)
+                      FROM v2_agenda_allocations
+                      WHERE day = ?
+                    ),
+                    0
+                  )
+
+                  - COALESCE(
+                    (
+                      SELECT SUM(a.points_units)
+                      FROM v2_checkout_hold_allocations a
+                      INNER JOIN v2_checkout_holds h
+                        ON h.id = a.hold_id
+                      WHERE
+                        a.day = ?
+                        AND h.status = 'active'
+                        AND h.expires_at > ?
+                    ),
+                    0
+                  )
+                )
+            `,
+          )
+          .bind(
+            holdId,
+            day,
+            pointsUnits,
+            stamp,
+
+            pointsUnits,
+
+            day,
+            day,
+            defaultCapacityUnits,
+
+            day,
+
+            day,
+            stamp,
+          ),
+    );
+
+  const results =
+    await db.batch(
+      statements,
+    );
+
+  if (
+    !results.every(
+      (entry) =>
+        Number(
+          entry
+            ?.meta
+            ?.changes
+          || 0,
+        )
+        === 1,
+    )
+  ) {
+    await db
+      .prepare(
+        `
+          DELETE FROM v2_checkout_holds
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        holdId,
+      )
+      .run();
+
+    throw new Error(
+      'Essa janela acabou de ficar indisponível. Ajuste o pedido antes de reenviar o link.',
+    );
+  }
+
+  return {
+    holdId,
+    holdToken,
+    expiresAt,
+
+    reused:
+      false,
+  };
+}
+
+export async function previewV2ManualOrder(
+  db,
+  body = {},
+) {
+  const eventDate =
+    requiredText(
+      body.event
+        ?.date,
+      'Data do evento',
+      10,
+    );
+
+  if (
+    !validIsoDate(
+      eventDate,
+    )
+  ) {
+    throw new Error(
+      'Data do evento inválida.',
+    );
+  }
+
+  const whatsapp =
+    normalizeWhatsapp(
+      body.customer
+        ?.whatsapp,
+    );
+
+  const existingCustomer =
+    whatsapp
+      ? await findCustomerByWhatsapp(
+        db,
+        whatsapp,
+      )
+      : null;
+
+  const quote =
+    await calculateCommercialV2Quote(
+      db,
+      body.selection
+      || {},
+      {
+        customerId:
+          existingCustomer
+            ?.id
+          || null,
+
+        eventType:
+          cleanText(
+            body.event
+              ?.type,
+            80,
+          ),
+
+        urgencyApproved:
+          body.urgencyApproved
+          === true,
+      },
+    );
+
+  const delivery =
+    await findV2DeliveryOptions(
+      db,
+      {
+        eventDate,
+
+        pointsUnits:
+          quote.pointsUnits,
+
+        limit:
+          6,
+      },
+    );
+
+  return {
+    quote,
+    delivery,
+  };
+}
+
+export async function createV2ManualOrder(
+  request,
+  env,
+  body = {},
+) {
+  const customerName =
+    requiredText(
+      body.customer
+        ?.name,
+      'Nome da cliente',
+      160,
+    );
+
+  const whatsapp =
+    normalizeWhatsapp(
+      body.customer
+        ?.whatsapp,
+    );
+
+  if (
+    whatsapp.length < 10
+    || whatsapp.length > 15
+  ) {
+    throw new Error(
+      'Confira o WhatsApp da cliente.',
+    );
+  }
+
+  const email =
+    cleanText(
+      body.customer
+        ?.email,
+      240,
+    )
+    || null;
+
+  const event = {
+    type:
+      requiredText(
+        body.event
+          ?.type,
+        'Tipo do evento',
+        80,
+ 

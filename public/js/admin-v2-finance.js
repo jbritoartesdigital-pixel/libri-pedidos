@@ -7,18 +7,26 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
-function findValue(object, keys, fallback = 0) {
-  for (const key of keys) {
-    if (
-      object
-      && object[key] !== undefined
-      && object[key] !== null
-    ) {
-      return object[key];
-    }
+function movementLabel(
+  row,
+) {
+  if (
+    row.paymentType
+    === 'refund'
+    || row.direction
+    === 'out'
+  ) {
+    return 'Reembolso';
   }
 
-  return fallback;
+  if (
+    row.paymentType
+    === 'balance'
+  ) {
+    return 'Saldo';
+  }
+
+  return 'Entrada';
 }
 
 export async function renderFinance() {
@@ -29,14 +37,44 @@ export async function renderFinance() {
 
   viewRoot.innerHTML = `
     <div class="toolbar">
-      <select id="financePreset" class="select" style="max-width:220px">
+      <select
+        id="financePreset"
+        class="select"
+        style="max-width:220px"
+      >
         <option value="this_month">Este mês</option>
-        <option value="last_month">Mês passado</option>
-        <option value="this_year">Este ano</option>
+        <option value="previous_month">Mês passado</option>
+        <option value="year">Este ano</option>
         <option value="custom">Personalizado</option>
       </select>
 
-      <input id="financeSearch" class="input" type="search" placeholder="Buscar pedido ou cliente" style="max-width:300px">
+      <div
+        id="financeCustomDates"
+        class="hidden"
+        style="display:flex;gap:8px;flex-wrap:wrap"
+      >
+        <input
+          id="financeStart"
+          class="input"
+          type="date"
+          style="max-width:170px"
+        >
+
+        <input
+          id="financeEnd"
+          class="input"
+          type="date"
+          style="max-width:170px"
+        >
+      </div>
+
+      <input
+        id="financeSearch"
+        class="input"
+        type="search"
+        placeholder="Buscar pedido ou cliente"
+        style="max-width:300px"
+      >
     </div>
 
     <div id="financeContent"></div>
@@ -44,122 +82,281 @@ export async function renderFinance() {
 
   const content =
     document
-      .getElementById('financeContent');
+      .getElementById(
+        'financeContent',
+      );
+
+  const preset =
+    document
+      .getElementById(
+        'financePreset',
+      );
+
+  const customDates =
+    document
+      .getElementById(
+        'financeCustomDates',
+      );
+
+  const startInput =
+    document
+      .getElementById(
+        'financeStart',
+      );
+
+  const endInput =
+    document
+      .getElementById(
+        'financeEnd',
+      );
+
+  const searchInput =
+    document
+      .getElementById(
+        'financeSearch',
+      );
+
+  const syncCustom =
+    () => {
+      customDates
+        .classList
+        .toggle(
+          'hidden',
+          preset.value
+          !== 'custom',
+        );
+    };
 
   const load =
     async () => {
+      if (
+        preset.value
+        === 'custom'
+        && (
+          !startInput.value
+          || !endInput.value
+        )
+      ) {
+        content.innerHTML =
+          empty(
+            'Escolha a data inicial e final.',
+          );
+
+        return;
+      }
+
       const params =
         new URLSearchParams({
           preset:
-            document
-              .getElementById('financePreset')
-              .value,
+            preset.value,
+
           q:
-            document
-              .getElementById('financeSearch')
-              .value
+            searchInput.value
               .trim(),
         });
 
-      const data =
-        await api(
-          `/api/admin/v2/finance?${params}`,
+      if (
+        preset.value
+        === 'custom'
+      ) {
+        params.set(
+          'start',
+          startInput.value,
         );
 
-      const f =
-        data.finance || {};
+        params.set(
+          'end',
+          endInput.value,
+        );
+      }
+
+      content.innerHTML =
+        empty(
+          'Carregando financeiro...',
+        );
+
+      const data =
+        await api(
+          `/api/admin/v2/finance?${
+            params
+          }`,
+        );
+
+      const finance =
+        data.finance
+        || {};
 
       const summary =
-        f.summary
-        || f.totals
-        || f;
+        finance.summary
+        || {};
 
       const rows =
-        f.transactions
-        || f.payments
-        || f.rows
-        || f.items
+        finance.movements
+        || [];
+
+      const receivables =
+        finance.receivables
         || [];
 
       content.innerHTML = `
         <div class="kpi-grid">
           <article class="kpi">
-            <span>Vendas</span>
+            <span>Vendas realizadas</span>
             <strong>
-              ${money(findValue(summary, ['salesCents','grossSalesCents','totalSalesCents']))}
+              ${money(summary.salesCents)}
             </strong>
           </article>
 
           <article class="kpi">
-            <span>Recebido</span>
+            <span>Entrou no caixa</span>
             <strong>
-              ${money(findValue(summary, ['cashCents','receivedCents','paidCents']))}
+              ${money(summary.cashInCents)}
             </strong>
           </article>
 
           <article class="kpi">
-            <span>A receber</span>
+            <span>A receber • vendas do período</span>
             <strong>
-              ${money(findValue(summary, ['receivableCents','pendingCents','openBalanceCents']))}
+              ${money(summary.receivableCents)}
             </strong>
           </article>
 
           <article class="kpi">
-            <span>Taxas Mercado Pago</span>
+            <span>A receber • total aberto</span>
             <strong>
-              ${money(findValue(summary, ['mercadoPagoFeeCents','feeCents','feesCents']))}
+              ${money(summary.openReceivableAllCents)}
             </strong>
           </article>
         </div>
 
-        <section class="card" style="margin-top:14px">
-          <div class="section-title">
-            <h2>Movimentações</h2>
-          </div>
+        <div class="kpi-grid" style="margin-top:12px">
+          <article class="kpi">
+            <span>Taxas Mercado Pago</span>
+            <strong>
+              ${money(summary.mercadoPagoFeeCents)}
+            </strong>
+          </article>
 
-          ${
-            rows.length
-              ? `
-                <div style="overflow:auto">
-                  <table class="finance-table">
-                    <thead>
-                      <tr>
-                        <th>Pedido</th>
-                        <th>Cliente</th>
-                        <th>Método</th>
-                        <th>Status</th>
-                        <th>Bruto</th>
-                        <th>Taxa</th>
-                        <th>Líquido</th>
-                      </tr>
-                    </thead>
+          <article class="kpi">
+            <span>Descontos</span>
+            <strong>
+              ${money(summary.discountsCents)}
+            </strong>
+          </article>
 
-                    <tbody>
-                      ${rows.map(
-                        (row) => `
-                          <tr>
-                            <td>${esc(row.orderCode || row.code || '')}</td>
-                            <td>${esc(row.customerName || '')}</td>
-                            <td>${esc(row.method || row.provider || '')}</td>
-                            <td>${esc(row.status || '')}</td>
-                            <td>${money(row.amountCents ?? row.grossCents ?? 0)}</td>
-                            <td>${money(row.feeCents ?? 0)}</td>
-                            <td>${money(row.netCents ?? 0)}</td>
-                          </tr>
-                        `,
-                      ).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              `
-              : empty('Nenhuma movimentação nesse período.')
-          }
-        </section>
+          <article class="kpi">
+            <span>Urgência</span>
+            <strong>
+              ${money(summary.urgencyAmountCents)}
+            </strong>
+          </article>
+
+          <article class="kpi">
+            <span>Movimento líquido</span>
+            <strong>
+              ${money(summary.netCashMovementCents)}
+            </strong>
+          </article>
+        </div>
+
+        <div class="section-grid">
+          <section class="card">
+            <div class="section-title">
+              <h2>Movimentações</h2>
+            </div>
+
+            ${
+              rows.length
+                ? `
+                  <div style="overflow:auto">
+                    <table class="finance-table">
+                      <thead>
+                        <tr>
+                          <th>Pedido</th>
+                          <th>Cliente</th>
+                          <th>Tipo</th>
+                          <th>Método</th>
+                          <th>Bruto</th>
+                          <th>Taxa</th>
+                          <th>Líquido</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        ${rows.map(
+                          (row) => `
+                            <tr>
+                              <td>${esc(row.orderCode || '')}</td>
+                              <td>${esc(row.customerName || '')}</td>
+                              <td>${esc(movementLabel(row))}</td>
+                              <td>${esc(row.method || row.provider || '')}</td>
+                              <td>${money(row.amountCents)}</td>
+                              <td>${money(row.feeCents)}</td>
+                              <td>${money(row.netCents)}</td>
+                            </tr>
+                          `,
+                        ).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                `
+                : empty(
+                  'Nenhuma movimentação nesse período.',
+                )
+            }
+          </section>
+
+          <section class="card">
+            <div class="section-title">
+              <h2>Saldos Pix em aberto</h2>
+            </div>
+
+            <div class="list">
+              ${
+                receivables.length
+                  ? receivables.map(
+                    (item) => `
+                      <div class="row-card">
+                        <strong>
+                          ${esc(item.orderCode)}
+                          •
+                          ${esc(item.honoreeName)}
+                        </strong>
+
+                        <small>
+                          ${esc(item.customerName)}
+                          • restante
+                          ${money(item.remainingCents)}
+                        </small>
+                      </div>
+                    `,
+                  ).join('')
+                  : empty(
+                    'Nenhum saldo Pix em aberto.',
+                  )
+              }
+            </div>
+          </section>
+        </div>
       `;
     };
 
-  document
-    .getElementById('financePreset')
+  preset
+    .addEventListener(
+      'change',
+      async () => {
+        syncCustom();
+        await load();
+      },
+    );
+
+  startInput
+    .addEventListener(
+      'change',
+      load,
+    );
+
+  endInput
     .addEventListener(
       'change',
       load,
@@ -167,16 +364,22 @@ export async function renderFinance() {
 
   let timer;
 
-  document
-    .getElementById('financeSearch')
+  searchInput
     .addEventListener(
       'input',
       () => {
-        clearTimeout(timer);
+        clearTimeout(
+          timer,
+        );
+
         timer =
-          setTimeout(load, 300);
+          setTimeout(
+            load,
+            300,
+          );
       },
     );
 
+  syncCustom();
   await load();
 }

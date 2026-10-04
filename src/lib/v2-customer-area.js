@@ -3318,7 +3318,11 @@ export async function submitV2Briefing(
       body:
         `${context.order.order_code} • ${context.order.honoree_display_name} • pronto para produção`,
       actionUrl:
-        `/admin/pedidos/${context.order.order_code}`,
+        `/admin-v2?order=${
+          encodeURIComponent(
+            context.order.order_code,
+          )
+        }`,
       priority:
         'high',
       pushEligible:

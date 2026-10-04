@@ -77,28 +77,46 @@ function diffDays(
 }
 
 function currentBrazilDay() {
-  const formatter =
-    new Intl.DateTimeFormat(
-      'en-CA',
-      {
-        timeZone:
-          'America/Sao_Paulo',
+  const parts =
+    new Intl
+      .DateTimeFormat(
+        'en-US',
+        {
+          timeZone:
+            'America/Sao_Paulo',
 
-        year:
-          'numeric',
+          year:
+            'numeric',
 
-        month:
-          '2-digit',
+          month:
+            '2-digit',
 
-        day:
-          '2-digit',
-      },
+          day:
+            '2-digit',
+        },
+      )
+      .formatToParts(
+        new Date(),
+      );
+
+  const map =
+    Object.fromEntries(
+      parts.map(
+        (part) => [
+          part.type,
+          part.value,
+        ],
+      ),
     );
 
   return parseIsoDay(
-    formatter.format(
-      new Date(),
-    ),
+    `${
+      map.year
+    }-${
+      map.month
+    }-${
+      map.day
+    }`,
   );
 }
 
@@ -389,13 +407,6 @@ function buildCandidateWindows({
 }) {
   const candidates = [];
 
-  /*
-   * Janelas móveis e sobrepostas.
-   * 3 e 4 dias permitem opções
-   * como 11–13 e 12–15 sem
-   * transformar a agenda em
-   * blocos rígidos.
-   */
   const windowLengths = [
     3,
     4,
@@ -434,10 +445,10 @@ function buildCandidateWindows({
       }
 
       const midpoint =
-        addDays(
-          start,
+        new Date(
           (
-            length - 1
+            start.getTime()
+            + end.getTime()
           )
           / 2,
         );
@@ -457,6 +468,99 @@ function buildCandidateWindows({
   }
 
   return candidates;
+}
+
+export async function validateV2DeliveryWindow(
+  db,
+  {
+    eventDate,
+    start,
+    end,
+  },
+) {
+  const eventDay =
+    parseIsoDay(
+      eventDate,
+    );
+
+  const startDay =
+    parseIsoDay(
+      start,
+    );
+
+  const endDay =
+    parseIsoDay(
+      end,
+    );
+
+  if (
+    endDay
+    < startDay
+  ) {
+    throw new Error(
+      'Janela de entrega inválida.',
+    );
+  }
+
+  const daysInWindow =
+    diffDays(
+      endDay,
+      startDay,
+    )
+    + 1;
+
+  if (
+    ![
+      3,
+      4,
+    ].includes(
+      daysInWindow,
+    )
+  ) {
+    throw new Error(
+      'Escolha uma das janelas de entrega disponíveis.',
+    );
+  }
+
+  const settings =
+    await loadV2Settings(
+      db,
+    );
+
+  const minimumDaysBeforeEvent =
+    v2IntSetting(
+      settings,
+      'minimum_delivery_days_before_event',
+      3,
+    );
+
+  const firstPossibleDay =
+    addDays(
+      currentBrazilDay(),
+      1,
+    );
+
+  const lastPossibleEnd =
+    addDays(
+      eventDay,
+      -minimumDaysBeforeEvent,
+    );
+
+  if (
+    startDay
+    < firstPossibleDay
+    || endDay
+    > lastPossibleEnd
+  ) {
+    throw new Error(
+      'Essa janela não é compatível com a data do evento.',
+    );
+  }
+
+  return {
+    valid:
+      true,
+  };
 }
 
 export async function findV2DeliveryOptions(
@@ -523,6 +627,12 @@ export async function findV2DeliveryOptions(
       -minimumDaysBeforeEvent,
     );
 
+  const targetDay =
+    addDays(
+      eventDay,
+      -recommendedDaysBefore,
+    );
+
   if (
     lastPossibleEnd
     < firstPossibleDay
@@ -530,10 +640,7 @@ export async function findV2DeliveryOptions(
     return {
       recommendedTargetDate:
         formatIsoDay(
-          addDays(
-            eventDay,
-            -recommendedDaysBefore,
-          ),
+          targetDay,
         ),
 
       options: [],
@@ -542,12 +649,6 @@ export async function findV2DeliveryOptions(
         true,
     };
   }
-
-  const targetDay =
-    addDays(
-      eventDay,
-      -recommendedDaysBefore,
-    );
 
   const candidates =
     buildCandidateWindows({
@@ -684,15 +785,6 @@ export async function findV2DeliveryOptions(
     };
   }
 
-  /*
-   * O primeiro resultado é o mais
-   * próximo da meta de ~40 dias.
-   * Ele recebe o selo "Recomendado".
-   *
-   * Não expomos Points Libri
-   * nem a distribuição interna
-   * para a cliente.
-   */
   const options =
     selected
       .map(
@@ -755,6 +847,23 @@ export async function planV2AllocationForWindow(
     );
   }
 
+  const requiredUnits =
+    Number.parseInt(
+      pointsUnits,
+      10,
+    );
+
+  if (
+    !Number.isInteger(
+      requiredUnits,
+    )
+    || requiredUnits <= 0
+  ) {
+    throw new Error(
+      'Carga de produção inválida.',
+    );
+  }
+
   const settings =
     await loadV2Settings(
       db,
@@ -772,9 +881,6 @@ export async function planV2AllocationForWindow(
     capacityMap,
     startDay,
     endDay,
-    Number.parseInt(
-      pointsUnits,
-      10,
-    ),
+    requiredUnits,
   );
 }

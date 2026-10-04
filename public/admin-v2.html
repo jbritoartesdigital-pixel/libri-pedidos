@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#f7f3f1">
+  <title>Libri Convites | Admin V2</title>
+  <link rel="manifest" href="/admin-manifest-v2.webmanifest">
+  <link rel="stylesheet" href="/css/admin-v2.css">
+</head>
+<body>
+  <div id="authGate" class="auth-gate hidden" aria-live="polite"></div>
+
+  <div id="adminApp" class="admin-app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">L</span>
+        <div>
+          <strong>Libri Convites</strong>
+          <small>Admin V2</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button data-view="central" class="nav-btn active">Central</button>
+        <button data-view="production" class="nav-btn">Produção</button>
+        <button data-view="agenda" class="nav-btn">Agenda</button>
+        <button data-view="finance" class="nav-btn">Financeiro</button>
+        <button data-view="store" class="nav-btn">Loja</button>
+        <button data-view="notifications" class="nav-btn">Notificações</button>
+        <button data-view="security" class="nav-btn">Segurança</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <button id="logoutBtn" class="btn btn-ghost btn-full" type="button">
+          Sair
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <span id="viewEyebrow" class="eyebrow">Hoje</span>
+          <h1 id="viewTitle">Central</h1>
+        </div>
+
+        <div class="top-actions">
+          <button id="notificationBell" class="icon-btn" type="button" aria-label="Notificações">
+            🔔
+            <span id="bellCount" class="bell-count hidden">0</span>
+          </button>
+
+          <button id="refreshBtn" class="btn btn-ghost" type="button">
+            Atualizar
+          </button>
+        </div>
+      </header>
+
+      <section id="viewRoot" class="view-root"></section>
+    </main>
+  </div>
+
+  <div id="modalRoot" class="modal-root hidden" aria-hidden="true"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/admin-v2.js"></script>
+</body>
+</html>

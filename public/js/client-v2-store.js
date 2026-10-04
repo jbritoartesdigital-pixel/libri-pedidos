@@ -413,6 +413,10 @@ async function updateQuote(
           JSON.stringify({
             selection:
               state.selection,
+
+            eventType:
+              state.event.type
+              || null,
           }),
       },
     );
@@ -1458,8 +1462,14 @@ function renderDetails(
                   JSON.stringify({
                     selection:
                       state.selection,
+
+                    eventType:
+                      state.event.type
+                      || null,
+
                     eventDate:
                       state.event.date,
+
                     limit:
                       6,
                   }),

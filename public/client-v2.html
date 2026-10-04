@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#fff8f3">
+  <title>Libri Convites</title>
+  <meta
+    name="description"
+    content="Pedidos e área privada da Libri Convites."
+  >
+  <link rel="stylesheet" href="/css/client-v2.css">
+</head>
+
+<body>
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="/pedido" aria-label="Libri Convites">
+      <span class="brand-mark">L</span>
+      <span class="brand-copy">
+        <strong>Libri Convites</strong>
+        <small id="brandSubtitle">Pedidos</small>
+      </span>
+    </a>
+
+    <a
+      id="headerHelp"
+      class="header-help hidden"
+      href="#"
+      target="_blank"
+      rel="noopener"
+    >
+      Falar com a Libri
+    </a>
+  </header>
+
+  <main id="app" class="app-shell" aria-live="polite">
+    <section class="loading-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <strong>Preparando tudo...</strong>
+      <small>Um instante ✨</small>
+    </section>
+  </main>
+
+  <div
+    id="toast"
+    class="toast hidden"
+    role="status"
+    aria-live="polite"
+  ></div>
+
+  <div
+    id="modalRoot"
+    class="modal-root hidden"
+    aria-hidden="true"
+  ></div>
+
+  <script type="module" src="/js/client-v2.js"></script>
+</body>
+</html>

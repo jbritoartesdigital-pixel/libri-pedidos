@@ -1132,4 +1132,279 @@ async function movementsForRange(
             signedNetCents,
 
           direction:
-            isRefu
+            isRefund
+              ? 'out'
+              : 'in',
+        };
+      },
+    );
+}
+
+async function openReceivables(
+  db,
+  {
+    limit = 100,
+  } = {},
+) {
+  const safeLimit =
+    Math.max(
+      1,
+      Math.min(
+        200,
+        Number.parseInt(
+          limit,
+          10,
+        )
+        || 100,
+      ),
+    );
+
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            o.delivery_start,
+            o.delivery_end,
+
+            c.name AS customer_name,
+            c.whatsapp,
+
+            pr.total_cents,
+
+            COALESCE(
+              (
+                SELECT SUM(pay.amount_cents)
+                FROM v2_payments pay
+                WHERE
+                  pay.order_id = o.id
+                  AND pay.status = 'approved'
+                  AND pay.payment_type != 'refund'
+              ),
+              0
+            ) AS paid_cents,
+
+            COALESCE(
+              (
+                SELECT SUM(ref.amount_cents)
+                FROM v2_payments ref
+                WHERE
+                  ref.order_id = o.id
+                  AND ref.status = 'approved'
+                  AND ref.payment_type = 'refund'
+              ),
+              0
+            ) AS refunded_cents,
+
+            (
+              SELECT MIN(initial.paid_at)
+              FROM v2_payments initial
+              WHERE
+                initial.order_id = o.id
+                AND initial.status = 'approved'
+                AND initial.payment_type != 'refund'
+            ) AS sale_at
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          INNER JOIN v2_order_pricing pr
+            ON pr.order_id = o.id
+          WHERE
+            pr.payment_method = 'pix'
+            AND o.status != 'cancelled'
+            AND EXISTS (
+              SELECT 1
+              FROM v2_payments initial
+              WHERE
+                initial.order_id = o.id
+                AND initial.status = 'approved'
+                AND initial.payment_type != 'refund'
+            )
+          ORDER BY
+            CASE o.status
+              WHEN 'balance_pending'
+                THEN 0
+              ELSE 1
+            END,
+            o.delivery_start,
+            o.event_date,
+            o.created_at
+          LIMIT ?
+        `,
+      )
+      .bind(
+        safeLimit,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  )
+    .map(
+      (row) => {
+        const total =
+          numberValue(
+            row.total_cents,
+          );
+
+        const paid =
+          numberValue(
+            row.paid_cents,
+          );
+
+        const refunded =
+          numberValue(
+            row.refunded_cents,
+          );
+
+        const remaining =
+          Math.max(
+            0,
+            total
+            - paid
+            + refunded,
+          );
+
+        return {
+          orderCode:
+            row.order_code,
+
+          honoreeName:
+            row.honoree_display_name,
+
+          customerName:
+            row.customer_name,
+
+          whatsapp:
+            row.whatsapp,
+
+          eventDate:
+            row.event_date,
+
+          status:
+            row.status,
+
+          deliveryWindow: {
+            start:
+              row.delivery_start,
+
+            end:
+              row.delivery_end,
+          },
+
+          saleAt:
+            row.sale_at,
+
+          totalCents:
+            total,
+
+          paidCents:
+            paid,
+
+          refundedCents:
+            refunded,
+
+          remainingCents:
+            remaining,
+        };
+      },
+    )
+    .filter(
+      (row) =>
+        row.remainingCents
+        > 0,
+    );
+}
+
+export async function getV2FinanceDashboard(
+  db,
+  filters = {},
+) {
+  const range =
+    resolveFinanceRange(
+      filters,
+    );
+
+  const [
+    summary,
+    byProduct,
+    byPaymentMethod,
+    byProvider,
+    movements,
+    receivables,
+  ] =
+    await Promise.all([
+      summaryForRange(
+        db,
+        range,
+      ),
+
+      salesByProduct(
+        db,
+        range,
+      ),
+
+      salesByPaymentMethod(
+        db,
+        range,
+      ),
+
+      cashByProvider(
+        db,
+        range,
+      ),
+
+      movementsForRange(
+        db,
+        range,
+        filters,
+      ),
+
+      openReceivables(
+        db,
+      ),
+    ]);
+
+  return {
+    range,
+
+    summary,
+
+    breakdown: {
+      byProduct,
+
+      byPaymentMethod,
+
+      byProvider,
+    },
+
+    movements,
+
+    receivables,
+  };
+}
+
+export async function getV2FinanceSummary(
+  db,
+  filters = {},
+) {
+  const range =
+    resolveFinanceRange(
+      filters,
+    );
+
+  return {
+    range,
+
+    summary:
+      await summaryForRange(
+        db,
+        range,
+      ),
+  };
+}

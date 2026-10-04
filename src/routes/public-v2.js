@@ -21,6 +21,11 @@ import {
   V2CheckoutError,
 } from '../lib/v2-checkout.js';
 
+import {
+  syncMercadoPagoOrder,
+  validateMercadoPagoWebhook,
+} from '../lib/v2-mercadopago.js';
+
 async function readActiveV2Terms(
   db,
 ) {
@@ -87,6 +92,92 @@ export async function handlePublicV2Api(
 
   const path =
     url.pathname;
+
+  /* ==================================================
+     WEBHOOK MERCADO PAGO
+  ================================================== */
+
+  if (
+    method === 'POST'
+    && path
+      === '/api/v2/payments/mercado-pago/webhook'
+  ) {
+    let body = {};
+
+    try {
+      body =
+        await request
+          .json();
+    } catch {
+      body = {};
+    }
+
+    const valid =
+      await validateMercadoPagoWebhook(
+        request,
+        env,
+        url,
+        body,
+      );
+
+    if (!valid) {
+      return fail(
+        'Assinatura de webhook inválida.',
+        401,
+      );
+    }
+
+    const providerOrderId =
+      String(
+        url.searchParams
+          .get(
+            'data.id',
+          )
+        || url.searchParams
+          .get(
+            'data_id',
+          )
+        || body
+          ?.data
+          ?.id
+        || '',
+      )
+        .trim();
+
+    if (
+      body
+        ?.type
+      && body.type
+        !== 'order'
+    ) {
+      return json({
+        ok: true,
+        ignored: true,
+      });
+    }
+
+    if (!providerOrderId) {
+      return fail(
+        'Order do Mercado Pago não informada.',
+        422,
+      );
+    }
+
+    /*
+     * Não confiamos no status vindo no webhook.
+     * Consultamos a Order diretamente no Mercado Pago.
+     */
+    const result =
+      await syncMercadoPagoOrder(
+        env,
+        providerOrderId,
+      );
+
+    return json({
+      ok: true,
+      result,
+    });
+  }
 
   /* ==================================================
      CATÁLOGO V2
@@ -249,10 +340,6 @@ export async function handlePublicV2Api(
 
   /* ==================================================
      INICIAR CHECKOUT V2
-
-     Cria pedido aguardando pagamento,
-     registra termos e segura a capacidade.
-     Mercado Pago entra no próximo bloco.
   ================================================== */
 
   if (

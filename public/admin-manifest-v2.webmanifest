@@ -1,0 +1,10 @@
+{
+  "name": "Libri Convites | Admin",
+  "short_name": "Libri Admin",
+  "description": "Painel de produção e pedidos da Libri Convites",
+  "start_url": "/admin/",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}

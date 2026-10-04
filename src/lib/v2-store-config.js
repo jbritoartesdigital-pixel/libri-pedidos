@@ -1285,3 +1285,2345 @@ export async function updateV2Product(
 
     slug:
       existing.slug,
+
+    pricingMode:
+      existing.pricing_mode,
+
+    name,
+
+    shortDescription:
+      description,
+
+    active:
+      active
+      === 1,
+
+    sortOrder,
+  };
+}
+
+export async function updateV2Variant(
+  db,
+  code,
+  body = {},
+) {
+  const variantCode =
+    safeCode(
+      code,
+      'Variante',
+    );
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT
+            pv.*,
+            p.code AS product_code
+          FROM v2_product_variants pv
+          INNER JOIN v2_products p
+            ON p.id = pv.product_id
+          WHERE pv.code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        variantCode,
+      )
+      .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  const label =
+    body.label
+    === undefined
+      ? existing.label
+      : cleanText(
+        body.label,
+        120,
+      );
+
+  if (!label) {
+    throw new Error(
+      'Nome da configuração é obrigatório.',
+    );
+  }
+
+  const priceCents =
+    body.priceCents
+    === undefined
+      ? existing.price_cents
+      : integer(
+        body.priceCents,
+        {
+          min:
+            0,
+
+          max:
+            100000000,
+
+          label:
+            'Preço',
+        },
+      );
+
+  const pointsUnits =
+    body.pointsUnits
+    === undefined
+      ? existing.points_units
+      : integer(
+        body.pointsUnits,
+        {
+          min:
+            0,
+
+          max:
+            100000,
+
+          label:
+            'Points Libri',
+        },
+      );
+
+  const active =
+    body.active
+    === undefined
+      ? existing.active
+      : (
+        booleanValue(
+          body.active,
+        )
+          ? 1
+          : 0
+      );
+
+  const sortOrder =
+    body.sortOrder
+    === undefined
+      ? existing.sort_order
+      : integer(
+        body.sortOrder,
+        {
+          min:
+            0,
+
+          max:
+            10000,
+
+          label:
+            'Ordem',
+        },
+      );
+
+  const makeDefault =
+    body.isDefault
+    === undefined
+      ? existing.is_default
+      === 1
+      : booleanValue(
+        body.isDefault,
+      );
+
+  const statements = [];
+
+  if (
+    makeDefault
+  ) {
+    statements.push(
+      db
+        .prepare(
+          `
+            UPDATE v2_product_variants
+            SET
+              is_default = 0,
+              updated_at = ?
+            WHERE product_id = ?
+          `,
+        )
+        .bind(
+          nowIso(),
+          existing.product_id,
+        ),
+    );
+  }
+
+  statements.push(
+    db
+      .prepare(
+        `
+          UPDATE v2_product_variants
+          SET
+            label = ?,
+            price_cents = ?,
+            points_units = ?,
+            is_default = ?,
+            active = ?,
+            sort_order = ?,
+            updated_at = ?
+          WHERE code = ?
+        `,
+      )
+      .bind(
+        label,
+        priceCents,
+        pointsUnits,
+        makeDefault
+          ? 1
+          : 0,
+        active,
+        sortOrder,
+        nowIso(),
+        variantCode,
+      ),
+  );
+
+  await db.batch(
+    statements,
+  );
+
+  return {
+    code:
+      variantCode,
+
+    productCode:
+      existing.product_code,
+
+    label,
+
+    sceneCount:
+      existing.scene_count,
+
+    priceCents,
+
+    pointsUnits,
+
+    isDefault:
+      makeDefault,
+
+    active:
+      active
+      === 1,
+
+    sortOrder,
+  };
+}
+
+export async function updateV2Addon(
+  db,
+  code,
+  body = {},
+) {
+  const addonCode =
+    safeCode(
+      code,
+      'Adicional',
+    );
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT *
+          FROM v2_addons
+          WHERE code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        addonCode,
+      )
+      .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  const name =
+    body.name
+    === undefined
+      ? existing.name
+      : cleanText(
+        body.name,
+        160,
+      );
+
+  if (!name) {
+    throw new Error(
+      'Nome do adicional é obrigatório.',
+    );
+  }
+
+  const priceCents =
+    body.priceCents
+    === undefined
+      ? existing.price_cents
+      : integer(
+        body.priceCents,
+        {
+          min:
+            0,
+
+          max:
+            100000000,
+
+          label:
+            'Preço',
+        },
+      );
+
+  const pointsUnits =
+    body.pointsUnits
+    === undefined
+      ? existing.points_units
+      : integer(
+        body.pointsUnits,
+        {
+          min:
+            0,
+
+          max:
+            100000,
+
+          label:
+            'Points Libri',
+        },
+      );
+
+  const active =
+    body.active
+    === undefined
+      ? existing.active
+      : (
+        booleanValue(
+          body.active,
+        )
+          ? 1
+          : 0
+      );
+
+  const sortOrder =
+    body.sortOrder
+    === undefined
+      ? existing.sort_order
+      : integer(
+        body.sortOrder,
+        {
+          min:
+            0,
+
+          max:
+            10000,
+
+          label:
+            'Ordem',
+        },
+      );
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_addons
+        SET
+          name = ?,
+          price_cents = ?,
+          points_units = ?,
+          active = ?,
+          sort_order = ?,
+          updated_at = ?
+        WHERE code = ?
+      `,
+    )
+    .bind(
+      name,
+      priceCents,
+      pointsUnits,
+      active,
+      sortOrder,
+      nowIso(),
+      addonCode,
+    )
+    .run();
+
+  return {
+    code:
+      addonCode,
+
+    group:
+      existing.addon_group,
+
+    name,
+
+    priceCents,
+
+    pointsUnits,
+
+    active:
+      active
+      === 1,
+
+    sortOrder,
+  };
+}
+
+async function validateComboItem(
+  db,
+  item,
+) {
+  const itemType =
+    cleanText(
+      item.itemType,
+      40,
+    );
+
+  const itemCode =
+    safeCode(
+      item.itemCode,
+      'Item do combo',
+    );
+
+  if (
+    itemType
+    === 'addon'
+  ) {
+    const row =
+      await db
+        .prepare(
+          `
+            SELECT code
+            FROM v2_addons
+            WHERE code = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          itemCode,
+        )
+        .first();
+
+    if (!row) {
+      throw new Error(
+        `Adicional do combo não encontrado: ${itemCode}.`,
+      );
+    }
+  } else if (
+    itemType
+    === 'addon_group'
+  ) {
+    const row =
+      await db
+        .prepare(
+          `
+            SELECT addon_group
+            FROM v2_addons
+            WHERE addon_group = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          itemCode,
+        )
+        .first();
+
+    if (!row) {
+      throw new Error(
+        `Grupo do combo não encontrado: ${itemCode}.`,
+      );
+    }
+  } else if (
+    itemType
+    === 'main_product'
+  ) {
+    const row =
+      await db
+        .prepare(
+          `
+            SELECT code
+            FROM v2_products
+            WHERE code = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          itemCode,
+        )
+        .first();
+
+    if (!row) {
+      throw new Error(
+        `Produto do combo não encontrado: ${itemCode}.`,
+      );
+    }
+  } else {
+    throw new Error(
+      'Tipo de item do combo inválido.',
+    );
+  }
+
+  return {
+    itemType,
+
+    itemCode,
+
+    required:
+      item.required
+      !== false,
+  };
+}
+
+export async function saveV2Combo(
+  db,
+  code,
+  body = {},
+) {
+  const comboCode =
+    safeCode(
+      code,
+      'Combo',
+    );
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT *
+          FROM v2_combos
+          WHERE code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        comboCode,
+      )
+      .first();
+
+  const name =
+    requiredComboText(
+      body.name
+      ?? existing
+        ?.name,
+      'Nome do combo',
+      160,
+    );
+
+  const description =
+    cleanText(
+      body.description
+      ?? existing
+        ?.description,
+      1000,
+    );
+
+  const discountType =
+    cleanText(
+      body.discountType
+      ?? existing
+        ?.discount_type,
+      20,
+    );
+
+  if (
+    ![
+      'fixed',
+      'percent',
+    ].includes(
+      discountType,
+    )
+  ) {
+    throw new Error(
+      'Tipo de desconto do combo inválido.',
+    );
+  }
+
+  const discountValue =
+    integer(
+      body.discountValue
+      ?? existing
+        ?.discount_value,
+      {
+        min:
+          0,
+
+        max:
+          discountType
+          === 'percent'
+            ? 100
+            : 100000000,
+
+        label:
+          'Desconto do combo',
+      },
+    );
+
+  const active =
+    body.active
+    === undefined
+      ? (
+        existing
+          ? existing.active
+          : 1
+      )
+      : (
+        booleanValue(
+          body.active,
+        )
+          ? 1
+          : 0
+      );
+
+  const rawItems =
+    Array.isArray(
+      body.items,
+    )
+      ? body.items
+      : null;
+
+  let items;
+
+  if (
+    rawItems
+  ) {
+    items = [];
+
+    for (
+      const item
+      of rawItems
+    ) {
+      items.push(
+        await validateComboItem(
+          db,
+          item,
+        ),
+      );
+    }
+
+    if (
+      !items.length
+    ) {
+      throw new Error(
+        'O combo precisa ter pelo menos um adicional além do convite.',
+      );
+    }
+  } else if (
+    existing
+  ) {
+    const result =
+      await db
+        .prepare(
+          `
+            SELECT
+              item_type,
+              item_code,
+              required
+            FROM v2_combo_items
+            WHERE combo_id = ?
+            ORDER BY id
+          `,
+        )
+        .bind(
+          existing.id,
+        )
+        .all();
+
+    items =
+      (
+        result.results
+        || []
+      )
+        .map(
+          (row) => ({
+            itemType:
+              row.item_type,
+
+            itemCode:
+              row.item_code,
+
+            required:
+              row.required
+              === 1,
+          }),
+        );
+  } else {
+    throw new Error(
+      'Defina os adicionais que fazem parte do combo.',
+    );
+  }
+
+  const stamp =
+    nowIso();
+
+  let comboId =
+    existing
+      ?.id;
+
+  if (
+    existing
+  ) {
+    await db
+      .prepare(
+        `
+          UPDATE v2_combos
+          SET
+            name = ?,
+            description = ?,
+            discount_type = ?,
+            discount_value = ?,
+            active = ?,
+            config_json = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        name,
+        description,
+        discountType,
+        discountValue,
+        active,
+        JSON.stringify({
+          includesInvitation:
+            true,
+        }),
+        stamp,
+        existing.id,
+      )
+      .run();
+  } else {
+    const result =
+      await db
+        .prepare(
+          `
+            INSERT INTO v2_combos(
+              code,
+              name,
+              description,
+              discount_type,
+              discount_value,
+              active,
+              config_json,
+              created_at,
+              updated_at
+            )
+            VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?
+            )
+          `,
+        )
+        .bind(
+          comboCode,
+          name,
+          description,
+          discountType,
+          discountValue,
+          active,
+          JSON.stringify({
+            includesInvitation:
+              true,
+          }),
+          stamp,
+          stamp,
+        )
+        .run();
+
+    comboId =
+      Number(
+        result
+          ?.meta
+          ?.last_row_id,
+      );
+  }
+
+  if (
+    rawItems
+  ) {
+    await db
+      .prepare(
+        `
+          DELETE FROM v2_combo_items
+          WHERE combo_id = ?
+        `,
+      )
+      .bind(
+        comboId,
+      )
+      .run();
+
+    if (
+      items.length
+    ) {
+      await db.batch(
+        items.map(
+          (item) =>
+            db
+              .prepare(
+                `
+                  INSERT INTO v2_combo_items(
+                    combo_id,
+                    item_type,
+                    item_code,
+                    required,
+                    created_at
+                  )
+                  VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
+                  )
+                `,
+              )
+              .bind(
+                comboId,
+                item.itemType,
+                item.itemCode,
+                item.required
+                  ? 1
+                  : 0,
+                stamp,
+              ),
+        ),
+      );
+    }
+  }
+
+  return {
+    code:
+      comboCode,
+
+    name,
+
+    description,
+
+    discountType,
+
+    discountValue,
+
+    active:
+      active
+      === 1,
+
+    includesInvitation:
+      true,
+
+    items,
+  };
+}
+
+function requiredComboText(
+  value,
+  label,
+  maxLength,
+) {
+  const text =
+    cleanText(
+      value,
+      maxLength,
+    );
+
+  if (!text) {
+    throw new Error(
+      `${label} é obrigatório.`,
+    );
+  }
+
+  return text;
+}
+
+export async function saveV2Coupon(
+  db,
+  code,
+  body = {},
+) {
+  const couponCode =
+    cleanText(
+      code,
+      80,
+    )
+      .toUpperCase();
+
+  if (
+    !/^[A-Z0-9][A-Z0-9_-]*$/
+      .test(
+        couponCode,
+      )
+  ) {
+    throw new Error(
+      'Código do cupom inválido.',
+    );
+  }
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT *
+          FROM v2_coupons
+          WHERE code = ?
+          COLLATE NOCASE
+          LIMIT 1
+        `,
+      )
+      .bind(
+        couponCode,
+      )
+      .first();
+
+  const discountType =
+    cleanText(
+      body.discountType
+      ?? existing
+        ?.discount_type,
+      20,
+    );
+
+  if (
+    ![
+      'fixed',
+      'percent',
+    ].includes(
+      discountType,
+    )
+  ) {
+    throw new Error(
+      'Tipo de desconto inválido.',
+    );
+  }
+
+  const discountValue =
+    integer(
+      body.discountValue
+      ?? existing
+        ?.discount_value,
+      {
+        min:
+          0,
+
+        max:
+          discountType
+          === 'percent'
+            ? 100
+            : 100000000,
+
+        label:
+          'Desconto',
+      },
+    );
+
+  const minOrderCents =
+    integer(
+      body.minOrderCents
+      ?? existing
+        ?.min_order_cents
+      ?? 0,
+      {
+        min:
+          0,
+
+        max:
+          100000000,
+
+        label:
+          'Pedido mínimo',
+      },
+    );
+
+  const nullablePositiveInt =
+    (
+      value,
+      fallback,
+      label,
+    ) => {
+      if (
+        value === null
+      ) {
+        return null;
+      }
+
+      if (
+        value === undefined
+      ) {
+        return fallback;
+      }
+
+      return integer(
+        value,
+        {
+          min:
+            1,
+
+          max:
+            1000000,
+
+          label,
+        },
+      );
+    };
+
+  const maxUses =
+    nullablePositiveInt(
+      body.maxUses,
+      existing
+        ?.max_uses
+      ?? null,
+      'Limite de usos',
+    );
+
+  const maxUsesPerCustomer =
+    nullablePositiveInt(
+      body.maxUsesPerCustomer,
+      existing
+        ?.max_uses_per_customer
+      ?? null,
+      'Limite por cliente',
+    );
+
+  const active =
+    body.active
+    === undefined
+      ? (
+        existing
+          ? existing.active
+          : 1
+      )
+      : (
+        booleanValue(
+          body.active,
+        )
+          ? 1
+          : 0
+      );
+
+  const validFrom =
+    body.validFrom
+    === undefined
+      ? existing
+        ?.valid_from
+      ?? null
+      : cleanText(
+        body.validFrom,
+        40,
+      )
+      || null;
+
+  const validUntil =
+    body.validUntil
+    === undefined
+      ? existing
+        ?.valid_until
+      ?? null
+      : cleanText(
+        body.validUntil,
+        40,
+      )
+      || null;
+
+  const restrictions =
+    body.restrictions
+    === undefined
+      ? parseJson(
+        existing
+          ?.restrictions_json,
+        {},
+      )
+      : (
+        body.restrictions
+        && typeof body.restrictions
+        === 'object'
+        && !Array.isArray(
+          body.restrictions,
+        )
+          ? body.restrictions
+          : {}
+      );
+
+  const stamp =
+    nowIso();
+
+  if (
+    existing
+  ) {
+    await db
+      .prepare(
+        `
+          UPDATE v2_coupons
+          SET
+            discount_type = ?,
+            discount_value = ?,
+            min_order_cents = ?,
+            max_uses = ?,
+            max_uses_per_customer = ?,
+            valid_from = ?,
+            valid_until = ?,
+            active = ?,
+            restrictions_json = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        discountType,
+        discountValue,
+        minOrderCents,
+        maxUses,
+        maxUsesPerCustomer,
+        validFrom,
+        validUntil,
+        active,
+        JSON.stringify(
+          restrictions,
+        ),
+        stamp,
+        existing.id,
+      )
+      .run();
+  } else {
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_coupons(
+            code,
+            discount_type,
+            discount_value,
+            min_order_cents,
+            max_uses,
+            max_uses_per_customer,
+            valid_from,
+            valid_until,
+            active,
+            restrictions_json,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        couponCode,
+        discountType,
+        discountValue,
+        minOrderCents,
+        maxUses,
+        maxUsesPerCustomer,
+        validFrom,
+        validUntil,
+        active,
+        JSON.stringify(
+          restrictions,
+        ),
+        stamp,
+        stamp,
+      )
+      .run();
+  }
+
+  return {
+    code:
+      couponCode,
+
+    discountType,
+
+    discountValue,
+
+    minOrderCents,
+
+    maxUses,
+
+    maxUsesPerCustomer,
+
+    validFrom,
+
+    validUntil,
+
+    active:
+      active
+      === 1,
+
+    restrictions,
+  };
+}
+
+export async function updateV2Settings(
+  db,
+  values = {},
+) {
+  if (
+    !values
+    || typeof values
+    !== 'object'
+    || Array.isArray(
+      values,
+    )
+  ) {
+    throw new Error(
+      'Configurações inválidas.',
+    );
+  }
+
+  const statements = [];
+
+  const saved = {};
+
+  for (
+    const [
+      key,
+      rawValue,
+    ]
+    of Object.entries(
+      values,
+    )
+  ) {
+    if (
+      !SETTINGS_ALLOWLIST
+        .has(
+          key,
+        )
+    ) {
+      continue;
+    }
+
+    let value;
+
+    if (
+      INTEGER_SETTINGS
+        .has(
+          key,
+        )
+    ) {
+      const rule =
+        INTEGER_SETTINGS
+          .get(
+            key,
+          );
+
+      value =
+        String(
+          integer(
+            rawValue,
+            {
+              ...rule,
+
+              label:
+                key,
+            },
+          ),
+        );
+    } else {
+      value =
+        cleanText(
+          rawValue,
+          2000,
+        );
+    }
+
+    saved[
+      key
+    ] =
+      value;
+
+    statements.push(
+      db
+        .prepare(
+          `
+            INSERT INTO v2_settings(
+              key,
+              value,
+              updated_at
+            )
+            VALUES (
+              ?,
+              ?,
+              ?
+            )
+            ON CONFLICT(key)
+            DO UPDATE SET
+              value =
+                excluded.value,
+
+              updated_at =
+                excluded.updated_at
+          `,
+        )
+        .bind(
+          key,
+          value,
+          nowIso(),
+        ),
+    );
+  }
+
+  /*
+   * HARD LOCK técnico:
+   * parcelamento financiado pelo comprador.
+   * Não expomos opção "seller" na configuração.
+   */
+  statements.push(
+    db
+      .prepare(
+        `
+          INSERT INTO v2_settings(
+            key,
+            value,
+            updated_at
+          )
+          VALUES (
+            'mercado_pago_installments_cost',
+            'buyer',
+            ?
+          )
+          ON CONFLICT(key)
+          DO UPDATE SET
+            value = 'buyer',
+            updated_at =
+              excluded.updated_at
+        `,
+      )
+      .bind(
+        nowIso(),
+      ),
+  );
+
+  await db.batch(
+    statements,
+  );
+
+  return {
+    saved,
+
+    enforced: {
+      mercado_pago_installments_cost:
+        'buyer',
+    },
+  };
+}
+
+async function ensureProductExists(
+  db,
+  productCode,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT code
+          FROM v2_products
+          WHERE code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        productCode,
+      )
+      .first();
+
+  if (!row) {
+    throw new Error(
+      'Produto da galeria não encontrado.',
+    );
+  }
+}
+
+async function galleryMaxBytes(
+  db,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT value
+          FROM v2_settings
+          WHERE key = 'gallery_max_upload_mb'
+          LIMIT 1
+        `,
+      )
+      .first();
+
+  const mb =
+    Number.parseInt(
+      row
+        ?.value,
+      10,
+    )
+    || 80;
+
+  return mb
+    * 1024
+    * 1024;
+}
+
+async function putGalleryFile(
+  env,
+  {
+    file,
+    keyPrefix,
+    allowedTypes,
+    maxBytes,
+  },
+) {
+  if (
+    !file
+    || typeof file
+      .stream
+      !== 'function'
+  ) {
+    return null;
+  }
+
+  const mimeType =
+    String(
+      file.type
+      || '',
+    )
+      .toLowerCase();
+
+  if (
+    !allowedTypes
+      .has(
+        mimeType,
+      )
+  ) {
+    throw new Error(
+      'Formato de mídia não permitido.',
+    );
+  }
+
+  const size =
+    Number(
+      file.size
+      || 0,
+    );
+
+  if (
+    size <= 0
+    || size > maxBytes
+  ) {
+    throw new Error(
+      'Arquivo acima do limite permitido.',
+    );
+  }
+
+  const key =
+    `${
+      keyPrefix
+    }/${
+      randomToken(
+        'media_',
+      )
+    }${
+      mimeExtension(
+        mimeType,
+      )
+    }`;
+
+  await env.FILES
+    .put(
+      key,
+      file.stream(),
+      {
+        httpMetadata: {
+          contentType:
+            mimeType,
+
+          cacheControl:
+            'private, max-age=0',
+        },
+      },
+    );
+
+  return {
+    key,
+
+    mimeType,
+
+    sizeBytes:
+      size,
+
+    originalFilename:
+      cleanText(
+        file.name,
+        240,
+      ),
+
+    mediaType:
+      mimeType
+        .startsWith(
+          'video/',
+        )
+          ? 'video'
+          : 'image',
+  };
+}
+
+export async function createV2GalleryItem(
+  request,
+  env,
+) {
+  if (!env.FILES) {
+    throw new Error(
+      'R2 ainda não está configurado.',
+    );
+  }
+
+  const form =
+    await request
+      .formData();
+
+  const productCode =
+    safeCode(
+      form.get(
+        'productCode',
+      ),
+      'Produto',
+    );
+
+  await ensureProductExists(
+    env.DB,
+    productCode,
+  );
+
+  const media =
+    form.get(
+      'media',
+    );
+
+  const externalUrl =
+    cleanText(
+      form.get(
+        'externalUrl',
+      ),
+      1000,
+    )
+    || null;
+
+  if (
+    (
+      !media
+      || typeof media
+        .stream
+        !== 'function'
+    )
+    && !externalUrl
+  ) {
+    throw new Error(
+      'Envie uma mídia ou informe uma URL externa.',
+    );
+  }
+
+  const maxBytes =
+    await galleryMaxBytes(
+      env.DB,
+    );
+
+  const storedMedia =
+    media
+    && typeof media
+      .stream
+      === 'function'
+      ? await putGalleryFile(
+        env,
+        {
+          file:
+            media,
+
+          keyPrefix:
+            `gallery/${
+              productCode
+            }`,
+
+          allowedTypes:
+            GALLERY_MIME_TYPES,
+
+          maxBytes,
+        },
+      )
+      : null;
+
+  const preview =
+    form.get(
+      'preview',
+    );
+
+  let storedPreview =
+    null;
+
+  try {
+    storedPreview =
+      preview
+      && typeof preview
+        .stream
+        === 'function'
+        ? await putGalleryFile(
+          env,
+          {
+            file:
+              preview,
+
+            keyPrefix:
+              `gallery/${
+                productCode
+              }/previews`,
+
+            allowedTypes:
+              GALLERY_PREVIEW_MIME_TYPES,
+
+            maxBytes:
+              Math.min(
+                maxBytes,
+                15
+                * 1024
+                * 1024,
+              ),
+          },
+        )
+        : null;
+
+    const stamp =
+      nowIso();
+
+    const result =
+      await env.DB
+        .prepare(
+          `
+            INSERT INTO v2_gallery_items(
+              product_code,
+              event_type,
+              theme_label,
+              preview_r2_key,
+              media_r2_key,
+              external_url,
+              active,
+              sort_order,
+              media_type,
+              original_filename,
+              mime_type,
+              size_bytes,
+              caption,
+              created_at,
+              updated_at
+            )
+            VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?,
+              ?
+            )
+          `,
+        )
+        .bind(
+          productCode,
+
+          cleanText(
+            form.get(
+              'eventType',
+            ),
+            100,
+          )
+          || null,
+
+          cleanText(
+            form.get(
+              'themeLabel',
+            ),
+            180,
+          )
+          || null,
+
+          storedPreview
+            ?.key
+          || null,
+
+          storedMedia
+            ?.key
+          || null,
+
+          externalUrl,
+
+          form.get(
+            'active',
+          )
+          === 'false'
+            ? 0
+            : 1,
+
+          Number.parseInt(
+            form.get(
+              'sortOrder',
+            ),
+            10,
+          )
+          || 0,
+
+          storedMedia
+            ?.mediaType
+          || cleanText(
+            form.get(
+              'mediaType',
+            ),
+            40,
+          )
+          || null,
+
+          storedMedia
+            ?.originalFilename
+          || null,
+
+          storedMedia
+            ?.mimeType
+          || null,
+
+          storedMedia
+            ?.sizeBytes
+          || null,
+
+          cleanText(
+            form.get(
+              'caption',
+            ),
+            500,
+          ),
+
+          stamp,
+          stamp,
+        )
+        .run();
+
+    return {
+      id:
+        Number(
+          result
+            ?.meta
+            ?.last_row_id,
+        ),
+
+      productCode,
+
+      mediaStored:
+        Boolean(
+          storedMedia,
+        ),
+
+      previewStored:
+        Boolean(
+          storedPreview,
+        ),
+
+      externalUrl,
+    };
+  } catch (
+    error
+  ) {
+    const keys =
+      [
+        storedMedia
+          ?.key,
+        storedPreview
+          ?.key,
+      ]
+        .filter(Boolean);
+
+    if (
+      keys.length
+    ) {
+      await env.FILES
+        .delete(
+          keys,
+        );
+    }
+
+    throw error;
+  }
+}
+
+export async function updateV2GalleryItem(
+  db,
+  id,
+  body = {},
+) {
+  const galleryId =
+    integer(
+      id,
+      {
+        min:
+          1,
+
+        max:
+          1000000000,
+
+        label:
+          'Item da galeria',
+      },
+    );
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT *
+          FROM v2_gallery_items
+          WHERE id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        galleryId,
+      )
+      .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  const eventType =
+    body.eventType
+    === undefined
+      ? existing.event_type
+      : cleanText(
+        body.eventType,
+        100,
+      )
+      || null;
+
+  const themeLabel =
+    body.themeLabel
+    === undefined
+      ? existing.theme_label
+      : cleanText(
+        body.themeLabel,
+        180,
+      )
+      || null;
+
+  const caption =
+    body.caption
+    === undefined
+      ? existing.caption
+      : cleanText(
+        body.caption,
+        500,
+      );
+
+  const externalUrl =
+    body.externalUrl
+    === undefined
+      ? existing.external_url
+      : cleanText(
+        body.externalUrl,
+        1000,
+      )
+      || null;
+
+  const active =
+    body.active
+    === undefined
+      ? existing.active
+      : (
+        booleanValue(
+          body.active,
+        )
+          ? 1
+          : 0
+      );
+
+  const sortOrder =
+    body.sortOrder
+    === undefined
+      ? existing.sort_order
+      : integer(
+        body.sortOrder,
+        {
+          min:
+            0,
+
+          max:
+            100000,
+
+          label:
+            'Ordem',
+        },
+      );
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_gallery_items
+        SET
+          event_type = ?,
+          theme_label = ?,
+          caption = ?,
+          external_url = ?,
+          active = ?,
+          sort_order = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      eventType,
+      themeLabel,
+      caption,
+      externalUrl,
+      active,
+      sortOrder,
+      nowIso(),
+      galleryId,
+    )
+    .run();
+
+  return {
+    id:
+      galleryId,
+
+    eventType,
+
+    themeLabel,
+
+    caption,
+
+    externalUrl,
+
+    active:
+      active
+      === 1,
+
+    sortOrder,
+  };
+}
+
+export async function deleteV2GalleryItem(
+  env,
+  id,
+) {
+  const galleryId =
+    integer(
+      id,
+      {
+        min:
+          1,
+
+        max:
+          1000000000,
+
+        label:
+          'Item da galeria',
+      },
+    );
+
+  const existing =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            preview_r2_key,
+            media_r2_key
+          FROM v2_gallery_items
+          WHERE id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        galleryId,
+      )
+      .first();
+
+  if (!existing) {
+    return null;
+  }
+
+  await env.DB
+    .prepare(
+      `
+        DELETE FROM v2_gallery_items
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      galleryId,
+    )
+    .run();
+
+  if (
+    env.FILES
+  ) {
+    const keys =
+      [
+        existing.preview_r2_key,
+        existing.media_r2_key,
+      ]
+        .filter(Boolean);
+
+    if (
+      keys.length
+    ) {
+      await env.FILES
+        .delete(
+          [
+            ...new Set(
+              keys,
+            ),
+          ],
+        );
+    }
+  }
+
+  return {
+    id:
+      galleryId,
+
+    deleted:
+      true,
+  };
+}
+
+export async function getV2GalleryContent(
+  env,
+  id,
+  kind,
+) {
+  const field =
+    kind
+    === 'preview'
+      ? 'preview_r2_key'
+      : 'media_r2_key';
+
+  const row =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            ${
+              field
+            } AS r2_key,
+            mime_type
+          FROM v2_gallery_items
+          WHERE id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        integer(
+          id,
+          {
+            min:
+              1,
+
+            max:
+              1000000000,
+
+            label:
+              'Item da galeria',
+          },
+        ),
+      )
+      .first();
+
+  if (
+    !row
+    || !row.r2_key
+    || !env.FILES
+  ) {
+    return null;
+  }
+
+  const object =
+    await env.FILES
+      .get(
+        row.r2_key,
+      );
+
+  if (!object) {
+    return null;
+  }
+
+  const headers =
+    new Headers();
+
+  object.writeHttpMetadata(
+    headers,
+  );
+
+  headers.set(
+    'cache-control',
+    'private, no-store',
+  );
+
+  headers.set(
+    'content-disposition',
+    'inline',
+  );
+
+  return new Response(
+    object.body,
+    {
+      headers,
+    },
+  );
+}
+
+export async function publishV2Terms(
+  db,
+  {
+    version,
+    body,
+  },
+) {
+  const termsVersion =
+    cleanText(
+      version,
+      40,
+    );
+
+  const termsBody =
+    cleanText(
+      body,
+      100000,
+    );
+
+  if (
+    !termsVersion
+    || !termsBody
+  ) {
+    throw new Error(
+      'Versão e texto dos termos são obrigatórios.',
+    );
+  }
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT version
+          FROM v2_terms_versions
+          WHERE version = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        termsVersion,
+      )
+      .first();
+
+  if (existing) {
+    throw new Error(
+      'Esta versão já foi publicada e é imutável. Crie uma nova versão.',
+    );
+  }
+
+  const hash =
+    await sha256Hex(
+      termsBody,
+    );
+
+  const stamp =
+    nowIso();
+
+  await db.batch([
+    db
+      .prepare(
+        `
+          UPDATE v2_terms_versions
+          SET active = 0
+          WHERE active = 1
+        `,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_terms_versions(
+            version,
+            body,
+            content_hash,
+            active,
+            published_at,
+            created_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            1,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        termsVersion,
+        termsBody,
+        hash,
+        stamp,
+        stamp,
+      ),
+  ]);
+
+  return {
+    version:
+      termsVersion,
+
+    contentHash:
+      hash,
+
+    active:
+      true,
+
+    publishedAt:
+      stamp,
+
+    immutable:
+      true,
+  };
+}
+
+export async function publishV2ContractTemplate(
+  db,
+  {
+    title,
+    body,
+  },
+) {
+  const templateTitle =
+    cleanText(
+      title,
+      180,
+    );
+
+  const templateBody =
+    cleanText(
+      body,
+      100000,
+    );
+
+  if (
+    !templateTitle
+    || !templateBody
+  ) {
+    throw new Error(
+      'Título e texto do contrato são obrigatórios.',
+    );
+  }
+
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT
+            COALESCE(
+              MAX(version),
+              0
+            ) AS max_version
+          FROM v2_contract_templates
+        `,
+      )
+      .first();
+
+  const version =
+    Number(
+      row
+        ?.max_version
+      || 0,
+    )
+    + 1;
+
+  const hash =
+    await sha256Hex(
+      templateBody,
+    );
+
+  const stamp =
+    nowIso();
+
+  await db.batch([
+    db
+      .prepare(
+        `
+          UPDATE v2_contract_templates
+          SET active = 0
+          WHERE active = 1
+        `,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_contract_templates(
+            version,
+            title,
+            body,
+            content_hash,
+            active,
+            published_at,
+            created_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            1,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        version,
+        templateTitle,
+        templateBody,
+        hash,
+        stamp,
+        stamp,
+      ),
+  ]);
+
+  return {
+    version,
+
+    title:
+      templateTitle,
+
+    contentHash:
+      hash,
+
+    active:
+      true,
+
+    publishedAt:
+      stamp,
+
+    immutable:
+      true,
+  };
+}

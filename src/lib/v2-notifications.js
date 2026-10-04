@@ -1305,4 +1305,138 @@ export async function createTodayEventNotifications(
           FROM v2_orders o
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
-         
+          WHERE
+            o.event_date = ?
+            AND o.status != 'cancelled'
+          ORDER BY
+            o.created_at
+        `,
+      )
+      .bind(
+        today,
+      )
+      .all();
+
+  let created = 0;
+
+  for (
+    const row
+    of result.results
+    || []
+  ) {
+    const notification =
+      await createV2AdminNotification(
+        env,
+        {
+          eventCode:
+            'EVENT_TODAY',
+
+          orderId:
+            row.id,
+
+          title:
+            'Festa hoje 🎉',
+
+          body:
+            `${
+              row.honoree_display_name
+            } • ${
+              row.customer_name
+            }`,
+
+          actionUrl:
+            `/admin/pedidos/${
+              row.order_code
+            }`,
+
+          priority:
+            'high',
+
+          pushEligible:
+            true,
+
+          dedupeKey:
+            `event_today:${
+              today
+            }:${
+              row.id
+            }`,
+        },
+      );
+
+    if (
+      notification.created
+    ) {
+      created += 1;
+    }
+  }
+
+  return {
+    day:
+      today,
+
+    created,
+  };
+}
+
+export async function runV2NotificationScheduler(
+  env,
+) {
+  const daily =
+    await createTodayEventNotifications(
+      env,
+    );
+
+  const push =
+    await dispatchPendingV2Push(
+      env,
+    );
+
+  return {
+    daily,
+    push,
+  };
+}
+
+export async function sendV2TestPush(
+  env,
+) {
+  const stamp =
+    Date.now();
+
+  await createV2AdminNotification(
+    env,
+    {
+      eventCode:
+        'TEST_PUSH',
+
+      title:
+        'Libri funcionando ✨',
+
+      body:
+        'As notificações deste aparelho estão ativas.',
+
+      actionUrl:
+        '/admin/',
+
+      priority:
+        'normal',
+
+      pushEligible:
+        true,
+
+      dedupeKey:
+        `test_push:${
+          stamp
+        }`,
+    },
+  );
+
+  return dispatchPendingV2Push(
+    env,
+    {
+      limit:
+        5,
+    },
+  );
+}

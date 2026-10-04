@@ -1356,4 +1356,364 @@ export async function streamV2CustomerPreview(
   const object =
     await env.FILES
       .get(
-        preview.preview_r2_ke
+        preview.preview_r2_key,
+        {
+          range:
+            request.headers,
+        },
+      );
+
+  if (!object) {
+    return fail(
+      'Arquivo da prévia não encontrado.',
+      404,
+    );
+  }
+
+  const headers =
+    new Headers();
+
+  object
+    .writeHttpMetadata(
+      headers,
+    );
+
+  headers.set(
+    'cache-control',
+    'private, no-store, max-age=0',
+  );
+
+  headers.set(
+    'content-disposition',
+    'inline',
+  );
+
+  headers.set(
+    'x-content-type-options',
+    'nosniff',
+  );
+
+  headers.set(
+    'accept-ranges',
+    'bytes',
+  );
+
+  let status = 200;
+
+  if (
+    object.range
+    && Number.isInteger(
+      object.range.offset,
+    )
+    && Number.isInteger(
+      object.range.length,
+    )
+  ) {
+    const start =
+      object.range
+        .offset;
+
+    const end =
+      start
+      + object.range
+        .length
+      - 1;
+
+    headers.set(
+      'content-range',
+      `bytes ${
+        start
+      }-${
+        end
+      }/${
+        object.size
+      }`,
+    );
+
+    headers.set(
+      'content-length',
+      String(
+        object.range
+          .length,
+      ),
+    );
+
+    status = 206;
+  } else {
+    headers.set(
+      'content-length',
+      String(
+        object.size,
+      ),
+    );
+  }
+
+  return new Response(
+    object.body,
+    {
+      status,
+      headers,
+    },
+  );
+}
+
+export async function approveV2CustomerPreview(
+  request,
+  env,
+  token,
+  previewId,
+) {
+  const {
+    order,
+    preview,
+  } =
+    await authorizedCustomerPreview(
+      env.DB,
+      token,
+      previewId,
+    );
+
+  if (!order) {
+    return fail(
+      'Pedido não encontrado.',
+      404,
+    );
+  }
+
+  if (!preview) {
+    return fail(
+      'Prévia não encontrada.',
+      404,
+    );
+  }
+
+  if (
+    preview.status
+    === 'expired'
+  ) {
+    return fail(
+      'Esta prévia expirou.',
+      410,
+      {
+        code:
+          'preview_expired',
+      },
+    );
+  }
+
+  if (
+    preview.status
+    === 'approved'
+  ) {
+    return json({
+      ok: true,
+
+      alreadyApproved:
+        true,
+    });
+  }
+
+  if (
+    preview.status
+    !== 'active'
+  ) {
+    return fail(
+      'Esta versão não pode mais ser aprovada.',
+      409,
+    );
+  }
+
+  const latest =
+    await latestPreviewForOrder(
+      env.DB,
+      order.id,
+    );
+
+  if (
+    !latest
+    || Number(
+      latest.id,
+    )
+      !== Number(
+        preview.id,
+      )
+  ) {
+    return fail(
+      'Existe uma versão mais recente para conferir.',
+      409,
+    );
+  }
+
+  const stamp =
+    nowIso();
+
+  const hasBalance =
+    Number(
+      order.balance_cents
+      || 0,
+    )
+    > 0;
+
+  const nextStatus =
+    hasBalance
+      ? 'balance_pending'
+      : 'ready_for_delivery';
+
+  const nextAction =
+    hasBalance
+      ? 'Cobrar saldo'
+      : 'Liberar entrega';
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `
+          INSERT OR IGNORE INTO v2_preview_approvals(
+            preview_id,
+            order_id,
+            approved_at,
+            evidence_json
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        preview.id,
+        order.id,
+        stamp,
+        JSON.stringify({
+          userAgent:
+            request.headers
+              .get(
+                'user-agent',
+              )
+            || '',
+
+          cfRay:
+            request.headers
+              .get(
+                'cf-ray',
+              )
+            || '',
+        }),
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_previews
+          SET status = 'approved'
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        preview.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            status = ?,
+            next_action = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        nextStatus,
+        nextAction,
+        stamp,
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'preview_approved',
+            'Prévia aprovada pela cliente.',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        order.id,
+        JSON.stringify({
+          previewId:
+            preview.id,
+
+          version:
+            preview.version_number,
+        }),
+        stamp,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_notifications(
+            event_code,
+            order_id,
+            title,
+            body,
+            action_url,
+            priority,
+            push_eligible,
+            created_at
+          )
+          VALUES (
+            'PREVIEW_APPROVED',
+            ?,
+            'Prévia aprovada',
+            ?,
+            ?,
+            'high',
+            1,
+            ?
+          )
+        `,
+      )
+      .bind(
+        order.id,
+        `${
+          order.order_code
+        } • ${
+          order.honoree_display_name
+        } • prévia aprovada`,
+        `/admin/pedidos/${
+          order.order_code
+        }`,
+        stamp,
+      ),
+  ]);
+
+  return json({
+    ok: true,
+
+    approvedAt:
+      stamp,
+
+    order: {
+      status:
+        nextStatus,
+
+      nextAction,
+    },
+  });
+}

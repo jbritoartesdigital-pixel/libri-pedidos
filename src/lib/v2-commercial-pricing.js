@@ -619,9 +619,22 @@ export async function calculateCommercialV2Quote(
       db,
     );
 
+  const configuredUrgencyPercent =
+    Math.max(
+      1,
+      Math.min(
+        100,
+        v2IntSetting(
+          settings,
+          'urgency_percent',
+          30,
+        ),
+      ),
+    );
+
   const urgencyPercent =
     urgencyApproved
-      ? 30
+      ? configuredUrgencyPercent
       : 0;
 
   const urgencyAmountCents =

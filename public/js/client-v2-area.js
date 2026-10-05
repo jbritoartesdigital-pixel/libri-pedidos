@@ -1,6 +1,7 @@
 import {
   api,
   app,
+  dateBr,
   debounce,
   esc,
   loading,
@@ -369,6 +370,10 @@ function summaryHtml(
 ) {
   const termsAlreadyAccepted = area.payment?.termsAccepted === true;
   const urgencyPercent = Number(area.urgency?.percent || 0);
+  const isPix = area.payment.method === 'pix';
+  const dueNowCents = isPix
+    ? Number(area.payment.depositCents || 0)
+    : Number(area.payment.totalCents || 0);
 
   return `
     <section class="page-card">
@@ -386,22 +391,33 @@ function summaryHtml(
         </p>
       </div>
 
+      ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
+      ${area.payment?.returnState === 'checking' ? '<div class="notice info">Pagamento enviado. Estamos confirmando com o Mercado Pago.</div>' : ''}
+      ${area.payment?.returnState === 'pending' ? '<div class="notice info">Pagamento ainda pendente no Mercado Pago. Você pode atualizar o status em alguns instantes.</div>' : ''}
+      ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
       ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
       ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
       ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
         <section class="card payment-priority">
           <div class="payment-priority-top">
             <div>
-              <span class="eyebrow">${area.urgency ? 'Encaixe aprovado' : 'Pagamento'}</span>
-              <strong class="payment-priority-total">${money(area.payment.totalCents)}</strong>
+              <span class="eyebrow">${area.urgency ? 'Encaixe aprovado' : 'Pagamento agora'}</span>
+              <strong
+                id="paymentDueNow"
+                class="payment-priority-total"
+                data-pix="${area.payment.depositCents}"
+                data-card="${area.payment.totalCents}"
+              >${money(dueNowCents)}</strong>
             </div>
-            <small>${area.payment.method === 'pix' ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
+            <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
           </div>
+
+          ${isPix ? `<p class="muted">Total do pedido: ${money(area.payment.totalCents)} • saldo após a entrada: ${money(area.payment.balanceCents)}</p>` : ''}
 
           ${area.urgency && area.order.status === 'urgency_approved' ? `
             <div class="payment-methods">
-              <label><input type="radio" name="resumeMethod" value="pix" checked> Pix • entrada de 50%</label>
-              <label><input type="radio" name="resumeMethod" value="card"> Cartão • 100%</label>
+              <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
+              <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
             </div>` : ''}
 
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
@@ -420,9 +436,9 @@ function summaryHtml(
         <div class="review-line">
           <dt>Janela de entrega</dt>
           <dd>
-            ${esc(area.order.deliveryWindow.start || '')}
+            ${esc(dateBr(area.order.deliveryWindow.start || ''))}
             a
-            ${esc(area.order.deliveryWindow.end || '')}
+            ${esc(dateBr(area.order.deliveryWindow.end || ''))}
           </dd>
         </div>
 
@@ -451,8 +467,8 @@ function summaryHtml(
             ${
               area.payment.method
               === 'pix'
-                ? `Pix • saldo ${money(area.payment.balanceCents)}`
-                : 'Cartão • pagamento integral'
+                ? `Pix • entrada ${money(area.payment.depositCents)} • saldo ${money(area.payment.balanceCents)}`
+                : `Cartão • ${money(area.payment.totalCents)}`
             }
           </dd>
         </div>

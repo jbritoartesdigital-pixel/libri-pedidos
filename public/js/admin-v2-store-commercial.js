@@ -10,11 +10,50 @@ function discountLabel(
   type,
   value,
 ) {
+  const amount =
+    Number(
+      value
+      || 0,
+    );
+
+  if (amount === 0) {
+    return 'desconto a definir';
+  }
+
   return type === 'percent'
-    ? `${Number(value || 0)}%`
+    ? `${amount}%`
     : money(
-        Number(value || 0),
+        amount,
       );
+}
+
+function comboItemLabel(
+  item,
+) {
+  const labels = {
+    confirmation:
+      'Confirmação Libri',
+    save_the_date:
+      'Save the Date',
+    reminder:
+      'Lembrete',
+    moments:
+      'Libri Moments',
+    filter:
+      'Filtro',
+  };
+
+  if (
+    item.itemType
+    === 'addon_group'
+  ) {
+    return labels[
+      item.itemCode
+    ]
+    || item.itemCode;
+  }
+
+  return item.itemCode;
 }
 
 function comboEditor(
@@ -280,8 +319,11 @@ export function renderStoreCombos(
               <strong>${esc(combo.name)}</strong>
               <small>
                 ${esc(combo.code)}
-                • desconto ${discountLabel(combo.discountType, combo.discountValue)}
+                • ${discountLabel(combo.discountType, combo.discountValue)}
                 • ${combo.active ? 'ativo' : 'inativo'}
+                ${(combo.items || []).length
+                  ? `<br>Inclui: ${esc(combo.items.map(comboItemLabel).join(' + '))}`
+                  : ''}
               </small>
 
               <button

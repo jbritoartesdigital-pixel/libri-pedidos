@@ -29,8 +29,11 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 12);
+  const DB = database(); assert.equal(DB.migrationCount, 13);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
+  assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
+  assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_instagram'").get().value, '@libriconvites');
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
 });
@@ -308,6 +311,24 @@ test('scheduler repairs missing notifications, expires reservations and previews
   assert.equal((await getV2CustomerArea(env(DB), result.order.publicToken)).urgency.status, 'pending');
 });
 
+test('official combos are seeded with the approved compositions and configurable zero discount', () => {
+  const DB = database();
+  const rows = DB.sqlite.prepare(`
+    SELECT c.code, c.name, c.discount_value, i.item_type, i.item_code
+    FROM v2_combos c
+    LEFT JOIN v2_combo_items i ON i.combo_id = c.id
+    ORDER BY c.code, i.item_code
+  `).all();
+
+  const byCode = Object.groupBy(rows, row => row.code);
+  assert.deepEqual(byCode.convite_save.map(row => row.item_code), ['save_the_date']);
+  assert.deepEqual(byCode.antes_festa.map(row => row.item_code), ['reminder', 'save_the_date']);
+  assert.deepEqual(byCode.organizacao.map(row => row.item_code), ['confirmation', 'reminder']);
+  assert.deepEqual(byCode.festa_completa.map(row => row.item_code), ['confirmation', 'moments']);
+  assert.deepEqual(byCode.libri_completo.map(row => row.item_code), ['confirmation', 'moments', 'reminder', 'save_the_date']);
+  assert.ok(rows.every(row => row.discount_value === 0));
+});
+
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
@@ -318,6 +339,23 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.urgency.percent, 99);
   assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.99));
   assert.equal(quote.payment.depositPercent, 50);
+});
+
+test('agenda range exposes contracted events on their party date', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const eventDate = day(40);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
+    deliveryWindow: { start: day(5), end: day(7) },
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const agenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
+  assert.equal(agenda.days.length, 1);
+  assert.equal(agenda.days[0].events.length, 1);
+  assert.equal(agenda.days[0].events[0].code, checkout.order.code);
+  assert.equal(agenda.days[0].events[0].honoreeName, 'Festa Calendário');
 });
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {

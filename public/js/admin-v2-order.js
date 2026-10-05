@@ -381,6 +381,7 @@ export async function openOrder(code, onChanged = null) {
               <span class="status">${(detail.previews || []).length}</span>
             </div>
 
+            ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
             <div class="field">
               <label for="previewFile">Arquivo da prévia</label>
               <input
@@ -413,6 +414,11 @@ export async function openOrder(code, onChanged = null) {
             >
               Publicar prévia
             </button>
+            ` : `
+              <div class="notice info">
+                A publicação de prévia é liberada quando o pedido estiver em produção ou ajustes.
+              </div>
+            `}
 
             <div class="list" style="margin-top:14px">
               ${(detail.previews || []).map(
@@ -955,9 +961,24 @@ export async function openOrder(code, onChanged = null) {
       async (event) => {
         if (
           !confirm(
-            `Excluir ${detail.order.code} definitivamente? O checkout pendente também será cancelado.`,
+            `Excluir ${detail.order.code} definitivamente? Use isso somente para teste, duplicado ou pedido criado por engano.`,
           )
         ) {
+          return;
+        }
+
+        const typed =
+          prompt(
+            `Para confirmar a exclusão permanente, digite ${detail.order.code}`,
+          );
+
+        if (
+          String(
+            typed
+            || '',
+          ).trim() !== detail.order.code
+        ) {
+          showToast('Exclusão cancelada.');
           return;
         }
 

@@ -24,6 +24,69 @@ jobs:
       - name: Validar sintaxe JavaScript
         run: npm run check
 
+      - name: Validar imports relativos JavaScript
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path("src"),
+              Path("public/js"),
+          ]
+
+          import_pattern = re.compile(
+              r"""(?:\bfrom\s*|\bimport\s*\()\s*['"]([.]{1,2}/[^'"]+)['"]"""
+          )
+
+          missing = []
+
+          for root in roots:
+              if not root.exists():
+                  continue
+
+              for path in root.rglob("*"):
+                  if not path.is_file() or path.suffix not in {".js", ".mjs"}:
+                      continue
+
+                  source = path.read_text(encoding="utf-8")
+
+                  for specifier in import_pattern.findall(source):
+                      clean_specifier = (
+                          specifier
+                          .split("?", 1)[0]
+                          .split("#", 1)[0]
+                      )
+
+                      target = path.parent / clean_specifier
+
+                      candidates = [target]
+
+                      if not target.suffix:
+                          candidates.extend([
+                              target.with_suffix(".js"),
+                              target.with_suffix(".mjs"),
+                              target / "index.js",
+                              target / "index.mjs",
+                          ])
+
+                      if not any(candidate.exists() for candidate in candidates):
+                          missing.append(
+                              f"{path}: import ausente -> {specifier}"
+                          )
+
+          if missing:
+              print("Imports relativos inválidos encontrados:")
+              for item in missing:
+                  print(f"  - {item}")
+
+              raise SystemExit(
+                  f"{len(missing)} import(s) relativo(s) apontam para arquivo inexistente."
+              )
+
+          print("✓ Imports relativos JavaScript validados.")
+          PY
+
       - name: Validar migrations e catálogo V2 localmente
         run: |
           python3 <<'PY'

@@ -405,6 +405,25 @@ export async function cancelV2Order(
           env,
           providerOrderId,
         );
+
+        await env.DB
+          .prepare(
+            `
+              UPDATE v2_payments
+              SET
+                status = 'cancelled',
+                updated_at = ?
+              WHERE
+                provider = 'mercado_pago'
+                AND provider_order_id = ?
+                AND status = 'pending'
+            `,
+          )
+          .bind(
+            nowIso(),
+            providerOrderId,
+          )
+          .run();
       }
     } catch (
       error

@@ -1293,6 +1293,36 @@ function renderConfiguration(
             if (
               input.checked
             ) {
+              const selectedAddon =
+                (state.catalog.addons || [])
+                  .find(
+                    (addon) =>
+                      addon.code
+                      === input.value,
+                  );
+
+              if (
+                selectedAddon
+                  ?.group
+              ) {
+                for (
+                  const addon
+                  of state.catalog.addons
+                  || []
+                ) {
+                  if (
+                    addon.group
+                      === selectedAddon.group
+                    && addon.code
+                      !== input.value
+                  ) {
+                    set.delete(
+                      addon.code,
+                    );
+                  }
+                }
+              }
+
               set.add(
                 input.value,
               );

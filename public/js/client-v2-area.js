@@ -380,20 +380,26 @@ function summaryHtml(
   const paidCents = Number(area.payment.paidCents || 0);
   const remainingCents = Number(area.payment.remainingCents ?? Math.max(0, totalCents - paidCents));
   const hasPaid = paidCents > 0;
+  const awaitingInitialPayment = ['urgency_approved', 'awaiting_payment'].includes(area.order.status);
+  const awaitingBalance = area.order.status === 'balance_pending';
 
   return `
     <section class="page-card">
-      <div class="page-head ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? 'payment-head' : ''}">
+      <div class="page-head ${awaitingInitialPayment || awaitingBalance ? 'payment-head' : ''}">
         <span class="eyebrow">Seu pedido</span>
         <h1 class="page-title">
-          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+          ${awaitingInitialPayment
             ? 'Pagamento pendente'
-            : `Oi, ${esc(area.customer.name)} 💛`}
+            : awaitingBalance
+              ? 'Saldo pendente'
+              : `Oi, ${esc(area.customer.name)} 💛`}
         </h1>
         <p class="page-subtitle">
-          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+          ${awaitingInitialPayment
             ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
-            : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
+            : awaitingBalance
+              ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
+              : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
         </p>
       </div>
 
@@ -404,7 +410,7 @@ function summaryHtml(
       ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
       ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
       ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
-      ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
+      ${awaitingInitialPayment ? `
         <section class="card payment-priority">
           <div class="payment-priority-top">
             <div>

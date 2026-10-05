@@ -1182,11 +1182,28 @@ async function completedCheckoutResponse(
 }
 
 export async function resumeV2Payment(request, env, token, body = {}) {
-  const order = await env.DB.prepare(`SELECT o.*, c.email, p.payment_method, p.deposit_cents,
+  const order = await env.DB.prepare(`SELECT o.*, c.email, p.payment_method, p.total_cents, p.deposit_cents, p.balance_cents,
     p.pricing_snapshot_json, u.status AS urgency_status FROM v2_orders o
     JOIN v2_customers c ON c.id = o.customer_id JOIN v2_order_pricing p ON p.order_id = o.id
     LEFT JOIN v2_urgency_requests u ON u.order_id = o.id WHERE o.public_token = ?`).bind(token).first();
   if (!order) throw new V2CheckoutError('Pedido não encontrado.', { status: 404 });
+
+  const requestedMethod =
+    urgencyPaymentMethod(
+      body.paymentMethod,
+      urgencyPaymentMethod(
+        order.payment_method,
+        'pix',
+      ),
+    );
+
+  const changingMethod =
+    requestedMethod
+    !== urgencyPaymentMethod(
+      order.payment_method,
+      'pix',
+    );
+
   return withV2PaymentLock(env.DB, order.id, async () => {
     const payments = await env.DB.prepare(`SELECT provider_order_id, status FROM v2_payments
       WHERE order_id = ? AND provider = 'mercado_pago' AND status IN ('pending', 'approved')
@@ -1200,11 +1217,19 @@ export async function resumeV2Payment(request, env, token, body = {}) {
       throw new V2CheckoutError('O pedido não está disponível para pagamento.', { status: 409 });
     }
     const recovered = await completedCheckoutResponse(env.DB, order.id);
-    if (recovered?.payment.ready) return recovered;
+    if (
+      recovered?.payment.ready
+      && !changingMethod
+    ) {
+      return recovered;
+    }
     const orphanHold = await env.DB.prepare(`SELECT id FROM v2_checkout_holds WHERE order_id = ?
       AND status IN ('active', 'expired') AND NOT EXISTS
       (SELECT 1 FROM v2_payments WHERE order_id = ?) ORDER BY id DESC LIMIT 1`).bind(order.id, order.id).first();
-    if (orphanHold) {
+    if (
+      orphanHold
+      && !changingMethod
+    ) {
       // Tenta recuperar apenas respostas realmente incertas. Uma rejeição explícita
       // do provedor encerra a reserva órfã e permite uma nova tentativa segura.
       try {
@@ -1252,6 +1277,13 @@ export async function resumeV2Payment(request, env, token, body = {}) {
         AND status = 'awaiting_payment' AND briefing_status = 'locked'`).bind(order.id).run();
       return startApprovedV2UrgencyCheckout(request, env, token, body);
     }
+    const paymentPricing =
+      await repriceV2PaymentMethod(
+        env.DB,
+        order.id,
+        requestedMethod,
+      );
+
     await validateV2DeliveryWindow(env.DB, { eventDate: order.event_date, start: order.delivery_start, end: order.delivery_end });
     const snapshot = safeJsonObject(order.pricing_snapshot_json);
     const plan = await planV2AllocationForWindow(env.DB, { start: order.delivery_start, end: order.delivery_end, pointsUnits: snapshot.pointsUnits });
@@ -1273,7 +1305,7 @@ export async function resumeV2Payment(request, env, token, body = {}) {
       }
       await createMercadoPagoCheckout(request, env, {
         orderId: order.id, orderCode: order.order_code, publicToken: token,
-        paymentMethod: order.payment_method, amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email,
+        paymentMethod: paymentPricing.method, amountDueNowCents: paymentPricing.depositCents, customerEmail: order.email,
       });
       return completedCheckoutResponse(env.DB, order.id);
     } catch (error) {
@@ -1978,6 +2010,126 @@ function urgencyPaymentMethod(
   )
     ? method
     : fallback;
+}
+
+async function repriceV2PaymentMethod(
+  db,
+  orderId,
+  requestedMethod,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT
+            total_cents,
+            payment_method,
+            pricing_snapshot_json
+          FROM v2_order_pricing
+          WHERE order_id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        orderId,
+      )
+      .first();
+
+  if (!row) {
+    throw new V2CheckoutError(
+      'Preço do pedido não encontrado.',
+      {
+        status: 404,
+        code: 'pricing_not_found',
+      },
+    );
+  }
+
+  const method =
+    urgencyPaymentMethod(
+      requestedMethod,
+      urgencyPaymentMethod(
+        row.payment_method,
+        'pix',
+      ),
+    );
+
+  const totalCents =
+    Number(
+      row.total_cents
+      || 0,
+    );
+
+  const depositPercent =
+    method === 'card'
+      ? 100
+      : 50;
+
+  const depositCents =
+    Math.round(
+      totalCents
+      * depositPercent
+      / 100,
+    );
+
+  const balanceCents =
+    Math.max(
+      0,
+      totalCents
+      - depositCents,
+    );
+
+  const snapshot =
+    safeJsonObject(
+      row.pricing_snapshot_json,
+    );
+
+  const nextSnapshot = {
+    ...snapshot,
+    totalCents,
+    payment: {
+      ...(snapshot.payment || {}),
+      method,
+      depositPercent,
+      depositCents,
+      balanceCents,
+    },
+  };
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_order_pricing
+        SET
+          payment_method = ?,
+          deposit_percent = ?,
+          deposit_cents = ?,
+          balance_cents = ?,
+          pricing_snapshot_json = ?,
+          updated_at = ?
+        WHERE order_id = ?
+      `,
+    )
+    .bind(
+      method,
+      depositPercent,
+      depositCents,
+      balanceCents,
+      JSON.stringify(
+        nextSnapshot,
+      ),
+      nowIso(),
+      orderId,
+    )
+    .run();
+
+  return {
+    method,
+    totalCents,
+    depositPercent,
+    depositCents,
+    balanceCents,
+  };
 }
 
 async function completeCheckoutRequest(

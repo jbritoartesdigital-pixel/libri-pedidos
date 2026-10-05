@@ -435,6 +435,21 @@ export async function createV2Preview(
     );
   }
 
+  if (
+    ![
+      'in_production',
+      'adjustments',
+      'waiting_customer',
+    ].includes(
+      order.status,
+    )
+  ) {
+    return fail(
+      'A prévia só pode ser publicada quando o pedido está em produção ou ajustes.',
+      409,
+    );
+  }
+
   const form =
     await request
       .formData();
@@ -1082,6 +1097,24 @@ export async function revokeV2Preview(
       )
       .bind(
         preview.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            status = 'in_production',
+            next_action = 'Preparar nova prévia',
+            updated_at = ?
+          WHERE
+            id = ?
+            AND status = 'waiting_customer'
+        `,
+      )
+      .bind(
+        stamp,
+        preview.order_id,
       ),
 
     env.DB

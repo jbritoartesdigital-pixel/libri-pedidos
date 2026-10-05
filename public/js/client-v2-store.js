@@ -156,7 +156,6 @@ function readSaved(
     if (
       productSlug
       && saved.deepProductSlug
-      && saved.deepProductSlug
       !== productSlug
     ) {
       return emptyState(
@@ -900,6 +899,12 @@ function renderConfiguration(
                     : 'Configuração'
                 }
               </h2>
+
+              ${product.pricingMode === 'scene_count' ? `
+                <p class="muted" style="margin-top:-4px">
+                  Cada cena é um momento diferente da história. A abertura está incluída e fica fora da contagem de cenas.
+                </p>
+              ` : ''}
 
               <div class="grid two">
                 ${product.variants.map(
@@ -2224,7 +2229,7 @@ export async function startStore(
 
     state.step =
       Math.max(
-        1,
+        2,
         state.step,
       );
   }

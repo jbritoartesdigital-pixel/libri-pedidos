@@ -451,11 +451,21 @@ function summaryHtml(
             ? `Total do pedido: ${money(totalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
             : `Total do pedido: ${money(totalCents)}`}</p>
 
-          ${area.urgency && area.order.status === 'urgency_approved' ? `
-            <div class="payment-methods">
-              <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
-              <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
-            </div>` : ''}
+          <button
+            class="btn btn-ghost"
+            id="togglePaymentMethod"
+            type="button"
+          >
+            Trocar forma de pagamento
+          </button>
+
+          <div
+            id="paymentMethodChooser"
+            class="payment-methods hidden"
+          >
+            <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
+            <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
+          </div>
 
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
 
@@ -1168,6 +1178,24 @@ export async function startCustomerArea(
               await render();
             },
           );
+        },
+      );
+
+    document
+      .getElementById(
+        'togglePaymentMethod',
+      )
+      ?.addEventListener(
+        'click',
+        () => {
+          document
+            .getElementById(
+              'paymentMethodChooser',
+            )
+            ?.classList
+            .toggle(
+              'hidden',
+            );
         },
       );
 

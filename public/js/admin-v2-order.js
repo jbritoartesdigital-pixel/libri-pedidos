@@ -113,7 +113,7 @@ function briefingBlock(detail) {
           class="btn btn-secondary"
           type="button"
         >
-          Copiar resumo de produção
+          Copiar briefing
         </button>
 
         <button
@@ -238,6 +238,15 @@ export async function openOrder(code, onChanged = null) {
               >
                 Baixar pasta ZIP
               </a>
+
+              <a
+                class="btn btn-ghost"
+                href="${esc(detail.order.customerAreaPath || '#')}"
+                target="_blank"
+                rel="noopener"
+              >
+                Área da cliente
+              </a>
             </div>
           </section>
 
@@ -298,6 +307,41 @@ export async function openOrder(code, onChanged = null) {
               </div>
             ` : ''}
 
+            ${!['cancelled','finalized'].includes(detail.order.status) ? `
+              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+                <strong>Cancelar pedido</strong>
+                <div class="form-grid" style="margin-top:9px">
+                  <div class="field">
+                    <label for="cancelReason">Motivo</label>
+                    <select id="cancelReason" class="select">
+                      <option value="">Selecione</option>
+                      <option value="Não realizou pagamento">Não realizou pagamento</option>
+                      <option value="Cliente desistiu">Cliente desistiu</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="cancelNote">Observação</label>
+                    <input
+                      id="cancelNote"
+                      class="input"
+                      placeholder="Obrigatória somente em Outro"
+                    >
+                  </div>
+                </div>
+                <button
+                  id="cancelOrder"
+                  class="btn btn-danger"
+                  type="button"
+                >
+                  Cancelar pedido
+                </button>
+                <small style="display:block;margin-top:7px">
+                  A vaga é liberada e checkouts pendentes são cancelados. Pagamentos já aprovados não são estornados automaticamente.
+                </small>
+              </div>
+            ` : ''}
+
             <div class="field" style="margin-top:16px">
               <label for="internalNote">
                 Observação interna
@@ -334,20 +378,89 @@ export async function openOrder(code, onChanged = null) {
           <section class="card">
             <div class="section-title">
               <h3>Prévia</h3>
+              <span class="status">${(detail.previews || []).length}</span>
             </div>
 
-            <div class="list">
+            ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
+            <div class="field">
+              <label for="previewFile">Arquivo da prévia</label>
+              <input
+                id="previewFile"
+                class="input"
+                type="file"
+                accept="video/mp4,video/webm,image/jpeg,image/png,image/webp"
+              >
+            </div>
+
+            <div class="field" style="margin-top:10px">
+              <label for="previewWatermark">Texto da marca d'água</label>
+              <input
+                id="previewWatermark"
+                class="input"
+                value="PRÉVIA • ${esc(detail.order.code)}"
+              >
+            </div>
+
+            <label class="checkline" style="margin-top:10px">
+              <input id="previewProtected" type="checkbox">
+              <span>Confirmei que este arquivo é a cópia de prévia, já comprimida e com marca d'água.</span>
+            </label>
+
+            <button
+              id="publishPreview"
+              class="btn btn-primary"
+              type="button"
+              style="margin-top:10px"
+            >
+              Publicar prévia
+            </button>
+            ` : `
+              <div class="notice info">
+                A publicação de prévia é liberada quando o pedido estiver em produção ou ajustes.
+              </div>
+            `}
+
+            <div class="list" style="margin-top:14px">
               ${(detail.previews || []).map(
                 (preview) => `
                   <div class="row-card">
                     <strong>
-                      v${preview.version} • ${esc(preview.status)}
+                      v${preview.version} • ${esc({
+                        active: 'Ativa',
+                        approved: 'Aprovada',
+                        expired: 'Expirada',
+                        replaced: 'Substituída',
+                        revoked: 'Revogada',
+                      }[preview.status] || preview.status)}
                     </strong>
 
                     <small>
                       ${esc(preview.mediaType)}
+                      ${preview.expiresAt ? ` • expira ${dateTimeBr(preview.expiresAt)}` : ''}
                       ${preview.approvedAt ? ` • aprovada ${dateTimeBr(preview.approvedAt)}` : ''}
                     </small>
+
+                    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
+                      ${preview.status === 'expired' ? `
+                        <button
+                          class="btn btn-secondary"
+                          type="button"
+                          data-preview-reactivate="${preview.id}"
+                        >
+                          Reativar
+                        </button>
+                      ` : ''}
+
+                      ${['active','expired'].includes(preview.status) ? `
+                        <button
+                          class="btn btn-ghost"
+                          type="button"
+                          data-preview-revoke="${preview.id}"
+                        >
+                          Retirar prévia
+                        </button>
+                      ` : ''}
+                    </div>
                   </div>
                 `,
               ).join('') || '<div class="empty">Nenhuma prévia publicada.</div>'}
@@ -399,6 +512,186 @@ export async function openOrder(code, onChanged = null) {
       } catch (error) { showToast(error.message); buttons.forEach(x => { x.disabled = false; }); }
     });
   });
+
+  document
+    .getElementById('publishPreview')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        const file =
+          document
+            .getElementById('previewFile')
+            ?.files
+            ?.[0];
+
+        if (!file) {
+          showToast('Selecione a prévia.');
+          return;
+        }
+
+        if (
+          !document
+            .getElementById('previewProtected')
+            ?.checked
+        ) {
+          showToast('Confirme a cópia com marca d’água.');
+          return;
+        }
+
+        const button =
+          event.currentTarget;
+
+        button.disabled = true;
+        button.textContent = 'Publicando...';
+
+        try {
+          const form =
+            new FormData();
+
+          form.append(
+            'file',
+            file,
+          );
+
+          form.append(
+            'watermarkConfirmed',
+            'true',
+          );
+
+          form.append(
+            'watermarkLabel',
+            document
+              .getElementById('previewWatermark')
+              .value
+              .trim(),
+          );
+
+          const result =
+            await api(
+              `/api/admin/v2/orders/${detail.order.code}/previews`,
+              {
+                method: 'POST',
+                body: form,
+              },
+            );
+
+          showToast('Prévia publicada ✓');
+
+          if (
+            result.client
+              ?.whatsappUrl
+            && confirm(
+              'Prévia publicada. Abrir o WhatsApp para enviar o link à cliente?',
+            )
+          ) {
+            window.open(
+              result.client.whatsappUrl,
+              '_blank',
+              'noopener',
+            );
+          }
+
+          close();
+
+          if (onChanged) {
+            await onChanged();
+          }
+
+          await openOrder(
+            detail.order.code,
+            onChanged,
+          );
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Publicar prévia';
+          showToast(error.message);
+        }
+      },
+    );
+
+  document
+    .querySelectorAll('[data-preview-reactivate]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            button.disabled = true;
+
+            try {
+              await api(
+                `/api/admin/v2/previews/${button.dataset.previewReactivate}/reactivate`,
+                {
+                  method: 'POST',
+                  body: '{}',
+                },
+              );
+
+              close();
+
+              if (onChanged) {
+                await onChanged();
+              }
+
+              await openOrder(
+                detail.order.code,
+                onChanged,
+              );
+
+              showToast('Prévia reativada ✓');
+            } catch (error) {
+              button.disabled = false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
+
+  document
+    .querySelectorAll('[data-preview-revoke]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            if (
+              !confirm(
+                'Retirar esta prévia da área da cliente?',
+              )
+            ) {
+              return;
+            }
+
+            button.disabled = true;
+
+            try {
+              await api(
+                `/api/admin/v2/previews/${button.dataset.previewRevoke}/revoke`,
+                {
+                  method: 'POST',
+                  body: '{}',
+                },
+              );
+
+              close();
+
+              if (onChanged) {
+                await onChanged();
+              }
+
+              await openOrder(
+                detail.order.code,
+                onChanged,
+              );
+
+              showToast('Prévia retirada.');
+            } catch (error) {
+              button.disabled = false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
 
   const refreshContracts =
     async () => {
@@ -585,15 +878,107 @@ export async function openOrder(code, onChanged = null) {
     );
 
   document
+    .getElementById('cancelOrder')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        const reason =
+          document
+            .getElementById('cancelReason')
+            ?.value
+          || '';
+
+        const note =
+          document
+            .getElementById('cancelNote')
+            ?.value
+            .trim()
+          || '';
+
+        if (!reason) {
+          showToast('Escolha o motivo do cancelamento.');
+          return;
+        }
+
+        if (
+          reason === 'Outro'
+          && !note
+        ) {
+          showToast('Descreva o motivo do cancelamento.');
+          return;
+        }
+
+        if (
+          !confirm(
+            `Cancelar ${detail.order.code}? A vaga será liberada. Pagamentos aprovados não serão estornados automaticamente.`,
+          )
+        ) {
+          return;
+        }
+
+        const button =
+          event.currentTarget;
+
+        button.disabled =
+          true;
+
+        try {
+          await api(
+            `/api/admin/v2/orders/${detail.order.code}/cancel`,
+            {
+              method:
+                'POST',
+              body:
+                JSON.stringify({
+                  reason,
+                  note,
+                }),
+            },
+          );
+
+          close();
+
+          if (onChanged) {
+            await onChanged();
+          }
+
+          showToast('Pedido cancelado.');
+        } catch (error) {
+          button.disabled =
+            false;
+
+          showToast(
+            error.message,
+          );
+        }
+      },
+    );
+
+  document
     .getElementById('deleteOrder')
     ?.addEventListener(
       'click',
       async (event) => {
         if (
           !confirm(
-            `Excluir ${detail.order.code} definitivamente? O checkout pendente também será cancelado.`,
+            `Excluir ${detail.order.code} definitivamente? Use isso somente para teste, duplicado ou pedido criado por engano.`,
           )
         ) {
+          return;
+        }
+
+        const typed =
+          prompt(
+            `Para confirmar a exclusão permanente, digite ${detail.order.code}`,
+          );
+
+        if (
+          String(
+            typed
+            || '',
+          ).trim() !== detail.order.code
+        ) {
+          showToast('Exclusão cancelada.');
           return;
         }
 
@@ -678,7 +1063,7 @@ export async function openOrder(code, onChanged = null) {
         await writeClipboard(
           detail.copy.production,
         );
-        showToast('Resumo copiado ✓');
+        showToast('Briefing copiado ✓');
       },
     );
 

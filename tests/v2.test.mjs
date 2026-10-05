@@ -8,10 +8,11 @@ import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { deleteUnpaidV2Order, getV2Central } from '../src/lib/v2-admin-core.js';
+import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
+import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -97,7 +98,7 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
-  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
+  assert.equal(mp.bodies[0].config.payment_method.default_type, undefined);
   assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
   assert.equal(mp.bodies[0].config.payment_method.installments_cost, undefined);
   assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
@@ -105,6 +106,33 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
     ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
   const pricing = DB.sqlite.prepare('SELECT total_cents, deposit_cents, balance_cents FROM v2_order_pricing').get();
   assert.equal(pricing.total_cents, pricing.deposit_cents); assert.equal(pricing.balance_cents, 0);
+});
+
+test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({
+    event: { honoreeName: 'Troca método', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  });
+
+  const first = await startV2Checkout(request, e, body);
+  assert.equal(first.payment.method, 'card');
+  assert.equal(first.payment.amountDueNowCents, first.payment.totalCents);
+
+  const switched = await resumeV2Payment(request, e, first.order.publicToken, {
+    clientRequestId: crypto.randomUUID(),
+    paymentMethod: 'pix',
+  });
+
+  assert.equal(switched.order.code, first.order.code);
+  assert.equal(switched.payment.method, 'pix');
+  assert.equal(switched.payment.amountDueNowCents, Math.round(switched.payment.totalCents * 0.5));
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT payment_method FROM v2_order_pricing').get().payment_method, 'pix');
+  assert.equal(mp.posts, 2);
+  assert.equal(mp.orders.get(first.payment.providerOrderId).status, 'cancelled');
 });
 
 test('admin can delete only unpaid pre-production orders and pending provider checkout is canceled', async t => {
@@ -131,6 +159,89 @@ test('admin can delete only unpaid pre-production orders and pending provider ch
   await syncMercadoPagoOrder(e, paid.payment.providerOrderId);
   await assert.rejects(deleteUnpaidV2Order(e, paid.order.code), /pagamento confirmado/i);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(paid.order.code).n, 1);
+});
+
+test('V2 cancellation keeps the order record, releases capacity and cancels pending checkout', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({
+    event: { honoreeName: 'Cancelamento', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  });
+  const checkout = await startV2Checkout(request, e, body);
+  const providerOrderId = checkout.payment.providerOrderId;
+  const cancelled = await cancelV2Order(e, checkout.order.code, { reason: 'Cliente desistiu' });
+
+  assert.equal(cancelled.cancelled, true);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?) ORDER BY id DESC LIMIT 1').get(checkout.order.code).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_payments WHERE provider_order_id = ?').get(providerOrderId).status, 'cancelled');
+  assert.equal(mp.orders.get(providerOrderId).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE action_code = 'order_cancelled'").get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(checkout.order.code).n, 1);
+});
+
+test('Admin preview publication and revocation follow the production workflow', async t => {
+  const DB = database(); providerMock(t);
+  const e = env(DB);
+  const body = input({
+    event: { honoreeName: 'Prévia', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  });
+  const checkout = await startV2Checkout(request, e, body);
+  DB.sqlite.prepare("UPDATE v2_orders SET status='in_production', briefing_status='completed' WHERE order_code = ?")
+    .run(checkout.order.code);
+
+  const stored = [];
+  e.FILES = {
+    async put(key) { stored.push(key); },
+    async delete() {},
+  };
+
+  const form = new FormData();
+  form.append('file', new Blob(['preview'], { type: 'image/jpeg' }), 'preview.jpg');
+  form.append('watermarkConfirmed', 'true');
+  form.append('watermarkLabel', 'PRÉVIA • TESTE');
+
+  const previewRequest = new Request(
+    'https://pedidos.libriconvites.com.br/api/admin/v2/orders/' + checkout.order.code + '/previews',
+    { method: 'POST', body: form },
+  );
+  const createdResponse = await createV2Preview(previewRequest, e, checkout.order.code);
+  assert.equal(createdResponse.status, 201);
+  const created = await createdResponse.json();
+  assert.equal(created.preview.status, 'active');
+  assert.equal(stored.length, 1);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'waiting_customer');
+
+  const revokedResponse = await revokeV2Preview(e, created.preview.id);
+  assert.equal(revokedResponse.status, 200);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_previews WHERE id = ?').get(created.preview.id).status, 'revoked');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'in_production');
+});
+
+test('production search finds theme and exposes the planned card data', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({
+    event: { honoreeName: 'Aurora', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  });
+  const checkout = await startV2Checkout(request, e, body);
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  DB.sqlite.prepare("UPDATE v2_orders SET status='ready_for_production', briefing_status='completed' WHERE order_code = ?")
+    .run(checkout.order.code);
+  DB.sqlite.prepare("UPDATE v2_briefings SET data_json = ? WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)")
+    .run(JSON.stringify({ theme_or_style: 'Jardim Encantado' }), checkout.order.code);
+
+  const rows = await listV2Production(DB, { q: 'Jardim Encantado', when: 'new' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].honoreeName, 'Aurora');
+  assert.equal(rows[0].theme, 'Jardim Encantado');
+  assert.ok(rows[0].productName);
+  assert.ok(rows[0].paidCents > 0);
 });
 
 test('normal checkout resumes expired payment in same order; stale payment cannot mutate paid order', async t => {

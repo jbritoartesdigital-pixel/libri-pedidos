@@ -7,6 +7,7 @@ import {
 import {
   addV2InternalNote,
   applyV2AdminAction,
+  cancelV2Order,
   deleteUnpaidV2Order,
   getV2AdminOrderDetail,
   getV2Central,
@@ -63,6 +64,12 @@ export async function handleAdminV2CoreApi(
               url.searchParams
                 .get(
                   'q',
+                )
+              || '',
+            when:
+              url.searchParams
+                .get(
+                  'when',
                 )
               || '',
           },
@@ -129,6 +136,56 @@ export async function handleAdminV2CoreApi(
       return fail(
         error?.message
         || 'Não foi possível excluir este pedido.',
+        409,
+      );
+    }
+  }
+
+  const cancelMatch =
+    path
+      .match(
+        /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/cancel$/,
+      );
+
+  if (
+    cancelMatch
+    && method === 'POST'
+  ) {
+    try {
+      const body =
+        await readJson(
+          request,
+        );
+
+      const result =
+        await cancelV2Order(
+          env,
+          cancelMatch[1],
+          {
+            reason:
+              body.reason,
+            note:
+              body.note,
+          },
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok: true,
+        result,
+      });
+    } catch (
+      error
+    ) {
+      return fail(
+        error?.message
+        || 'Não foi possível cancelar este pedido.',
         409,
       );
     }

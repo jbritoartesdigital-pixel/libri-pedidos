@@ -236,6 +236,316 @@ export async function deleteUnpaidV2Order(
   };
 }
 
+export async function cancelV2Order(
+  env,
+  orderCode,
+  {
+    reason = '',
+    note = '',
+  } = {},
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    );
+
+  const allowedReasons =
+    new Set([
+      'Não realizou pagamento',
+      'Cliente desistiu',
+      'Outro',
+    ]);
+
+  const selectedReason =
+    cleanText(
+      reason,
+      120,
+    );
+
+  if (
+    !allowedReasons
+      .has(
+        selectedReason,
+      )
+  ) {
+    throw new Error(
+      'Informe o motivo do cancelamento.',
+    );
+  }
+
+  const detail =
+    cleanText(
+      note,
+      1000,
+    );
+
+  if (
+    selectedReason === 'Outro'
+    && !detail
+  ) {
+    throw new Error(
+      'Descreva o motivo do cancelamento.',
+    );
+  }
+
+  const finalReason =
+    selectedReason === 'Outro'
+      ? `Outro: ${detail}`
+      : selectedReason;
+
+  const order =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            order_code,
+            status
+          FROM v2_orders
+          WHERE order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  if (
+    order.status
+    === 'cancelled'
+  ) {
+    return {
+      cancelled: true,
+      alreadyCancelled: true,
+      code:
+        order.order_code,
+      reason:
+        finalReason,
+    };
+  }
+
+  if (
+    order.status
+    === 'finalized'
+  ) {
+    throw new Error(
+      'Pedido finalizado não pode ser cancelado por esta ação.',
+    );
+  }
+
+  const providerPayments =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            provider_order_id
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+            AND status = 'pending'
+            AND provider_order_id IS NOT NULL
+          ORDER BY id DESC
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  for (
+    const payment
+    of providerPayments.results
+    || []
+  ) {
+    const providerOrderId =
+      String(
+        payment.provider_order_id
+        || '',
+      ).trim();
+
+    if (!providerOrderId) {
+      continue;
+    }
+
+    try {
+      const remote =
+        await fetchMercadoPagoOrder(
+          env,
+          providerOrderId,
+        );
+
+      const remoteStatus =
+        String(
+          remote?.status
+          || '',
+        )
+          .toLowerCase();
+
+      if (
+        [
+          'processed',
+          'approved',
+          'refunded',
+        ].includes(
+          remoteStatus,
+        )
+      ) {
+        throw new Error(
+          'O Mercado Pago informa pagamento processado neste pedido. Atualize o status antes de cancelar.',
+        );
+      }
+
+      if (
+        ![
+          'canceled',
+          'cancelled',
+          'failed',
+          'expired',
+        ].includes(
+          remoteStatus,
+        )
+      ) {
+        await cancelMercadoPagoOrder(
+          env,
+          providerOrderId,
+        );
+      }
+
+      await env.DB
+        .prepare(
+          `
+            UPDATE v2_payments
+            SET
+              status = 'cancelled',
+              updated_at = ?
+            WHERE
+              provider = 'mercado_pago'
+              AND provider_order_id = ?
+              AND status = 'pending'
+          `,
+        )
+        .bind(
+          nowIso(),
+          providerOrderId,
+        )
+        .run();
+    } catch (
+      error
+    ) {
+      if (
+        /pagamento processado/i
+          .test(
+            String(
+              error?.message
+              || '',
+            ),
+          )
+      ) {
+        throw error;
+      }
+
+      console.error(
+        'V2 cancel provider checkout failed',
+        providerOrderId,
+        error?.message
+        || error,
+      );
+    }
+  }
+
+  const stamp =
+    nowIso();
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_checkout_holds
+          SET
+            status = 'cancelled',
+            updated_at = ?
+          WHERE
+            order_id = ?
+            AND status = 'active'
+        `,
+      )
+      .bind(
+        stamp,
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_agenda_allocations WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            status = 'cancelled',
+            next_action = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        `Cancelado • ${finalReason}`,
+        stamp,
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'order_cancelled',
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        order.id,
+        `Pedido cancelado: ${finalReason}.`,
+        JSON.stringify({
+          reason:
+            finalReason,
+        }),
+        stamp,
+      ),
+  ]);
+
+  return {
+    cancelled: true,
+    alreadyCancelled: false,
+    code:
+      order.order_code,
+    reason:
+      finalReason,
+  };
+}
+
 export async function cleanupAbandonedUnpaidV2Orders(
   env,
 ) {
@@ -1512,6 +1822,10 @@ export async function getV2AdminOrderDetail(
         order.id,
       code:
         order.order_code,
+      publicToken:
+        order.public_token,
+      customerAreaPath:
+        `/meu-pedido/${order.public_token}`,
       customerName:
         order.customer_name,
       whatsapp:
@@ -1635,6 +1949,7 @@ export async function listV2Production(
   {
     status = '',
     q = '',
+    when = '',
   } = {},
 ) {
   const clauses = [
@@ -1650,8 +1965,7 @@ export async function listV2Production(
 
   if (
     status
-    && status
-      !== 'all'
+    && status !== 'all'
   ) {
     clauses.push(
       'o.status = ?',
@@ -1674,6 +1988,39 @@ export async function listV2Production(
     );
   }
 
+  const today =
+    dateKeyInSaoPaulo();
+
+  if (when === 'today') {
+    clauses.push(
+      'o.event_date = ?',
+    );
+
+    binds.push(
+      today,
+    );
+  } else if (when === 'week') {
+    clauses.push(
+      'o.event_date BETWEEN ? AND ?',
+    );
+
+    binds.push(
+      today,
+      addDays(
+        today,
+        6,
+      ),
+    );
+  } else if (when === 'new') {
+    clauses.push(
+      "o.status = 'ready_for_production'",
+    );
+  } else if (when === 'in_production') {
+    clauses.push(
+      "o.status = 'in_production'",
+    );
+  }
+
   const query =
     cleanText(
       q,
@@ -1687,6 +2034,17 @@ export async function listV2Production(
         OR o.honoree_display_name LIKE ?
         OR c.name LIKE ?
         OR c.whatsapp LIKE ?
+        OR b.data_json LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM v2_order_items search_item
+          WHERE
+            search_item.order_id = o.id
+            AND (
+              search_item.name_snapshot LIKE ?
+              OR search_item.configuration_json LIKE ?
+            )
+        )
       )
     `);
 
@@ -1694,6 +2052,9 @@ export async function listV2Production(
       `%${query}%`;
 
     binds.push(
+      like,
+      like,
+      like,
       like,
       like,
       like,
@@ -1721,18 +2082,70 @@ export async function listV2Production(
 
             p.total_cents,
             p.payment_method,
-            p.balance_cents
+            p.balance_cents,
+
+            json_extract(
+              b.data_json,
+              '$.theme_or_style'
+            ) AS theme,
+
+            (
+              SELECT item.name_snapshot
+              FROM v2_order_items item
+              WHERE
+                item.order_id = o.id
+                AND item.item_type = 'product'
+              ORDER BY item.id
+              LIMIT 1
+            ) AS product_name,
+
+            (
+              SELECT json_extract(
+                item.configuration_json,
+                '$.sceneCount'
+              )
+              FROM v2_order_items item
+              WHERE
+                item.order_id = o.id
+                AND item.item_type = 'product'
+              ORDER BY item.id
+              LIMIT 1
+            ) AS scene_count,
+
+            COALESCE(
+              (
+                SELECT SUM(
+                  CASE
+                    WHEN
+                      pay.status = 'approved'
+                      AND pay.payment_type != 'refund'
+                      THEN pay.amount_cents
+                    WHEN
+                      pay.status = 'approved'
+                      AND pay.payment_type = 'refund'
+                      THEN -pay.amount_cents
+                    ELSE 0
+                  END
+                )
+                FROM v2_payments pay
+                WHERE pay.order_id = o.id
+              ),
+              0
+            ) AS paid_cents
           FROM v2_orders o
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
           INNER JOIN v2_order_pricing p
             ON p.order_id = o.id
+          LEFT JOIN v2_briefings b
+            ON b.order_id = o.id
           WHERE ${
             clauses.join(
               ' AND ',
             )
           }
           ORDER BY
+            o.event_date,
             CASE o.status
               WHEN 'adjustments' THEN 0
               WHEN 'ready_for_production' THEN 1
@@ -1772,6 +2185,17 @@ export async function listV2Production(
           row.whatsapp,
         eventDate:
           row.event_date,
+        theme:
+          row.theme
+          || '',
+        productName:
+          row.product_name
+          || '',
+        sceneCount:
+          Number(
+            row.scene_count
+            || 0,
+          ),
         status:
           row.status,
         statusLabel:
@@ -1791,6 +2215,11 @@ export async function listV2Production(
         totalCents:
           Number(
             row.total_cents
+            || 0,
+        ),
+        paidCents:
+          Number(
+            row.paid_cents
             || 0,
         ),
         paymentMethod:
@@ -1912,7 +2341,17 @@ async function partiesForDay(
             ON c.id = o.customer_id
           WHERE
             o.event_date = ?
-            AND o.status != 'cancelled'
+            AND o.status IN (
+              'briefing_pending',
+              'ready_for_production',
+              'in_production',
+              'waiting_customer',
+              'adjustments',
+              'approved',
+              'balance_pending',
+              'ready_for_delivery',
+              'finalized'
+            )
           ORDER BY
             o.created_at
         `,
@@ -1954,6 +2393,205 @@ async function partiesForDay(
         };
       },
     );
+}
+
+async function upcomingParties(
+  db,
+  today,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            c.name AS customer_name
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          WHERE
+            o.event_date > ?
+            AND o.status IN (
+              'briefing_pending',
+              'ready_for_production',
+              'in_production',
+              'waiting_customer',
+              'adjustments',
+              'approved',
+              'balance_pending',
+              'ready_for_delivery',
+              'finalized'
+            )
+          ORDER BY
+            o.event_date,
+            o.created_at
+          LIMIT 12
+        `,
+      )
+      .bind(
+        today,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      eventDate:
+        row.event_date,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+    }),
+  );
+}
+
+async function centralPendingPayments(
+  db,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.status,
+            o.next_action,
+            c.name AS customer_name,
+            p.total_cents,
+            p.deposit_cents,
+            p.payment_method
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          INNER JOIN v2_order_pricing p
+            ON p.order_id = o.id
+          WHERE
+            o.status IN (
+              'awaiting_payment',
+              'urgency_approved'
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_payments paid
+              WHERE
+                paid.order_id = o.id
+                AND paid.status = 'approved'
+                AND paid.payment_type != 'refund'
+            )
+          ORDER BY
+            o.created_at DESC
+          LIMIT 12
+        `,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+      nextAction:
+        nextActionFromStatus(
+          row,
+        ),
+      totalCents:
+        Number(
+          row.total_cents
+          || 0,
+        ),
+      dueCents:
+        Number(
+          row.deposit_cents
+          || row.total_cents
+          || 0,
+        ),
+      paymentMethod:
+        row.payment_method,
+    }),
+  );
+}
+
+async function centralNewOrders(
+  db,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            o.next_action,
+            c.name AS customer_name
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          WHERE
+            o.status IN (
+              'briefing_pending',
+              'ready_for_production'
+            )
+          ORDER BY
+            o.created_at DESC
+          LIMIT 12
+        `,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      eventDate:
+        row.event_date,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+      nextAction:
+        nextActionFromStatus(
+          row,
+        ),
+    }),
+  );
 }
 
 async function upcomingDeliveries(
@@ -2290,6 +2928,9 @@ export async function getV2Central(
     attention,
     partiesToday,
     partiesTomorrow,
+    partiesUpcoming,
+    pendingPayments,
+    newOrders,
     deliveries,
     capacity,
     finance,
@@ -2305,6 +2946,16 @@ export async function getV2Central(
       partiesForDay(
         db,
         tomorrow,
+      ),
+      upcomingParties(
+        db,
+        today,
+      ),
+      centralPendingPayments(
+        db,
+      ),
+      centralNewOrders(
+        db,
       ),
       upcomingDeliveries(
         db,
@@ -2324,6 +2975,9 @@ export async function getV2Central(
     attention,
     partiesToday,
     partiesTomorrow,
+    partiesUpcoming,
+    pendingPayments,
+    newOrders,
     upcomingDeliveries:
       deliveries,
     capacity,

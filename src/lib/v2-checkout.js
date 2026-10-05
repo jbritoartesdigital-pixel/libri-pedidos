@@ -1809,3 +1809,1820 @@ export async function startV2Checkout(
     );
   }
 }
+
+/* ==================================================
+   URGÊNCIA V2
+   Fluxo:
+   cliente solicita análise -> Ju decide -> cliente paga
+   A taxa é SEMPRE 30% sobre o subtotal já descontado.
+================================================== */
+
+function safeJsonObject(
+  value,
+) {
+  try {
+    const parsed =
+      typeof value
+      === 'string'
+        ? JSON.parse(
+          value
+          || '{}',
+        )
+        : (
+          value
+          || {}
+        );
+
+    return parsed
+      && typeof parsed
+      === 'object'
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function urgencyPaymentMethod(
+  value,
+  fallback = 'pix',
+) {
+  const method =
+    cleanText(
+      value,
+      20,
+    );
+
+  return [
+    'pix',
+    'card',
+  ].includes(
+    method,
+  )
+    ? method
+    : fallback;
+}
+
+async function completeCheckoutRequest(
+  db,
+  requestKey,
+  orderId,
+) {
+  await db
+    .prepare(
+      `
+        UPDATE v2_checkout_requests
+        SET
+          order_id = ?,
+          status = 'completed',
+          updated_at = ?
+        WHERE request_key = ?
+      `,
+    )
+    .bind(
+      orderId,
+      nowIso(),
+      requestKey,
+    )
+    .run();
+}
+
+async function urgencyRequestResponse(
+  db,
+  orderId,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.public_token,
+            o.status AS order_status,
+            o.event_date,
+            o.recommended_target_date,
+
+            u.status AS urgency_status,
+            u.urgency_percent,
+            u.requested_at,
+            u.decided_at
+          FROM v2_orders o
+          INNER JOIN v2_urgency_requests u
+            ON u.order_id = o.id
+          WHERE o.id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        orderId,
+      )
+      .first();
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ok: true,
+
+    recovered:
+      true,
+
+    urgency: {
+      status:
+        row.urgency_status,
+
+      percent:
+        Number(
+          row.urgency_percent
+          || 30,
+        ),
+
+      requestedAt:
+        row.requested_at,
+
+      decidedAt:
+        row.decided_at,
+    },
+
+    order: {
+      code:
+        row.order_code,
+
+      publicToken:
+        row.public_token,
+
+      status:
+        row.order_status,
+
+      eventDate:
+        row.event_date,
+
+      recommendedTargetDate:
+        row.recommended_target_date,
+
+      customerAreaPath:
+        `/meu-pedido/${
+          row.public_token
+        }`,
+    },
+  };
+}
+
+async function createUrgencyRequestOrderRecords(
+  db,
+  {
+    orderCode,
+    publicToken,
+    customerId,
+    eventType,
+    eventSubtype,
+    honoreeName,
+    eventDate,
+    recommendedTargetDate,
+    quote,
+  },
+) {
+  const stamp =
+    nowIso();
+
+  const orderResult =
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_orders(
+            order_code,
+            public_token,
+            customer_id,
+
+            event_type,
+            event_subtype,
+            honoree_display_name,
+            event_date,
+
+            status,
+            next_action,
+
+            delivery_start,
+            delivery_end,
+            recommended_target_date,
+
+            urgency_enabled,
+            briefing_status,
+            source,
+
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+
+            ?,
+            ?,
+            ?,
+            ?,
+
+            'awaiting_urgency_decision',
+            'Aguardando análise de encaixe',
+
+            NULL,
+            NULL,
+            ?,
+
+            0,
+            'locked',
+            'store',
+
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderCode,
+        publicToken,
+        customerId,
+
+        eventType,
+        eventSubtype,
+        honoreeName,
+        eventDate,
+
+        recommendedTargetDate,
+
+        stamp,
+        stamp,
+      )
+      .run();
+
+  const orderId =
+    Number(
+      orderResult
+        ?.meta
+        ?.last_row_id,
+    );
+
+  if (
+    !Number.isInteger(
+      orderId,
+    )
+    || orderId <= 0
+  ) {
+    throw new V2CheckoutError(
+      'Não foi possível registrar a solicitação de encaixe.',
+      {
+        status:
+          500,
+
+        code:
+          'urgency_order_create_error',
+      },
+    );
+  }
+
+  const itemStatements =
+    orderItemRows(
+      quote,
+    )
+      .map(
+        (item) =>
+          db
+            .prepare(
+              `
+                INSERT INTO v2_order_items(
+                  order_id,
+                  item_type,
+                  item_code,
+                  name_snapshot,
+                  quantity,
+                  unit_price_cents,
+                  points_units,
+                  configuration_json,
+                  created_at
+                )
+                VALUES (
+                  ?,
+                  ?,
+                  ?,
+                  ?,
+                  1,
+                  ?,
+                  ?,
+                  ?,
+                  ?
+                )
+              `,
+            )
+            .bind(
+              orderId,
+              item.itemType,
+              item.itemCode,
+              item.name,
+              item.unitPriceCents,
+              item.pointsUnits,
+              JSON.stringify(
+                item.configuration,
+              ),
+              stamp,
+            ),
+      );
+
+  await db.batch([
+    ...itemStatements,
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_order_pricing(
+            order_id,
+            subtotal_cents,
+            combo_discount_cents,
+            coupon_discount_cents,
+            urgency_percent,
+            urgency_amount_cents,
+            total_cents,
+            payment_method,
+            deposit_percent,
+            deposit_cents,
+            balance_cents,
+            currency,
+            pricing_snapshot_json,
+            updated_at
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            0,
+            0,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?,
+            'BRL',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+
+        quote.subtotalCents,
+        quote.comboDiscountCents,
+        quote.couponDiscountCents,
+
+        quote.totalCents,
+
+        quote.payment
+          .method,
+
+        quote.payment
+          .depositPercent,
+
+        quote.payment
+          .depositCents,
+
+        quote.payment
+          .balanceCents,
+
+        JSON.stringify(
+          quote,
+        ),
+
+        stamp,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_briefings(
+            order_id,
+            schema_version,
+            data_json,
+            current_section,
+            completion_percent,
+            updated_at
+          )
+          VALUES (
+            ?,
+            '2.0',
+            '{}',
+            NULL,
+            0,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        stamp,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_urgency_requests(
+            order_id,
+            status,
+            urgency_percent,
+            requested_delivery_start,
+            requested_delivery_end,
+            requested_at
+          )
+          VALUES (
+            ?,
+            'pending',
+            30,
+            NULL,
+            NULL,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        stamp,
+      ),
+
+    db
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'urgency_requested',
+            'Cliente solicitou análise de encaixe urgente.',
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        JSON.stringify({
+          urgencyPercent:
+            30,
+
+          subtotalCents:
+            quote.subtotalCents,
+
+          totalBeforeUrgencyCents:
+            quote.totalCents,
+        }),
+        stamp,
+      ),
+  ]);
+
+  return orderId;
+}
+
+async function urgencyTermsEvidence(
+  request,
+  env,
+  body,
+) {
+  if (
+    body.termsAccepted
+    !== true
+  ) {
+    throw new V2CheckoutError(
+      'Leia e aceite as Condições do Pedido para continuar.',
+      {
+        code:
+          'terms_required',
+      },
+    );
+  }
+
+  const terms =
+    await activeV2Terms(
+      env.DB,
+    );
+
+  if (!terms) {
+    throw new V2CheckoutError(
+      'As Condições do Pedido ainda não estão disponíveis.',
+      {
+        status:
+          503,
+
+        code:
+          'terms_unavailable',
+      },
+    );
+  }
+
+  const acceptedVersion =
+    cleanText(
+      body.termsVersion,
+      40,
+    );
+
+  if (
+    acceptedVersion
+    !== terms.version
+  ) {
+    throw new V2CheckoutError(
+      'As Condições do Pedido foram atualizadas. Leia a nova versão antes de continuar.',
+      {
+        status:
+          409,
+
+        code:
+          'terms_changed',
+
+        details: {
+          currentVersion:
+            terms.version,
+        },
+      },
+    );
+  }
+
+  const termsHash =
+    terms.content_hash
+    || await sha256Hex(
+      terms.body,
+    );
+
+  if (
+    !terms
+      .content_hash
+  ) {
+    await env.DB
+      .prepare(
+        `
+          UPDATE v2_terms_versions
+          SET content_hash = ?
+          WHERE
+            version = ?
+            AND content_hash IS NULL
+        `,
+      )
+      .bind(
+        termsHash,
+        terms.version,
+      )
+      .run();
+  }
+
+  const ip =
+    request.headers
+      .get(
+        'CF-Connecting-IP',
+      )
+    || '';
+
+  return {
+    terms,
+    termsHash,
+
+    evidence: {
+      userAgent:
+        request.headers
+          .get(
+            'user-agent',
+          )
+        || '',
+
+      cfRay:
+        request.headers
+          .get(
+            'cf-ray',
+          )
+        || '',
+
+      connectionIpHash:
+        ip
+          ? await sha256Hex(
+            ip,
+          )
+          : null,
+    },
+  };
+}
+
+export async function requestV2UrgencyReview(
+  request,
+  env,
+  body,
+) {
+  const rawRequestKey =
+    requireText(
+      body.clientRequestId,
+      'Identificador da solicitação',
+      120,
+    );
+
+  if (
+    rawRequestKey.length < 12
+  ) {
+    throw new V2CheckoutError(
+      'Atualize a página e tente novamente.',
+      {
+        status:
+          422,
+
+        code:
+          'invalid_client_request_id',
+      },
+    );
+  }
+
+  const requestKey =
+    `urgency:${rawRequestKey}`;
+
+  const claim =
+    await claimCheckoutRequest(
+      env.DB,
+      requestKey,
+    );
+
+  if (!claim.claimed) {
+    if (
+      claim.existing
+        ?.status
+      === 'completed'
+      && claim.existing
+        ?.order_id
+    ) {
+      const recovered =
+        await urgencyRequestResponse(
+          env.DB,
+          claim.existing
+            .order_id,
+        );
+
+      if (recovered) {
+        return recovered;
+      }
+    }
+
+    throw new V2CheckoutError(
+      'Esta solicitação já está sendo processada.',
+      {
+        status:
+          409,
+
+        code:
+          'urgency_request_in_progress',
+      },
+    );
+  }
+
+  let orderId =
+    null;
+
+  try {
+    const customerName =
+      requireText(
+        body.customer
+          ?.name,
+        'Seu nome',
+        160,
+      );
+
+    const whatsapp =
+      normalizeWhatsapp(
+        body.customer
+          ?.whatsapp,
+      );
+
+    if (
+      whatsapp.length < 10
+      || whatsapp.length > 15
+    ) {
+      throw new V2CheckoutError(
+        'Confira o número do WhatsApp.',
+      );
+    }
+
+    const email =
+      optionalText(
+        body.customer
+          ?.email,
+        240,
+      );
+
+    const honoreeName =
+      requireText(
+        body.event
+          ?.honoreeName,
+        'Nome do aniversariante, casal ou evento',
+        180,
+      );
+
+    const eventDate =
+      requireText(
+        body.event
+          ?.date,
+        'Data do evento',
+        10,
+      );
+
+    if (
+      !validIsoDate(
+        eventDate,
+      )
+    ) {
+      throw new V2CheckoutError(
+        'Confira a data do evento.',
+      );
+    }
+
+    const eventType =
+      optionalText(
+        body.event
+          ?.type,
+        80,
+      )
+      || 'unspecified';
+
+    const eventSubtype =
+      optionalText(
+        body.event
+          ?.subtype,
+        120,
+      );
+
+    const paymentMethod =
+      urgencyPaymentMethod(
+        body.selection
+          ?.paymentMethod,
+        'pix',
+      );
+
+    const selection = {
+      ...(
+        body.selection
+        || {}
+      ),
+
+      paymentMethod,
+    };
+
+    const existingCustomer =
+      await env.DB
+        .prepare(
+          `
+            SELECT id
+            FROM v2_customers
+            WHERE whatsapp = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          whatsapp,
+        )
+        .first();
+
+    const quote =
+      await calculateCommercialV2Quote(
+        env.DB,
+        selection,
+        {
+          customerId:
+            existingCustomer
+              ?.id
+            || null,
+
+          eventType,
+
+          urgencyApproved:
+            false,
+        },
+      );
+
+    const delivery =
+      await findV2DeliveryOptions(
+        env.DB,
+        {
+          eventDate,
+
+          pointsUnits:
+            quote.pointsUnits,
+
+          limit:
+            10,
+        },
+      );
+
+    if (
+      (
+        delivery.options
+        || []
+      ).length > 0
+      || delivery
+        .needsUrgencyReview
+        !== true
+    ) {
+      throw new V2CheckoutError(
+        'Ainda existem janelas normais disponíveis para esta data.',
+        {
+          status:
+            409,
+
+          code:
+            'regular_delivery_available',
+
+          details: {
+            delivery,
+          },
+        },
+      );
+    }
+
+    const customerId =
+      await upsertCustomer(
+        env.DB,
+        {
+          name:
+            customerName,
+
+          whatsapp,
+          email,
+        },
+      );
+
+    const orderCode =
+      await nextOrderCode(
+        env.DB,
+      );
+
+    const publicToken =
+      randomToken(
+        'ord_',
+      );
+
+    orderId =
+      await createUrgencyRequestOrderRecords(
+        env.DB,
+        {
+          orderCode,
+          publicToken,
+          customerId,
+
+          eventType,
+          eventSubtype,
+          honoreeName,
+          eventDate,
+
+          recommendedTargetDate:
+            delivery
+              .recommendedTargetDate,
+
+          quote,
+        },
+      );
+
+    await completeCheckoutRequest(
+      env.DB,
+      requestKey,
+      orderId,
+    );
+
+    try {
+      const {
+        createV2AdminNotification,
+      } =
+        await import(
+          './v2-notifications.js'
+        );
+
+      await createV2AdminNotification(
+        env,
+        {
+          eventCode:
+            'URGENCY_REQUESTED',
+
+          orderId,
+
+          title:
+            'Pedido de encaixe urgente',
+
+          body:
+            `${orderCode} • ${honoreeName} • evento em ${eventDate}`,
+
+          actionUrl:
+            '/admin-v2',
+
+          priority:
+            'high',
+
+          pushEligible:
+            true,
+
+          dedupeKey:
+            `urgency-requested:${orderId}`,
+        },
+      );
+    } catch {
+      /*
+       * A solicitação não pode ser perdida
+       * se apenas a notificação falhar.
+       */
+    }
+
+    return {
+      ok: true,
+
+      recovered:
+        false,
+
+      urgency: {
+        status:
+          'pending',
+
+        percent:
+          30,
+      },
+
+      order: {
+        code:
+          orderCode,
+
+        publicToken,
+
+        status:
+          'awaiting_urgency_decision',
+
+        eventDate,
+
+        recommendedTargetDate:
+          delivery
+            .recommendedTargetDate,
+
+        customerAreaPath:
+          `/meu-pedido/${
+            publicToken
+          }`,
+      },
+    };
+  } catch (
+    error
+  ) {
+    if (orderId) {
+      await env.DB
+        .prepare(
+          `
+            DELETE FROM v2_orders
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          orderId,
+        )
+        .run();
+    }
+
+    await releaseCheckoutRequest(
+      env.DB,
+      requestKey,
+    );
+
+    if (
+      error
+      instanceof V2CheckoutError
+    ) {
+      throw error;
+    }
+
+    throw new V2CheckoutError(
+      error
+        ?.message
+      || 'Não foi possível solicitar o encaixe.',
+      {
+        status:
+          Number(
+            error
+              ?.status,
+          )
+          || 500,
+
+        code:
+          'urgency_request_error',
+
+        details:
+          error
+            ?.details,
+      },
+    );
+  }
+}
+
+export async function repriceApprovedV2Urgency(
+  db,
+  orderId,
+  paymentMethod = null,
+) {
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT
+            subtotal_cents,
+            combo_discount_cents,
+            coupon_discount_cents,
+            payment_method,
+            pricing_snapshot_json
+          FROM v2_order_pricing
+          WHERE order_id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        orderId,
+      )
+      .first();
+
+  if (!row) {
+    throw new V2CheckoutError(
+      'Preço do pedido não encontrado.',
+      {
+        status:
+          404,
+
+        code:
+          'urgency_pricing_not_found',
+      },
+    );
+  }
+
+  const snapshot =
+    safeJsonObject(
+      row.pricing_snapshot_json,
+    );
+
+  const method =
+    urgencyPaymentMethod(
+      paymentMethod,
+      urgencyPaymentMethod(
+        row.payment_method,
+        'pix',
+      ),
+    );
+
+  const subtotalCents =
+    Number(
+      row.subtotal_cents
+      || 0,
+    );
+
+  const urgencyPercent =
+    30;
+
+  const urgencyAmountCents =
+    Math.round(
+      subtotalCents
+      * urgencyPercent
+      / 100,
+    );
+
+  const totalCents =
+    subtotalCents
+    + urgencyAmountCents;
+
+  const depositPercent =
+    method
+    === 'card'
+      ? 100
+      : 50;
+
+  const depositCents =
+    Math.round(
+      totalCents
+      * depositPercent
+      / 100,
+    );
+
+  const balanceCents =
+    Math.max(
+      0,
+      totalCents
+      - depositCents,
+    );
+
+  const nextSnapshot = {
+    ...snapshot,
+
+    urgency: {
+      approved:
+        true,
+
+      percent:
+        urgencyPercent,
+
+      amountCents:
+        urgencyAmountCents,
+    },
+
+    totalCents,
+
+    payment: {
+      ...(
+        snapshot.payment
+        || {}
+      ),
+
+      method,
+
+      depositPercent,
+      depositCents,
+      balanceCents,
+    },
+  };
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_order_pricing
+        SET
+          urgency_percent = 30,
+          urgency_amount_cents = ?,
+          total_cents = ?,
+          payment_method = ?,
+          deposit_percent = ?,
+          deposit_cents = ?,
+          balance_cents = ?,
+          pricing_snapshot_json = ?,
+          updated_at = ?
+        WHERE order_id = ?
+      `,
+    )
+    .bind(
+      urgencyAmountCents,
+      totalCents,
+      method,
+      depositPercent,
+      depositCents,
+      balanceCents,
+      JSON.stringify(
+        nextSnapshot,
+      ),
+      nowIso(),
+      orderId,
+    )
+    .run();
+
+  return {
+    subtotalCents,
+    urgencyPercent,
+    urgencyAmountCents,
+    totalCents,
+
+    payment: {
+      method,
+      depositPercent,
+      depositCents,
+      balanceCents,
+    },
+
+    pricingSnapshot:
+      nextSnapshot,
+  };
+}
+
+export async function startApprovedV2UrgencyCheckout(
+  request,
+  env,
+  publicToken,
+  body,
+) {
+  const rawRequestKey =
+    requireText(
+      body.clientRequestId,
+      'Identificador do checkout',
+      120,
+    );
+
+  if (
+    rawRequestKey.length < 12
+  ) {
+    throw new V2CheckoutError(
+      'Atualize a página e tente novamente.',
+      {
+        status:
+          422,
+
+        code:
+          'invalid_client_request_id',
+      },
+    );
+  }
+
+  const requestKey =
+    `urgency-payment:${rawRequestKey}`;
+
+  const claim =
+    await claimCheckoutRequest(
+      env.DB,
+      requestKey,
+    );
+
+  if (!claim.claimed) {
+    if (
+      claim.existing
+        ?.status
+      === 'completed'
+      && claim.existing
+        ?.order_id
+    ) {
+      const recovered =
+        await completedCheckoutResponse(
+          env.DB,
+          claim.existing
+            .order_id,
+        );
+
+      if (recovered) {
+        return recovered;
+      }
+    }
+
+    throw new V2CheckoutError(
+      'Este pagamento já está sendo processado.',
+      {
+        status:
+          409,
+
+        code:
+          'checkout_in_progress',
+      },
+    );
+  }
+
+  let orderId =
+    null;
+
+  let holdCreated =
+    false;
+
+  try {
+    const token =
+      requireText(
+        publicToken,
+        'Pedido',
+        80,
+      );
+
+    const order =
+      await env.DB
+        .prepare(
+          `
+            SELECT
+              o.id,
+              o.order_code,
+              o.public_token,
+              o.event_date,
+              o.status,
+              o.delivery_start,
+              o.delivery_end,
+              o.customer_id,
+
+              c.email,
+
+              p.pricing_snapshot_json,
+
+              u.status AS urgency_status
+            FROM v2_orders o
+            INNER JOIN v2_customers c
+              ON c.id = o.customer_id
+            INNER JOIN v2_order_pricing p
+              ON p.order_id = o.id
+            INNER JOIN v2_urgency_requests u
+              ON u.order_id = o.id
+            WHERE o.public_token = ?
+            LIMIT 1
+          `,
+        )
+        .bind(
+          token,
+        )
+        .first();
+
+    if (!order) {
+      throw new V2CheckoutError(
+        'Pedido não encontrado.',
+        {
+          status:
+            404,
+
+          code:
+            'order_not_found',
+        },
+      );
+    }
+
+    orderId =
+      Number(
+        order.id,
+      );
+
+    if (
+      order.status
+      === 'awaiting_payment'
+    ) {
+      const existing =
+        await completedCheckoutResponse(
+          env.DB,
+          orderId,
+        );
+
+      if (
+        existing
+        ?.payment
+        ?.checkoutUrl
+      ) {
+        await completeCheckoutRequest(
+          env.DB,
+          requestKey,
+          orderId,
+        );
+
+        return existing;
+      }
+    }
+
+    if (
+      order.status
+      !== 'urgency_approved'
+      || order.urgency_status
+      !== 'approved'
+    ) {
+      throw new V2CheckoutError(
+        'O encaixe ainda não foi aprovado pela Libri.',
+        {
+          status:
+            409,
+
+          code:
+            'urgency_not_approved',
+        },
+      );
+    }
+
+    const deliveryStart =
+      cleanText(
+        order.delivery_start,
+        10,
+      );
+
+    const deliveryEnd =
+      cleanText(
+        order.delivery_end,
+        10,
+      );
+
+    if (
+      !validIsoDate(
+        deliveryStart,
+      )
+      || !validIsoDate(
+        deliveryEnd,
+      )
+      || deliveryStart
+        > deliveryEnd
+      || deliveryEnd
+        > order.event_date
+    ) {
+      throw new V2CheckoutError(
+        'A janela aprovada para o encaixe é inválida.',
+        {
+          status:
+            409,
+
+          code:
+            'urgency_window_invalid',
+        },
+      );
+    }
+
+    const paymentMethod =
+      urgencyPaymentMethod(
+        body.paymentMethod,
+        '',
+      );
+
+    if (!paymentMethod) {
+      throw new V2CheckoutError(
+        'Escolha Pix ou cartão.',
+      );
+    }
+
+    const {
+      terms,
+      termsHash,
+      evidence,
+    } =
+      await urgencyTermsEvidence(
+        request,
+        env,
+        body,
+      );
+
+    const storedSnapshot =
+      safeJsonObject(
+        order.pricing_snapshot_json,
+      );
+
+    const pointsUnits =
+      Number.parseInt(
+        storedSnapshot
+          .pointsUnits,
+        10,
+      );
+
+    if (
+      !Number.isInteger(
+        pointsUnits,
+      )
+      || pointsUnits <= 0
+    ) {
+      throw new V2CheckoutError(
+        'A carga de produção deste pedido é inválida.',
+        {
+          status:
+            409,
+
+          code:
+            'urgency_points_invalid',
+        },
+      );
+    }
+
+    const plan =
+      await planV2AllocationForWindow(
+        env.DB,
+        {
+          start:
+            deliveryStart,
+
+          end:
+            deliveryEnd,
+
+          pointsUnits,
+        },
+      );
+
+    if (!plan.fits) {
+      throw new V2CheckoutError(
+        'O encaixe aprovado perdeu capacidade disponível. A Libri precisa revisar a janela antes do pagamento.',
+        {
+          status:
+            409,
+
+          code:
+            'urgency_capacity_changed',
+        },
+      );
+    }
+
+    const pricing =
+      await repriceApprovedV2Urgency(
+        env.DB,
+        orderId,
+        paymentMethod,
+      );
+
+    const settings =
+      await loadV2Settings(
+        env.DB,
+      );
+
+    const holdMinutes =
+      v2IntSetting(
+        settings,
+        'checkout_hold_minutes',
+        30,
+      );
+
+    const defaultCapacityUnits =
+      v2IntSetting(
+        settings,
+        'default_sellable_points_per_day_units',
+        400,
+      );
+
+    const expiresAt =
+      new Date(
+        Date.now()
+        + (
+          holdMinutes
+          * 60
+          * 1000
+        ),
+      )
+        .toISOString();
+
+    const hold =
+      await createCapacityHold(
+        env.DB,
+        {
+          orderId,
+
+          allocation:
+            plan.allocation,
+
+          expiresAt,
+          defaultCapacityUnits,
+        },
+      );
+
+    holdCreated =
+      true;
+
+    const stamp =
+      nowIso();
+
+    await env.DB
+      .prepare(
+        `
+          INSERT INTO v2_order_terms_acceptances(
+            order_id,
+            terms_version,
+            terms_hash,
+            accepted_at,
+            evidence_json
+          )
+          VALUES (
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        orderId,
+        terms.version,
+        termsHash,
+        stamp,
+        JSON.stringify(
+          evidence,
+        ),
+      )
+      .run();
+
+    const mpCheckout =
+      await createMercadoPagoCheckout(
+        request,
+        env,
+        {
+          orderId,
+
+          orderCode:
+            order.order_code,
+
+          publicToken:
+            order.public_token,
+
+          paymentMethod,
+
+          amountDueNowCents:
+            pricing.payment
+              .depositCents,
+
+          customerEmail:
+            order.email,
+        },
+      );
+
+    await env.DB.batch([
+      env.DB
+        .prepare(
+          `
+            UPDATE v2_orders
+            SET
+              status = 'awaiting_payment',
+              next_action = 'Aguardando pagamento',
+              urgency_enabled = 1,
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          stamp,
+          orderId,
+        ),
+
+      env.DB
+        .prepare(
+          `
+            INSERT INTO v2_order_history(
+              order_id,
+              action_code,
+              description,
+              metadata_json,
+              created_at
+            )
+            VALUES (
+              ?,
+              'urgency_checkout_started',
+              'Pagamento do encaixe urgente iniciado.',
+              ?,
+              ?
+            )
+          `,
+        )
+        .bind(
+          orderId,
+          JSON.stringify({
+            deliveryStart,
+            deliveryEnd,
+
+            urgencyPercent:
+              30,
+
+            urgencyAmountCents:
+              pricing
+                .urgencyAmountCents,
+
+            totalCents:
+              pricing
+                .totalCents,
+
+            paymentMethod,
+          }),
+          stamp,
+        ),
+    ]);
+
+    await completeCheckoutRequest(
+      env.DB,
+      requestKey,
+      orderId,
+    );
+
+    return {
+      ok: true,
+
+      recovered:
+        false,
+
+      order: {
+        code:
+          order.order_code,
+
+        publicToken:
+          order.public_token,
+
+        customerAreaPath:
+          `/meu-pedido/${
+            order.public_token
+          }`,
+
+        deliveryWindow: {
+          start:
+            deliveryStart,
+
+          end:
+            deliveryEnd,
+        },
+      },
+
+      hold: {
+        token:
+          hold.holdToken,
+
+        expiresAt:
+          hold.expiresAt,
+      },
+
+      payment: {
+        method:
+          paymentMethod,
+
+        totalCents:
+          pricing
+            .totalCents,
+
+        amountDueNowCents:
+          pricing.payment
+            .depositCents,
+
+        balanceCents:
+          pricing.payment
+            .balanceCents,
+
+        provider:
+          'mercado_pago',
+
+        providerOrderId:
+          mpCheckout
+            .providerOrderId,
+
+        checkoutUrl:
+          mpCheckout
+            .checkoutUrl,
+
+        ready:
+          true,
+      },
+    };
+  } catch (
+    error
+  ) {
+    if (
+      orderId
+      && holdCreated
+    ) {
+      const payment =
+        await env.DB
+          .prepare(
+            `
+              SELECT id
+              FROM v2_payments
+              WHERE
+                order_id = ?
+                AND provider = 'mercado_pago'
+                AND status = 'pending'
+              ORDER BY id DESC
+              LIMIT 1
+            `,
+          )
+          .bind(
+            orderId,
+          )
+          .first();
+
+      if (!payment) {
+        await env.DB
+          .prepare(
+            `
+              DELETE FROM v2_checkout_holds
+              WHERE
+                order_id = ?
+                AND status = 'active'
+            `,
+          )
+          .bind(
+            orderId,
+          )
+          .run();
+      } else {
+        await env.DB
+          .prepare(
+            `
+              UPDATE v2_orders
+              SET
+                status = 'awaiting_payment',
+                next_action = 'Aguardando pagamento',
+                urgency_enabled = 1,
+                updated_at = ?
+              WHERE id = ?
+            `,
+          )
+          .bind(
+            nowIso(),
+            orderId,
+          )
+          .run();
+      }
+    }
+
+    await releaseCheckoutRequest(
+      env.DB,
+      requestKey,
+    );
+
+    if (
+      error
+      instanceof V2CheckoutError
+    ) {
+      throw error;
+    }
+
+    throw new V2CheckoutError(
+      error
+        ?.message
+      || 'Não foi possível iniciar o pagamento do encaixe.',
+      {
+        status:
+          Number(
+            error
+              ?.status,
+          )
+          || 502,
+
+        code:
+          'urgency_payment_error',
+
+        details:
+          error
+            ?.details,
+      },
+    );
+  }
+}

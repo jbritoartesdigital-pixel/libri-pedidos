@@ -2253,6 +2253,10 @@ export async function getV2CustomerArea(
   const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent
     FROM v2_urgency_requests WHERE order_id = ?`).bind(context.order.id).first();
 
+  const termsAcceptance = await env.DB.prepare(
+    'SELECT terms_version FROM v2_order_terms_acceptances WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+  ).bind(context.order.id).first();
+
   const progress =
     context.order.briefing_status
     === 'completed'
@@ -2309,7 +2313,8 @@ export async function getV2CustomerArea(
         context.order.source,
     },
 
-    urgency: urgency ? { status: urgency.status, note: urgency.decision_note, percent: 30 } : null,
+    urgency: urgency ? { status: urgency.status, note: urgency.decision_note,
+      percent: Number(urgency.urgency_percent || 0) } : null,
 
     customer: {
       name:
@@ -2341,6 +2346,8 @@ export async function getV2CustomerArea(
         Number(
           context.order.balance_cents || 0,
         ),
+      termsAccepted: Boolean(termsAcceptance),
+      termsVersion: termsAcceptance?.terms_version || null,
     },
 
     briefing: {

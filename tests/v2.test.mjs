@@ -320,7 +320,10 @@ test('official combos are seeded with the approved compositions and configurable
     ORDER BY c.code, i.item_code
   `).all();
 
-  const byCode = Object.groupBy(rows, row => row.code);
+  const byCode = rows.reduce((acc, row) => {
+    (acc[row.code] ||= []).push(row);
+    return acc;
+  }, {});
   assert.deepEqual(byCode.convite_save.map(row => row.item_code), ['save_the_date']);
   assert.deepEqual(byCode.antes_festa.map(row => row.item_code), ['reminder', 'save_the_date']);
   assert.deepEqual(byCode.organizacao.map(row => row.item_code), ['confirmation', 'reminder']);

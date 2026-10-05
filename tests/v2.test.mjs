@@ -37,6 +37,10 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const result = await urgency(DB); const token = result.order.publicToken;
   assert.equal(mp.posts, 0);
+  const pendingPricing = DB.sqlite.prepare('SELECT subtotal_cents, urgency_percent, urgency_amount_cents, total_cents FROM v2_order_pricing').get();
+  assert.equal(pendingPricing.urgency_percent, 30);
+  assert.equal(pendingPricing.urgency_amount_cents, Math.round(pendingPricing.subtotal_cents * 0.3));
+  assert.equal(pendingPricing.total_cents, pendingPricing.subtotal_cents + pendingPricing.urgency_amount_cents);
   DB.sqlite.prepare('UPDATE v2_order_pricing SET subtotal_cents = 7001, combo_discount_cents = 1000, coupon_discount_cents = 500').run();
   const approved = await decideV2Urgency(DB, result.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });
   assert.equal(approved.pricing.totalCents, 9101); assert.equal(approved.pricing.urgencyAmountCents, 2100);
@@ -86,8 +90,9 @@ test('normal checkout resumes expired payment in same order; stale payment canno
   const checkout = await startV2Checkout(request, e, body);
   const old = checkout.payment.providerOrderId; mp.orders.get(old).status = 'expired';
   mp.orders.get(old).status_detail = 'expired';
-  const resumed = await resumeV2Payment(request, e, checkout.order.publicToken, await terms(DB));
+  const resumed = await resumeV2Payment(request, e, checkout.order.publicToken, { clientRequestId: crypto.randomUUID() });
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1); assert.equal(mp.posts, 2);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_terms_acceptances').get().n, 1);
   mp.approve(resumed.payment.providerOrderId); await syncMercadoPagoOrder(e, resumed.payment.providerOrderId);
   await syncMercadoPagoOrder(e, old);
   assert.equal(DB.sqlite.prepare('SELECT next_action FROM v2_orders').get().next_action, 'Briefing aguardando preenchimento');
@@ -122,14 +127,15 @@ test('scheduler repairs missing notifications, expires reservations and previews
   assert.equal((await getV2CustomerArea(env(DB), result.order.publicToken)).urgency.status, 'pending');
 });
 
-test('commercial quote applies fixed 30% and Pix 50% after combo and coupon discounts', async () => {
+test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
     INSERT INTO v2_coupons(code,discount_type,discount_value) VALUES ('TEST','percent',10);
     UPDATE v2_settings SET value = '99' WHERE key IN ('urgency_percent','pix_deposit_percent');`);
   const quote = await calculateCommercialV2Quote(DB, { productCode: 'interactive_essential', paymentMethod: 'pix', comboCode: 'test', couponCode: 'TEST' }, { urgencyApproved: true });
   assert.equal(quote.subtotalCents, Math.round((quote.productCents - 100) * 0.9));
-  assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.3));
+  assert.equal(quote.urgency.percent, 99);
+  assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.99));
   assert.equal(quote.payment.depositPercent, 50);
 });
 

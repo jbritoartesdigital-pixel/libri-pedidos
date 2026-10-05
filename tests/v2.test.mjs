@@ -164,6 +164,27 @@ test('normal delivery availability prevents urgency request', async () => {
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 0);
 });
 
+test('explicit provider rejection releases old attempt and retries with a fresh idempotency key', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({ event: { honoreeName: 'Teste', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });
+
+  mp.rejectNext();
+
+  const first = await startV2Checkout(request, e, body);
+  assert.equal(first.payment.ready, false);
+  assert.equal(DB.sqlite.prepare("SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1").get().status, 'cancelled');
+
+  const resumed = await resumeV2Payment(request, e, first.order.publicToken, {
+    clientRequestId: crypto.randomUUID(),
+  });
+
+  assert.equal(resumed.payment.ready, true);
+  assert.equal(mp.keysUsed.length, 2);
+  assert.notEqual(mp.keysUsed[0], mp.keysUsed[1]);
+  assert.equal(DB.sqlite.prepare("SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1").get().status, 'active');
+});
+
 test('uncertain provider response is recovered with same idempotency key and no duplicate charge', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const a = await urgency(DB);

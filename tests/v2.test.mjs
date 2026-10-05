@@ -121,6 +121,7 @@ test('admin can delete only unpaid pre-production orders and pending provider ch
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE id = ?').get(orderId).n, 0);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id = ?').get(orderId).n, 0);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_requests WHERE order_id = ?').get(orderId).n, 0);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_customers').get().n, 0);
 
   const paidBody = input({ clientRequestId: crypto.randomUUID(),
     event: { honoreeName: 'Teste pago', type: 'birthday', date: day(60) },

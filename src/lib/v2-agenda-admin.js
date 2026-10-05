@@ -982,6 +982,7 @@ export async function getV2AgendaRange(
     allocations,
     holds,
     allocationOrders,
+    eventOrders,
   ] =
     await Promise.all([
       defaultCapacities(
@@ -1084,6 +1085,38 @@ export async function getV2AgendaRange(
               a.day,
               o.status = 'finalized' DESC,
               o.delivery_start,
+              o.order_code
+          `,
+        )
+        .bind(
+          rangeStart,
+          rangeEnd,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              o.event_date,
+              o.order_code,
+              o.honoree_display_name,
+              o.status,
+              o.delivery_start,
+              o.delivery_end,
+              c.name AS customer_name
+            FROM v2_orders o
+            INNER JOIN v2_customers c
+              ON c.id = o.customer_id
+            WHERE
+              o.event_date BETWEEN ? AND ?
+              AND o.status NOT IN (
+                'cancelled',
+                'awaiting_urgency_decision'
+              )
+            ORDER BY
+              o.event_date,
+              o.honoree_display_name,
               o.order_code
           `,
         )
@@ -1201,6 +1234,49 @@ export async function getV2AgendaRange(
       });
   }
 
+  const eventsByDay = {};
+
+  for (
+    const row
+    of eventOrders.results
+    || []
+  ) {
+    if (
+      !eventsByDay[
+        row.event_date
+      ]
+    ) {
+      eventsByDay[
+        row.event_date
+      ] = [];
+    }
+
+    eventsByDay[
+      row.event_date
+    ]
+      .push({
+        code:
+          row.order_code,
+
+        honoreeName:
+          row.honoree_display_name,
+
+        customerName:
+          row.customer_name,
+
+        status:
+          row.status,
+
+        deliveryWindow: {
+          start:
+            row.delivery_start,
+
+          end:
+            row.delivery_end,
+        },
+      });
+  }
+
   const days =
     listDays(
       rangeStart,
@@ -1295,6 +1371,12 @@ export async function getV2AgendaRange(
 
             orders:
               ordersByDay[
+                day
+              ]
+              || [],
+
+            events:
+              eventsByDay[
                 day
               ]
               || [],

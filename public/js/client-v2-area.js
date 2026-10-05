@@ -377,6 +377,9 @@ function summaryHtml(
   const dueNowCents = isPix
     ? pixDueCents
     : totalCents;
+  const paidCents = Number(area.payment.paidCents || 0);
+  const remainingCents = Number(area.payment.remainingCents ?? Math.max(0, totalCents - paidCents));
+  const hasPaid = paidCents > 0;
 
   return `
     <section class="page-card">
@@ -438,6 +441,32 @@ function summaryHtml(
           <button class="btn btn-primary payment-main-cta" id="resumePayment">Pagar agora</button>
         </section>` : ''}
 
+      ${area.order.status === 'balance_pending' && isPix && remainingCents > 0 ? `
+        <section class="card payment-priority" id="balancePixCard">
+          <div class="payment-priority-top">
+            <div>
+              <span class="eyebrow">Saldo final</span>
+              <strong class="payment-priority-total">${money(remainingCents)}</strong>
+            </div>
+            <small>Pix direto para a Libri</small>
+          </div>
+
+          ${area.payment.balancePix?.recipient ? `<p class="muted">Recebedor: <strong>${esc(area.payment.balancePix.recipient)}</strong></p>` : ""}
+          ${area.payment.balancePix?.key ? `
+            <div class="notice info compact-notice">
+              <strong>Chave Pix</strong><br>
+              <span>${esc(area.payment.balancePix.key)}</span>
+            </div>
+            <button
+              class="btn btn-primary payment-main-cta"
+              id="copyBalancePix"
+              type="button"
+              data-pix-key="${esc(area.payment.balancePix.key)}"
+            >Copiar chave Pix</button>
+          ` : `<div class="notice info">Entre em contato com a Libri para receber os dados do saldo.</div>`}
+        </section>
+      ` : ""}
+
       <dl class="review-list">
         <div class="review-line">
           <dt>Status</dt>
@@ -477,8 +506,12 @@ function summaryHtml(
           <dd id="paymentReviewLine">
             ${
               isPix
-                ? `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`
-                : `Cartão • ${money(totalCents)}`
+                ? (hasPaid
+                    ? `Pix • pago ${money(paidCents)} • saldo ${money(remainingCents)}`
+                    : `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`)
+                : (hasPaid
+                    ? `Cartão • pago ${money(paidCents)}`
+                    : `Cartão • ${money(totalCents)}`)
             }
           </dd>
         </div>
@@ -1102,6 +1135,17 @@ export async function startCustomerArea(
           );
         },
       );
+
+    document.getElementById('copyBalancePix')?.addEventListener('click', async (event) => {
+      const key = event.currentTarget.dataset.pixKey || '';
+      if (!key) return;
+      try {
+        await navigator.clipboard.writeText(key);
+        showToast('Chave Pix copiada ✓');
+      } catch {
+        showToast('Não foi possível copiar. Toque e segure a chave Pix para copiar.');
+      }
+    });
 
     app
       .querySelectorAll(

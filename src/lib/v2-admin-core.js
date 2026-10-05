@@ -44,6 +44,7 @@ export async function deleteUnpaidV2Order(
           SELECT
             id,
             order_code,
+            customer_id,
             status,
             briefing_status
           FROM v2_orders
@@ -206,6 +207,25 @@ export async function deleteUnpaidV2Order(
         order.id,
       ),
   ]);
+
+  await env.DB
+    .prepare(
+      `
+        DELETE FROM v2_customers
+        WHERE
+          id = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM v2_orders
+            WHERE customer_id = ?
+          )
+      `,
+    )
+    .bind(
+      order.customer_id,
+      order.customer_id,
+    )
+    .run();
 
   return {
     deleted:

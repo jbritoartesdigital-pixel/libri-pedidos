@@ -22,10 +22,13 @@ export function validateUrgencyWindow(start, end, eventDate) {
 
 export async function decideV2Urgency(db, orderCode, body) {
   if (!['approve', 'reject'].includes(body.decision)) throw new Error('Escolha aprovar ou rejeitar.');
-  const row = await db.prepare(`SELECT o.*, u.status AS urgency_status, p.pricing_snapshot_json
+  const row = await db.prepare(`SELECT o.*, u.status AS urgency_status,
+      u.urgency_percent AS requested_urgency_percent, p.pricing_snapshot_json
     FROM v2_orders o JOIN v2_urgency_requests u ON u.order_id = o.id
     JOIN v2_order_pricing p ON p.order_id = o.id WHERE o.order_code = ?`).bind(orderCode).first();
   if (!row) throw Object.assign(new Error('Solicitação não encontrada.'), { status: 404 });
+  const urgencyPercent = Math.max(1, Math.min(100,
+    Number.parseInt(row.requested_urgency_percent, 10) || 30));
   return withV2PaymentLock(db, row.id, async () => {
     const current = await db.prepare(`SELECT o.status, u.status AS urgency_status
       FROM v2_orders o JOIN v2_urgency_requests u ON u.order_id = o.id WHERE o.id = ?`).bind(row.id).first();
@@ -47,18 +50,18 @@ export async function decideV2Urgency(db, orderCode, body) {
     }
     const stamp = nowIso();
     await db.batch([
-      db.prepare(`UPDATE v2_urgency_requests SET status = ?, urgency_percent = 30,
+      db.prepare(`UPDATE v2_urgency_requests SET status = ?, urgency_percent = ?,
         requested_delivery_start = ?, requested_delivery_end = ?, decision_note = ?, decided_at = ?
-        WHERE order_id = ? AND status = 'pending'`).bind(approved ? 'approved' : 'rejected', start, end, note, stamp, row.id),
+        WHERE order_id = ? AND status = 'pending'`).bind(approved ? 'approved' : 'rejected', urgencyPercent, start, end, note, stamp, row.id),
       db.prepare(`UPDATE v2_orders SET status = ?, next_action = ?, delivery_start = ?, delivery_end = ?,
         urgency_enabled = ?, updated_at = ? WHERE id = ? AND status = 'awaiting_urgency_decision'`)
         .bind(approved ? 'urgency_approved' : 'cancelled', approved ? 'Encaixe aprovado; aguardando pagamento' : 'Encaixe não aprovado', start, end, approved ? 1 : 0, stamp, row.id),
       db.prepare(`INSERT INTO v2_order_history(order_id, action_code, description, metadata_json, created_at)
         VALUES (?, ?, ?, ?, ?)`).bind(row.id, approved ? 'urgency_approved' : 'urgency_rejected',
-        approved ? 'Encaixe aprovado; pagamento liberado com adicional de 30%.' : 'Encaixe rejeitado.', JSON.stringify({ start, end, note }), stamp),
+        approved ? `Encaixe aprovado; pagamento liberado com adicional de ${urgencyPercent}%.` : 'Encaixe rejeitado.', JSON.stringify({ start, end, note, urgencyPercent }), stamp),
       db.prepare(`UPDATE v2_notifications SET resolved_at = ? WHERE order_id = ?
         AND event_code = 'URGENCY_REQUESTED' AND resolved_at IS NULL`).bind(stamp, row.id),
     ]);
-    return { approved, pricing, deliveryWindow: { start, end }, note };
+    return { approved, pricing, urgencyPercent, deliveryWindow: { start, end }, note };
   });
 }

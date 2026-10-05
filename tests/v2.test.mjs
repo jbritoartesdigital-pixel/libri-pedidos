@@ -192,7 +192,8 @@ test('uncertain provider response is recovered with same idempotency key and no 
   const first = await resumeV2Payment(request, e, a.order.publicToken, await terms(DB));
   const order = DB.sqlite.prepare('SELECT id, order_code FROM v2_orders').get();
   await createMercadoPagoCheckout(request, e, { orderId: order.id, orderCode: order.order_code,
-    publicToken: a.order.publicToken, paymentMethod: 'pix', amountDueNowCents: first.payment.amountDueNowCents });
+    publicToken: a.order.publicToken, paymentMethod: 'pix', amountDueNowCents: first.payment.amountDueNowCents,
+    customerEmail: 'test@example.com' });
   assert.equal(mp.posts, 1); assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n, 1);
   DB.sqlite.prepare('DELETE FROM v2_payments').run();
   const recovered = await resumeV2Payment(request, e, a.order.publicToken, await terms(DB));

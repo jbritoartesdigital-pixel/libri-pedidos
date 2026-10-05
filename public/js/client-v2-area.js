@@ -412,7 +412,14 @@ function summaryHtml(
             <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
           </div>
 
-          ${isPix ? `<p class="muted">Total do pedido: ${money(area.payment.totalCents)} • saldo após a entrada: ${money(area.payment.balanceCents)}</p>` : ''}
+          <p
+            id="paymentBreakdown"
+            class="muted"
+            data-total="${area.payment.totalCents}"
+            data-balance="${area.payment.balanceCents}"
+          >${isPix
+            ? `Total do pedido: ${money(area.payment.totalCents)} • saldo após a entrada: ${money(area.payment.balanceCents)}`
+            : `Total do pedido: ${money(area.payment.totalCents)}`}</p>
 
           ${area.urgency && area.order.status === 'urgency_approved' ? `
             <div class="payment-methods">
@@ -1110,6 +1117,11 @@ export async function startCustomerArea(
                   'paymentDueLabel',
                 );
 
+              const breakdown =
+                document.getElementById(
+                  'paymentBreakdown',
+                );
+
               if (
                 !total
                 || !label
@@ -1133,6 +1145,27 @@ export async function startCustomerArea(
                 method === 'pix'
                   ? 'Pix • entrada de 50%'
                   : 'Cartão • pagamento integral';
+
+              if (breakdown) {
+                const orderTotal =
+                  money(
+                    Number(
+                      breakdown.dataset.total,
+                    ),
+                  );
+
+                const balance =
+                  money(
+                    Number(
+                      breakdown.dataset.balance,
+                    ),
+                  );
+
+                breakdown.textContent =
+                  method === 'pix'
+                    ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
+                    : `Total do pedido: ${orderTotal}`;
+              }
             },
           );
         },

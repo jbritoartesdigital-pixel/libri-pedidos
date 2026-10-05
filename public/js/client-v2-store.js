@@ -156,7 +156,6 @@ function readSaved(
     if (
       productSlug
       && saved.deepProductSlug
-      && saved.deepProductSlug
       !== productSlug
     ) {
       return emptyState(

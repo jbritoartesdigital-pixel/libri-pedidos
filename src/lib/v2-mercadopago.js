@@ -252,19 +252,6 @@ export async function createMercadoPagoCheckout(
       env.DB,
     );
 
-  const expiryMinutes =
-    Math.max(
-      5,
-      Math.min(
-        180,
-        v2IntSetting(
-          settings,
-          'mercado_pago_order_expiry_minutes',
-          25,
-        ),
-      ),
-    );
-
   const origin =
     new URL(
       request.url,

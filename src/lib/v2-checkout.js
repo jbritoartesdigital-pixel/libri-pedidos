@@ -1205,19 +1205,29 @@ export async function resumeV2Payment(request, env, token, body = {}) {
       AND status IN ('active', 'expired') AND NOT EXISTS
       (SELECT 1 FROM v2_payments WHERE order_id = ?) ORDER BY id DESC LIMIT 1`).bind(order.id, order.id).first();
     if (orphanHold) {
-      // Reuse the same provider idempotency key to recover an uncertain POST response.
-      const checkout = await createMercadoPagoCheckout(request, env, { orderId: order.id,
-        orderCode: order.order_code, publicToken: token, paymentMethod: order.payment_method,
-        amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email });
-      const checked = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
-      if (checked.approved) return { ok: true, alreadyPaid: true, capacityReview: !!checked.capacityReview };
-      if (checked.paymentStatus === 'pending') {
-        const existingHold = await env.DB.prepare(`SELECT status, expires_at FROM v2_checkout_holds WHERE id = ?`).bind(orphanHold.id).first();
-        if (existingHold.status === 'active' && existingHold.expires_at > nowIso()) return completedCheckoutResponse(env.DB, order.id);
-        await cancelMercadoPagoOrder(env, checkout.providerOrderId);
-        const cancelled = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
-        if (cancelled.approved) return { ok: true, alreadyPaid: true, capacityReview: !!cancelled.capacityReview };
-        if (cancelled.paymentStatus === 'pending') throw new V2CheckoutError('Aguarde a confirmação do pagamento anterior.', { status: 409 });
+      // Tenta recuperar apenas respostas realmente incertas. Uma rejeição explícita
+      // do provedor encerra a reserva órfã e permite uma nova tentativa segura.
+      try {
+        const checkout = await createMercadoPagoCheckout(request, env, { orderId: order.id,
+          orderCode: order.order_code, publicToken: token, paymentMethod: order.payment_method,
+          amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email });
+        const checked = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
+        if (checked.approved) return { ok: true, alreadyPaid: true, capacityReview: !!checked.capacityReview };
+        if (checked.paymentStatus === 'pending') {
+          const existingHold = await env.DB.prepare(`SELECT status, expires_at FROM v2_checkout_holds WHERE id = ?`).bind(orphanHold.id).first();
+          if (existingHold.status === 'active' && existingHold.expires_at > nowIso()) return completedCheckoutResponse(env.DB, order.id);
+          await cancelMercadoPagoOrder(env, checkout.providerOrderId);
+          const cancelled = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
+          if (cancelled.approved) return { ok: true, alreadyPaid: true, capacityReview: !!cancelled.capacityReview };
+          if (cancelled.paymentStatus === 'pending') throw new V2CheckoutError('Aguarde a confirmação do pagamento anterior.', { status: 409 });
+        }
+      } catch (error) {
+        if (error.status && error.status >= 400 && error.status < 500) {
+          await env.DB.prepare(`UPDATE v2_checkout_holds SET status = 'cancelled', updated_at = ?
+            WHERE id = ? AND status IN ('active', 'expired')`).bind(nowIso(), orphanHold.id).run();
+        } else {
+          throw error;
+        }
       }
     }
     // A replacement checkout is only created after the previous provider order is terminal.
@@ -1859,8 +1869,13 @@ export async function startV2Checkout(
     error
   ) {
     if (orderId) {
-      const retained = await env.DB.prepare('SELECT id FROM v2_checkout_holds WHERE order_id = ? LIMIT 1').bind(orderId).first();
+      const retained = await env.DB.prepare(`SELECT id, status FROM v2_checkout_holds
+        WHERE order_id = ? ORDER BY id DESC LIMIT 1`).bind(orderId).first();
       if (retained) {
+        if (error.status && error.status >= 400 && error.status < 500) {
+          await env.DB.prepare(`UPDATE v2_checkout_holds SET status = 'cancelled', updated_at = ?
+            WHERE id = ? AND status IN ('active', 'expired')`).bind(nowIso(), retained.id).run();
+        }
         await completeCheckoutRequest(env.DB, requestKey, orderId);
         return completedCheckoutResponse(env.DB, orderId);
       }

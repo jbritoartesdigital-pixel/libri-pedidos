@@ -29,8 +29,12 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 12);
+  const DB = database(); assert.equal(DB.migrationCount, 13);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupons WHERE active = 0').get().n, 3);
+  assert.equal(DB.sqlite.prepare("SELECT discount_value FROM v2_combos WHERE code='libri_completo'").get().discount_value, 2500);
+  assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key='company_instagram'").get().value, '@libriconvites');
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
 });
@@ -332,6 +336,9 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   DB.sqlite.prepare("UPDATE v2_orders SET status='ready_for_production',briefing_status='completed' WHERE id=?").run(rows[1].id);
   DB.sqlite.prepare("INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents) VALUES (?,'direct_pix','deposit','pix','approved',1000)").run(rows[1].id);
   for (const [i,d] of [[0,3],[1,5]]) DB.sqlite.prepare('INSERT INTO v2_agenda_allocations(order_id,day,points_units) VALUES (?,?,100)').run(rows[i].id,day(d));
+  const eventAgenda = await getV2AgendaRange(DB, { start: day(2), end: day(2) });
+  assert.equal(eventAgenda.days[0].events.length, 2);
+  assert.ok(eventAgenda.days[0].events.some(item => item.code === a.order.code));
   assert.equal((await getV2CascadeSuggestions(DB)).suggestions.length, 1);
   assert.equal((await anticipateV2Production(DB, { sourceOrderCode: a.order.code, targetOrderCode: b.order.code })).movedUnits, 100);
   assert.equal((await releaseV2CascadeSurplus(DB, { sourceOrderCode: a.order.code })).releasedUnits, 100);

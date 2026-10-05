@@ -1696,8 +1696,10 @@ export async function approveV2CustomerPreview(
         } • ${
           order.honoree_display_name
         } • prévia aprovada`,
-        `/admin/pedidos/${
-          order.order_code
+        `/admin-v2?order=${
+          encodeURIComponent(
+            order.order_code,
+          )
         }`,
         stamp,
       ),

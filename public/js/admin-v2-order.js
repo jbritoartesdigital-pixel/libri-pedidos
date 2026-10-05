@@ -247,7 +247,7 @@ export async function openOrder(code, onChanged = null) {
         ${detail.order.status === 'awaiting_urgency_decision' ? `
           <section class="card">
             <h3>Análise de encaixe urgente</h3>
-            <p>Adicional de 30% após os descontos. A capacidade será conferida novamente no pagamento.</p>
+            <p>Adicional de ${detail.pricing.urgencyPercent || 30}% após os descontos. A capacidade será conferida novamente no pagamento.</p>
             <label>Início da entrega <input class="input" id="urgencyStart" type="date"></label>
             <label>Fim da entrega <input class="input" id="urgencyEnd" type="date"></label>
             <label>Observação / motivo da rejeição <textarea class="textarea" id="urgencyNote"></textarea></label>

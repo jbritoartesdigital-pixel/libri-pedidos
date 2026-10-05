@@ -43,6 +43,7 @@ function partyRow(item, today) {
 
       <small>
         ${esc(item.customerName)} • ${esc(item.code)}
+        ${item.eventDate ? ` • ${dateBr(item.eventDate)}` : ''}
       </small>
 
       ${
@@ -128,21 +129,6 @@ export async function renderCentral(openOrder) {
     <div class="section-grid">
       <section class="card">
         <div class="section-title">
-          <h2>Precisa da sua atenção</h2>
-          <span class="status">${c.attention.length}</span>
-        </div>
-
-        <div class="list">
-          ${
-            c.attention.length
-              ? c.attention.map(attentionRow).join('')
-              : empty('Nada urgente por aqui ✨')
-          }
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="section-title">
           <h2>Festas de hoje</h2>
           <span class="status">${c.partiesToday.length}</span>
         </div>
@@ -161,17 +147,96 @@ export async function renderCentral(openOrder) {
 
       <section class="card">
         <div class="section-title">
-          <h2>Festas de amanhã</h2>
+          <h2>Próximas festas</h2>
+          <span class="status">${(c.partiesUpcoming || []).length}</span>
         </div>
 
         <div class="list">
           ${
-            c.partiesTomorrow.length
-              ? c.partiesTomorrow.map(
-                (item) =>
-                  partyRow(item, false),
+            (c.partiesUpcoming || []).length
+              ? c.partiesUpcoming.map(
+                (item) => `
+                  <button
+                    class="row-card"
+                    type="button"
+                    data-open-order="${esc(item.code)}"
+                    style="text-align:left;cursor:pointer"
+                  >
+                    <strong>${esc(item.honoreeName)}</strong>
+                    <small>
+                      ${dateBr(item.eventDate)}
+                      • ${esc(item.customerName)}
+                      • ${esc(item.statusLabel)}
+                    </small>
+                  </button>
+                `,
               ).join('')
-              : empty('Nenhuma festa amanhã.')
+              : empty('Nenhuma festa próxima.')
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Pagamentos pendentes</h2>
+          <span class="status">${(c.pendingPayments || []).length}</span>
+        </div>
+
+        <div class="list">
+          ${
+            (c.pendingPayments || []).length
+              ? c.pendingPayments.map(
+                (item) => `
+                  <button
+                    class="row-card"
+                    type="button"
+                    data-open-order="${esc(item.code)}"
+                    style="text-align:left;cursor:pointer"
+                  >
+                    <strong>
+                      ${esc(item.code)} • ${esc(item.honoreeName)}
+                    </strong>
+                    <small>
+                      ${esc(item.customerName)}
+                      • ${esc(item.paymentMethod || '')}
+                      • agora ${money(item.dueCents)}
+                    </small>
+                  </button>
+                `,
+              ).join('')
+              : empty('Nenhum pagamento pendente.')
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Novos pedidos</h2>
+          <span class="status">${(c.newOrders || []).length}</span>
+        </div>
+
+        <div class="list">
+          ${
+            (c.newOrders || []).length
+              ? c.newOrders.map(attentionRow).join('')
+              : empty('Nenhum pedido novo.')
+          }
+        </div>
+      </section>
+    </div>
+
+    <div class="section-grid">
+      <section class="card">
+        <div class="section-title">
+          <h2>Precisa da sua atenção</h2>
+          <span class="status">${c.attention.length}</span>
+        </div>
+
+        <div class="list">
+          ${
+            c.attention.length
+              ? c.attention.map(attentionRow).join('')
+              : empty('Nada urgente por aqui ✨')
           }
         </div>
       </section>

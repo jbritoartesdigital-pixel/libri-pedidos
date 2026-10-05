@@ -124,25 +124,75 @@ export async function api(
   path,
   options = {},
 ) {
-  const response =
-    await fetch(
-      path,
-      {
-        credentials:
-          'same-origin',
-        ...options,
-        headers: {
-          ...(options.body
-          && !(options.body instanceof FormData)
-            ? {
-              'content-type':
-                'application/json',
-            }
-            : {}),
-          ...(options.headers || {}),
-        },
-      },
-    );
+  const requestOptions = {
+    credentials:
+      'same-origin',
+    ...options,
+    headers: {
+      ...(options.body
+      && !(options.body instanceof FormData)
+        ? {
+          'content-type':
+            'application/json',
+        }
+        : {}),
+      ...(options.headers || {}),
+    },
+  };
+
+  const method =
+    String(
+      requestOptions.method
+      || 'GET',
+    )
+      .toUpperCase();
+
+  const maxAttempts =
+    ['GET', 'HEAD']
+      .includes(method)
+      ? 2
+      : 1;
+
+  let response;
+
+  for (
+    let attempt = 1;
+    attempt <= maxAttempts;
+    attempt += 1
+  ) {
+    try {
+      response =
+        await fetch(
+          path,
+          requestOptions,
+        );
+
+      break;
+    } catch (error) {
+      if (
+        attempt
+        >= maxAttempts
+      ) {
+        const networkError =
+          new Error(
+            'Não foi possível conectar agora. Tente novamente.',
+          );
+
+        networkError.cause =
+          error;
+
+        throw networkError;
+      }
+
+      await new Promise(
+        (resolve) =>
+          window.setTimeout(
+            resolve,
+            450,
+          ),
+      );
+    }
+  }
 
   const type =
     response.headers.get(

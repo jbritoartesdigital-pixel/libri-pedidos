@@ -494,6 +494,7 @@ function dayDetail(
         close();
         editAgendaDay(
           day,
+          openOrder,
         );
       },
     );
@@ -501,6 +502,7 @@ function dayDetail(
 
 function editAgendaDay(
   day,
+  openOrder = null,
 ) {
   const close =
     modal(
@@ -603,7 +605,9 @@ function editAgendaDay(
         );
 
         close();
-        await renderAgenda();
+        await renderAgenda(
+          openOrder,
+        );
       },
     );
 }
@@ -982,6 +986,7 @@ export async function renderAgenda(
             if (day) {
               editAgendaDay(
                 day,
+                openOrder,
               );
             }
           },

@@ -1,9 +1,7 @@
 import {
-  nowIso,
-} from './http.js';
-
-const SAO_PAULO =
-  'America/Sao_Paulo';
+  loadV2Settings,
+  v2IntSetting,
+} from './v2-catalog.js';
 
 const DAY_MS =
   24
@@ -11,24 +9,7 @@ const DAY_MS =
   * 60
   * 1000;
 
-function cleanText(
-  value,
-  maxLength = 1000,
-) {
-  return String(
-    value
-    ?? '',
-  )
-    .trim()
-    .slice(
-      0,
-      maxLength,
-    );
-}
-
-function isIsoDay(
-  value,
-) {
+function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/
     .test(
       String(
@@ -38,16 +19,10 @@ function isIsoDay(
     );
 }
 
-function parseIsoDay(
-  value,
-) {
-  if (
-    !isIsoDay(
-      value,
-    )
-  ) {
+function parseIsoDay(value) {
+  if (!isIsoDate(value)) {
     throw new Error(
-      'Data inválida.',
+      'Informe uma data válida.',
     );
   }
 
@@ -62,72 +37,53 @@ function parseIsoDay(
     )
   ) {
     throw new Error(
-      'Data inválida.',
+      'Informe uma data válida.',
     );
   }
 
   return date;
 }
 
-function formatIsoDay(
-  date,
-) {
+function formatIsoDay(date) {
   return date
     .toISOString()
-    .slice(
-      0,
-      10,
-    );
+    .slice(0, 10);
 }
 
 function addDays(
-  day,
+  date,
   amount,
 ) {
-  const date =
-    typeof day
-    === 'string'
-      ? parseIsoDay(
-        day,
-      )
-      : day;
-
-  return formatIsoDay(
-    new Date(
-      date.getTime()
-      + amount
-      * DAY_MS,
+  return new Date(
+    date.getTime()
+    + (
+      amount
+      * DAY_MS
     ),
   );
 }
 
 function diffDays(
-  start,
-  end,
+  a,
+  b,
 ) {
   return Math.round(
     (
-      parseIsoDay(
-        end,
-      )
-        .getTime()
-      - parseIsoDay(
-        start,
-      )
-        .getTime()
+      a.getTime()
+      - b.getTime()
     )
     / DAY_MS,
   );
 }
 
-function todayInSaoPaulo() {
+function currentBrazilDay() {
   const parts =
     new Intl
       .DateTimeFormat(
         'en-US',
         {
           timeZone:
-            SAO_PAULO,
+            'America/Sao_Paulo',
 
           year:
             'numeric',
@@ -153,856 +109,88 @@ function todayInSaoPaulo() {
       ),
     );
 
-  return `${
-    map.year
-  }-${
-    map.month
-  }-${
-    map.day
-  }`;
+  return parseIsoDay(
+    `${
+      map.year
+    }-${
+      map.month
+    }-${
+      map.day
+    }`,
+  );
 }
 
 function listDays(
   start,
   end,
 ) {
-  const total =
-    diffDays(
-      start,
-      end,
-    );
+  const result = [];
 
-  if (
-    total < 0
-  ) {
-    throw new Error(
-      'Período inválido.',
-    );
-  }
+  for (
+    let cursor =
+      new Date(
+        start.getTime(),
+      );
 
-  return Array.from(
-    {
-      length:
-        total
-        + 1,
-    },
-    (
-      ,
-      index,
-    ) =>
+    cursor <= end;
+
+    cursor =
       addDays(
-        start,
-        index,
-      ),
-  );
-}
-
-function integerInRange(
-  value,
-  {
-    min,
-    max,
-    label,
-  },
-) {
-  const parsed =
-    Number.parseInt(
-      value,
-      10,
-    );
-
-  if (
-    !Number.isInteger(
-      parsed,
-    )
-    || parsed < min
-    || parsed > max
+        cursor,
+        1,
+      )
   ) {
-    throw new Error(
-      `${label} inválido.`,
-    );
-  }
-
-  return parsed;
-}
-
-async function settingInt(
-  db,
-  key,
-  fallback,
-) {
-  const row =
-    await db
-      .prepare(
-        `
-          SELECT value
-          FROM v2_settings
-          WHERE key = ?
-          LIMIT 1
-        `,
-      )
-      .bind(
-        key,
-      )
-      .first();
-
-  const parsed =
-    Number.parseInt(
-      row
-        ?.value,
-      10,
-    );
-
-  return Number.isInteger(
-    parsed,
-  )
-    ? parsed
-    : fallback;
-}
-
-async function defaultCapacities(
-  db,
-) {
-  const [
-    sellable,
-    buffer,
-  ] =
-    await Promise.all([
-      settingInt(
-        db,
-        'default_sellable_points_per_day_units',
-        400,
+    result.push(
+      formatIsoDay(
+        cursor,
       ),
-
-      settingInt(
-        db,
-        'default_internal_buffer_points_per_day_units',
-        100,
-      ),
-    ]);
-
-  return {
-    sellable,
-    buffer,
-  };
-}
-
-async function orderByCode(
-  db,
-  orderCode,
-) {
-  return db
-    .prepare(
-      `
-        SELECT
-          id,
-          order_code,
-          honoree_display_name,
-          event_date,
-          status,
-          briefing_status,
-          delivery_start,
-          delivery_end,
-          created_at,
-          finalized_at
-        FROM v2_orders
-        WHERE order_code = ?
-        LIMIT 1
-      `,
-    )
-    .bind(
-      orderCode,
-    )
-    .first();
-}
-
-async function hasApprovedPayment(
-  db,
-  orderId,
-) {
-  const row =
-    await db
-      .prepare(
-        `
-          SELECT 1 AS ok
-          FROM v2_payments
-          WHERE
-            order_id = ?
-            AND status = 'approved'
-          LIMIT 1
-        `,
-      )
-      .bind(
-        orderId,
-      )
-      .first();
-
-  return Boolean(
-    row,
-  );
-}
-
-async function futureAllocations(
-  db,
-  orderId,
-  {
-    afterDay = null,
-    ascending = true,
-  } = {},
-) {
-  const today =
-    todayInSaoPaulo();
-
-  const clauses = [
-    'order_id = ?',
-    'day >= ?',
-  ];
-
-  const binds = [
-    orderId,
-    today,
-  ];
-
-  if (
-    afterDay
-  ) {
-    clauses.push(
-      'day > ?',
-    );
-
-    binds.push(
-      afterDay,
-    );
-  }
-
-  const direction =
-    ascending
-      ? 'ASC'
-      : 'DESC';
-
-  const result =
-    await db
-      .prepare(
-        `
-          SELECT
-            id,
-            order_id,
-            day,
-            points_units,
-            allocation_type
-          FROM v2_agenda_allocations
-          WHERE ${
-            clauses.join(
-              ' AND ',
-            )
-          }
-          ORDER BY
-            day ${direction},
-            id ${direction}
-        `,
-      )
-      .bind(
-        ...binds,
-      )
-      .all();
-
-  return (
-    result.results
-    || []
-  )
-    .map(
-      (row) => ({
-        id:
-          Number(
-            row.id,
-          ),
-
-        orderId:
-          Number(
-            row.order_id,
-          ),
-
-        day:
-          row.day,
-
-        pointsUnits:
-          Number(
-            row.points_units
-            || 0,
-          ),
-
-        allocationType:
-          row.allocation_type,
-      }),
-    );
-}
-
-function totalUnits(
-  rows,
-) {
-  return rows.reduce(
-    (
-      total,
-      row,
-    ) =>
-      total
-      + Number(
-        row.pointsUnits
-        || 0,
-      ),
-    0,
-  );
-}
-
-function pairCascadeMoves(
-  poolRows,
-  targetRows,
-  requestedUnits = null,
-) {
-  const pools =
-    poolRows.map(
-      (row) => ({
-        ...row,
-
-        remaining:
-          row.pointsUnits,
-      }),
-    );
-
-  const targets =
-    targetRows.map(
-      (row) => ({
-        ...row,
-
-        remaining:
-          row.pointsUnits,
-      }),
-    );
-
-  const maximum =
-    Math.min(
-      totalUnits(
-        poolRows,
-      ),
-
-      totalUnits(
-        targetRows,
-      ),
-    );
-
-  const limit =
-    requestedUnits === null
-      ? maximum
-      : Math.min(
-        maximum,
-        requestedUnits,
-      );
-
-  let moved = 0;
-
-  const pairs = [];
-
-  for (
-    const pool
-    of pools
-  ) {
-    if (
-      moved >= limit
-    ) {
-      break;
-    }
-
-    for (
-      const target
-      of targets
-  ) {
-      if (
-        moved >= limit
-      ) {
-        break;
-      }
-
-      if (
-        pool.remaining <= 0
-        || target.remaining <= 0
-      ) {
-        continue;
-      }
-
-      /*
-       * Antecipar precisa realmente mover
-       * produção de uma data posterior
-       * para uma data anterior.
-       */
-      if (
-        target.day
-        <= pool.day
-      ) {
-        continue;
-      }
-
-      const units =
-        Math.min(
-          pool.remaining,
-          target.remaining,
-          limit - moved,
-        );
-
-      if (
-        units <= 0
-      ) {
-        continue;
-      }
-
-      pairs.push({
-        poolAllocationId:
-          pool.id,
-
-        poolDay:
-          pool.day,
-
-        targetAllocationId:
-          target.id,
-
-        targetDay:
-          target.day,
-
-        units,
-      });
-
-      pool.remaining -=
-        units;
-
-      target.remaining -=
-        units;
-
-      moved +=
-        units;
-    }
-  }
-
-  return {
-    movedUnits:
-      moved,
-
-    pairs,
-  };
-}
-
-function aggregateTaken(
-  pairs,
-  key,
-) {
-  const result =
-    new Map();
-
-  for (
-    const pair
-    of pairs
-  ) {
-    const id =
-      pair[
-        key
-      ];
-
-    result.set(
-      id,
-      (
-        result.get(
-          id,
-        )
-        || 0
-      )
-      + pair.units,
     );
   }
 
   return result;
 }
 
-function aggregateInsertions(
-  pairs,
-  key,
-) {
-  const result =
-    new Map();
-
-  for (
-    const pair
-    of pairs
-  ) {
-    const day =
-      pair[
-        key
-      ];
-
-    result.set(
-      day,
-      (
-        result.get(
-          day,
-        )
-        || 0
-      )
-      + pair.units,
-    );
-  }
-
-  return result;
-}
-
-function mutationForAllocation(
+async function loadCapacityMap(
   db,
-  row,
-  takenUnits,
+  startDay,
+  endDay,
+  settings,
 ) {
-  const remaining =
-    row.pointsUnits
-    - takenUnits;
-
-  if (
-    remaining > 0
-  ) {
-    return db
-      .prepare(
-        `
-          UPDATE v2_agenda_allocations
-          SET points_units = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        remaining,
-        row.id,
-      );
-  }
-
-  return db
-    .prepare(
-      `
-        DELETE FROM v2_agenda_allocations
-        WHERE id = ?
-      `,
-    )
-    .bind(
-      row.id,
-    );
-}
-
-async function bestCandidateForPool(
-  db,
-  sourceOrderId,
-  earliestPoolDay,
-) {
-  const result =
-    await db
-      .prepare(
-        `
-          SELECT
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.delivery_start,
-            o.delivery_end,
-            o.created_at,
-
-            MIN(a.day) AS earliest_allocation_day,
-            MAX(a.day) AS latest_allocation_day,
-            SUM(
-              CASE
-                WHEN a.day > ?
-                  THEN a.points_units
-                ELSE 0
-              END
-            ) AS movable_units
-          FROM v2_orders o
-          INNER JOIN v2_agenda_allocations a
-            ON a.order_id = o.id
-          WHERE
-            o.id != ?
-            AND o.status = 'ready_for_production'
-            AND o.briefing_status = 'completed'
-            AND EXISTS (
-              SELECT 1
-              FROM v2_payments pay
-              WHERE
-                pay.order_id = o.id
-                AND pay.status = 'approved'
-            )
-          GROUP BY
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.delivery_start,
-            o.delivery_end,
-            o.created_at
-          HAVING movable_units > 0
-          ORDER BY
-            COALESCE(
-              o.delivery_start,
-              '9999-12-31'
-            ),
-            o.event_date,
-            o.created_at,
-            o.id
-          LIMIT 1
-        `,
-      )
-      .bind(
-        earliestPoolDay,
-        sourceOrderId,
-      )
-      .all();
-
-  const row =
-    result.results
-      ?.[0];
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    id:
-      Number(
-        row.id,
-      ),
-
-    code:
-      row.order_code,
-
-    honoreeName:
-      row.honoree_display_name,
-
-    eventDate:
-      row.event_date,
-
-    deliveryWindow: {
-      start:
-        row.delivery_start,
-
-      end:
-        row.delivery_end,
-    },
-
-    earliestAllocationDay:
-      row.earliest_allocation_day,
-
-    latestAllocationDay:
-      row.latest_allocation_day,
-
-    movableUnits:
-      Number(
-        row.movable_units
-        || 0,
-      ),
-  };
-}
-
-export async function finalizeV2OrderToCascadePool(
-  db,
-  order,
-) {
-  const stamp =
-    nowIso();
-
-  const rows =
-    await futureAllocations(
-      db,
-      order.id,
+  const defaultCapacity =
+    v2IntSetting(
+      settings,
+      'default_sellable_points_per_day_units',
+      400,
     );
 
-  const reservedUnits =
-    totalUnits(
-      rows,
+  const days =
+    listDays(
+      startDay,
+      endDay,
     );
-
-  await db.batch([
-    db
-      .prepare(
-        `
-          UPDATE v2_orders
-          SET
-            status = 'finalized',
-            next_action = 'Finalizado',
-            finalized_at = ?,
-            updated_at = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        stamp,
-        stamp,
-        order.id,
-      ),
-
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (
-            ?,
-            'order_finalized',
-            'Pedido finalizado.',
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        order.id,
-        JSON.stringify({
-          cascadeReservedUnits:
-            reservedUnits,
-
-          capacityPublished:
-            reservedUnits
-            === 0,
-        }),
-        stamp,
-      ),
-  ]);
-
-  if (
-    reservedUnits > 0
-  ) {
-    await db
-      .prepare(
-        `
-          INSERT INTO v2_notifications(
-            event_code,
-            order_id,
-            title,
-            body,
-            action_url,
-            priority,
-            push_eligible,
-            created_at
-          )
-          VALUES (
-            'CAPACITY_RELEASED',
-            ?,
-            'Capacidade para antecipar',
-            ?,
-            '/admin-v2?view=agenda',
-            'normal',
-            0,
-            ?
-          )
-        `,
-      )
-      .bind(
-        order.id,
-        `${
-          order.order_code
-        } terminou antes e deixou ${
-          reservedUnits / 100
-        } Points Libri para redistribuir antes de abrir a agenda.`,
-        stamp,
-      )
-      .run();
-  }
-
-  /*
-   * IMPORTANTE:
-   * não deletamos as alocações futuras.
-   * Enquanto pertencem a um pedido finalizado,
-   * elas funcionam como reserva interna da cascata
-   * e continuam invisíveis ao cliente como capacidade livre.
-   */
-  return {
-    status:
-      'finalized',
-
-    nextAction:
-      'Finalizado',
-
-    cascadeReservedUnits:
-      reservedUnits,
-
-    needsCascadeReview:
-      reservedUnits > 0,
-  };
-}
-
-export async function getV2AgendaRange(
-  db,
-  {
-    start,
-    end,
-  } = {},
-) {
-  const today =
-    todayInSaoPaulo();
-
-  const rangeStart =
-    start
-      || today;
-
-  const rangeEnd =
-    end
-      || addDays(
-        rangeStart,
-        60,
-      );
-
-  if (
-    !isIsoDay(
-      rangeStart,
-    )
-    || !isIsoDay(
-      rangeEnd,
-    )
-    || diffDays(
-      rangeStart,
-      rangeEnd,
-    ) < 0
-    || diffDays(
-      rangeStart,
-      rangeEnd,
-    ) > 180
-  ) {
-    throw new Error(
-      'Período da agenda inválido.',
-    );
-  }
 
   const [
-    defaults,
     dayRows,
     allocations,
     holds,
-    allocationOrders,
   ] =
     await Promise.all([
-      defaultCapacities(
-        db,
-      ),
-
       db
         .prepare(
           `
             SELECT
               day,
               sellable_capacity_units,
-              internal_buffer_units,
-              blocked,
-              internal_note
+              blocked
             FROM v2_agenda_days
-            WHERE day BETWEEN ? AND ?
+            WHERE
+              day >= ?
+              AND day <= ?
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
         )
         .all(),
 
@@ -1010,33 +198,18 @@ export async function getV2AgendaRange(
         .prepare(
           `
             SELECT
-              a.day,
-
-              SUM(
-                CASE
-                  WHEN o.status = 'finalized'
-                    THEN a.points_units
-                  ELSE 0
-                END
-              ) AS cascade_units,
-
-              SUM(
-                CASE
-                  WHEN o.status != 'finalized'
-                    THEN a.points_units
-                  ELSE 0
-                END
-              ) AS production_units
-            FROM v2_agenda_allocations a
-            INNER JOIN v2_orders o
-              ON o.id = a.order_id
-            WHERE a.day BETWEEN ? AND ?
-            GROUP BY a.day
+              day,
+              SUM(points_units) AS used_units
+            FROM v2_agenda_allocations
+            WHERE
+              day >= ?
+              AND day <= ?
+            GROUP BY day
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
         )
         .all(),
 
@@ -1050,55 +223,24 @@ export async function getV2AgendaRange(
             INNER JOIN v2_checkout_holds h
               ON h.id = a.hold_id
             WHERE
-              a.day BETWEEN ? AND ?
+              a.day >= ?
+              AND a.day <= ?
               AND h.status = 'active'
               AND h.expires_at > ?
             GROUP BY a.day
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
-          nowIso(),
-        )
-        .all(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              a.day,
-              a.points_units,
-
-              o.order_code,
-              o.honoree_display_name,
-              o.status,
-              o.delivery_start,
-              o.delivery_end
-            FROM v2_agenda_allocations a
-            INNER JOIN v2_orders o
-              ON o.id = a.order_id
-            WHERE a.day BETWEEN ? AND ?
-            ORDER BY
-              a.day,
-              o.status = 'finalized' DESC,
-              o.delivery_start,
-              o.order_code
-          `,
-        )
-        .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
+          new Date().toISOString(),
         )
         .all(),
     ]);
 
-  const configs =
+  const dayConfig =
     Object.fromEntries(
-      (
-        dayRows.results
-        || []
-      )
+      (dayRows.results || [])
         .map(
           (row) => [
             row.day,
@@ -1107,38 +249,23 @@ export async function getV2AgendaRange(
         ),
     );
 
-  const unitsByDay =
+  const used =
     Object.fromEntries(
-      (
-        allocations.results
-        || []
-      )
+      (allocations.results || [])
         .map(
           (row) => [
             row.day,
-            {
-              production:
-                Number(
-                  row.production_units
-                  || 0,
-                ),
-
-              cascade:
-                Number(
-                  row.cascade_units
-                  || 0,
-                ),
-            },
+            Number(
+              row.used_units
+              || 0,
+            ),
           ],
         ),
     );
 
-  const holdsByDay =
+  const held =
     Object.fromEntries(
-      (
-        holds.results
-        || []
-      )
+      (holds.results || [])
         .map(
           (row) => [
             row.day,
@@ -1150,166 +277,610 @@ export async function getV2AgendaRange(
         ),
     );
 
-  const ordersByDay = {};
+  return Object.fromEntries(
+    days.map(
+      (day) => {
+        const config =
+          dayConfig[day];
+
+        const capacity =
+          config
+            ? Number(
+              config
+                .sellable_capacity_units,
+            )
+            : defaultCapacity;
+
+        const blocked =
+          config
+            ?.blocked
+          === 1;
+
+        const free =
+          blocked
+            ? 0
+            : Math.max(
+              0,
+              capacity
+              - (
+                used[day]
+                || 0
+              )
+              - (
+                held[day]
+                || 0
+              ),
+            );
+
+        return [
+          day,
+
+          {
+            capacity,
+            used:
+              used[day]
+              || 0,
+
+            held:
+              held[day]
+              || 0,
+
+            free,
+            blocked,
+          },
+        ];
+      },
+    ),
+  );
+}
+
+function planAllocation(
+  capacityMap,
+  startDay,
+  endDay,
+  requiredUnits,
+) {
+  let remaining =
+    requiredUnits;
+
+  const allocation = [];
 
   for (
-    const row
-    of allocationOrders.results
-    || []
+    const day
+    of listDays(
+      startDay,
+      endDay,
+    )
   ) {
     if (
-      !ordersByDay[
-        row.day
-      ]
+      remaining
+      <= 0
     ) {
-      ordersByDay[
-        row.day
-      ] = [];
+      break;
     }
 
-    ordersByDay[
-      row.day
-    ]
-      .push({
-        code:
-          row.order_code,
+    const free =
+      capacityMap[
+        day
+      ]?.free
+      || 0;
 
-        honoreeName:
-          row.honoree_display_name,
+    if (
+      free
+      <= 0
+    ) {
+      continue;
+    }
 
-        status:
-          row.status,
+    const take =
+      Math.min(
+        free,
+        remaining,
+      );
 
-        pointsUnits:
-          Number(
-            row.points_units
-            || 0,
-          ),
+    allocation.push({
+      day,
+      pointsUnits:
+        take,
+    });
 
-        cascadeReserve:
-          row.status
-          === 'finalized',
-
-        deliveryWindow: {
-          start:
-            row.delivery_start,
-
-          end:
-            row.delivery_end,
-        },
-      });
+    remaining -=
+      take;
   }
 
-  const days =
-    listDays(
-      rangeStart,
-      rangeEnd,
+  return {
+    fits:
+      remaining
+      === 0,
+
+    allocation,
+
+    remainingUnits:
+      remaining,
+  };
+}
+
+function buildCandidateWindows({
+  firstPossibleDay,
+  lastPossibleEnd,
+  targetDay,
+}) {
+  const candidates = [];
+
+  const windowLengths = [
+    3,
+    4,
+  ];
+
+  for (
+    let start =
+      new Date(
+        firstPossibleDay
+          .getTime(),
+      );
+
+    start <= lastPossibleEnd;
+
+    start =
+      addDays(
+        start,
+        1,
+      )
+  ) {
+    for (
+      const length
+      of windowLengths
+    ) {
+      const end =
+        addDays(
+          start,
+          length - 1,
+        );
+
+      if (
+        end
+        > lastPossibleEnd
+      ) {
+        continue;
+      }
+
+      const midpoint =
+        new Date(
+          (
+            start.getTime()
+            + end.getTime()
+          )
+          / 2,
+        );
+
+      candidates.push({
+        start,
+        end,
+        distanceToTarget:
+          Math.abs(
+            diffDays(
+              midpoint,
+              targetDay,
+            ),
+          ),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+export async function validateV2DeliveryWindow(
+  db,
+  {
+    eventDate,
+    start,
+    end,
+  },
+) {
+  const eventDay =
+    parseIsoDay(
+      eventDate,
+    );
+
+  const startDay =
+    parseIsoDay(
+      start,
+    );
+
+  const endDay =
+    parseIsoDay(
+      end,
+    );
+
+  if (
+    endDay
+    < startDay
+  ) {
+    throw new Error(
+      'Janela de entrega inválida.',
+    );
+  }
+
+  const daysInWindow =
+    diffDays(
+      endDay,
+      startDay,
     )
+    + 1;
+
+  if (
+    ![
+      3,
+      4,
+    ].includes(
+      daysInWindow,
+    )
+  ) {
+    throw new Error(
+      'Escolha uma das janelas de entrega disponíveis.',
+    );
+  }
+
+  const settings =
+    await loadV2Settings(
+      db,
+    );
+
+  const minimumDaysBeforeEvent =
+    v2IntSetting(
+      settings,
+      'minimum_delivery_days_before_event',
+      3,
+    );
+
+  const firstPossibleDay =
+    addDays(
+      currentBrazilDay(),
+      1,
+    );
+
+  const lastPossibleEnd =
+    addDays(
+      eventDay,
+      -minimumDaysBeforeEvent,
+    );
+
+  if (
+    startDay
+    < firstPossibleDay
+    || endDay
+    > lastPossibleEnd
+  ) {
+    throw new Error(
+      'Essa janela não é compatível com a data do evento.',
+    );
+  }
+
+  return {
+    valid:
+      true,
+  };
+}
+
+export async function findV2DeliveryOptions(
+  db,
+  {
+    eventDate,
+    pointsUnits,
+    limit = 5,
+  },
+) {
+  const eventDay =
+    parseIsoDay(
+      eventDate,
+    );
+
+  const requiredUnits =
+    Number.parseInt(
+      pointsUnits,
+      10,
+    );
+
+  if (
+    !Number.isInteger(
+      requiredUnits,
+    )
+    || requiredUnits <= 0
+  ) {
+    throw new Error(
+      'Carga de produção inválida.',
+    );
+  }
+
+  const settings =
+    await loadV2Settings(
+      db,
+    );
+
+  const recommendedDaysBefore =
+    v2IntSetting(
+      settings,
+      'recommended_delivery_days_before_event',
+      40,
+    );
+
+  const minimumDaysBeforeEvent =
+    v2IntSetting(
+      settings,
+      'minimum_delivery_days_before_event',
+      3,
+    );
+
+  const today =
+    currentBrazilDay();
+
+  const firstPossibleDay =
+    addDays(
+      today,
+      1,
+    );
+
+  const lastPossibleEnd =
+    addDays(
+      eventDay,
+      -minimumDaysBeforeEvent,
+    );
+
+  const targetDay =
+    addDays(
+      eventDay,
+      -recommendedDaysBefore,
+    );
+
+  if (
+    lastPossibleEnd
+    < firstPossibleDay
+  ) {
+    return {
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
+        true,
+    };
+  }
+
+  const candidates =
+    buildCandidateWindows({
+      firstPossibleDay,
+      lastPossibleEnd,
+      targetDay,
+    });
+
+  if (
+    !candidates.length
+  ) {
+    return {
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
+        true,
+    };
+  }
+
+  const capacityMap =
+    await loadCapacityMap(
+      db,
+      firstPossibleDay,
+      lastPossibleEnd,
+      settings,
+    );
+
+  const viable =
+    candidates
       .map(
-        (day) => {
-          const config =
-            configs[
-              day
-            ];
-
-          const blocked =
-            config
-              ?.blocked
-            === 1;
-
-          const sellable =
-            Number(
-              config
-                ?.sellable_capacity_units
-              ?? defaults.sellable,
+        (candidate) => {
+          const plan =
+            planAllocation(
+              capacityMap,
+              candidate.start,
+              candidate.end,
+              requiredUnits,
             );
-
-          const buffer =
-            Number(
-              config
-                ?.internal_buffer_units
-              ?? defaults.buffer,
-            );
-
-          const production =
-            unitsByDay[
-              day
-            ]?.production
-            || 0;
-
-          const cascade =
-            unitsByDay[
-              day
-            ]?.cascade
-            || 0;
-
-          const held =
-            holdsByDay[
-              day
-            ]
-            || 0;
-
-          const free =
-            blocked
-              ? 0
-              : Math.max(
-                0,
-                sellable
-                - production
-                - cascade
-                - held,
-              );
 
           return {
-            day,
-
-            blocked,
-
-            sellableCapacityUnits:
-              sellable,
-
-            internalBufferUnits:
-              buffer,
-
-            physicalCapacityUnits:
-              sellable
-              + buffer,
-
-            productionUnits:
-              production,
-
-            cascadeReservedUnits:
-              cascade,
-
-            checkoutHeldUnits:
-              held,
-
-            publicFreeUnits:
-              free,
-
-            internalNote:
-              config
-                ?.internal_note
-              || '',
-
-            orders:
-              ordersByDay[
-                day
-              ]
-              || [],
+            ...candidate,
+            plan,
           };
         },
+      )
+      .filter(
+        (candidate) =>
+          candidate
+            .plan
+            .fits,
+      )
+      .sort(
+        (
+          a,
+          b,
+        ) =>
+          a.distanceToTarget
+          - b.distanceToTarget
+          || a.start
+            - b.start
+          || a.end
+            - b.end,
+      );
+
+  const selected = [];
+
+  const seen =
+    new Set();
+
+  for (
+    const candidate
+    of viable
+  ) {
+    const key =
+      `${
+        formatIsoDay(
+          candidate.start,
+        )
+      }_${
+        formatIsoDay(
+          candidate.end,
+        )
+      }`;
+
+    if (
+      seen.has(
+        key,
+      )
+    ) {
+      continue;
+    }
+
+    seen.add(
+      key,
+    );
+
+    selected.push(
+      candidate,
+    );
+
+    if (
+      selected.length
+      >= Math.max(
+        1,
+        Math.min(
+          10,
+          Number(limit)
+          || 5,
+        ),
+      )
+    ) {
+      break;
+    }
+  }
+
+  if (
+    !selected.length
+  ) {
+    return {
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
+        true,
+    };
+  }
+
+  const options =
+    selected
+      .map(
+        (
+          candidate,
+          index,
+        ) => ({
+          start:
+            formatIsoDay(
+              candidate.start,
+            ),
+
+          end:
+            formatIsoDay(
+              candidate.end,
+            ),
+
+          recommended:
+            index === 0,
+        }),
       );
 
   return {
-    start:
-      rangeStart,
+    recommendedTargetDate:
+      formatIsoDay(
+        targetDay,
+      ),
 
-    end:
-      rangeEnd,
+    options,
 
-    defaults: {
-      sellableCapacityUnits:
-        defaults.sellable,
+    needsUrgencyReview:
+      false,
+  };
+}
 
-      internalB
+export async function planV2AllocationForWindow(
+  db,
+  {
+    start,
+    end,
+    pointsUnits,
+  },
+) {
+  const startDay =
+    parseIsoDay(
+      start,
+    );
+
+  const endDay =
+    parseIsoDay(
+      end,
+    );
+
+  if (
+    endDay
+    < startDay
+  ) {
+    throw new Error(
+      'Janela de entrega inválida.',
+    );
+  }
+
+  const requiredUnits =
+    Number.parseInt(
+      pointsUnits,
+      10,
+    );
+
+  if (
+    !Number.isInteger(
+      requiredUnits,
+    )
+    || requiredUnits <= 0
+  ) {
+    throw new Error(
+      'Carga de produção inválida.',
+    );
+  }
+
+  const settings =
+    await loadV2Settings(
+      db,
+    );
+
+  const capacityMap =
+    await loadCapacityMap(
+      db,
+      startDay,
+      endDay,
+      settings,
+    );
+
+  return planAllocation(
+    capacityMap,
+    startDay,
+    endDay,
+    requiredUnits,
+  );
+}

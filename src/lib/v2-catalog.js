@@ -56,6 +56,7 @@ export async function loadV2Catalog(db) {
     variantsResult,
     addonsResult,
     combosResult,
+    comboItemsResult,
     settings,
   ] =
     await Promise.all([
@@ -126,12 +127,29 @@ export async function loadV2Catalog(db) {
         .prepare(
           `
             SELECT
+              id,
               code,
               name,
               description,
+              discount_type,
+              discount_value,
               config_json
             FROM v2_combos
             WHERE active = 1
+            ORDER BY id
+          `,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              combo_id,
+              item_type,
+              item_code,
+              required
+            FROM v2_combo_items
             ORDER BY id
           `,
         )
@@ -241,6 +259,43 @@ export async function loadV2Catalog(db) {
         }),
       );
 
+  const comboItemsById =
+    new Map();
+
+  for (
+    const item
+    of comboItemsResult.results
+    || []
+  ) {
+    if (
+      !comboItemsById.has(
+        item.combo_id,
+      )
+    ) {
+      comboItemsById.set(
+        item.combo_id,
+        [],
+      );
+    }
+
+    comboItemsById
+      .get(
+        item.combo_id,
+      )
+      .push({
+        itemType:
+          item.item_type,
+
+        itemCode:
+          item.item_code,
+
+        required:
+          Number(
+            item.required,
+          ) === 1,
+      });
+  }
+
   const combos =
     (combosResult.results || [])
       .map(
@@ -254,6 +309,21 @@ export async function loadV2Catalog(db) {
           description:
             row.description
             || '',
+
+          discountType:
+            row.discount_type,
+
+          discountValue:
+            Number(
+              row.discount_value
+              || 0,
+            ),
+
+          items:
+            comboItemsById.get(
+              row.id,
+            )
+            || [],
 
           config:
             parseJson(

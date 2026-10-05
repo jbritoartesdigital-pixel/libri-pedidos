@@ -278,6 +278,9 @@ test('late accredited payment does not oversell capacity; repeated review is ded
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations').get().n, 0);
   assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders').get().briefing_status, 'locked');
+  const reviewArea = await getV2CustomerArea(e, a.order.publicToken);
+  assert.equal(reviewArea.payment.capacityReview, true);
+  assert.ok(reviewArea.payment.paidCents > 0);
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE dedupe_key LIKE 'payment-capacity:%'").get().n, 1);
 });
 

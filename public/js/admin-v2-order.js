@@ -307,6 +307,41 @@ export async function openOrder(code, onChanged = null) {
               </div>
             ` : ''}
 
+            ${!['cancelled','finalized'].includes(detail.order.status) ? `
+              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+                <strong>Cancelar pedido</strong>
+                <div class="form-grid" style="margin-top:9px">
+                  <div class="field">
+                    <label for="cancelReason">Motivo</label>
+                    <select id="cancelReason" class="select">
+                      <option value="">Selecione</option>
+                      <option value="Não realizou pagamento">Não realizou pagamento</option>
+                      <option value="Cliente desistiu">Cliente desistiu</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="cancelNote">Observação</label>
+                    <input
+                      id="cancelNote"
+                      class="input"
+                      placeholder="Obrigatória somente em Outro"
+                    >
+                  </div>
+                </div>
+                <button
+                  id="cancelOrder"
+                  class="btn btn-danger"
+                  type="button"
+                >
+                  Cancelar pedido
+                </button>
+                <small style="display:block;margin-top:7px">
+                  A vaga é liberada e checkouts pendentes são cancelados. Pagamentos já aprovados não são estornados automaticamente.
+                </small>
+              </div>
+            ` : ''}
+
             <div class="field" style="margin-top:16px">
               <label for="internalNote">
                 Observação interna
@@ -834,6 +869,83 @@ export async function openOrder(code, onChanged = null) {
             }
           },
         ),
+    );
+
+  document
+    .getElementById('cancelOrder')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        const reason =
+          document
+            .getElementById('cancelReason')
+            ?.value
+          || '';
+
+        const note =
+          document
+            .getElementById('cancelNote')
+            ?.value
+            .trim()
+          || '';
+
+        if (!reason) {
+          showToast('Escolha o motivo do cancelamento.');
+          return;
+        }
+
+        if (
+          reason === 'Outro'
+          && !note
+        ) {
+          showToast('Descreva o motivo do cancelamento.');
+          return;
+        }
+
+        if (
+          !confirm(
+            `Cancelar ${detail.order.code}? A vaga será liberada. Pagamentos aprovados não serão estornados automaticamente.`,
+          )
+        ) {
+          return;
+        }
+
+        const button =
+          event.currentTarget;
+
+        button.disabled =
+          true;
+
+        try {
+          await api(
+            `/api/admin/v2/orders/${detail.order.code}/cancel`,
+            {
+              method:
+                'POST',
+              body:
+                JSON.stringify({
+                  reason,
+                  note,
+                }),
+            },
+          );
+
+          close();
+
+          if (onChanged) {
+            await onChanged();
+          }
+
+          showToast('Pedido cancelado.');
+        } catch (error) {
+          button.disabled =
+            false;
+
+          showToast(
+            error.message,
+          );
+        }
+      },
     );
 
   document

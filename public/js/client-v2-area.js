@@ -371,9 +371,12 @@ function summaryHtml(
   const termsAlreadyAccepted = area.payment?.termsAccepted === true;
   const urgencyPercent = Number(area.urgency?.percent || 0);
   const isPix = area.payment.method === 'pix';
+  const totalCents = Number(area.payment.totalCents || 0);
+  const pixDueCents = Math.round(totalCents * 0.5);
+  const pixBalanceCents = Math.max(0, totalCents - pixDueCents);
   const dueNowCents = isPix
-    ? Number(area.payment.depositCents || 0)
-    : Number(area.payment.totalCents || 0);
+    ? pixDueCents
+    : totalCents;
 
   return `
     <section class="page-card">
@@ -392,6 +395,7 @@ function summaryHtml(
       </div>
 
       ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
+      ${area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo.</div>' : ''}
       ${area.payment?.returnState === 'checking' ? '<div class="notice info">Pagamento enviado. Estamos confirmando com o Mercado Pago.</div>' : ''}
       ${area.payment?.returnState === 'pending' ? '<div class="notice info">Pagamento ainda pendente no Mercado Pago. Você pode atualizar o status em alguns instantes.</div>' : ''}
       ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
@@ -405,8 +409,8 @@ function summaryHtml(
               <strong
                 id="paymentDueNow"
                 class="payment-priority-total"
-                data-pix="${area.payment.depositCents}"
-                data-card="${area.payment.totalCents}"
+                data-pix="${pixDueCents}"
+                data-card="${totalCents}"
               >${money(dueNowCents)}</strong>
             </div>
             <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
@@ -415,11 +419,11 @@ function summaryHtml(
           <p
             id="paymentBreakdown"
             class="muted"
-            data-total="${area.payment.totalCents}"
-            data-balance="${area.payment.balanceCents}"
+            data-total="${totalCents}"
+            data-balance="${pixBalanceCents}"
           >${isPix
-            ? `Total do pedido: ${money(area.payment.totalCents)} • saldo após a entrada: ${money(area.payment.balanceCents)}`
-            : `Total do pedido: ${money(area.payment.totalCents)}`}</p>
+            ? `Total do pedido: ${money(totalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+            : `Total do pedido: ${money(totalCents)}`}</p>
 
           ${area.urgency && area.order.status === 'urgency_approved' ? `
             <div class="payment-methods">
@@ -962,7 +966,9 @@ export async function startCustomerArea(
             await loadArea();
 
           area.payment.returnState =
-            'confirmed';
+            result.capacityReview
+              ? 'capacity_review'
+              : 'confirmed';
         } else {
           area.payment.returnState =
             paymentReturn

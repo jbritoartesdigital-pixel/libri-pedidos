@@ -8,7 +8,7 @@ import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { deleteUnpaidV2Order } from '../src/lib/v2-admin-core.js';
+import { deleteUnpaidV2Order, getV2Central } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
@@ -155,6 +155,27 @@ test('amount mismatch blocks unlocking; valid signature preserves order ID case 
   assert.equal(await validateMercadoPagoWebhook(signed, config, url, { data: { id } }), true);
   assert.equal(await validateMercadoPagoWebhook(signed, config, url, { data: { id: 'OTHER' } }), false);
   assert.equal(await validateMercadoPagoWebhook(signed, config, new URL('https://example.com/?data.id=ordabc123'), {}), false);
+});
+
+test('unpaid abandoned orders do not count as sales and are removed after checkout expiry', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({ event: { honoreeName: 'Abandonado', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });
+  const checkout = await startV2Checkout(request, e, body);
+
+  const centralBefore = await getV2Central(DB);
+  assert.equal(centralBefore.finance.salesCents, 0);
+  assert.equal(centralBefore.finance.receivableCents, 0);
+
+  DB.sqlite.prepare("UPDATE v2_orders SET updated_at = '2000-01-01T00:00:00.000Z' WHERE order_code = ?")
+    .run(checkout.order.code);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00.000Z' WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)")
+    .run(checkout.order.code);
+
+  const result = await runV2Scheduler(e);
+  assert.equal(result.abandonedOrders.deleted, 1);
+  assert.equal(mp.orders.get(checkout.payment.providerOrderId).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(checkout.order.code).n, 0);
 });
 
 test('scheduler repairs missing notifications, expires reservations and previews, cleans challenges, deduplicates events', async () => {

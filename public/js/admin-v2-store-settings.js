@@ -1,6 +1,7 @@
 import {
   api,
   esc,
+  modal,
   showToast,
 } from './admin-v2-core.js';
 
@@ -360,34 +361,454 @@ export function renderStoreContracts(
 export function renderStoreGallery(
   panel,
   config,
+  reload,
 ) {
   panel.innerHTML = `
     <section class="settings-card">
       <div class="section-title">
         <h2>Galeria de exemplos</h2>
+        <span class="status">${(config.gallery || []).length}</span>
       </div>
 
-      <div class="list">
-        ${(config.gallery || []).map(
-          (item) => `
-            <div class="row-card">
-              <strong>
-                ${esc(item.themeLabel || 'Exemplo')}
-              </strong>
-              <small>
-                ${esc(item.productCode || '')}
-                • ${esc(item.eventType || '')}
-                • ${item.active ? 'ativo' : 'inativo'}
-              </small>
-            </div>
-          `,
-        ).join('')}
+      <div class="form-grid">
+        <div class="field">
+          <label for="galleryProduct">Formato</label>
+          <select id="galleryProduct" class="select">
+            ${(config.products || []).map(
+              (product) => `
+                <option value="${esc(product.code)}">
+                  ${esc(product.name)}
+                </option>
+              `,
+            ).join('')}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="galleryEventType">Tipo de evento</label>
+          <input
+            id="galleryEventType"
+            class="input"
+            placeholder="Ex.: birthday"
+          >
+        </div>
+
+        <div class="field">
+          <label for="galleryTheme">Tema / identificação</label>
+          <input
+            id="galleryTheme"
+            class="input"
+            placeholder="Ex.: Jardim Encantado"
+          >
+        </div>
+
+        <div class="field">
+          <label for="gallerySort">Ordem</label>
+          <input
+            id="gallerySort"
+            class="input"
+            type="number"
+            min="0"
+            value="0"
+          >
+        </div>
+
+        <div class="field">
+          <label for="galleryMedia">Mídia</label>
+          <input
+            id="galleryMedia"
+            class="input"
+            type="file"
+            accept="video/*,image/*"
+          >
+        </div>
+
+        <div class="field">
+          <label for="galleryPreview">Capa <span class="muted">(opcional)</span></label>
+          <input
+            id="galleryPreview"
+            class="input"
+            type="file"
+            accept="image/*"
+          >
+        </div>
+
+        <div class="field full">
+          <label for="galleryExternal">URL externa <span class="muted">(opcional, em vez de arquivo)</span></label>
+          <input
+            id="galleryExternal"
+            class="input"
+            type="url"
+            placeholder="https://..."
+          >
+        </div>
+
+        <div class="field full">
+          <label for="galleryCaption">Legenda <span class="muted">(opcional)</span></label>
+          <textarea id="galleryCaption" class="textarea"></textarea>
+        </div>
       </div>
 
-      <div class="notice" style="margin-top:12px">
-        Upload e edição avançada entram no consolidado final depois de restaurar o módulo completo do repositório.
-      </div>
+      <button
+        id="uploadGallery"
+        class="btn btn-primary"
+        type="button"
+        style="margin-top:14px"
+      >
+        Adicionar exemplo
+      </button>
     </section>
-  `;
-}
 
+    <div class="list" style="margin-top:14px">
+      ${(config.gallery || []).map(
+        (item) => `
+          <div class="row-card">
+            <strong>
+              ${esc(item.themeLabel || 'Exemplo')}
+            </strong>
+            <small>
+              ${esc(item.productCode || '')}
+              • ${esc(item.eventType || 'evento geral')}
+              • ${item.active ? 'ativo' : 'inativo'}
+              ${item.originalFilename ? ` • ${esc(item.originalFilename)}` : ''}
+            </small>
+
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
+              ${item.hasPreview ? `
+                <a
+                  class="btn btn-ghost"
+                  href="/api/admin/v2/store-config/gallery/${item.id}/preview"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Ver capa
+                </a>
+              ` : ''}
+
+              ${item.hasMedia ? `
+                <a
+                  class="btn btn-secondary"
+                  href="/api/admin/v2/store-config/gallery/${item.id}/media"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Ver mídia
+                </a>
+              ` : item.externalUrl ? `
+                <a
+                  class="btn btn-secondary"
+                  href="${esc(item.externalUrl)}"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Abrir
+                </a>
+              ` : ''}
+
+              <button
+                class="btn btn-ghost"
+                type="button"
+                data-edit-gallery="${item.id}"
+              >
+                Editar
+              </button>
+
+              <button
+                class="btn btn-danger"
+                type="button"
+                data-delete-gallery="${item.id}"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        `,
+      ).join('') || '<div class="empty">Nenhum exemplo publicado.</div>'}
+    </div>
+  `;
+
+  document
+    .getElementById('uploadGallery')
+    .addEventListener(
+      'click',
+      async (event) => {
+        const button =
+          event.currentTarget;
+
+        const media =
+          document
+            .getElementById('galleryMedia')
+            .files
+            ?.[0];
+
+        const externalUrl =
+          document
+            .getElementById('galleryExternal')
+            .value
+            .trim();
+
+        if (
+          !media
+          && !externalUrl
+        ) {
+          showToast('Envie uma mídia ou informe uma URL.');
+          return;
+        }
+
+        const form =
+          new FormData();
+
+        form.append(
+          'productCode',
+          document
+            .getElementById('galleryProduct')
+            .value,
+        );
+
+        form.append(
+          'eventType',
+          document
+            .getElementById('galleryEventType')
+            .value
+            .trim(),
+        );
+
+        form.append(
+          'themeLabel',
+          document
+            .getElementById('galleryTheme')
+            .value
+            .trim(),
+        );
+
+        form.append(
+          'sortOrder',
+          document
+            .getElementById('gallerySort')
+            .value
+          || '0',
+        );
+
+        form.append(
+          'caption',
+          document
+            .getElementById('galleryCaption')
+            .value
+            .trim(),
+        );
+
+        if (externalUrl) {
+          form.append(
+            'externalUrl',
+            externalUrl,
+          );
+        }
+
+        if (media) {
+          form.append(
+            'media',
+            media,
+          );
+        }
+
+        const preview =
+          document
+            .getElementById('galleryPreview')
+            .files
+            ?.[0];
+
+        if (preview) {
+          form.append(
+            'preview',
+            preview,
+          );
+        }
+
+        button.disabled =
+          true;
+
+        button.textContent =
+          'Enviando...';
+
+        try {
+          await api(
+            '/api/admin/v2/store-config/gallery',
+            {
+              method: 'POST',
+              body: form,
+            },
+          );
+
+          showToast('Exemplo publicado ✓');
+          await reload();
+        } catch (error) {
+          button.disabled =
+            false;
+          button.textContent =
+            'Adicionar exemplo';
+          showToast(error.message);
+        }
+      },
+    );
+
+  panel
+    .querySelectorAll('[data-edit-gallery]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          () => {
+            const item =
+              (config.gallery || [])
+                .find(
+                  (current) =>
+                    String(current.id)
+                    === button.dataset.editGallery,
+                );
+
+            if (!item) {
+              return;
+            }
+
+            const close =
+              modal(
+                `Editar ${item.themeLabel || 'exemplo'}`,
+                `
+                  <div class="form-grid">
+                    <div class="field">
+                      <label for="editGalleryTheme">Tema</label>
+                      <input id="editGalleryTheme" class="input" value="${esc(item.themeLabel || '')}">
+                    </div>
+
+                    <div class="field">
+                      <label for="editGalleryEvent">Evento</label>
+                      <input id="editGalleryEvent" class="input" value="${esc(item.eventType || '')}">
+                    </div>
+
+                    <div class="field">
+                      <label for="editGallerySort">Ordem</label>
+                      <input id="editGallerySort" class="input" type="number" value="${esc(item.sortOrder || 0)}">
+                    </div>
+
+                    <div class="field">
+                      <label for="editGalleryActive">Ativo</label>
+                      <select id="editGalleryActive" class="select">
+                        <option value="1" ${item.active ? 'selected' : ''}>Sim</option>
+                        <option value="0" ${item.active ? '' : 'selected'}>Não</option>
+                      </select>
+                    </div>
+
+                    <div class="field full">
+                      <label for="editGalleryExternal">URL externa</label>
+                      <input id="editGalleryExternal" class="input" value="${esc(item.externalUrl || '')}">
+                    </div>
+
+                    <div class="field full">
+                      <label for="editGalleryCaption">Legenda</label>
+                      <textarea id="editGalleryCaption" class="textarea">${esc(item.caption || '')}</textarea>
+                    </div>
+                  </div>
+
+                  <button id="saveGalleryEdit" class="btn btn-primary" type="button">
+                    Salvar
+                  </button>
+                `,
+                {
+                  width:
+                    '680px',
+                },
+              );
+
+            document
+              .getElementById('saveGalleryEdit')
+              .addEventListener(
+                'click',
+                async () => {
+                  await api(
+                    `/api/admin/v2/store-config/gallery/${item.id}`,
+                    {
+                      method: 'PATCH',
+                      body:
+                        JSON.stringify({
+                          themeLabel:
+                            document
+                              .getElementById('editGalleryTheme')
+                              .value
+                              .trim(),
+                          eventType:
+                            document
+                              .getElementById('editGalleryEvent')
+                              .value
+                              .trim(),
+                          sortOrder:
+                            Number(
+                              document
+                                .getElementById('editGallerySort')
+                                .value
+                              || 0,
+                            ),
+                          active:
+                            document
+                              .getElementById('editGalleryActive')
+                              .value === '1',
+                          externalUrl:
+                            document
+                              .getElementById('editGalleryExternal')
+                              .value
+                              .trim(),
+                          caption:
+                            document
+                              .getElementById('editGalleryCaption')
+                              .value
+                              .trim(),
+                        }),
+                    },
+                  );
+
+                  close();
+                  showToast('Exemplo atualizado ✓');
+                  await reload();
+                },
+              );
+          },
+        ),
+    );
+
+  panel
+    .querySelectorAll('[data-delete-gallery]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            if (
+              !confirm(
+                'Excluir este exemplo da galeria?',
+              )
+            ) {
+              return;
+            }
+
+            button.disabled =
+              true;
+
+            try {
+              await api(
+                `/api/admin/v2/store-config/gallery/${button.dataset.deleteGallery}`,
+                {
+                  method:
+                    'DELETE',
+                },
+              );
+
+              showToast('Exemplo excluído.');
+              await reload();
+            } catch (error) {
+              button.disabled =
+                false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
+}

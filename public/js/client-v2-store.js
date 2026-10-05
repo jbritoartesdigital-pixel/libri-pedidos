@@ -384,6 +384,111 @@ function addonGroupLabel(value) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function addonByCode(
+  state,
+  code,
+) {
+  return (
+    state.catalog?.addons
+    || []
+  ).find(
+    (addon) =>
+      addon.code
+      === code,
+  )
+  || null;
+}
+
+function comboByCode(
+  state,
+  code,
+) {
+  return (
+    state.catalog?.combos
+    || []
+  ).find(
+    (combo) =>
+      combo.code
+      === code,
+  )
+  || null;
+}
+
+function comboRequiredGroups(
+  combo,
+) {
+  return (
+    combo?.items
+    || []
+  )
+    .filter(
+      (item) =>
+        item.required !== false
+        && item.itemType === 'addon_group',
+    )
+    .map(
+      (item) =>
+        item.itemCode,
+    );
+}
+
+function ensureComboSelections(
+  state,
+  combo,
+) {
+  const selected =
+    new Set(
+      state.selection.addonCodes,
+    );
+
+  for (
+    const group
+    of comboRequiredGroups(
+      combo,
+    )
+  ) {
+    const hasGroup =
+      [
+        ...selected,
+      ]
+        .some(
+          (code) =>
+            addonByCode(
+              state,
+              code,
+            )
+              ?.group
+            === group,
+        );
+
+    if (hasGroup) {
+      continue;
+    }
+
+    const fallback =
+      (
+        state.catalog?.addons
+        || []
+      )
+        .find(
+          (addon) =>
+            addon.group
+            === group,
+        );
+
+    if (fallback) {
+      selected.add(
+        fallback.code,
+      );
+    }
+  }
+
+  state.selection.addonCodes =
+    [
+      ...selected,
+    ];
+}
+
 function comboRequirements(
   combo,
 ) {
@@ -1159,9 +1264,41 @@ function renderConfiguration(
                 state.selection.addonCodes,
               );
 
+            const changedAddon =
+              addonByCode(
+                state,
+                input.value,
+              );
+
             if (
               input.checked
             ) {
+              if (
+                changedAddon?.group
+              ) {
+                for (
+                  const code
+                  of [
+                    ...set,
+                  ]
+                ) {
+                  const current =
+                    addonByCode(
+                      state,
+                      code,
+                    );
+
+                  if (
+                    current?.group
+                    === changedAddon.group
+                  ) {
+                    set.delete(
+                      code,
+                    );
+                  }
+                }
+              }
+
               set.add(
                 input.value,
               );
@@ -1175,6 +1312,46 @@ function renderConfiguration(
               [
                 ...set,
               ];
+
+            const combo =
+              comboByCode(
+                state,
+                state.selection.comboCode,
+              );
+
+            if (combo) {
+              const selectedGroups =
+                new Set(
+                  state.selection.addonCodes
+                    .map(
+                      (code) =>
+                        addonByCode(
+                          state,
+                          code,
+                        )
+                          ?.group,
+                    )
+                    .filter(
+                      Boolean,
+                    ),
+                );
+
+              const stillMatches =
+                comboRequiredGroups(
+                  combo,
+                )
+                  .every(
+                    (group) =>
+                      selectedGroups.has(
+                        group,
+                      ),
+                  );
+
+              if (!stillMatches) {
+                state.selection.comboCode =
+                  '';
+              }
+            }
 
             persist(state);
             renderConfiguration(
@@ -1197,6 +1374,19 @@ function renderConfiguration(
           () => {
             state.selection.comboCode =
               input.value;
+
+            const combo =
+              comboByCode(
+                state,
+                input.value,
+              );
+
+            if (combo) {
+              ensureComboSelections(
+                state,
+                combo,
+              );
+            }
 
             persist(state);
 

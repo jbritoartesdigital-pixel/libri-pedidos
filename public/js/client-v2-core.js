@@ -1,105 +1,135 @@
 export const app =
-  document.getElementById('adminApp');
+  document.getElementById(
+    'app',
+  );
 
-export const authGate =
-  document.getElementById('authGate');
+export const headerHelp =
+  document.getElementById(
+    'headerHelp',
+  );
 
-export const viewRoot =
-  document.getElementById('viewRoot');
-
-export const viewTitle =
-  document.getElementById('viewTitle');
-
-export const viewEyebrow =
-  document.getElementById('viewEyebrow');
-
-export const modalRoot =
-  document.getElementById('modalRoot');
+export const brandSubtitle =
+  document.getElementById(
+    'brandSubtitle',
+  );
 
 const toast =
-  document.getElementById('toast');
+  document.getElementById(
+    'toast',
+  );
 
-export const state = {
-  view: 'central',
-  auth: null,
-  currentOrder: null,
-};
+const modalRoot =
+  document.getElementById(
+    'modalRoot',
+  );
 
-export function esc(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+export function esc(
+  value,
+) {
+  return String(
+    value ?? '',
+  )
+    .replace(
+      /&/g,
+      '&amp;',
+    )
+    .replace(
+      /</g,
+      '&lt;',
+    )
+    .replace(
+      />/g,
+      '&gt;',
+    )
+    .replace(
+      /"/g,
+      '&quot;',
+    )
+    .replace(
+      /'/g,
+      '&#039;',
+    );
 }
 
-export function money(cents) {
+export function money(
+  cents,
+) {
   return new Intl.NumberFormat(
     'pt-BR',
     {
-      style: 'currency',
-      currency: 'BRL',
+      style:
+        'currency',
+      currency:
+        'BRL',
     },
   ).format(
     Number(cents || 0) / 100,
   );
 }
 
-export function dateBr(value) {
-  if (!value) return '';
+export function dateBr(
+  value,
+) {
+  if (!value) {
+    return '';
+  }
 
   const date =
-    /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? new Date(`${value}T12:00:00Z`)
-      : new Date(value);
+    new Date(
+      `${value}T12:00:00Z`,
+    );
 
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value;
   }
 
   return new Intl.DateTimeFormat(
     'pt-BR',
     {
       timeZone:
-        /^\d{4}-\d{2}-\d{2}$/.test(value)
-          ? 'UTC'
-          : 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+        'UTC',
+      day:
+        '2-digit',
+      month:
+        '2-digit',
+      year:
+        'numeric',
     },
   ).format(date);
 }
 
-export function dateTimeBr(value) {
-  if (!value) return '';
+export function debounce(
+  fn,
+  wait = 350,
+) {
+  let timer;
 
-  const date = new Date(value);
+  return (...args) => {
+    window.clearTimeout(timer);
 
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    },
-  ).format(date);
+    timer =
+      window.setTimeout(
+        () =>
+          fn(...args),
+        wait,
+      );
+  };
 }
 
-export async function api(path, options = {}) {
+export async function api(
+  path,
+  options = {},
+) {
   const response =
     await fetch(
       path,
       {
-        credentials: 'same-origin',
+        credentials:
+          'same-origin',
         ...options,
         headers: {
           ...(options.body
@@ -114,12 +144,16 @@ export async function api(path, options = {}) {
       },
     );
 
-  const contentType =
-    response.headers.get('content-type')
+  const type =
+    response.headers.get(
+      'content-type',
+    )
     || '';
 
   const data =
-    contentType.includes('application/json')
+    type.includes(
+      'application/json',
+    )
       ? await response.json()
       : null;
 
@@ -137,12 +171,6 @@ export async function api(path, options = {}) {
     error.data =
       data;
 
-    if (response.status === 401) {
-      window.dispatchEvent(
-        new CustomEvent('libri-admin-unauthorized'),
-      );
-    }
-
     throw error;
   }
 
@@ -151,176 +179,234 @@ export async function api(path, options = {}) {
 
 let toastTimer;
 
-export function showToast(message) {
-  clearTimeout(toastTimer);
+export function showToast(
+  message,
+) {
+  window.clearTimeout(
+    toastTimer,
+  );
 
   toast.textContent =
     message;
 
-  toast.classList.remove('hidden');
+  toast.classList.remove(
+    'hidden',
+  );
 
   toastTimer =
-    setTimeout(
-      () =>
-        toast.classList.add('hidden'),
-      2800,
+    window.setTimeout(
+      () => {
+        toast.classList.add(
+          'hidden',
+        );
+      },
+      2600,
     );
 }
 
 export function modal(
   title,
-  html,
+  bodyHtml,
   {
-    width = '920px',
+    wide = false,
   } = {},
 ) {
   modalRoot.innerHTML = `
     <section
-      class="modal"
-      style="width:min(${esc(width)},100%)"
+      class="modal-card"
+      ${wide ? 'style="width:min(960px,100%)"' : ''}
       role="dialog"
       aria-modal="true"
+      aria-label="${esc(title)}"
     >
       <header class="modal-head">
         <h2>${esc(title)}</h2>
-
         <button
-          class="close-btn"
+          class="modal-close"
           type="button"
           aria-label="Fechar"
-        >
-          ×
-        </button>
+        >×</button>
       </header>
 
       <div class="modal-body">
-        ${html}
+        ${bodyHtml}
       </div>
     </section>
   `;
 
-  modalRoot.classList.remove('hidden');
-  modalRoot.setAttribute('aria-hidden', 'false');
+  modalRoot.classList.remove(
+    'hidden',
+  );
+
+  modalRoot.setAttribute(
+    'aria-hidden',
+    'false',
+  );
 
   const close = () => {
-    modalRoot.classList.add('hidden');
-    modalRoot.setAttribute('aria-hidden', 'true');
+    modalRoot.classList.add(
+      'hidden',
+    );
+
+    modalRoot.setAttribute(
+      'aria-hidden',
+      'true',
+    );
+
     modalRoot.innerHTML = '';
   };
 
   modalRoot
-    .querySelector('.close-btn')
-    .addEventListener('click', close);
+    .querySelector(
+      '.modal-close',
+    )
+    .addEventListener(
+      'click',
+      close,
+    );
 
   modalRoot.addEventListener(
     'click',
     (event) => {
-      if (event.target === modalRoot) {
+      if (
+        event.target
+        === modalRoot
+      ) {
         close();
       }
     },
     {
-      once: true,
+      once:
+        true,
     },
   );
 
   return close;
 }
 
-export function setViewMeta(title, eyebrow) {
-  viewTitle.textContent =
-    title;
-
-  viewEyebrow.textContent =
-    eyebrow;
-}
-
-export function loading(label = 'Carregando...') {
-  viewRoot.innerHTML = `
-    <div class="card empty">
-      ${esc(label)}
-    </div>
-  `;
-}
-
-export function empty(label) {
-  return `
-    <div class="empty">
-      ${esc(label)}
-    </div>
-  `;
-}
-
-export function statusClass(status) {
-  if (
-    [
-      'ready_for_delivery',
-      'finalized',
-      'approved',
-    ].includes(status)
-  ) {
-    return 'green';
-  }
-
-  if (
-    [
-      'balance_pending',
-      'waiting_customer',
-      'awaiting_urgency_decision',
-    ].includes(status)
-  ) {
-    return 'yellow';
-  }
-
-  if (
-    [
-      'in_production',
-      'ready_for_production',
-    ].includes(status)
-  ) {
-    return 'blue';
-  }
-
-  return '';
-}
-
-export function bindNav(onChange) {
-  document
-    .querySelectorAll('[data-view]')
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          'click',
-          () => {
-            state.view =
-              button.dataset.view;
-
-            document
-              .querySelectorAll('[data-view]')
-              .forEach(
-                (entry) =>
-                  entry.classList.toggle(
-                    'active',
-                    entry === button,
-                  ),
-              );
-
-            onChange(state.view);
-          },
-        );
-      },
+export function setHelp(
+  url,
+) {
+  if (!url) {
+    headerHelp.classList.add(
+      'hidden',
     );
+
+    return;
+  }
+
+  headerHelp.href =
+    url;
+
+  headerHelp.classList.remove(
+    'hidden',
+  );
 }
 
-export function setBellCount(count) {
-  const bubble =
-    document.getElementById('bellCount');
+export function setSubtitle(
+  value,
+) {
+  brandSubtitle.textContent =
+    value;
+}
 
-  bubble.textContent =
-    String(count || 0);
+export function loading(
+  title = 'Preparando tudo...',
+  subtitle = 'Um instante ✨',
+) {
+  app.innerHTML = `
+    <section class="loading-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <strong>${esc(title)}</strong>
+      <small>${esc(subtitle)}</small>
+    </section>
+  `;
+}
 
-  bubble.classList.toggle(
-    'hidden',
-    !count,
-  );
+export function errorPage(
+  title,
+  message,
+  {
+    actionHref = '/pedido',
+    actionLabel = 'Voltar',
+  } = {},
+) {
+  app.innerHTML = `
+    <section class="page-card">
+      <div class="page-head">
+        <span class="eyebrow">Libri Convites</span>
+        <h1 class="page-title">${esc(title)}</h1>
+        <p class="page-subtitle">${esc(message)}</p>
+      </div>
+
+      <a class="btn btn-primary" href="${esc(actionHref)}">
+        ${esc(actionLabel)}
+      </a>
+    </section>
+  `;
+}
+
+export function randomId(
+  prefix = 'req_',
+) {
+  const random =
+    crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
+
+  return `${prefix}${random}`;
+}
+
+export function pathInfo() {
+  const path =
+    window.location.pathname;
+
+  const manual =
+    path.match(
+      /^\/pedido\/manual\/(ord_[a-f0-9]{36})\/?$/,
+    );
+
+  if (manual) {
+    return {
+      mode:
+        'manual',
+      token:
+        manual[1],
+    };
+  }
+
+  const area =
+    path.match(
+      /^\/meu-pedido\/(ord_[a-f0-9]{36})\/?$/,
+    );
+
+  if (area) {
+    return {
+      mode:
+        'area',
+      token:
+        area[1],
+    };
+  }
+
+  const product =
+    path.match(
+      /^\/pedido\/([a-z0-9-]+)\/?$/,
+    );
+
+  if (product) {
+    return {
+      mode:
+        'store',
+      productSlug:
+        product[1],
+    };
+  }
+
+  return {
+    mode:
+      'store',
+    productSlug:
+      '',
+  };
 }

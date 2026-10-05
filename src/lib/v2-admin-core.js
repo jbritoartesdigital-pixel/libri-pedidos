@@ -1512,6 +1512,10 @@ export async function getV2AdminOrderDetail(
         order.id,
       code:
         order.order_code,
+      publicToken:
+        order.public_token,
+      customerAreaPath:
+        `/meu-pedido/${order.public_token}`,
       customerName:
         order.customer_name,
       whatsapp:

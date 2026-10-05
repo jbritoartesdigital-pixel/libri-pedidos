@@ -1533,7 +1533,7 @@ export async function verifyAdminPasskeyRegistration(
           NULL,
           'Novo acesso administrativo',
           ?,
-          '/admin/configuracoes',
+          '/admin-v2?view=security',
           'high',
           0,
           ?
@@ -1779,7 +1779,7 @@ export async function revokeAdminPasskeyDevice(
             NULL,
             'Acesso administrativo removido',
             ?,
-            '/admin/configuracoes',
+            '/admin-v2?view=security',
             'high',
             0,
             ?

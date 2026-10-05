@@ -24,11 +24,14 @@
 }
 
 html {
+  max-width: 100%;
   background: var(--bg);
   scroll-behavior: smooth;
 }
 
 body {
+  max-width: 100%;
+  overflow-x: clip;
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
@@ -307,6 +310,40 @@ a {
   gap: 14px;
 }
 
+.page-card,
+.hero-card,
+.summary-card,
+.product-card,
+.choice-card,
+.delivery-card,
+.upload-card,
+.status-card,
+.contract-card,
+.preview-card,
+.quote-card,
+.field,
+.choice-main,
+.delivery-copy,
+.customer-layout > *,
+.grid > *,
+.form-grid > * {
+  min-width: 0;
+}
+
+.page-title,
+.page-subtitle,
+.product-card h3,
+.product-card p,
+.choice-main strong,
+.choice-main small,
+.delivery-copy strong,
+.delivery-copy small,
+.notice,
+.status-line,
+.review-line dd {
+  overflow-wrap: anywhere;
+}
+
 .grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -491,6 +528,8 @@ a {
 }
 
 .btn {
+  max-width: 100%;
+  min-width: 0;
   border: 0;
   border-radius: 14px;
   padding: 13px 18px;
@@ -671,8 +710,10 @@ a {
 }
 
 .review-line dd {
+  min-width: 0;
   margin: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .terms-box {
@@ -742,7 +783,17 @@ a {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   font-size: 13px;
+}
+
+.status-line > * {
+  min-width: 0;
+}
+
+.status-line strong {
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .status-line span {
@@ -922,8 +973,10 @@ a {
 }
 
 .modal-body {
+  min-width: 0;
   overflow: auto;
   padding: 20px;
+  overscroll-behavior: contain;
 }
 
 .modal-body pre {
@@ -1010,6 +1063,15 @@ a {
     padding-top: 14px;
   }
 
+  .site-header,
+  .brand,
+  .brand-copy,
+  .app-shell,
+  .page-card,
+  .hero-card {
+    min-width: 0;
+  }
+
   .app-shell {
     width: min(100% - 20px, 1120px);
     margin-top: 6px;
@@ -1061,7 +1123,45 @@ a {
   }
 
   .upload-card .btn {
+    width: 100%;
     grid-column: 1 / -1;
+  }
+
+  .preview-actions,
+  .contract-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .preview-actions .btn,
+  .contract-actions .btn {
+    width: 100%;
+  }
+
+  .modal-root {
+    padding: 8px;
+    align-items: stretch;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    margin: auto 0;
+    border-radius: 18px;
+  }
+
+  .modal-head {
+    padding: 14px;
+  }
+
+  .modal-head h2 {
+    min-width: 0;
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+
+  .modal-body {
+    padding: 13px;
   }
 }
 
@@ -1233,7 +1333,102 @@ a {
     margin-top: -2px;
   }
 
+  .payment-priority-top {
+    align-items: flex-start;
+  }
+
   .payment-priority-total {
-    font-size: 28px;
+    font-size: clamp(25px, 8vw, 30px);
+    overflow-wrap: anywhere;
+  }
+
+  .payment-priority-top small {
+    max-width: 45%;
+  }
+
+  .payment-methods label {
+    align-items: flex-start;
+    line-height: 1.35;
+  }
+}
+
+@media (max-width: 390px) {
+  .site-header {
+    gap: 8px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-copy strong {
+    font-size: 14px;
+  }
+
+  .brand-copy small {
+    font-size: 11px;
+  }
+
+  .page-card,
+  .hero-card {
+    padding: 12px;
+  }
+
+  .page-title {
+    font-size: 27px;
+  }
+
+  .payment-priority-top {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .payment-priority-top small {
+    max-width: none;
+    text-align: left;
+  }
+
+  .payment-priority-total {
+    font-size: 27px;
+  }
+
+  .status-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .status-line strong {
+    text-align: left;
+  }
+
+  .customer-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .customer-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .customer-tab {
+    flex: 0 0 auto;
+  }
+
+  .quote-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .quote-row strong {
+    text-align: left;
+  }
+
+  .btn {
+    white-space: normal;
+    text-align: center;
   }
 }

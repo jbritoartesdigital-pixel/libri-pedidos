@@ -476,6 +476,16 @@ function summaryHtml(
               type="button"
               data-pix-key="${esc(area.payment.balancePix.key)}"
             >Copiar chave Pix</button>
+            ${area.support?.whatsappUrl ? `
+              <a
+                class="btn btn-ghost"
+                href="${esc(area.support.whatsappUrl)}"
+                target="_blank"
+                rel="noopener"
+                style="margin-top:8px"
+              >Já paguei • avisar a Libri</a>
+            ` : ''}
+            <p class="muted">Depois do Pix, avise a Libri para a confirmação do saldo e liberação da entrega.</p>
           ` : `<div class="notice info">Entre em contato com a Libri para receber os dados do saldo.</div>`}
         </section>
       ` : ""}

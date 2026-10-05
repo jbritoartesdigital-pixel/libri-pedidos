@@ -34,7 +34,8 @@ export function day(offset) {
 }
 
 export function providerMock(t) {
-  const orders = new Map(); const keys = new Map(); const bodies = []; let posts = 0;
+  const orders = new Map(); const keys = new Map(); const bodies = [];
+  const rejectedKeys = new Set(); const keysUsed = []; let posts = 0; let rejectNextPost = false;
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     if (!String(url).startsWith('https://api.mercadopago.com/v1/orders')) throw new Error(`Unexpected network call ${url}`);
     if (options.method === 'POST' && String(url).endsWith('/cancel')) {
@@ -43,6 +44,17 @@ export function providerMock(t) {
     }
     if (options.method === 'POST') {
       const key = options.headers['x-idempotency-key'];
+      keysUsed.push(key);
+      if (rejectedKeys.has(key)) {
+        return Response.json({ message: 'X-Idempotency-Key already used.',
+          errors: [{ code: 'idempotency_key_already_used' }] }, { status: 400 });
+      }
+      if (rejectNextPost) {
+        rejectNextPost = false;
+        rejectedKeys.add(key);
+        return Response.json({ message: 'Properties not supported',
+          errors: [{ code: 'unsupported_properties', property: 'config.online.retries' }] }, { status: 400 });
+      }
       if (keys.has(key)) return Response.json(orders.get(keys.get(key)));
       posts++; const body = JSON.parse(options.body); bodies.push(body);
       const order = { id: `ORD${posts}`, status: 'created', status_detail: 'created',
@@ -53,6 +65,7 @@ export function providerMock(t) {
     const id = String(url).split('/').at(-1);
     return orders.has(id) ? Response.json(orders.get(id)) : Response.json({}, { status: 404 });
   });
-  return { orders, keys, bodies, get posts() { return posts; },
+  return { orders, keys, bodies, keysUsed, get posts() { return posts; },
+    rejectNext() { rejectNextPost = true; },
     approve(id) { Object.assign(orders.get(id), { status: 'processed', status_detail: 'accredited' }); } };
 }

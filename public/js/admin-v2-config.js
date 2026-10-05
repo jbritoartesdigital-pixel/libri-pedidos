@@ -149,6 +149,7 @@ export async function renderStore() {
       renderStoreGallery(
         panel,
         config,
+        renderStore,
       );
     };
 

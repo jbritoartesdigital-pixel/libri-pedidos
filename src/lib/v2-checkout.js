@@ -1226,7 +1226,10 @@ export async function resumeV2Payment(request, env, token, body = {}) {
     const orphanHold = await env.DB.prepare(`SELECT id FROM v2_checkout_holds WHERE order_id = ?
       AND status IN ('active', 'expired') AND NOT EXISTS
       (SELECT 1 FROM v2_payments WHERE order_id = ?) ORDER BY id DESC LIMIT 1`).bind(order.id, order.id).first();
-    if (orphanHold) {
+    if (
+      orphanHold
+      && !changingMethod
+    ) {
       // Tenta recuperar apenas respostas realmente incertas. Uma rejeição explícita
       // do provedor encerra a reserva órfã e permite uma nova tentativa segura.
       try {

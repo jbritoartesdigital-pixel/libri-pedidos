@@ -47,6 +47,18 @@ export async function renderProduction(openOrder) {
           `,
         ).join('')}
       </select>
+
+      <select
+        id="productionWhen"
+        class="select"
+        style="max-width:220px"
+      >
+        <option value="">Todas as datas</option>
+        <option value="today">Hoje</option>
+        <option value="week">Esta semana</option>
+        <option value="new">Novos</option>
+        <option value="in_production">Em produção</option>
+      </select>
     </div>
 
     <div id="productionList" class="order-list"></div>
@@ -71,6 +83,11 @@ export async function renderProduction(openOrder) {
         .getElementById('productionStatus')
         .value;
 
+    const when =
+      document
+        .getElementById('productionWhen')
+        .value;
+
     list.innerHTML =
       empty('Carregando...');
 
@@ -79,6 +96,7 @@ export async function renderProduction(openOrder) {
 
     if (q) params.set('q', q);
     if (status) params.set('status', status);
+    if (when) params.set('when', when);
 
     const data =
       await api(
@@ -103,8 +121,19 @@ export async function renderProduction(openOrder) {
                 </h3>
 
                 <div class="order-meta">
-                  ${esc(order.customerName)}
+                  <strong>${esc(order.customerName)}</strong>
                   • festa ${dateBr(order.eventDate)}
+                  <br>
+                  ${order.theme ? `Tema: ${esc(order.theme)} • ` : ''}
+                  ${esc(order.productName || 'Formato não identificado')}
+                  ${order.sceneCount ? ` • ${order.sceneCount} cena(s)` : ''}
+                  <br>
+                  Pagamento:
+                  ${Number(order.paidCents || 0) >= Number(order.totalCents || 0)
+                    ? 'pago'
+                    : Number(order.paidCents || 0) > 0
+                      ? `parcial • ${esc(order.paymentMethod || '')}`
+                      : `pendente • ${esc(order.paymentMethod || '')}`}
                   • entrega ${dateBr(order.deliveryWindow.start)} a ${dateBr(order.deliveryWindow.end)}
                   <br>
                   Próximo: ${esc(order.nextAction || '')}
@@ -126,6 +155,13 @@ export async function renderProduction(openOrder) {
 
   document
     .getElementById('productionStatus')
+    .addEventListener(
+      'change',
+      load,
+    );
+
+  document
+    .getElementById('productionWhen')
     .addEventListener(
       'change',
       load,

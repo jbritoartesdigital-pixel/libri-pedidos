@@ -1907,6 +1907,7 @@ export async function listV2Production(
   {
     status = '',
     q = '',
+    when = '',
   } = {},
 ) {
   const clauses = [
@@ -1922,8 +1923,7 @@ export async function listV2Production(
 
   if (
     status
-    && status
-      !== 'all'
+    && status !== 'all'
   ) {
     clauses.push(
       'o.status = ?',
@@ -1946,6 +1946,39 @@ export async function listV2Production(
     );
   }
 
+  const today =
+    dateKeyInSaoPaulo();
+
+  if (when === 'today') {
+    clauses.push(
+      'o.event_date = ?',
+    );
+
+    binds.push(
+      today,
+    );
+  } else if (when === 'week') {
+    clauses.push(
+      'o.event_date BETWEEN ? AND ?',
+    );
+
+    binds.push(
+      today,
+      addDays(
+        today,
+        6,
+      ),
+    );
+  } else if (when === 'new') {
+    clauses.push(
+      "o.status = 'ready_for_production'",
+    );
+  } else if (when === 'in_production') {
+    clauses.push(
+      "o.status = 'in_production'",
+    );
+  }
+
   const query =
     cleanText(
       q,
@@ -1959,6 +1992,17 @@ export async function listV2Production(
         OR o.honoree_display_name LIKE ?
         OR c.name LIKE ?
         OR c.whatsapp LIKE ?
+        OR b.data_json LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM v2_order_items search_item
+          WHERE
+            search_item.order_id = o.id
+            AND (
+              search_item.name_snapshot LIKE ?
+              OR search_item.configuration_json LIKE ?
+            )
+        )
       )
     `);
 
@@ -1966,6 +2010,9 @@ export async function listV2Production(
       `%${query}%`;
 
     binds.push(
+      like,
+      like,
+      like,
       like,
       like,
       like,
@@ -1993,18 +2040,70 @@ export async function listV2Production(
 
             p.total_cents,
             p.payment_method,
-            p.balance_cents
+            p.balance_cents,
+
+            json_extract(
+              b.data_json,
+              '$.theme_or_style'
+            ) AS theme,
+
+            (
+              SELECT item.name_snapshot
+              FROM v2_order_items item
+              WHERE
+                item.order_id = o.id
+                AND item.item_type = 'product'
+              ORDER BY item.id
+              LIMIT 1
+            ) AS product_name,
+
+            (
+              SELECT json_extract(
+                item.configuration_json,
+                '$.sceneCount'
+              )
+              FROM v2_order_items item
+              WHERE
+                item.order_id = o.id
+                AND item.item_type = 'product'
+              ORDER BY item.id
+              LIMIT 1
+            ) AS scene_count,
+
+            COALESCE(
+              (
+                SELECT SUM(
+                  CASE
+                    WHEN
+                      pay.status = 'approved'
+                      AND pay.payment_type != 'refund'
+                      THEN pay.amount_cents
+                    WHEN
+                      pay.status = 'approved'
+                      AND pay.payment_type = 'refund'
+                      THEN -pay.amount_cents
+                    ELSE 0
+                  END
+                )
+                FROM v2_payments pay
+                WHERE pay.order_id = o.id
+              ),
+              0
+            ) AS paid_cents
           FROM v2_orders o
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
           INNER JOIN v2_order_pricing p
             ON p.order_id = o.id
+          LEFT JOIN v2_briefings b
+            ON b.order_id = o.id
           WHERE ${
             clauses.join(
               ' AND ',
             )
           }
           ORDER BY
+            o.event_date,
             CASE o.status
               WHEN 'adjustments' THEN 0
               WHEN 'ready_for_production' THEN 1
@@ -2044,6 +2143,17 @@ export async function listV2Production(
           row.whatsapp,
         eventDate:
           row.event_date,
+        theme:
+          row.theme
+          || '',
+        productName:
+          row.product_name
+          || '',
+        sceneCount:
+          Number(
+            row.scene_count
+            || 0,
+          ),
         status:
           row.status,
         statusLabel:
@@ -2063,6 +2173,11 @@ export async function listV2Production(
         totalCents:
           Number(
             row.total_cents
+            || 0,
+        ),
+        paidCents:
+          Number(
+            row.paid_cents
             || 0,
         ),
         paymentMethod:

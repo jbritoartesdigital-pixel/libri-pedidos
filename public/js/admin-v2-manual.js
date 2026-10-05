@@ -628,13 +628,28 @@ export async function renderManualOrder() {
                     .addEventListener(
                       'click',
                       async () => {
-                        await navigator
-                          .clipboard
-                          .writeText(
-                            url,
+                        try {
+                          await navigator
+                            .clipboard
+                            .writeText(
+                              url,
+                            );
+
+                          showToast('Link copiado ✓');
+                        } catch {
+                          const input =
+                            document
+                              .getElementById('manualCreatedLink');
+
+                          input.focus();
+                          input.select();
+
+                          document.execCommand(
+                            'copy',
                           );
 
-                        showToast('Link copiado ✓');
+                          showToast('Link copiado ✓');
+                        }
                       },
                     );
                 } catch (error) {

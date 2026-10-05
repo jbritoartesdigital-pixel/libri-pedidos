@@ -34,7 +34,7 @@ self.addEventListener(
       data: {
         url:
           payload.url
-          || '/admin/',
+          || '/admin-v2',
       },
     };
 

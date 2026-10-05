@@ -884,3 +884,13 @@ export async function planV2AllocationForWindow(
     requiredUnits,
   );
 }
+
+export function validateV2UrgencyWindow(start, end, eventDate) {
+  const startDay = parseIsoDay(start);
+  const endDay = parseIsoDay(end);
+  if (formatIsoDay(startDay) !== start || formatIsoDay(endDay) !== end || start > end
+    || start < formatIsoDay(currentBrazilDay()) || end > eventDate) {
+    throw new Error('Informe uma janela válida, de hoje até a data do evento.');
+  }
+}
+

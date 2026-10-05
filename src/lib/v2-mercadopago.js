@@ -1,6 +1,5 @@
 import {
   nowIso,
-  randomToken,
 } from './http.js';
 
 import {
@@ -11,6 +10,9 @@ import {
 import {
   commitV2CouponUse,
 } from './v2-commercial-pricing.js';
+import { planV2AllocationForWindow } from './v2-agenda.js';
+import { createV2AdminNotification } from './v2-notifications.js';
+import { withV2PaymentLock } from './v2-payment-lock.js';
 
 const MP_API_BASE =
   'https://api.mercadopago.com';
@@ -170,6 +172,7 @@ async function mpFetch(
             : JSON.stringify(
               body,
             ),
+        signal: AbortSignal.timeout(15000),
       },
     );
 
@@ -255,14 +258,14 @@ export async function createMercadoPagoCheckout(
       )
     }`;
 
-  const idempotencyKey =
-    randomToken(
-      'mp_',
-    )
-      .slice(
-        0,
-        120,
-      );
+  const hold = await env.DB.prepare(`SELECT token FROM v2_checkout_holds
+    WHERE order_id = ? AND status IN ('active', 'expired') ORDER BY id DESC LIMIT 1`).bind(orderId).first();
+  if (!hold) throw new Error('Reserva do pagamento não encontrada.');
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${orderId}:${hold.token}`)));
+  digest[6] = (digest[6] & 15) | 64;
+  digest[8] = (digest[8] & 63) | 128;
+  const hex = Array.from(digest.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+  const idempotencyKey = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 
   const paymentType =
     paymentMethod
@@ -274,6 +277,9 @@ export async function createMercadoPagoCheckout(
     centsToAmount(
       amountDueNowCents,
     );
+  if (!Number.isSafeInteger(amountDueNowCents) || amountDueNowCents <= 0) {
+    throw new Error('O valor do pagamento deve ser positivo em centavos.');
+  }
 
   const body = {
     type:
@@ -430,7 +436,7 @@ export async function createMercadoPagoCheckout(
           checkout_url,
           external_reference
         )
-        VALUES (
+        SELECT
           ?,
           'mercado_pago',
           ?,
@@ -451,7 +457,7 @@ export async function createMercadoPagoCheckout(
           ?,
           ?,
           ?
-        )
+        WHERE NOT EXISTS (SELECT 1 FROM v2_payments WHERE provider = 'mercado_pago' AND provider_order_id = ?)
       `,
     )
     .bind(
@@ -474,6 +480,7 @@ export async function createMercadoPagoCheckout(
       || 'created',
       checkoutUrl,
       orderCode,
+      providerOrderId,
     )
     .run();
 
@@ -535,6 +542,12 @@ export async function fetchMercadoPagoOrder(
       )
     }`,
   );
+}
+
+export async function cancelMercadoPagoOrder(env, providerOrderId) {
+  return mpFetch(env, `/v1/orders/${encodeURIComponent(providerOrderId)}/cancel`, {
+    method: 'POST', idempotencyKey: crypto.randomUUID(),
+  });
 }
 
 function parseSignature(
@@ -730,6 +743,9 @@ export async function validateMercadoPagoWebhook(
     || !v1
     || !xRequestId
     || !dataId
+    || !/^\d+$/.test(ts)
+    || !/^[a-fA-F0-9]{64}$/.test(v1)
+    || (body?.data?.id && String(body.data.id) !== String(dataId))
   ) {
     return false;
   }
@@ -753,7 +769,7 @@ export async function validateMercadoPagoWebhook(
 
   return constantTimeStringEqual(
     calculated,
-    v1,
+    v1.toLowerCase(),
   );
 }
 
@@ -788,6 +804,8 @@ function normalizePaymentStatus(
       || '',
     );
 
+  if (status === 'refunded' || status === 'charged_back') return 'refunded';
+
   const detail =
     String(
       mpOrder
@@ -806,6 +824,7 @@ function normalizePaymentStatus(
   if (
     status
     === 'cancelled'
+    || status === 'canceled'
     || detail
       .includes(
         'cancel',
@@ -859,11 +878,12 @@ async function convertHoldToAgenda(
         `
           SELECT
             id,
-            status
+            status,
+            expires_at
           FROM v2_checkout_holds
           WHERE
             order_id = ?
-            AND status = 'active'
+            AND status IN ('active', 'expired')
           ORDER BY id DESC
           LIMIT 1
         `,
@@ -904,6 +924,17 @@ async function convertHoldToAgenda(
     allocationRows
       .results
     || [];
+
+  if (!rows.length) return { converted: false, reason: 'empty_hold' };
+  if (hold.expires_at <= nowIso()) {
+    const order = await db.prepare('SELECT delivery_start, delivery_end FROM v2_orders WHERE id = ?').bind(orderId).first();
+    const plan = await planV2AllocationForWindow(db, {
+      start: order.delivery_start, end: order.delivery_end,
+      pointsUnits: rows.reduce((sum, row) => sum + Number(row.points_units), 0),
+    });
+    if (!plan.fits) return { converted: false, reason: 'late_payment_capacity_changed' };
+    rows.splice(0, rows.length, ...plan.allocation.map(x => ({ day: x.day, points_units: x.pointsUnits })));
+  }
 
   const existing =
     await db
@@ -952,7 +983,10 @@ async function convertHoldToAgenda(
     };
   }
 
-  await db.batch([
+  const settings = await loadV2Settings(db);
+  const defaultCapacity = v2IntSetting(settings, 'default_sellable_points_per_day_units', 400);
+  const allocationJson = JSON.stringify(rows);
+  const conversion = await db.batch([
     ...rows.map(
       (row) =>
         db
@@ -965,13 +999,22 @@ async function convertHoldToAgenda(
                 allocation_type,
                 created_at
               )
-              VALUES (
+              SELECT
                 ?,
                 ?,
                 ?,
                 'confirmed',
                 ?
-              )
+              WHERE NOT EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ? AND day = ?)
+                AND NOT EXISTS (
+                  SELECT 1 FROM json_each(?) proposed
+                  WHERE CAST(json_extract(proposed.value, '$.points_units') AS INTEGER) >
+                    CASE WHEN COALESCE((SELECT blocked FROM v2_agenda_days WHERE day = json_extract(proposed.value, '$.day')), 0) = 1 THEN 0
+                    ELSE COALESCE((SELECT sellable_capacity_units FROM v2_agenda_days WHERE day = json_extract(proposed.value, '$.day')), ?) END
+                    - COALESCE((SELECT SUM(points_units) FROM v2_agenda_allocations WHERE day = json_extract(proposed.value, '$.day') AND order_id != ?), 0)
+                    - COALESCE((SELECT SUM(a.points_units) FROM v2_checkout_hold_allocations a JOIN v2_checkout_holds h ON h.id = a.hold_id
+                      WHERE a.day = json_extract(proposed.value, '$.day') AND h.status = 'active' AND h.expires_at > ? AND h.order_id != ?), 0)
+                )
             `,
           )
           .bind(
@@ -979,6 +1022,13 @@ async function convertHoldToAgenda(
             row.day,
             row.points_units,
             nowIso(),
+            orderId,
+            row.day,
+            allocationJson,
+            defaultCapacity,
+            orderId,
+            nowIso(),
+            orderId,
           ),
     ),
 
@@ -990,13 +1040,19 @@ async function convertHoldToAgenda(
             status = 'converted',
             updated_at = ?
           WHERE id = ?
+            AND EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ?)
         `,
       )
       .bind(
         nowIso(),
         hold.id,
+        orderId,
       ),
   ]);
+
+  if (conversion.slice(0, rows.length).some(x => Number(x.meta?.changes) !== 1)) {
+    return { converted: false, reason: 'capacity_changed' };
+  }
 
   return {
     converted:
@@ -1029,7 +1085,15 @@ async function releaseHold(
     .run();
 }
 
-export async function syncMercadoPagoOrder(
+export async function syncMercadoPagoOrder(env, providerOrderId, { lock = true } = {}) {
+  if (!lock) return syncMercadoPagoOrderUnlocked(env, providerOrderId);
+  const payment = await env.DB.prepare(`SELECT order_id FROM v2_payments
+    WHERE provider = 'mercado_pago' AND provider_order_id = ?`).bind(providerOrderId).first();
+  if (!payment) return { found: false };
+  return withV2PaymentLock(env.DB, payment.order_id, () => syncMercadoPagoOrderUnlocked(env, providerOrderId));
+}
+
+async function syncMercadoPagoOrderUnlocked(
   env,
   providerOrderId,
 ) {
@@ -1095,6 +1159,11 @@ export async function syncMercadoPagoOrder(
     throw new Error(
       'Referência externa do pagamento não corresponde ao pedido.',
     );
+  }
+
+  const providerAmount = Number(mpOrder?.total_amount);
+  if (!Number.isFinite(providerAmount) || Math.round(providerAmount * 100) !== Number(localPayment.amount_cents)) {
+    throw new Error('Valor do Mercado Pago não corresponde ao valor esperado do pedido.');
   }
 
   const paymentStatus =
@@ -1180,6 +1249,15 @@ export async function syncMercadoPagoOrder(
     )
     .run();
 
+  if (['refunded', 'charged_back'].includes(String(mpOrder.status)) || String(mpOrder.status_detail).includes('refund')) {
+    await createV2AdminNotification(env, {
+      eventCode: 'PAYMENT_REVIEW', orderId: localPayment.order_id, title: 'Revisar estorno ou contestação',
+      body: `${localPayment.order_code} • ${mpOrder.status}/${mpOrder.status_detail}. Confira o valor devolvido e a produção no Mercado Pago.`,
+      actionUrl: `/admin-v2?order=${encodeURIComponent(localPayment.order_code)}`,
+      priority: 'high', pushEligible: true, dedupeKey: `payment-review:${providerOrderId}:${mpOrder.status}:${mpOrder.status_detail}`,
+    });
+  }
+
   if (
     paymentStatus
     === 'approved'
@@ -1205,11 +1283,22 @@ export async function syncMercadoPagoOrder(
       },
     );
 
-    await convertHoldToAgenda(
+    const capacity = await convertHoldToAgenda(
       env.DB,
       localPayment
         .order_id,
     );
+
+    if (!capacity.converted && localPayment.briefing_status === 'locked') {
+      await createV2AdminNotification(env, {
+        eventCode: 'PAYMENT_CONFIRMED', orderId: localPayment.order_id,
+        title: 'Pagamento recebido; revisar capacidade',
+        body: `${localPayment.order_code} • pagamento recebido após perda da reserva. Revise a agenda antes de liberar a produção.`,
+        actionUrl: `/admin-v2?order=${encodeURIComponent(localPayment.order_code)}`,
+        priority: 'high', pushEligible: true, dedupeKey: `payment-capacity:${localPayment.order_id}`,
+      });
+      return { found: true, approved: true, capacityReview: true, paymentStatus };
+    }
 
     const alreadyUnlocked =
       localPayment
@@ -1226,7 +1315,8 @@ export async function syncMercadoPagoOrder(
               next_action = 'Briefing aguardando preenchimento',
               briefing_status = 'available',
               updated_at = ?
-            WHERE id = ?
+            WHERE id = ? AND briefing_status = 'locked'
+              AND status IN ('awaiting_payment', 'urgency_approved')
           `,
         )
         .bind(
@@ -1356,6 +1446,10 @@ export async function syncMercadoPagoOrder(
       paymentStatus,
     )
   ) {
+    const newer = await env.DB.prepare(`SELECT id FROM v2_payments WHERE order_id = ?
+      AND id > ? AND status IN ('pending', 'approved') LIMIT 1`)
+      .bind(localPayment.order_id, localPayment.payment_id).first();
+    if (newer) return { found: true, approved: false, paymentStatus, superseded: true };
     await releaseHold(
       env.DB,
       localPayment
@@ -1374,6 +1468,7 @@ export async function syncMercadoPagoOrder(
             next_action = ?,
             updated_at = ?
           WHERE id = ?
+            AND status = 'awaiting_payment' AND briefing_status = 'locked'
         `,
       )
       .bind(
@@ -1406,3 +1501,4 @@ export async function syncMercadoPagoOrder(
     paymentStatus,
   };
 }
+

@@ -103,6 +103,7 @@ import {
 import {
   handlePublicApi,
 } from './routes/public.js';
+import { runV2Scheduler } from './lib/v2-scheduler.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -376,6 +377,11 @@ async function handleCustomerV2Api(
 }
 
 export default {
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runV2Scheduler(env).then(result => {
+      console.log('V2 scheduler', JSON.stringify(result));
+    }));
+  },
   async fetch(
     request,
     env,
@@ -587,3 +593,4 @@ export default {
     );
   },
 };
+

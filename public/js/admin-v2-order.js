@@ -230,6 +230,17 @@ export async function openOrder(code, onChanged = null) {
           ${paymentBlock(detail)}
         </div>
 
+        ${detail.order.status === 'awaiting_urgency_decision' ? `
+          <section class="card">
+            <h3>Análise de encaixe urgente</h3>
+            <p>Adicional de 30% após os descontos. A capacidade será conferida novamente no pagamento.</p>
+            <label>Início da entrega <input class="input" id="urgencyStart" type="date"></label>
+            <label>Fim da entrega <input class="input" id="urgencyEnd" type="date"></label>
+            <label>Observação / motivo da rejeição <textarea class="textarea" id="urgencyNote"></textarea></label>
+            <button class="btn btn-primary" data-urgency-decision="approve">Aprovar encaixe</button>
+            <button class="btn btn-danger" data-urgency-decision="reject">Rejeitar encaixe</button>
+          </section>` : ''}
+
         <div class="section-grid">
           ${briefingBlock(detail)}
 
@@ -340,6 +351,25 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  document.querySelectorAll('[data-urgency-decision]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const buttons = [...document.querySelectorAll('[data-urgency-decision]')];
+      buttons.forEach(x => { x.disabled = true; });
+      try {
+        await api(`/api/admin/v2/orders/${code}/urgency`, { method: 'POST', body: JSON.stringify({
+          decision: button.dataset.urgencyDecision,
+          deliveryStart: document.getElementById('urgencyStart').value,
+          deliveryEnd: document.getElementById('urgencyEnd').value,
+          note: document.getElementById('urgencyNote').value,
+        }) });
+        close();
+        if (onChanged) await onChanged();
+        await openOrder(code, onChanged);
+        showToast('Decisão de encaixe registrada.');
+      } catch (error) { showToast(error.message); buttons.forEach(x => { x.disabled = false; }); }
+    });
+  });
 
   const refreshContracts =
     async () => {
@@ -582,3 +612,4 @@ export async function openOrder(code, onChanged = null) {
       },
     );
 }
+

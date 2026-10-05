@@ -17,11 +17,15 @@ import {
   findV2DeliveryOptions,
   planV2AllocationForWindow,
   validateV2DeliveryWindow,
+  validateV2UrgencyWindow,
 } from './v2-agenda.js';
 
 import {
   createMercadoPagoCheckout,
+  syncMercadoPagoOrder,
+  cancelMercadoPagoOrder,
 } from './v2-mercadopago.js';
+import { withV2PaymentLock } from './v2-payment-lock.js';
 
 export class V2CheckoutError extends Error {
   constructor(
@@ -1091,9 +1095,11 @@ async function completedCheckoutResponse(
           LEFT JOIN v2_checkout_holds h
             ON h.order_id = o.id
             AND h.status = 'active'
+            AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
           LEFT JOIN v2_payments pay
             ON pay.order_id = o.id
             AND pay.provider = 'mercado_pago'
+            AND pay.status = 'pending'
           WHERE o.id = ?
           ORDER BY
             h.id DESC,
@@ -1169,10 +1175,102 @@ async function completedCheckoutResponse(
 
       ready:
         Boolean(
-          row.checkout_url,
+          row.checkout_url && row.hold_token,
         ),
     },
   };
+}
+
+export async function resumeV2Payment(request, env, token, body = {}) {
+  const order = await env.DB.prepare(`SELECT o.*, c.email, p.payment_method, p.deposit_cents,
+    p.pricing_snapshot_json, u.status AS urgency_status FROM v2_orders o
+    JOIN v2_customers c ON c.id = o.customer_id JOIN v2_order_pricing p ON p.order_id = o.id
+    LEFT JOIN v2_urgency_requests u ON u.order_id = o.id WHERE o.public_token = ?`).bind(token).first();
+  if (!order) throw new V2CheckoutError('Pedido não encontrado.', { status: 404 });
+  return withV2PaymentLock(env.DB, order.id, async () => {
+    const payments = await env.DB.prepare(`SELECT provider_order_id, status FROM v2_payments
+      WHERE order_id = ? AND provider = 'mercado_pago' AND status IN ('pending', 'approved')
+      ORDER BY id DESC`).bind(order.id).all();
+    for (const p of payments.results || []) {
+      const result = await syncMercadoPagoOrder(env, p.provider_order_id, { lock: false });
+      if (result.approved) return { ok: true, alreadyPaid: true, capacityReview: !!result.capacityReview };
+    }
+    const current = await env.DB.prepare('SELECT status, briefing_status FROM v2_orders WHERE id = ?').bind(order.id).first();
+    if (!['awaiting_payment', 'urgency_approved'].includes(current.status) || current.briefing_status !== 'locked') {
+      throw new V2CheckoutError('O pedido não está disponível para pagamento.', { status: 409 });
+    }
+    const recovered = await completedCheckoutResponse(env.DB, order.id);
+    if (recovered?.payment.ready) return recovered;
+    const orphanHold = await env.DB.prepare(`SELECT id FROM v2_checkout_holds WHERE order_id = ?
+      AND status IN ('active', 'expired') AND NOT EXISTS
+      (SELECT 1 FROM v2_payments WHERE order_id = ?) ORDER BY id DESC LIMIT 1`).bind(order.id, order.id).first();
+    if (orphanHold) {
+      // Reuse the same provider idempotency key to recover an uncertain POST response.
+      const checkout = await createMercadoPagoCheckout(request, env, { orderId: order.id,
+        orderCode: order.order_code, publicToken: token, paymentMethod: order.payment_method,
+        amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email });
+      const checked = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
+      if (checked.approved) return { ok: true, alreadyPaid: true, capacityReview: !!checked.capacityReview };
+      if (checked.paymentStatus === 'pending') {
+        const existingHold = await env.DB.prepare(`SELECT status, expires_at FROM v2_checkout_holds WHERE id = ?`).bind(orphanHold.id).first();
+        if (existingHold.status === 'active' && existingHold.expires_at > nowIso()) return completedCheckoutResponse(env.DB, order.id);
+        await cancelMercadoPagoOrder(env, checkout.providerOrderId);
+        const cancelled = await syncMercadoPagoOrder(env, checkout.providerOrderId, { lock: false });
+        if (cancelled.approved) return { ok: true, alreadyPaid: true, capacityReview: !!cancelled.capacityReview };
+        if (cancelled.paymentStatus === 'pending') throw new V2CheckoutError('Aguarde a confirmação do pagamento anterior.', { status: 409 });
+      }
+    }
+    // A replacement checkout is only created after the previous provider order is terminal.
+    for (const p of payments.results || []) {
+      const live = await env.DB.prepare('SELECT status FROM v2_payments WHERE provider_order_id = ?').bind(p.provider_order_id).first();
+      if (live?.status === 'pending') {
+        try { await cancelMercadoPagoOrder(env, p.provider_order_id); }
+        catch (error) {
+          const checked = await syncMercadoPagoOrder(env, p.provider_order_id, { lock: false });
+          if (checked.approved) return { ok: true, alreadyPaid: true, capacityReview: !!checked.capacityReview };
+          if (checked.paymentStatus === 'pending') throw error;
+        }
+        const checked = await syncMercadoPagoOrder(env, p.provider_order_id, { lock: false });
+        if (checked.approved) return { ok: true, alreadyPaid: true, capacityReview: !!checked.capacityReview };
+        if (checked.paymentStatus === 'pending') throw new V2CheckoutError('Aguarde a confirmação do cancelamento anterior.', { status: 409 });
+      }
+    }
+    await env.DB.prepare(`UPDATE v2_checkout_holds SET status = 'cancelled', updated_at = ?
+      WHERE order_id = ? AND status = 'active'`).bind(nowIso(), order.id).run();
+    if (order.urgency_status === 'approved') {
+      await env.DB.prepare(`UPDATE v2_orders SET status = 'urgency_approved' WHERE id = ?
+        AND status = 'awaiting_payment' AND briefing_status = 'locked'`).bind(order.id).run();
+      return startApprovedV2UrgencyCheckout(request, env, token, body);
+    }
+    await validateV2DeliveryWindow(env.DB, { eventDate: order.event_date, start: order.delivery_start, end: order.delivery_end });
+    const snapshot = safeJsonObject(order.pricing_snapshot_json);
+    const plan = await planV2AllocationForWindow(env.DB, { start: order.delivery_start, end: order.delivery_end, pointsUnits: snapshot.pointsUnits });
+    if (!plan.fits) throw new V2CheckoutError('A janela perdeu capacidade. Entre em contato com a Libri para revisar a entrega.', { status: 409, code: 'delivery_window_unavailable' });
+    const { terms, termsHash, evidence } = await urgencyTermsEvidence(request, env, body);
+    const settings = await loadV2Settings(env.DB);
+    const minutes = Math.max(v2IntSetting(settings, 'checkout_hold_minutes', 30), v2IntSetting(settings, 'mercado_pago_order_expiry_minutes', 25) + 5);
+    const hold = await createCapacityHold(env.DB, {
+      orderId: order.id, allocation: plan.allocation,
+      expiresAt: new Date(Date.now() + minutes * 60000).toISOString(),
+      defaultCapacityUnits: v2IntSetting(settings, 'default_sellable_points_per_day_units', 400),
+    });
+    try {
+      await env.DB.prepare(`INSERT INTO v2_order_terms_acceptances
+        (order_id, terms_version, terms_hash, accepted_at, evidence_json) VALUES (?, ?, ?, ?, ?)`)
+        .bind(order.id, terms.version, termsHash, nowIso(), JSON.stringify(evidence)).run();
+      await createMercadoPagoCheckout(request, env, {
+        orderId: order.id, orderCode: order.order_code, publicToken: token,
+        paymentMethod: order.payment_method, amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email,
+      });
+      return completedCheckoutResponse(env.DB, order.id);
+    } catch (error) {
+      // Keep the reservation on uncertain network failures: the provider may have created the order.
+      if (error.status && error.status >= 400 && error.status < 500) {
+        await env.DB.prepare("UPDATE v2_checkout_holds SET status = 'cancelled' WHERE id = ?").bind(hold.holdId).run();
+      }
+      throw error;
+    }
+  });
 }
 
 export async function startV2Checkout(
@@ -1570,12 +1668,8 @@ export async function startV2Checkout(
         env.DB,
       );
 
-    const holdMinutes =
-      v2IntSetting(
-        settings,
-        'checkout_hold_minutes',
-        30,
-      );
+    const holdMinutes = Math.max(v2IntSetting(settings, 'checkout_hold_minutes', 30),
+      Math.min(180, Math.max(5, v2IntSetting(settings, 'mercado_pago_order_expiry_minutes', 25))) + 5);
 
     const defaultCapacityUnits =
       v2IntSetting(
@@ -1762,6 +1856,11 @@ export async function startV2Checkout(
     error
   ) {
     if (orderId) {
+      const retained = await env.DB.prepare('SELECT id FROM v2_checkout_holds WHERE order_id = ? LIMIT 1').bind(orderId).first();
+      if (retained) {
+        await completeCheckoutRequest(env.DB, requestKey, orderId);
+        return completedCheckoutResponse(env.DB, orderId);
+      }
       await env.DB
         .prepare(
           `
@@ -3022,7 +3121,7 @@ export async function startApprovedV2UrgencyCheckout(
   }
 
   const requestKey =
-    `urgency-payment:${rawRequestKey}`;
+    `urgency-payment:${publicToken}:${rawRequestKey}`;
 
   const claim =
     await claimCheckoutRequest(
@@ -3208,6 +3307,8 @@ export async function startApprovedV2UrgencyCheckout(
       );
     }
 
+    validateV2UrgencyWindow(deliveryStart, deliveryEnd, order.event_date);
+
     const paymentMethod =
       urgencyPaymentMethod(
         body.paymentMethod,
@@ -3300,12 +3401,8 @@ export async function startApprovedV2UrgencyCheckout(
         env.DB,
       );
 
-    const holdMinutes =
-      v2IntSetting(
-        settings,
-        'checkout_hold_minutes',
-        30,
-      );
+    const holdMinutes = Math.max(v2IntSetting(settings, 'checkout_hold_minutes', 30),
+      Math.min(180, Math.max(5, v2IntSetting(settings, 'mercado_pago_order_expiry_minutes', 25))) + 5);
 
     const defaultCapacityUnits =
       v2IntSetting(
@@ -3557,7 +3654,7 @@ export async function startApprovedV2UrgencyCheckout(
           )
           .first();
 
-      if (!payment) {
+      if (!payment && error.status && error.status >= 400 && error.status < 500) {
         await env.DB
           .prepare(
             `
@@ -3626,3 +3723,4 @@ export async function startApprovedV2UrgencyCheckout(
     );
   }
 }
+

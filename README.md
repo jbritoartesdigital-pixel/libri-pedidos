@@ -1,200 +1,43 @@
-# Libri Pedidos | Starter V1
+# LIBRI PEDIDOS V2
 
-Esqueleto funcional do Portal de Pedidos da Libri Convites.
+Portal V2 em /pedido, área da cliente em /meu-pedido/<token> e Admin em /admin-v2. O portal V1 em / e seu Admin em /admin/ permanecem disponíveis.
 
-## O que já está incluído
+## Fluxo implementado
 
-- Portal público sem login para a cliente
-- Rascunho salvo por etapas
-- Escolha Completo/Reduzido antes do preço
-- Escolha Vídeo/Interativo
-- Preços e adicionais carregados do D1
-- Cálculo automático de total, entrada de 50% e saldo
-- Briefing em 6 etapas curtas
-- Termos versionados
-- Autorização de divulgação separada
-- Pedido final `LIBRI-XXXX`
-- Tela final com Pix e um único botão para enviar fotos, referências e comprovante pelo WhatsApp
-- Painel `/admin/`
-- Tema e data da festa explícitos no painel
-- Status de fotos, entrada, mascote, falas, convite e saldo
-- Controle de rodadas de ajustes
-- Início, pausa e retomada do prazo
-- Histórico automático
-- Observações internas
-- Botões de WhatsApp
-- Destaque de festa no dia + botão de parabéns
-- Configuração de preços, Pix, WhatsApp e links de exemplo pelo painel
-- Urgência ativada somente pelo admin
+- Sem janela normal, a cliente solicita análise de encaixe, sem cobrança.
+- O Admin aprova com janela e capacidade conferidas, ou rejeita com motivo.
+- Urgência: adicional fixo de 30% sobre o subtotal depois de combo e cupom, arredondado em centavos.
+- Pix: entrada de 50%; cartão: pagamento integral. Capacidade revalidada e reservada antes do checkout.
+- Retomada na área privada: consulta o pagamento anterior, reutiliza checkout válido, cancela tentativa pendente sem reserva antes de substituí-la e preserva o mesmo pedido.
+- Idempotência por reserva e serialização por pedido protegem tentativas repetidas.
+- Mercado Pago Checkout Pro via Orders: POST /v1/orders, consulta autenticada, assinatura HMAC do webhook, validação do valor e referência.
+- A aprovação libera o briefing uma vez. Webhooks repetidos não reiniciam produção nem duplicam alocações.
+- Pagamento tardio sem capacidade gera alerta no Admin e mantém o briefing bloqueado para revisão.
+- Cron a cada cinco minutos: sincronização de pagamentos, notificações e Web Push, eventos do dia em São Paulo, expiração de reservas/prévias e limpeza de desafios e operações abandonadas.
+- Agenda administrativa restaurada: dias, períodos, sugestões de cascata, antecipação e liberação explícita de excedente.
+- D1, R2 privado, Static Assets, Passkey e Web Push mantidos. Nenhuma migration nova.
 
-## Valores iniciais cadastrados
+## Validação
 
-- Vídeo Completo: R$ 150
-- Vídeo Reduzido: R$ 75
-- Interativo Completo: R$ 180
-- Interativo Reduzido: R$ 105
-- Confirmação Libri: +R$ 25
-- Filtro: +R$ 30
-- Cena extra: +R$ 30
-- Pessoa extra: +R$ 30
-- Entrada: 50%
-- Urgência: +30%
-- Prazo padrão: 5 dias úteis
+Node 24 e pnpm 11.19.0:
 
-Todos podem ser alterados depois pelo painel.
-
-## Estrutura
-
-```text
-libri-pedidos/
-├── src/
-│   ├── index.js
-│   ├── lib/
-│   └── routes/
-├── public/
-│   ├── index.html
-│   ├── admin/
-│   ├── css/
-│   └── js/
-├── migrations/
-│   └── 0001_initial.sql
-├── .github/workflows/
-│   └── publicar.yml
-├── wrangler.jsonc
-└── package.json
+```sh
+pnpm install --frozen-lockfile
+pnpm run check
+pnpm test
+pnpm exec wrangler deploy --dry-run --outdir .wrangler/validation
 ```
 
-## 1. Criar o D1
+O check percorre todos os JS/MJS de src, public, scripts e tests, aplica node --check, confere imports relativos e bindings. Os testes aplicam as 12 migrations existentes em SQLite em memória e exercitam os fluxos V2 e rotas V1.
 
-No terminal do repositório:
+Mercado Pago é simulado nos testes: nenhum pagamento real é criado. Testes locais não confirmam credenciais, Webhooks, push em dispositivos ou configuração da conta Cloudflare.
 
-```bash
-npm install
-npx wrangler d1 create libri-pedidos-db
-```
+## Publicação
 
-Copie o `database_id` retornado e substitua:
+O workflow Validar Libri Pedidos V2 roda em push/PR, sem publicar. Publicar Portal de Pedidos permanece exclusivamente manual (workflow_dispatch), com validação, teste SQLite e backup D1 antes das migrations remotas.
 
-```text
-REPLACE_WITH_D1_DATABASE_ID
-```
+Não executar a publicação até a autorização da responsável. Commit na main não dispara deploy por estes workflows.
 
-no `wrangler.jsonc`.
+Consulte PROXIMOS_PASSOS.md para as configurações externas.
 
-## 2. Aplicar o banco localmente
-
-```bash
-npm run db:migrate:local
-npm run dev
-```
-
-## 3. Aplicar o banco em produção
-
-```bash
-npm run db:migrate:remote
-```
-
-O workflow `Publicar Portal de Pedidos` também aplica as migrations antes do deploy.
-
-## 4. GitHub Secrets
-
-No repositório, configurar:
-
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-
-Nunca colocar o token da Cloudflare no código.
-
-## 5. Publicação manual
-
-O workflow foi criado somente com `workflow_dispatch`.
-
-Fluxo esperado:
-
-```text
-GitHub
-→ Actions
-→ Publicar Portal de Pedidos
-→ Run workflow
-```
-
-## 6. Domínio
-
-Depois do primeiro deploy, configurar o Worker para responder em:
-
-```text
-pedidos.libriconvites.com.br
-```
-
-## 7. Proteção obrigatória do admin
-
-Antes de usar em produção, configure Cloudflare Access para proteger, no mínimo:
-
-```text
-pedidos.libriconvites.com.br/admin/*
-pedidos.libriconvites.com.br/api/admin/*
-```
-
-As duas rotas precisam ficar protegidas. Não basta proteger somente a página `/admin/`.
-
-A área pública do pedido continua sem login.
-
-## 8. Primeira configuração no painel
-
-Depois do deploy, entre em:
-
-```text
-https://pedidos.libriconvites.com.br/admin/
-```
-
-Abra **Configurações** e preencha:
-
-- chave Pix
-- nome do recebedor
-- WhatsApp da Libri
-- link do Interativo Completo
-- link do Interativo Reduzido
-- exemplos em vídeo, quando disponíveis
-- exemplo da Confirmação Libri
-- exemplo do filtro
-
-Os campos começam vazios de propósito para não inventar dados.
-
-## 9. Sobre o prazo
-
-O starter calcula dias úteis considerando segunda a sexta-feira.
-
-Feriados nacionais, estaduais e municipais ainda não são descontados automaticamente na V1. O painel permite registrar uma data de prazo manual quando necessário.
-
-## 10. Fotos e comprovante
-
-O Portal não armazena fotos da criança, referências nem comprovante.
-
-Depois do pedido ser finalizado, a cliente recebe um único botão para abrir o WhatsApp e enviar tudo na mesma conversa, já com o número `LIBRI-XXXX` na mensagem.
-
-## 11. Termos
-
-A migration cria a versão inicial `1.0` dos termos já discutidos no projeto.
-
-Antes de colocar o Portal em produção comercial, recomenda-se revisão jurídica dos termos, especialmente nas partes de cancelamento, direito de arrependimento, uso de imagem e dados de menores.
-
-Quando uma nova versão dos termos for criada, pedidos antigos continuam vinculados à versão aceita na data da contratação.
-
-## 12. Segurança e V1
-
-Este starter foi pensado para uma primeira versão simples. Antes de produção:
-
-- habilite Cloudflare Access no admin e na API administrativa
-- use HTTPS no domínio
-- mantenha os secrets somente no GitHub/Cloudflare
-- não publique arquivos de configuração contendo tokens
-- teste o fluxo inteiro com um pedido fictício
-
-## Testes feitos neste pacote
-
-- sintaxe de todos os arquivos JavaScript verificada com `node --check`
-- migration SQL executada em SQLite em memória
-- tabela `settings` criada com 20 configurações iniciais
-- termos `1.0` criados como versão ativa
-- cálculo de preço testado para combinações com adicionais e urgência
 

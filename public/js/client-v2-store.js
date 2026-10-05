@@ -1592,7 +1592,7 @@ function renderDelivery(
         nextLabel:
           options.length
             ? 'Continuar'
-            : 'Voltar',
+            : 'Solicitar análise de encaixe',
       })}
     </section>
   `;
@@ -1638,10 +1638,25 @@ function renderDelivery(
     )
     .addEventListener(
       'click',
-      () => {
+      async () => {
         if (!options.length) {
-          state.step = 3;
-          render();
+          const button = document.getElementById('nextBtn');
+          button.disabled = true;
+          try {
+            const result = await api('/api/v2/urgency/request', {
+              method: 'POST', body: JSON.stringify({ clientRequestId: state.clientRequestId,
+                customer: state.customer, event: state.event, selection: state.selection }),
+            });
+            localStorage.removeItem(STORE_KEY);
+            window.location.href = result.order.customerAreaPath;
+          } catch (error) {
+            button.disabled = false;
+            showToast(error.message);
+            if (error.data?.code === 'regular_delivery_available') {
+              state.delivery = error.data.details.delivery;
+              renderDelivery(state, render);
+            }
+          }
           return;
         }
 
@@ -2041,6 +2056,11 @@ function renderReview(
             !result.payment
               ?.checkoutUrl
           ) {
+            if (result.order?.customerAreaPath) {
+              localStorage.removeItem(STORE_KEY);
+              window.location.href = result.order.customerAreaPath;
+              return;
+            }
             throw new Error(
               'O pagamento não ficou disponível. Tente novamente.',
             );
@@ -2539,3 +2559,4 @@ export async function startManualOrder(
 
   render();
 }
+

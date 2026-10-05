@@ -3,6 +3,7 @@ import {
   json,
   readJson,
 } from '../lib/http.js';
+import { resumeV2Payment } from '../lib/v2-checkout.js';
 
 import {
   deleteV2BriefingUpload,
@@ -42,6 +43,12 @@ export async function handleCustomerAreaV2Api(
 ) {
   const method =
     request.method.toUpperCase();
+
+  const paymentMatch = url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/payment$/);
+  if (paymentMatch && method === 'POST') {
+    try { return json(await resumeV2Payment(request, env, paymentMatch[1], await readJson(request))); }
+    catch (error) { return routeError(error, 502); }
+  }
 
   const areaMatch =
     url.pathname.match(
@@ -267,3 +274,4 @@ export async function handleCustomerAreaV2Api(
 
   return null;
 }
+

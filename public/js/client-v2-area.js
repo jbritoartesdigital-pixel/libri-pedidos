@@ -6,6 +6,7 @@ import {
   loading,
   modal,
   money,
+  randomId,
   setHelp,
   setSubtitle,
   showToast,
@@ -377,6 +378,21 @@ function summaryHtml(
           Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.
         </p>
       </div>
+
+      ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
+      ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
+      ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
+        <section class="card">
+          <h2>${area.urgency ? 'Pagamento do encaixe aprovado' : 'Retomar pagamento'}</h2>
+          <p>${area.urgency ? 'Total com adicional de 30% após os descontos.' : 'Seu pedido e sua janela serão conferidos antes do pagamento.'}</p>
+          <p>Total: ${money(area.payment.totalCents)}</p>
+          ${area.urgency && area.order.status === 'urgency_approved' ? `
+            <label><input type="radio" name="resumeMethod" value="pix" checked> Pix: entrada de 50%</label>
+            <label><input type="radio" name="resumeMethod" value="card"> Cartão: 100%</label>` : `<p>${area.payment.method === 'pix' ? 'Pix: entrada de 50%' : 'Cartão: 100%'}</p>`}
+          <label><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label>
+          <button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>
+          <button class="btn btn-primary" id="resumePayment">Ir para o pagamento</button>
+        </section>` : ''}
 
       <dl class="review-list">
         <div class="review-line">
@@ -953,6 +969,33 @@ export async function startCustomerArea(
           );
         },
       );
+
+    let paymentTerms = null;
+    const loadTerms = async () => paymentTerms || (paymentTerms = (await api('/api/v2/terms/current')).terms);
+    document.getElementById('resumeReadTerms')?.addEventListener('click', async () => {
+      try { const terms = await loadTerms(); modal(`Condições • ${terms.version}`, `<pre>${esc(terms.body)}</pre>`); }
+      catch (error) { showToast(error.message); }
+    });
+    document.getElementById('resumePayment')?.addEventListener('click', async event => {
+      if (!document.getElementById('resumeTerms').checked) { showToast('Leia e aceite as condições.'); return; }
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const terms = await loadTerms();
+        const result = await api(`/api/v2/customer-area/${token}/payment`, {
+          method: 'POST', body: JSON.stringify({ clientRequestId: randomId(), termsAccepted: true,
+            termsVersion: terms.version, paymentMethod: document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method }),
+        });
+        if (result.alreadyPaid) {
+          area = await loadArea(); await render();
+          showToast(result.capacityReview ? 'Pagamento recebido. A Libri está revisando sua janela.' : 'Pagamento confirmado.');
+        } else if (result.payment?.checkoutUrl) window.location.href = result.payment.checkoutUrl;
+        else throw new Error('Pagamento indisponível. Atualize o pedido.');
+      } catch (error) {
+        button.disabled = false; showToast(error.message);
+        if (error.data?.code === 'terms_changed') { paymentTerms = null; document.getElementById('resumeTerms').checked = false; }
+      }
+    });
 
     bindBriefing();
     bindPreview();
@@ -1550,3 +1593,4 @@ export async function startCustomerArea(
 
   await render();
 }
+

@@ -621,11 +621,7 @@ export async function calculateCommercialV2Quote(
 
   const urgencyPercent =
     urgencyApproved
-      ? v2IntSetting(
-        settings,
-        'urgency_percent',
-        30,
-      )
+      ? 30
       : 0;
 
   const urgencyAmountCents =
@@ -661,11 +657,7 @@ export async function calculateCommercialV2Quote(
     paymentMethod
     === 'card'
       ? 100
-      : v2IntSetting(
-        settings,
-        'pix_deposit_percent',
-        50,
-      );
+      : 50;
 
   const depositCents =
     Math.round(
@@ -817,3 +809,4 @@ export async function commitV2CouponUse(
       > 0,
   };
 }
+

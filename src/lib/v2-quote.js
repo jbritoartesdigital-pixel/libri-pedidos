@@ -158,11 +158,7 @@ export async function calculateV2Quote(
 
   const urgencyPercent =
     urgencyApproved
-      ? v2IntSetting(
-        settings,
-        'urgency_percent',
-        30,
-      )
+      ? 30
       : 0;
 
   const urgencyAmountCents =
@@ -188,12 +184,7 @@ export async function calculateV2Quote(
       ? selection.paymentMethod
       : null;
 
-  const pixDepositPercent =
-    v2IntSetting(
-      settings,
-      'pix_deposit_percent',
-      50,
-    );
+  const pixDepositPercent = 50;
 
   const depositPercent =
     paymentMethod
@@ -280,3 +271,4 @@ export async function calculateV2Quote(
       / 100,
   };
 }
+

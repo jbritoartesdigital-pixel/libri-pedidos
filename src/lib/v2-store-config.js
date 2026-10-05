@@ -60,16 +60,16 @@ const INTEGER_SETTINGS =
     [
       'urgency_percent',
       {
-        min: 0,
-        max: 200,
+        min: 30,
+        max: 30,
       },
     ],
 
     [
       'pix_deposit_percent',
       {
-        min: 1,
-        max: 100,
+        min: 50,
+        max: 50,
       },
     ],
 
@@ -1130,11 +1130,7 @@ export async function getV2StoreConfig(
           || 40,
 
         urgencyPercent:
-          Number.parseInt(
-            settings.urgency_percent,
-            10,
-          )
-          || 30,
+          30,
 
         checkoutHoldMinutes:
           Number.parseInt(
@@ -1162,11 +1158,7 @@ export async function getV2StoreConfig(
 
       checkout: {
         pixDepositPercent:
-          Number.parseInt(
-            settings.pix_deposit_percent,
-            10,
-          )
-          || 50,
+          50,
       },
     },
   };
@@ -3627,3 +3619,4 @@ export async function publishV2ContractTemplate(
       true,
   };
 }
+

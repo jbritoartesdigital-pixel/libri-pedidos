@@ -1068,6 +1068,7 @@ export async function dispatchPendingV2Push(
             ON p.event_code = n.event_code
           WHERE
             n.push_eligible = 1
+            AND n.resolved_at IS NULL
             AND n.push_sent_at IS NULL
             AND n.created_at >= ?
             AND COALESCE(
@@ -1308,6 +1309,7 @@ export async function createTodayEventNotifications(
           WHERE
             o.event_date = ?
             AND o.status != 'cancelled'
+            AND EXISTS (SELECT 1 FROM v2_payments pay WHERE pay.order_id = o.id AND pay.status = 'approved')
           ORDER BY
             o.created_at
         `,
@@ -1442,3 +1444,4 @@ export async function sendV2TestPush(
     },
   );
 }
+

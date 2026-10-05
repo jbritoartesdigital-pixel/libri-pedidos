@@ -15,14 +15,20 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           package-manager-cache: false
 
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Instalar dependências
-        run: npm install --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Validar sintaxe JavaScript
         run: npm run check
+
+      - name: Testar fluxos V2 em SQLite
+        run: npm test
 
       - name: Validar imports relativos JavaScript
         run: |
@@ -208,6 +214,9 @@ jobs:
             "ADMIN_PASSKEY_RECOVERY_SECRET" \
             "$ADMIN_PASSKEY_RECOVERY_SECRET"
 
+          put_secret "ADMIN_PASSWORD" "$ADMIN_PASSWORD"
+          put_secret "ADMIN_SESSION_SECRET" "$ADMIN_SESSION_SECRET"
+
           put_secret \
             "VAPID_PUBLIC_KEY" \
             "$VAPID_PUBLIC_KEY"
@@ -221,6 +230,8 @@ jobs:
           MERCADO_PAGO_ACCESS_TOKEN: ${{ secrets.MERCADO_PAGO_ACCESS_TOKEN }}
           MERCADO_PAGO_WEBHOOK_SECRET: ${{ secrets.MERCADO_PAGO_WEBHOOK_SECRET }}
           ADMIN_PASSKEY_RECOVERY_SECRET: ${{ secrets.ADMIN_PASSKEY_RECOVERY_SECRET }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
 
@@ -230,3 +241,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+

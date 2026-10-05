@@ -3,6 +3,7 @@ import {
   json,
   readJson,
 } from '../lib/http.js';
+import { decideV2Urgency } from '../lib/v2-urgency-admin.js';
 
 import {
   createV2ManualOrder,
@@ -56,6 +57,13 @@ export async function handleAdminOrdersV2Api(
 
   const path =
     url.pathname;
+
+  const urgencyMatch = path.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/urgency$/);
+  if (method === 'POST' && urgencyMatch) {
+    try {
+      return json({ ok: true, result: await decideV2Urgency(env.DB, urgencyMatch[1], await readJson(request)) });
+    } catch (error) { return routeError(error, Number(error.status) || 422); }
+  }
 
   if (
     method
@@ -262,3 +270,4 @@ export async function handleAdminOrdersV2Api(
 
   return null;
 }
+

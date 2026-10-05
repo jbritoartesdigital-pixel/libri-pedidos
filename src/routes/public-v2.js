@@ -18,7 +18,7 @@ import {
 
 import {
   requestV2UrgencyReview,
-  startApprovedV2UrgencyCheckout,
+  resumeV2Payment,
   startV2Checkout,
   V2CheckoutError,
 } from '../lib/v2-checkout.js';
@@ -683,7 +683,7 @@ export async function handlePublicV2Api(
         );
 
       const result =
-        await startApprovedV2UrgencyCheckout(
+        await resumeV2Payment(
           request,
           env,
           urgencyCheckoutMatch[1],
@@ -740,3 +740,4 @@ export async function handlePublicV2Api(
 
   return null;
 }
+

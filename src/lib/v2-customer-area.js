@@ -1,3 +1,5 @@
+import { syncMercadoPagoOrder } from './v2-mercadopago.js';
+
 import {
   fail,
   nowIso,
@@ -166,6 +168,8 @@ function statusLabel(
   status,
 ) {
   return {
+    awaiting_urgency_decision: 'Encaixe em análise',
+    urgency_approved: 'Encaixe aprovado; pagamento disponível',
     awaiting_payment:
       'Aguardando pagamento',
     briefing_pending:
@@ -2218,7 +2222,7 @@ export async function getV2CustomerArea(
   env,
   token,
 ) {
-  const context =
+  let context =
     await contextByToken(
       env.DB,
       token,
@@ -2228,11 +2232,26 @@ export async function getV2CustomerArea(
     return null;
   }
 
+  if (env.MERCADO_PAGO_ACCESS_TOKEN && context.order.status === 'awaiting_payment') {
+    const payment = await env.DB.prepare(`SELECT provider_order_id FROM v2_payments
+      WHERE order_id = ? AND provider = 'mercado_pago' AND status IN ('pending', 'approved')
+      ORDER BY id DESC LIMIT 1`).bind(context.order.id).first();
+    if (payment?.provider_order_id) {
+      try {
+        await syncMercadoPagoOrder(env, payment.provider_order_id);
+        context = await contextByToken(env.DB, token);
+      } catch (error) { console.error('Customer payment sync deferred', error.message); }
+    }
+  }
+
   const schema =
     buildSchema(
       context,
       context.briefing.data,
     );
+
+  const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent
+    FROM v2_urgency_requests WHERE order_id = ?`).bind(context.order.id).first();
 
   const progress =
     context.order.briefing_status
@@ -2289,6 +2308,8 @@ export async function getV2CustomerArea(
       source:
         context.order.source,
     },
+
+    urgency: urgency ? { status: urgency.status, note: urgency.decision_note, percent: 30 } : null,
 
     customer: {
       name:
@@ -3360,3 +3381,4 @@ export async function submitV2Briefing(
     },
   };
 }
+

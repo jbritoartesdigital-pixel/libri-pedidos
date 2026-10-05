@@ -71,7 +71,7 @@ export function renderStoreSettings(
 
         <div class="field">
           <label for="urgencyPercent">Urgência %</label>
-          <input id="urgencyPercent" class="input" type="number" value="${esc(s.agenda.urgencyPercent)}">
+          <input id="urgencyPercent" class="input" type="number" value="30" readonly>
         </div>
 
         <div class="field">
@@ -390,3 +390,4 @@ export function renderStoreGallery(
     </section>
   `;
 }
+

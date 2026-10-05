@@ -1,6 +1,7 @@
 import {
   nowIso,
 } from './http.js';
+import { withV2PaymentLock } from './v2-payment-lock.js';
 
 const SAO_PAULO =
   'America/Sao_Paulo';
@@ -187,7 +188,7 @@ function listDays(
         + 1,
     },
     (
-      ,
+      _value,
       index,
     ) =>
       addDays(
@@ -1312,4 +1313,113 @@ export async function getV2AgendaRange(
       sellableCapacityUnits:
         defaults.sellable,
 
-      internalB
+      internalBufferUnits: defaults.buffer,
+    },
+    days,
+  };
+}
+
+export async function setV2AgendaDay(db, day, body = {}) {
+  parseIsoDay(day);
+  const defaults = await defaultCapacities(db);
+  const sellable = integerInRange(body.sellableCapacityUnits ?? defaults.sellable, { label: 'Capacidade', min: 0, max: 100000 });
+  const buffer = integerInRange(body.internalBufferUnits ?? defaults.buffer, { label: 'Buffer', min: 0, max: 100000 });
+  const stamp = nowIso();
+  const reserved = await db.prepare(`SELECT
+    COALESCE((SELECT SUM(points_units) FROM v2_agenda_allocations WHERE day = ?), 0) +
+    COALESCE((SELECT SUM(a.points_units) FROM v2_checkout_hold_allocations a JOIN v2_checkout_holds h ON h.id = a.hold_id
+      WHERE a.day = ? AND h.status = 'active' AND h.expires_at > ?), 0) AS units`).bind(day, day, stamp).first();
+  if (Number(reserved.units) > (body.blocked ? 0 : sellable)) throw new Error('O dia já tem capacidade reservada. Revise os pedidos antes de reduzir ou bloquear.');
+  await db.prepare(`INSERT INTO v2_agenda_days(day, sellable_capacity_units, internal_buffer_units, blocked, internal_note, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(day) DO UPDATE SET sellable_capacity_units = excluded.sellable_capacity_units,
+    internal_buffer_units = excluded.internal_buffer_units, blocked = excluded.blocked,
+    internal_note = excluded.internal_note, updated_at = excluded.updated_at`)
+    .bind(day, sellable, buffer, body.blocked ? 1 : 0, cleanText(body.internalNote), stamp).run();
+  return (await getV2AgendaRange(db, { start: day, end: day })).days[0];
+}
+
+export async function setV2AgendaPeriod(db, { start, end, blocked, internalNote = '' }) {
+  parseIsoDay(start); parseIsoDay(end);
+  if (diffDays(start, end) < 0 || diffDays(start, end) > 180) throw new Error('Período inválido.');
+  const range = await getV2AgendaRange(db, { start, end });
+  if (blocked && range.days.some(x => x.productionUnits + x.cascadeReservedUnits + x.checkoutHeldUnits > 0)) {
+    throw new Error('O período tem pedidos ou pagamentos reservados. Revise a agenda antes de bloquear.');
+  }
+  await db.batch(range.days.map(x => db.prepare(`INSERT INTO v2_agenda_days
+    (day, sellable_capacity_units, internal_buffer_units, blocked, internal_note, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(day) DO UPDATE SET blocked = excluded.blocked, internal_note = excluded.internal_note, updated_at = excluded.updated_at`)
+    .bind(x.day, x.sellableCapacityUnits, x.internalBufferUnits, blocked ? 1 : 0, cleanText(internalNote), nowIso())));
+  return { updatedDays: range.days.length };
+}
+
+export async function getV2CascadeSuggestions(db) {
+  const sources = await db.prepare(`SELECT DISTINCT o.id, o.order_code FROM v2_orders o JOIN v2_agenda_allocations a
+    ON a.order_id = o.id WHERE o.status = 'finalized' AND a.day >= ? ORDER BY o.id`).bind(todayInSaoPaulo()).all();
+  const suggestions = [];
+  for (const source of sources.results || []) {
+    const pool = await futureAllocations(db, source.id);
+    if (!pool.length) continue;
+    const candidate = await bestCandidateForPool(db, source.id, pool[0].day);
+    if (!candidate) continue;
+    const target = await futureAllocations(db, candidate.id, { ascending: false });
+    const plan = pairCascadeMoves(pool, target);
+    if (plan.movedUnits) suggestions.push({ sourceOrderCode: source.order_code,
+      targetOrderCode: candidate.code, pointsUnits: plan.movedUnits });
+  }
+  return { suggestions };
+}
+
+export async function anticipateV2Production(db, { sourceOrderCode, targetOrderCode, pointsUnits = null }) {
+  const source = await orderByCode(db, sourceOrderCode);
+  const target = await orderByCode(db, targetOrderCode);
+  if (!source || !target || source.id === target.id) throw new Error('Confira os pedidos de origem e destino.');
+  const ids = [source.id, target.id].sort((a, b) => a - b);
+  return withV2PaymentLock(db, ids[0], () => withV2PaymentLock(db, ids[1], async () => {
+    const freshSource = await orderByCode(db, sourceOrderCode);
+    const freshTarget = await orderByCode(db, targetOrderCode);
+    if (freshSource.status !== 'finalized' || freshTarget.status !== 'ready_for_production'
+      || freshTarget.briefing_status !== 'completed' || !await hasApprovedPayment(db, target.id)) {
+      throw new Error('A origem precisa estar finalizada e o destino pago, com briefing completo.');
+    }
+    const pool = await futureAllocations(db, source.id);
+    const targetRows = await futureAllocations(db, target.id, { ascending: false });
+    const units = pointsUnits === null ? null : integerInRange(pointsUnits, { label: 'Points', min: 1, max: 100000 });
+    const plan = pairCascadeMoves(pool, targetRows, units);
+    if (!plan.movedUnits) throw new Error('Não há produção posterior para antecipar.');
+    const sourceTaken = aggregateTaken(plan.pairs, 'poolAllocationId');
+    const targetTaken = aggregateTaken(plan.pairs, 'targetAllocationId');
+    const stamp = nowIso();
+    await db.batch([
+      ...pool.filter(x => sourceTaken.has(x.id)).map(x => mutationForAllocation(db, x, sourceTaken.get(x.id))),
+      ...targetRows.filter(x => targetTaken.has(x.id)).map(x => mutationForAllocation(db, x, targetTaken.get(x.id))),
+      ...[...aggregateInsertions(plan.pairs, 'poolDay')].map(([day, amount]) =>
+        db.prepare(`INSERT INTO v2_agenda_allocations(order_id, day, points_units, allocation_type, created_at)
+          VALUES (?, ?, ?, 'anticipated', ?)`).bind(target.id, day, amount, stamp)),
+      // Released later days stay inside the cascade pool until explicitly published.
+      ...[...aggregateInsertions(plan.pairs, 'targetDay')].map(([day, amount]) =>
+        db.prepare(`INSERT INTO v2_agenda_allocations(order_id, day, points_units, allocation_type, created_at)
+          VALUES (?, ?, ?, 'anticipated', ?)`).bind(source.id, day, amount, stamp)),
+      db.prepare(`INSERT INTO v2_order_history(order_id, action_code, description, metadata_json, created_at)
+        VALUES (?, 'production_anticipated', 'Produção antecipada pela cascata.', ?, ?)`)
+        .bind(target.id, JSON.stringify({ sourceOrderCode, pointsUnits: plan.movedUnits }), stamp),
+    ]);
+    return { movedUnits: plan.movedUnits };
+  }));
+}
+
+export async function releaseV2CascadeSurplus(db, { sourceOrderCode, force = false }) {
+  const source = await orderByCode(db, sourceOrderCode);
+  if (!source || source.status !== 'finalized') throw new Error('Pedido de origem não está finalizado.');
+  return withV2PaymentLock(db, source.id, async () => {
+    const pool = await futureAllocations(db, source.id);
+    const suggestion = pool.length ? await bestCandidateForPool(db, source.id, pool[0].day) : null;
+    if (suggestion && !force) throw Object.assign(new Error('Há um pedido que pode ser antecipado antes de publicar a capacidade.'), { suggestion });
+    await db.batch([
+      db.prepare('DELETE FROM v2_agenda_allocations WHERE order_id = ? AND day >= ?').bind(source.id, todayInSaoPaulo()),
+      db.prepare(`INSERT INTO v2_order_history(order_id, action_code, description, metadata_json, created_at)
+        VALUES (?, 'cascade_capacity_released', 'Capacidade excedente publicada.', ?, ?)`)
+        .bind(source.id, JSON.stringify({ pointsUnits: totalUnits(pool), force }), nowIso()),
+    ]);
+    return { releasedUnits: totalUnits(pool) };
+  });
+}

@@ -16,6 +16,11 @@ import {
   renderStoreGallery,
 } from './admin-v2-store-settings.js';
 
+import {
+  renderStoreCombos,
+  renderStoreCoupons,
+} from './admin-v2-store-commercial.js';
+
 export async function renderStore() {
   setViewMeta(
     'Loja',
@@ -34,6 +39,8 @@ export async function renderStore() {
     <div class="settings-tabs">
       <button class="settings-tab active" data-store-tab="products">Produtos</button>
       <button class="settings-tab" data-store-tab="addons">Adicionais</button>
+      <button class="settings-tab" data-store-tab="combos">Combos</button>
+      <button class="settings-tab" data-store-tab="coupons">Cupons</button>
       <button class="settings-tab" data-store-tab="settings">Configurações</button>
       <button class="settings-tab" data-store-tab="terms">Termos</button>
       <button class="settings-tab" data-store-tab="contracts">Modelo de contrato</button>
@@ -78,6 +85,28 @@ export async function renderStore() {
         tab === 'addons'
       ) {
         renderStoreAddons(
+          panel,
+          config,
+          renderStore,
+        );
+        return;
+      }
+
+      if (
+        tab === 'combos'
+      ) {
+        renderStoreCombos(
+          panel,
+          config,
+          renderStore,
+        );
+        return;
+      }
+
+      if (
+        tab === 'coupons'
+      ) {
+        renderStoreCoupons(
           panel,
           config,
           renderStore,

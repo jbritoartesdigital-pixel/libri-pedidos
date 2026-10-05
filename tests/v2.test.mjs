@@ -63,6 +63,12 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   mp.approve(payment.payment.providerOrderId);
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
   const area = await getV2CustomerArea(e, token); assert.equal(area.briefing.locked, false);
+  assert.equal(area.payment.paidCents, 4551); assert.equal(area.payment.remainingCents, 4550);
+  DB.sqlite.prepare("UPDATE v2_settings SET value='pix-teste' WHERE key='balance_pix_key'").run();
+  DB.sqlite.prepare("UPDATE v2_settings SET value='Libri Teste' WHERE key='balance_pix_recipient_name'").run();
+  DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending'").run();
+  const balanceArea = await getV2CustomerArea(e, token);
+  assert.deepEqual(balanceArea.payment.balancePix, { key: 'pix-teste', recipient: 'Libri Teste' });
   DB.sqlite.prepare("UPDATE v2_orders SET status = 'in_production', briefing_status = 'completed'").run();
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders').get().status, 'in_production');

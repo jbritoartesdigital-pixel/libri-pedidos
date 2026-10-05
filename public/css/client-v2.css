@@ -986,6 +986,14 @@ a {
     position: static;
   }
 
+  .customer-layout.payment-first > div {
+    order: 1;
+  }
+
+  .customer-layout.payment-first .customer-sidebar {
+    order: 2;
+  }
+
   .review-line {
     grid-template-columns: 1fr;
     gap: 4px;

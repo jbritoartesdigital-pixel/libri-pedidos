@@ -2299,7 +2299,17 @@ async function partiesForDay(
             ON c.id = o.customer_id
           WHERE
             o.event_date = ?
-            AND o.status != 'cancelled'
+            AND o.status IN (
+              'briefing_pending',
+              'ready_for_production',
+              'in_production',
+              'waiting_customer',
+              'adjustments',
+              'approved',
+              'balance_pending',
+              'ready_for_delivery',
+              'finalized'
+            )
           ORDER BY
             o.created_at
         `,
@@ -2362,8 +2372,16 @@ async function upcomingParties(
             ON c.id = o.customer_id
           WHERE
             o.event_date > ?
-            AND o.status NOT IN (
-              'cancelled'
+            AND o.status IN (
+              'briefing_pending',
+              'ready_for_production',
+              'in_production',
+              'waiting_customer',
+              'adjustments',
+              'approved',
+              'balance_pending',
+              'ready_for_delivery',
+              'finalized'
             )
           ORDER BY
             o.event_date,

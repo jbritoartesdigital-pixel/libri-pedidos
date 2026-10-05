@@ -852,6 +852,160 @@ function renderProducts(
     );
 }
 
+function comboDiscountText(
+  combo,
+) {
+  if (
+    combo.discountType
+    === 'percent'
+  ) {
+    return `Economize ${Number(combo.discountValue || 0)}%`;
+  }
+
+  return `Economize ${money(Number(combo.discountValue || 0))}`;
+}
+
+function comboRequirementsSatisfied(
+  state,
+  combo,
+) {
+  const selected =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const addons =
+    state.catalog.addons
+    || [];
+
+  return (combo.items || [])
+    .filter(
+      (item) =>
+        item.required !== false,
+    )
+    .every(
+      (item) => {
+        if (
+          item.itemType === 'addon'
+        ) {
+          return selected.has(
+            item.itemCode,
+          );
+        }
+
+        if (
+          item.itemType
+          === 'addon_group'
+        ) {
+          return addons.some(
+            (addon) =>
+              addon.group
+                === item.itemCode
+              && selected.has(
+                addon.code,
+              ),
+          );
+        }
+
+        return true;
+      },
+    );
+}
+
+function applyComboDefaults(
+  state,
+  combo,
+) {
+  const selected =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const addons =
+    state.catalog.addons
+    || [];
+
+  for (
+    const item
+    of combo.items
+    || []
+  ) {
+    if (
+      item.required === false
+    ) {
+      continue;
+    }
+
+    if (
+      item.itemType
+      === 'addon'
+    ) {
+      selected.add(
+        item.itemCode,
+      );
+
+      continue;
+    }
+
+    if (
+      item.itemType
+      === 'addon_group'
+    ) {
+      const current =
+        addons.find(
+          (addon) =>
+            addon.group
+              === item.itemCode
+            && selected.has(
+              addon.code,
+            ),
+        );
+
+      if (current) {
+        continue;
+      }
+
+      const defaultAddon =
+        addons
+          .filter(
+            (addon) =>
+              addon.group
+              === item.itemCode,
+          )
+          .sort(
+            (
+              a,
+              b,
+            ) =>
+              Number(
+                a.priceCents
+                || 0,
+              )
+              - Number(
+                b.priceCents
+                || 0,
+              ),
+          )
+          ?.[0];
+
+      if (
+        defaultAddon
+      ) {
+        selected.add(
+          defaultAddon.code,
+        );
+      }
+    }
+  }
+
+  state.selection.addonCodes =
+    [
+      ...selected,
+    ];
+}
+
 function renderConfiguration(
   state,
   render,
@@ -1013,7 +1167,25 @@ function renderConfiguration(
                 Combos
               </h2>
 
+              <p class="muted" style="margin-top:-4px">
+                Ao escolher um combo, os adicionais básicos necessários são marcados automaticamente. Você ainda pode trocar a versão de Save, Lembrete ou Moments.
+              </p>
+
               <div class="grid two">
+                <label class="choice-card ${state.selection.comboCode ? '' : 'selected'}">
+                  <input
+                    type="radio"
+                    name="combo"
+                    value=""
+                    ${state.selection.comboCode ? '' : 'checked'}
+                  >
+
+                  <span class="choice-main">
+                    <strong>Sem combo</strong>
+                    <small>Continuar somente com os itens escolhidos.</small>
+                  </span>
+                </label>
+
                 ${state.catalog.combos.map(
                   (combo) => `
                     <label class="choice-card ${
@@ -1036,7 +1208,10 @@ function renderConfiguration(
 
                       <span class="choice-main">
                         <strong>${esc(combo.name)}</strong>
-                        <small>${esc(combo.description || '')}</small>
+                        <small>
+                          ${esc(combo.description || '')}
+                          ${combo.discountValue ? ` • ${esc(comboDiscountText(combo))}` : ''}
+                        </small>
                       </span>
                     </label>
                   `,
@@ -1132,6 +1307,29 @@ function renderConfiguration(
                 ...set,
               ];
 
+            const activeCombo =
+              (state.catalog.combos || [])
+                .find(
+                  (combo) =>
+                    combo.code
+                    === state.selection.comboCode,
+                );
+
+            if (
+              activeCombo
+              && !comboRequirementsSatisfied(
+                state,
+                activeCombo,
+              )
+            ) {
+              state.selection.comboCode =
+                '';
+
+              showToast(
+                'Combo removido porque um item necessário foi desmarcado.',
+              );
+            }
+
             persist(state);
             renderConfiguration(
               state,
@@ -1154,7 +1352,27 @@ function renderConfiguration(
             state.selection.comboCode =
               input.value;
 
+            const combo =
+              (state.catalog.combos || [])
+                .find(
+                  (item) =>
+                    item.code
+                    === input.value,
+                );
+
+            if (combo) {
+              applyComboDefaults(
+                state,
+                combo,
+              );
+            }
+
             persist(state);
+
+            renderConfiguration(
+              state,
+              render,
+            );
           },
         );
       },

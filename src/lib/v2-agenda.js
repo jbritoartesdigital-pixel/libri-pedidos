@@ -1,9 +1,7 @@
 import {
-  nowIso,
-} from './http.js';
-
-const SAO_PAULO =
-  'America/Sao_Paulo';
+  loadV2Settings,
+  v2IntSetting,
+} from './v2-catalog.js';
 
 const DAY_MS =
   24
@@ -11,24 +9,7 @@ const DAY_MS =
   * 60
   * 1000;
 
-function cleanText(
-  value,
-  maxLength = 1000,
-) {
-  return String(
-    value
-    ?? '',
-  )
-    .trim()
-    .slice(
-      0,
-      maxLength,
-    );
-}
-
-function isIsoDay(
-  value,
-) {
+function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/
     .test(
       String(
@@ -38,16 +19,10 @@ function isIsoDay(
     );
 }
 
-function parseIsoDay(
-  value,
-) {
-  if (
-    !isIsoDay(
-      value,
-    )
-  ) {
+function parseIsoDay(value) {
+  if (!isIsoDate(value)) {
     throw new Error(
-      'Data inválida.',
+      'Informe uma data válida.',
     );
   }
 
@@ -62,72 +37,53 @@ function parseIsoDay(
     )
   ) {
     throw new Error(
-      'Data inválida.',
+      'Informe uma data válida.',
     );
   }
 
   return date;
 }
 
-function formatIsoDay(
-  date,
-) {
+function formatIsoDay(date) {
   return date
     .toISOString()
-    .slice(
-      0,
-      10,
-    );
+    .slice(0, 10);
 }
 
 function addDays(
-  day,
+  date,
   amount,
 ) {
-  const date =
-    typeof day
-    === 'string'
-      ? parseIsoDay(
-        day,
-      )
-      : day;
-
-  return formatIsoDay(
-    new Date(
-      date.getTime()
-      + amount
-      * DAY_MS,
+  return new Date(
+    date.getTime()
+    + (
+      amount
+      * DAY_MS
     ),
   );
 }
 
 function diffDays(
-  start,
-  end,
+  a,
+  b,
 ) {
   return Math.round(
     (
-      parseIsoDay(
-        end,
-      )
-        .getTime()
-      - parseIsoDay(
-        start,
-      )
-        .getTime()
+      a.getTime()
+      - b.getTime()
     )
     / DAY_MS,
   );
 }
 
-function todayInSaoPaulo() {
+function currentBrazilDay() {
   const parts =
     new Intl
       .DateTimeFormat(
         'en-US',
         {
           timeZone:
-            SAO_PAULO,
+            'America/Sao_Paulo',
 
           year:
             'numeric',
@@ -153,856 +109,88 @@ function todayInSaoPaulo() {
       ),
     );
 
-  return `${
-    map.year
-  }-${
-    map.month
-  }-${
-    map.day
-  }`;
+  return parseIsoDay(
+    `${
+      map.year
+    }-${
+      map.month
+    }-${
+      map.day
+    }`,
+  );
 }
 
 function listDays(
   start,
   end,
 ) {
-  const total =
-    diffDays(
-      start,
-      end,
-    );
+  const result = [];
 
-  if (
-    total < 0
-  ) {
-    throw new Error(
-      'Período inválido.',
-    );
-  }
+  for (
+    let cursor =
+      new Date(
+        start.getTime(),
+      );
 
-  return Array.from(
-    {
-      length:
-        total
-        + 1,
-    },
-    (
-      ,
-      index,
-    ) =>
+    cursor <= end;
+
+    cursor =
       addDays(
-        start,
-        index,
-      ),
-  );
-}
-
-function integerInRange(
-  value,
-  {
-    min,
-    max,
-    label,
-  },
-) {
-  const parsed =
-    Number.parseInt(
-      value,
-      10,
-    );
-
-  if (
-    !Number.isInteger(
-      parsed,
-    )
-    || parsed < min
-    || parsed > max
+        cursor,
+        1,
+      )
   ) {
-    throw new Error(
-      `${label} inválido.`,
-    );
-  }
-
-  return parsed;
-}
-
-async function settingInt(
-  db,
-  key,
-  fallback,
-) {
-  const row =
-    await db
-      .prepare(
-        `
-          SELECT value
-          FROM v2_settings
-          WHERE key = ?
-          LIMIT 1
-        `,
-      )
-      .bind(
-        key,
-      )
-      .first();
-
-  const parsed =
-    Number.parseInt(
-      row
-        ?.value,
-      10,
-    );
-
-  return Number.isInteger(
-    parsed,
-  )
-    ? parsed
-    : fallback;
-}
-
-async function defaultCapacities(
-  db,
-) {
-  const [
-    sellable,
-    buffer,
-  ] =
-    await Promise.all([
-      settingInt(
-        db,
-        'default_sellable_points_per_day_units',
-        400,
+    result.push(
+      formatIsoDay(
+        cursor,
       ),
-
-      settingInt(
-        db,
-        'default_internal_buffer_points_per_day_units',
-        100,
-      ),
-    ]);
-
-  return {
-    sellable,
-    buffer,
-  };
-}
-
-async function orderByCode(
-  db,
-  orderCode,
-) {
-  return db
-    .prepare(
-      `
-        SELECT
-          id,
-          order_code,
-          honoree_display_name,
-          event_date,
-          status,
-          briefing_status,
-          delivery_start,
-          delivery_end,
-          created_at,
-          finalized_at
-        FROM v2_orders
-        WHERE order_code = ?
-        LIMIT 1
-      `,
-    )
-    .bind(
-      orderCode,
-    )
-    .first();
-}
-
-async function hasApprovedPayment(
-  db,
-  orderId,
-) {
-  const row =
-    await db
-      .prepare(
-        `
-          SELECT 1 AS ok
-          FROM v2_payments
-          WHERE
-            order_id = ?
-            AND status = 'approved'
-          LIMIT 1
-        `,
-      )
-      .bind(
-        orderId,
-      )
-      .first();
-
-  return Boolean(
-    row,
-  );
-}
-
-async function futureAllocations(
-  db,
-  orderId,
-  {
-    afterDay = null,
-    ascending = true,
-  } = {},
-) {
-  const today =
-    todayInSaoPaulo();
-
-  const clauses = [
-    'order_id = ?',
-    'day >= ?',
-  ];
-
-  const binds = [
-    orderId,
-    today,
-  ];
-
-  if (
-    afterDay
-  ) {
-    clauses.push(
-      'day > ?',
-    );
-
-    binds.push(
-      afterDay,
-    );
-  }
-
-  const direction =
-    ascending
-      ? 'ASC'
-      : 'DESC';
-
-  const result =
-    await db
-      .prepare(
-        `
-          SELECT
-            id,
-            order_id,
-            day,
-            points_units,
-            allocation_type
-          FROM v2_agenda_allocations
-          WHERE ${
-            clauses.join(
-              ' AND ',
-            )
-          }
-          ORDER BY
-            day ${direction},
-            id ${direction}
-        `,
-      )
-      .bind(
-        ...binds,
-      )
-      .all();
-
-  return (
-    result.results
-    || []
-  )
-    .map(
-      (row) => ({
-        id:
-          Number(
-            row.id,
-          ),
-
-        orderId:
-          Number(
-            row.order_id,
-          ),
-
-        day:
-          row.day,
-
-        pointsUnits:
-          Number(
-            row.points_units
-            || 0,
-          ),
-
-        allocationType:
-          row.allocation_type,
-      }),
-    );
-}
-
-function totalUnits(
-  rows,
-) {
-  return rows.reduce(
-    (
-      total,
-      row,
-    ) =>
-      total
-      + Number(
-        row.pointsUnits
-        || 0,
-      ),
-    0,
-  );
-}
-
-function pairCascadeMoves(
-  poolRows,
-  targetRows,
-  requestedUnits = null,
-) {
-  const pools =
-    poolRows.map(
-      (row) => ({
-        ...row,
-
-        remaining:
-          row.pointsUnits,
-      }),
-    );
-
-  const targets =
-    targetRows.map(
-      (row) => ({
-        ...row,
-
-        remaining:
-          row.pointsUnits,
-      }),
-    );
-
-  const maximum =
-    Math.min(
-      totalUnits(
-        poolRows,
-      ),
-
-      totalUnits(
-        targetRows,
-      ),
-    );
-
-  const limit =
-    requestedUnits === null
-      ? maximum
-      : Math.min(
-        maximum,
-        requestedUnits,
-      );
-
-  let moved = 0;
-
-  const pairs = [];
-
-  for (
-    const pool
-    of pools
-  ) {
-    if (
-      moved >= limit
-    ) {
-      break;
-    }
-
-    for (
-      const target
-      of targets
-  ) {
-      if (
-        moved >= limit
-      ) {
-        break;
-      }
-
-      if (
-        pool.remaining <= 0
-        || target.remaining <= 0
-      ) {
-        continue;
-      }
-
-      /*
-       * Antecipar precisa realmente mover
-       * produção de uma data posterior
-       * para uma data anterior.
-       */
-      if (
-        target.day
-        <= pool.day
-      ) {
-        continue;
-      }
-
-      const units =
-        Math.min(
-          pool.remaining,
-          target.remaining,
-          limit - moved,
-        );
-
-      if (
-        units <= 0
-      ) {
-        continue;
-      }
-
-      pairs.push({
-        poolAllocationId:
-          pool.id,
-
-        poolDay:
-          pool.day,
-
-        targetAllocationId:
-          target.id,
-
-        targetDay:
-          target.day,
-
-        units,
-      });
-
-      pool.remaining -=
-        units;
-
-      target.remaining -=
-        units;
-
-      moved +=
-        units;
-    }
-  }
-
-  return {
-    movedUnits:
-      moved,
-
-    pairs,
-  };
-}
-
-function aggregateTaken(
-  pairs,
-  key,
-) {
-  const result =
-    new Map();
-
-  for (
-    const pair
-    of pairs
-  ) {
-    const id =
-      pair[
-        key
-      ];
-
-    result.set(
-      id,
-      (
-        result.get(
-          id,
-        )
-        || 0
-      )
-      + pair.units,
     );
   }
 
   return result;
 }
 
-function aggregateInsertions(
-  pairs,
-  key,
-) {
-  const result =
-    new Map();
-
-  for (
-    const pair
-    of pairs
-  ) {
-    const day =
-      pair[
-        key
-      ];
-
-    result.set(
-      day,
-      (
-        result.get(
-          day,
-        )
-        || 0
-      )
-      + pair.units,
-    );
-  }
-
-  return result;
-}
-
-function mutationForAllocation(
+async function loadCapacityMap(
   db,
-  row,
-  takenUnits,
+  startDay,
+  endDay,
+  settings,
 ) {
-  const remaining =
-    row.pointsUnits
-    - takenUnits;
-
-  if (
-    remaining > 0
-  ) {
-    return db
-      .prepare(
-        `
-          UPDATE v2_agenda_allocations
-          SET points_units = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        remaining,
-        row.id,
-      );
-  }
-
-  return db
-    .prepare(
-      `
-        DELETE FROM v2_agenda_allocations
-        WHERE id = ?
-      `,
-    )
-    .bind(
-      row.id,
-    );
-}
-
-async function bestCandidateForPool(
-  db,
-  sourceOrderId,
-  earliestPoolDay,
-) {
-  const result =
-    await db
-      .prepare(
-        `
-          SELECT
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.delivery_start,
-            o.delivery_end,
-            o.created_at,
-
-            MIN(a.day) AS earliest_allocation_day,
-            MAX(a.day) AS latest_allocation_day,
-            SUM(
-              CASE
-                WHEN a.day > ?
-                  THEN a.points_units
-                ELSE 0
-              END
-            ) AS movable_units
-          FROM v2_orders o
-          INNER JOIN v2_agenda_allocations a
-            ON a.order_id = o.id
-          WHERE
-            o.id != ?
-            AND o.status = 'ready_for_production'
-            AND o.briefing_status = 'completed'
-            AND EXISTS (
-              SELECT 1
-              FROM v2_payments pay
-              WHERE
-                pay.order_id = o.id
-                AND pay.status = 'approved'
-            )
-          GROUP BY
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.delivery_start,
-            o.delivery_end,
-            o.created_at
-          HAVING movable_units > 0
-          ORDER BY
-            COALESCE(
-              o.delivery_start,
-              '9999-12-31'
-            ),
-            o.event_date,
-            o.created_at,
-            o.id
-          LIMIT 1
-        `,
-      )
-      .bind(
-        earliestPoolDay,
-        sourceOrderId,
-      )
-      .all();
-
-  const row =
-    result.results
-      ?.[0];
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    id:
-      Number(
-        row.id,
-      ),
-
-    code:
-      row.order_code,
-
-    honoreeName:
-      row.honoree_display_name,
-
-    eventDate:
-      row.event_date,
-
-    deliveryWindow: {
-      start:
-        row.delivery_start,
-
-      end:
-        row.delivery_end,
-    },
-
-    earliestAllocationDay:
-      row.earliest_allocation_day,
-
-    latestAllocationDay:
-      row.latest_allocation_day,
-
-    movableUnits:
-      Number(
-        row.movable_units
-        || 0,
-      ),
-  };
-}
-
-export async function finalizeV2OrderToCascadePool(
-  db,
-  order,
-) {
-  const stamp =
-    nowIso();
-
-  const rows =
-    await futureAllocations(
-      db,
-      order.id,
+  const defaultCapacity =
+    v2IntSetting(
+      settings,
+      'default_sellable_points_per_day_units',
+      400,
     );
 
-  const reservedUnits =
-    totalUnits(
-      rows,
+  const days =
+    listDays(
+      startDay,
+      endDay,
     );
-
-  await db.batch([
-    db
-      .prepare(
-        `
-          UPDATE v2_orders
-          SET
-            status = 'finalized',
-            next_action = 'Finalizado',
-            finalized_at = ?,
-            updated_at = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        stamp,
-        stamp,
-        order.id,
-      ),
-
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (
-            ?,
-            'order_finalized',
-            'Pedido finalizado.',
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        order.id,
-        JSON.stringify({
-          cascadeReservedUnits:
-            reservedUnits,
-
-          capacityPublished:
-            reservedUnits
-            === 0,
-        }),
-        stamp,
-      ),
-  ]);
-
-  if (
-    reservedUnits > 0
-  ) {
-    await db
-      .prepare(
-        `
-          INSERT INTO v2_notifications(
-            event_code,
-            order_id,
-            title,
-            body,
-            action_url,
-            priority,
-            push_eligible,
-            created_at
-          )
-          VALUES (
-            'CAPACITY_RELEASED',
-            ?,
-            'Capacidade para antecipar',
-            ?,
-            '/admin/agenda',
-            'normal',
-            0,
-            ?
-          )
-        `,
-      )
-      .bind(
-        order.id,
-        `${
-          order.order_code
-        } terminou antes e deixou ${
-          reservedUnits / 100
-        } Points Libri para redistribuir antes de abrir a agenda.`,
-        stamp,
-      )
-      .run();
-  }
-
-  /*
-   * IMPORTANTE:
-   * não deletamos as alocações futuras.
-   * Enquanto pertencem a um pedido finalizado,
-   * elas funcionam como reserva interna da cascata
-   * e continuam invisíveis ao cliente como capacidade livre.
-   */
-  return {
-    status:
-      'finalized',
-
-    nextAction:
-      'Finalizado',
-
-    cascadeReservedUnits:
-      reservedUnits,
-
-    needsCascadeReview:
-      reservedUnits > 0,
-  };
-}
-
-export async function getV2AgendaRange(
-  db,
-  {
-    start,
-    end,
-  } = {},
-) {
-  const today =
-    todayInSaoPaulo();
-
-  const rangeStart =
-    start
-      || today;
-
-  const rangeEnd =
-    end
-      || addDays(
-        rangeStart,
-        60,
-      );
-
-  if (
-    !isIsoDay(
-      rangeStart,
-    )
-    || !isIsoDay(
-      rangeEnd,
-    )
-    || diffDays(
-      rangeStart,
-      rangeEnd,
-    ) < 0
-    || diffDays(
-      rangeStart,
-      rangeEnd,
-    ) > 180
-  ) {
-    throw new Error(
-      'Período da agenda inválido.',
-    );
-  }
 
   const [
-    defaults,
     dayRows,
     allocations,
     holds,
-    allocationOrders,
   ] =
     await Promise.all([
-      defaultCapacities(
-        db,
-      ),
-
       db
         .prepare(
           `
             SELECT
               day,
               sellable_capacity_units,
-              internal_buffer_units,
-              blocked,
-              internal_note
+              blocked
             FROM v2_agenda_days
-            WHERE day BETWEEN ? AND ?
+            WHERE
+              day >= ?
+              AND day <= ?
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
         )
         .all(),
 
@@ -1010,33 +198,18 @@ export async function getV2AgendaRange(
         .prepare(
           `
             SELECT
-              a.day,
-
-              SUM(
-                CASE
-                  WHEN o.status = 'finalized'
-                    THEN a.points_units
-                  ELSE 0
-                END
-              ) AS cascade_units,
-
-              SUM(
-                CASE
-                  WHEN o.status != 'finalized'
-                    THEN a.points_units
-                  ELSE 0
-                END
-              ) AS production_units
-            FROM v2_agenda_allocations a
-            INNER JOIN v2_orders o
-              ON o.id = a.order_id
-            WHERE a.day BETWEEN ? AND ?
-            GROUP BY a.day
+              day,
+              SUM(points_units) AS used_units
+            FROM v2_agenda_allocations
+            WHERE
+              day >= ?
+              AND day <= ?
+            GROUP BY day
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
         )
         .all(),
 
@@ -1050,55 +223,24 @@ export async function getV2AgendaRange(
             INNER JOIN v2_checkout_holds h
               ON h.id = a.hold_id
             WHERE
-              a.day BETWEEN ? AND ?
+              a.day >= ?
+              AND a.day <= ?
               AND h.status = 'active'
               AND h.expires_at > ?
             GROUP BY a.day
           `,
         )
         .bind(
-          rangeStart,
-          rangeEnd,
-          nowIso(),
-        )
-        .all(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              a.day,
-              a.points_units,
-
-              o.order_code,
-              o.honoree_display_name,
-              o.status,
-              o.delivery_start,
-              o.delivery_end
-            FROM v2_agenda_allocations a
-            INNER JOIN v2_orders o
-              ON o.id = a.order_id
-            WHERE a.day BETWEEN ? AND ?
-            ORDER BY
-              a.day,
-              o.status = 'finalized' DESC,
-              o.delivery_start,
-              o.order_code
-          `,
-        )
-        .bind(
-          rangeStart,
-          rangeEnd,
+          formatIsoDay(startDay),
+          formatIsoDay(endDay),
+          new Date().toISOString(),
         )
         .all(),
     ]);
 
-  const configs =
+  const dayConfig =
     Object.fromEntries(
-      (
-        dayRows.results
-        || []
-      )
+      (dayRows.results || [])
         .map(
           (row) => [
             row.day,
@@ -1107,38 +249,23 @@ export async function getV2AgendaRange(
         ),
     );
 
-  const unitsByDay =
+  const used =
     Object.fromEntries(
-      (
-        allocations.results
-        || []
-      )
+      (allocations.results || [])
         .map(
           (row) => [
             row.day,
-            {
-              production:
-                Number(
-                  row.production_units
-                  || 0,
-                ),
-
-              cascade:
-                Number(
-                  row.cascade_units
-                  || 0,
-                ),
-            },
+            Number(
+              row.used_units
+              || 0,
+            ),
           ],
         ),
     );
 
-  const holdsByDay =
+  const held =
     Object.fromEntries(
-      (
-        holds.results
-        || []
-      )
+      (holds.results || [])
         .map(
           (row) => [
             row.day,
@@ -1150,1186 +277,610 @@ export async function getV2AgendaRange(
         ),
     );
 
-  const ordersByDay = {};
+  return Object.fromEntries(
+    days.map(
+      (day) => {
+        const config =
+          dayConfig[day];
+
+        const capacity =
+          config
+            ? Number(
+              config
+                .sellable_capacity_units,
+            )
+            : defaultCapacity;
+
+        const blocked =
+          config
+            ?.blocked
+          === 1;
+
+        const free =
+          blocked
+            ? 0
+            : Math.max(
+              0,
+              capacity
+              - (
+                used[day]
+                || 0
+              )
+              - (
+                held[day]
+                || 0
+              ),
+            );
+
+        return [
+          day,
+
+          {
+            capacity,
+            used:
+              used[day]
+              || 0,
+
+            held:
+              held[day]
+              || 0,
+
+            free,
+            blocked,
+          },
+        ];
+      },
+    ),
+  );
+}
+
+function planAllocation(
+  capacityMap,
+  startDay,
+  endDay,
+  requiredUnits,
+) {
+  let remaining =
+    requiredUnits;
+
+  const allocation = [];
 
   for (
-    const row
-    of allocationOrders.results
-    || []
+    const day
+    of listDays(
+      startDay,
+      endDay,
+    )
   ) {
     if (
-      !ordersByDay[
-        row.day
-      ]
+      remaining
+      <= 0
     ) {
-      ordersByDay[
-        row.day
-      ] = [];
+      break;
     }
 
-    ordersByDay[
-      row.day
-    ]
-      .push({
-        code:
-          row.order_code,
+    const free =
+      capacityMap[
+        day
+      ]?.free
+      || 0;
 
-        honoreeName:
-          row.honoree_display_name,
+    if (
+      free
+      <= 0
+    ) {
+      continue;
+    }
 
-        status:
-          row.status,
-
-        pointsUnits:
-          Number(
-            row.points_units
-            || 0,
-          ),
-
-        cascadeReserve:
-          row.status
-          === 'finalized',
-
-        deliveryWindow: {
-          start:
-            row.delivery_start,
-
-          end:
-            row.delivery_end,
-        },
-      });
-  }
-
-  const days =
-    listDays(
-      rangeStart,
-      rangeEnd,
-    )
-      .map(
-        (day) => {
-          const config =
-            configs[
-              day
-            ];
-
-          const blocked =
-            config
-              ?.blocked
-            === 1;
-
-          const sellable =
-            Number(
-              config
-                ?.sellable_capacity_units
-              ?? defaults.sellable,
-            );
-
-          const buffer =
-            Number(
-              config
-                ?.internal_buffer_units
-              ?? defaults.buffer,
-            );
-
-          const production =
-            unitsByDay[
-              day
-            ]?.production
-            || 0;
-
-          const cascade =
-            unitsByDay[
-              day
-            ]?.cascade
-            || 0;
-
-          const held =
-            holdsByDay[
-              day
-            ]
-            || 0;
-
-          const free =
-            blocked
-              ? 0
-              : Math.max(
-                0,
-                sellable
-                - production
-                - cascade
-                - held,
-              );
-
-          return {
-            day,
-
-            blocked,
-
-            sellableCapacityUnits:
-              sellable,
-
-            internalBufferUnits:
-              buffer,
-
-            physicalCapacityUnits:
-              sellable
-              + buffer,
-
-            productionUnits:
-              production,
-
-            cascadeReservedUnits:
-              cascade,
-
-            checkoutHeldUnits:
-              held,
-
-            publicFreeUnits:
-              free,
-
-            internalNote:
-              config
-                ?.internal_note
-              || '',
-
-            orders:
-              ordersByDay[
-                day
-              ]
-              || [],
-          };
-        },
+    const take =
+      Math.min(
+        free,
+        remaining,
       );
 
-  return {
-    start:
-      rangeStart,
-
-    end:
-      rangeEnd,
-
-    defaults: {
-      sellableCapacityUnits:
-        defaults.sellable,
-
-      internalBufferUnits:
-        defaults.buffer,
-    },
-
-    days,
-  };
-}
-
-export async function setV2AgendaDay(
-  db,
-  day,
-  body = {},
-) {
-  if (
-    !isIsoDay(
+    allocation.push({
       day,
-    )
-  ) {
-    throw new Error(
-      'Data inválida.',
-    );
-  }
-
-  const [
-    defaults,
-    existing,
-  ] =
-    await Promise.all([
-      defaultCapacities(
-        db,
-      ),
-
-      db
-        .prepare(
-          `
-            SELECT
-              sellable_capacity_units,
-              internal_buffer_units,
-              blocked,
-              internal_note
-            FROM v2_agenda_days
-            WHERE day = ?
-            LIMIT 1
-          `,
-        )
-        .bind(
-          day,
-        )
-        .first(),
-    ]);
-
-  const sellable =
-    body.sellableCapacityUnits
-    === undefined
-      ? Number(
-        existing
-          ?.sellable_capacity_units
-        ?? defaults.sellable,
-      )
-      : integerInRange(
-        body.sellableCapacityUnits,
-        {
-          min:
-            0,
-
-          max:
-            5000,
-
-          label:
-            'Capacidade vendável',
-        },
-      );
-
-  const buffer =
-    body.internalBufferUnits
-    === undefined
-      ? Number(
-        existing
-          ?.internal_buffer_units
-        ?? defaults.buffer,
-      )
-      : integerInRange(
-        body.internalBufferUnits,
-        {
-          min:
-            0,
-
-          max:
-            5000,
-
-          label:
-            'Reserva interna',
-        },
-      );
-
-  const blocked =
-    body.blocked
-    === undefined
-      ? (
-        existing
-          ?.blocked
-        === 1
-      )
-      : body.blocked
-        === true;
-
-  const note =
-    body.internalNote
-    === undefined
-      ? String(
-        existing
-          ?.internal_note
-        || '',
-      )
-      : cleanText(
-        body.internalNote,
-        1000,
-      );
-
-  await db
-    .prepare(
-      `
-        INSERT INTO v2_agenda_days(
-          day,
-          sellable_capacity_units,
-          internal_buffer_units,
-          blocked,
-          internal_note,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?,
-          ?
-        )
-        ON CONFLICT(day)
-        DO UPDATE SET
-          sellable_capacity_units =
-            excluded.sellable_capacity_units,
-
-          internal_buffer_units =
-            excluded.internal_buffer_units,
-
-          blocked =
-            excluded.blocked,
-
-          internal_note =
-            excluded.internal_note,
-
-          updated_at =
-            excluded.updated_at
-      `,
-    )
-    .bind(
-      day,
-      sellable,
-      buffer,
-      blocked
-        ? 1
-        : 0,
-      note,
-      nowIso(),
-      nowIso(),
-    )
-    .run();
-
-  return {
-    day,
-
-    sellableCapacityUnits:
-      sellable,
-
-    internalBufferUnits:
-      buffer,
-
-    blocked,
-
-    internalNote:
-      note,
-  };
-}
-
-export async function setV2AgendaPeriod(
-  db,
-  {
-    start,
-    end,
-    blocked,
-    internalNote = '',
-  },
-) {
-  if (
-    !isIsoDay(
-      start,
-    )
-    || !isIsoDay(
-      end,
-    )
-  ) {
-    throw new Error(
-      'Período inválido.',
-    );
-  }
-
-  const days =
-    listDays(
-      start,
-      end,
-    );
-
-  if (
-    days.length > 120
-  ) {
-    throw new Error(
-      'Ajuste no máximo 120 dias por vez.',
-    );
-  }
-
-  const defaults =
-    await defaultCapacities(
-      db,
-    );
-
-  const stamp =
-    nowIso();
-
-  const note =
-    cleanText(
-      internalNote,
-      1000,
-    );
-
-  await db.batch(
-    days.map(
-      (day) =>
-        db
-          .prepare(
-            `
-              INSERT INTO v2_agenda_days(
-                day,
-                sellable_capacity_units,
-                internal_buffer_units,
-                blocked,
-                internal_note,
-                created_at,
-                updated_at
-              )
-              VALUES (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-              )
-              ON CONFLICT(day)
-              DO UPDATE SET
-                blocked =
-                  excluded.blocked,
-
-                internal_note =
-                  CASE
-                    WHEN excluded.internal_note != ''
-                      THEN excluded.internal_note
-                    ELSE v2_agenda_days.internal_note
-                  END,
-
-                updated_at =
-                  excluded.updated_at
-            `,
-          )
-          .bind(
-            day,
-            defaults.sellable,
-            defaults.buffer,
-            blocked
-              ? 1
-              : 0,
-            note,
-            stamp,
-            stamp,
-          ),
-    ),
-  );
-
-  return {
-    start,
-    end,
-    blocked:
-      Boolean(
-        blocked,
-      ),
-    affectedDays:
-      days.length,
-  };
-}
-
-export async function getV2CascadeSuggestions(
-  db,
-) {
-  const today =
-    todayInSaoPaulo();
-
-  const poolsResult =
-    await db
-      .prepare(
-        `
-          SELECT
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.finalized_at,
-
-            SUM(a.points_units) AS reserved_units,
-            MIN(a.day) AS earliest_day,
-            MAX(a.day) AS latest_day
-          FROM v2_orders o
-          INNER JOIN v2_agenda_allocations a
-            ON a.order_id = o.id
-          WHERE
-            o.status = 'finalized'
-            AND a.day >= ?
-          GROUP BY
-            o.id,
-            o.order_code,
-            o.honoree_display_name,
-            o.event_date,
-            o.finalized_at
-          HAVING reserved_units > 0
-          ORDER BY
-            earliest_day,
-            o.finalized_at,
-            o.id
-        `,
-      )
-      .bind(
-        today,
-      )
-      .all();
-
-  const pools = [];
-
-  for (
-    const row
-    of poolsResult.results
-    || []
-  ) {
-    const candidate =
-      await bestCandidateForPool(
-        db,
-        row.id,
-        row.earliest_day,
-      );
-
-    const reservedUnits =
-      Number(
-        row.reserved_units
-        || 0,
-      );
-
-    pools.push({
-      source: {
-        id:
-          Number(
-            row.id,
-          ),
-
-        code:
-          row.order_code,
-
-        honoreeName:
-          row.honoree_display_name,
-
-        eventDate:
-          row.event_date,
-
-        finalizedAt:
-          row.finalized_at,
-      },
-
-      reservedUnits,
-
-      reservedPoints:
-        reservedUnits
-        / 100,
-
-      earliestDay:
-        row.earliest_day,
-
-      latestDay:
-        row.latest_day,
-
-      suggestion:
-        candidate
-          ? {
-            targetOrder:
-              candidate,
-
-            movableUnits:
-              Math.min(
-                reservedUnits,
-                candidate.movableUnits,
-              ),
-
-            movablePoints:
-              Math.min(
-                reservedUnits,
-                candidate.movableUnits,
-              )
-              / 100,
-
-            promisedWindowChanges:
-              false,
-
-            priorityRule:
-              'janela mais próxima → evento mais próximo → pedido mais antigo',
-          }
-          : null,
-
-      finalSurplus:
-        !candidate,
+      pointsUnits:
+        take,
     });
+
+    remaining -=
+      take;
   }
 
   return {
-    pools,
+    fits:
+      remaining
+      === 0,
+
+    allocation,
+
+    remainingUnits:
+      remaining,
   };
 }
 
-export async function anticipateV2Production(
+function buildCandidateWindows({
+  firstPossibleDay,
+  lastPossibleEnd,
+  targetDay,
+}) {
+  const candidates = [];
+
+  const windowLengths = [
+    3,
+    4,
+  ];
+
+  for (
+    let start =
+      new Date(
+        firstPossibleDay
+          .getTime(),
+      );
+
+    start <= lastPossibleEnd;
+
+    start =
+      addDays(
+        start,
+        1,
+      )
+  ) {
+    for (
+      const length
+      of windowLengths
+    ) {
+      const end =
+        addDays(
+          start,
+          length - 1,
+        );
+
+      if (
+        end
+        > lastPossibleEnd
+      ) {
+        continue;
+      }
+
+      const midpoint =
+        new Date(
+          (
+            start.getTime()
+            + end.getTime()
+          )
+          / 2,
+        );
+
+      candidates.push({
+        start,
+        end,
+        distanceToTarget:
+          Math.abs(
+            diffDays(
+              midpoint,
+              targetDay,
+            ),
+          ),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+export async function validateV2DeliveryWindow(
   db,
   {
-    sourceOrderCode,
-    targetOrderCode,
-    pointsUnits = null,
+    eventDate,
+    start,
+    end,
   },
 ) {
-  const [
-    source,
-    target,
-  ] =
-    await Promise.all([
-      orderByCode(
-        db,
-        sourceOrderCode,
-      ),
+  const eventDay =
+    parseIsoDay(
+      eventDate,
+    );
 
-      orderByCode(
-        db,
-        targetOrderCode,
-      ),
-    ]);
+  const startDay =
+    parseIsoDay(
+      start,
+    );
+
+  const endDay =
+    parseIsoDay(
+      end,
+    );
 
   if (
-    !source
-    || source.status
-      !== 'finalized'
+    endDay
+    < startDay
   ) {
     throw new Error(
-      'A capacidade de origem não está disponível para cascata.',
+      'Janela de entrega inválida.',
     );
   }
 
-  if (
-    !target
-    || target.status
-      !== 'ready_for_production'
-    || target.briefing_status
-      !== 'completed'
-  ) {
-    throw new Error(
-      'O pedido escolhido ainda não está pronto para antecipação.',
-    );
-  }
+  const daysInWindow =
+    diffDays(
+      endDay,
+      startDay,
+    )
+    + 1;
 
   if (
-    !await hasApprovedPayment(
-      db,
-      target.id,
+    ![
+      3,
+      4,
+    ].includes(
+      daysInWindow,
     )
   ) {
     throw new Error(
-      'O pedido escolhido ainda não possui pagamento confirmado.',
+      'Escolha uma das janelas de entrega disponíveis.',
     );
   }
 
-  const poolRows =
-    await futureAllocations(
+  const settings =
+    await loadV2Settings(
       db,
-      source.id,
-      {
-        ascending:
-          true,
-      },
+    );
+
+  const minimumDaysBeforeEvent =
+    v2IntSetting(
+      settings,
+      'minimum_delivery_days_before_event',
+      3,
+    );
+
+  const firstPossibleDay =
+    addDays(
+      currentBrazilDay(),
+      1,
+    );
+
+  const lastPossibleEnd =
+    addDays(
+      eventDay,
+      -minimumDaysBeforeEvent,
     );
 
   if (
-    !poolRows.length
+    startDay
+    < firstPossibleDay
+    || endDay
+    > lastPossibleEnd
   ) {
     throw new Error(
-      'Não há capacidade reservada para redistribuir.',
+      'Essa janela não é compatível com a data do evento.',
     );
   }
-
-  const earliestPoolDay =
-    poolRows[0]
-      .day;
-
-  const targetRows =
-    await futureAllocations(
-      db,
-      target.id,
-      {
-        afterDay:
-          earliestPoolDay,
-
-        ascending:
-          false,
-      },
-    );
-
-  if (
-    !targetRows.length
-  ) {
-    throw new Error(
-      'Este pedido não possui produção futura que possa ser antecipada.',
-    );
-  }
-
-  const requested =
-    pointsUnits === null
-    || pointsUnits === undefined
-      ? null
-      : integerInRange(
-        pointsUnits,
-        {
-          min:
-            1,
-
-          max:
-            100000,
-
-          label:
-            'Quantidade de Points Libri',
-        },
-      );
-
-  const plan =
-    pairCascadeMoves(
-      poolRows,
-      targetRows,
-      requested,
-    );
-
-  if (
-    plan.movedUnits <= 0
-  ) {
-    throw new Error(
-      'Não há combinação válida para antecipar este pedido.',
-    );
-  }
-
-  const poolTaken =
-    aggregateTaken(
-      plan.pairs,
-      'poolAllocationId',
-    );
-
-  const targetTaken =
-    aggregateTaken(
-      plan.pairs,
-      'targetAllocationId',
-    );
-
-  const targetEarlier =
-    aggregateInsertions(
-      plan.pairs,
-      'poolDay',
-    );
-
-  const poolCarriedForward =
-    aggregateInsertions(
-      plan.pairs,
-      'targetDay',
-    );
-
-  const poolById =
-    new Map(
-      poolRows.map(
-        (row) => [
-          row.id,
-          row,
-        ],
-      ),
-    );
-
-  const targetById =
-    new Map(
-      targetRows.map(
-        (row) => [
-          row.id,
-          row,
-        ],
-      ),
-    );
-
-  const stamp =
-    nowIso();
-
-  const statements = [];
-
-  for (
-    const [
-      allocationId,
-      units,
-    ]
-    of poolTaken
-  ) {
-    statements.push(
-      mutationForAllocation(
-        db,
-        poolById.get(
-          allocationId,
-        ),
-        units,
-      ),
-    );
-  }
-
-  for (
-    const [
-      allocationId,
-      units,
-    ]
-    of targetTaken
-  ) {
-    statements.push(
-      mutationForAllocation(
-        db,
-        targetById.get(
-          allocationId,
-        ),
-        units,
-      ),
-    );
-  }
-
-  for (
-    const [
-      day,
-      units,
-    ]
-    of targetEarlier
-  ) {
-    statements.push(
-      db
-        .prepare(
-          `
-            INSERT INTO v2_agenda_allocations(
-              order_id,
-              day,
-              points_units,
-              allocation_type,
-              created_at
-            )
-            VALUES (
-              ?,
-              ?,
-              ?,
-              'anticipated',
-              ?
-            )
-          `,
-        )
-        .bind(
-          target.id,
-          day,
-          units,
-          stamp,
-        ),
-    );
-  }
-
-  /*
-   * O espaço que foi liberado nas datas antigas do pedido
-   * antecipado continua reservado em nome do pedido finalizado.
-   * É isso que faz a cascata continuar sem abrir vaga pública cedo.
-   */
-  for (
-    const [
-      day,
-      units,
-    ]
-    of poolCarriedForward
-  ) {
-    statements.push(
-      db
-        .prepare(
-          `
-            INSERT INTO v2_agenda_allocations(
-              order_id,
-              day,
-              points_units,
-              allocation_type,
-              created_at
-            )
-            VALUES (
-              ?,
-              ?,
-              ?,
-              'confirmed',
-              ?
-            )
-          `,
-        )
-        .bind(
-          source.id,
-          day,
-          units,
-          stamp,
-        ),
-    );
-  }
-
-  statements.push(
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (
-            ?,
-            'production_anticipated',
-            'Produção antecipada usando capacidade liberada pela cascata.',
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        target.id,
-        JSON.stringify({
-          sourceOrderCode:
-            source.order_code,
-
-          movedUnits:
-            plan.movedUnits,
-
-          movedPoints:
-            plan.movedUnits
-            / 100,
-
-          promisedWindowChanged:
-            false,
-
-          fromDays:
-            [
-              ...new Set(
-                plan.pairs.map(
-                  (pair) =>
-                    pair.targetDay,
-                ),
-              ),
-            ],
-
-          toDays:
-            [
-              ...new Set(
-                plan.pairs.map(
-                  (pair) =>
-                    pair.poolDay,
-                ),
-              ),
-            ],
-        }),
-        stamp,
-      ),
-  );
-
-  statements.push(
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (
-            ?,
-            'cascade_transferred',
-            'Capacidade interna redistribuída para antecipar outro pedido.',
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        source.id,
-        JSON.stringify({
-          targetOrderCode:
-            target.order_code,
-
-          movedUnits:
-            plan.movedUnits,
-        }),
-        stamp,
-      ),
-  );
-
-  await db.batch(
-    statements,
-  );
 
   return {
-    ok:
-      true,
-
-    sourceOrderCode:
-      source.order_code,
-
-    targetOrderCode:
-      target.order_code,
-
-    movedUnits:
-      plan.movedUnits,
-
-    movedPoints:
-      plan.movedUnits
-      / 100,
-
-    promisedWindowChanged:
-      false,
-
-    recalculateCascade:
+    valid:
       true,
   };
 }
 
-export async function releaseV2CascadeSurplus(
+export async function findV2DeliveryOptions(
   db,
   {
-    sourceOrderCode,
-    force = false,
+    eventDate,
+    pointsUnits,
+    limit = 5,
   },
 ) {
-  const source =
-    await orderByCode(
-      db,
-      sourceOrderCode,
+  const eventDay =
+    parseIsoDay(
+      eventDate,
+    );
+
+  const requiredUnits =
+    Number.parseInt(
+      pointsUnits,
+      10,
     );
 
   if (
-    !source
-    || source.status
-      !== 'finalized'
+    !Number.isInteger(
+      requiredUnits,
+    )
+    || requiredUnits <= 0
   ) {
     throw new Error(
-      'Pedido de origem inválido para liberação de capacidade.',
+      'Carga de produção inválida.',
     );
   }
 
-  const rows =
-    await futureAllocations(
+  const settings =
+    await loadV2Settings(
       db,
-      source.id,
+    );
+
+  const recommendedDaysBefore =
+    v2IntSetting(
+      settings,
+      'recommended_delivery_days_before_event',
+      40,
+    );
+
+  const minimumDaysBeforeEvent =
+    v2IntSetting(
+      settings,
+      'minimum_delivery_days_before_event',
+      3,
+    );
+
+  const today =
+    currentBrazilDay();
+
+  const firstPossibleDay =
+    addDays(
+      today,
+      1,
+    );
+
+  const lastPossibleEnd =
+    addDays(
+      eventDay,
+      -minimumDaysBeforeEvent,
+    );
+
+  const targetDay =
+    addDays(
+      eventDay,
+      -recommendedDaysBefore,
     );
 
   if (
-    !rows.length
+    lastPossibleEnd
+    < firstPossibleDay
   ) {
     return {
-      ok:
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
         true,
-
-      releasedUnits:
-        0,
-
-      releasedPoints:
-        0,
     };
   }
 
-  const candidate =
-    await bestCandidateForPool(
+  const candidates =
+    buildCandidateWindows({
+      firstPossibleDay,
+      lastPossibleEnd,
+      targetDay,
+    });
+
+  if (
+    !candidates.length
+  ) {
+    return {
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
+        true,
+    };
+  }
+
+  const capacityMap =
+    await loadCapacityMap(
       db,
-      source.id,
-      rows[0].day,
+      firstPossibleDay,
+      lastPossibleEnd,
+      settings,
+    );
+
+  const viable =
+    candidates
+      .map(
+        (candidate) => {
+          const plan =
+            planAllocation(
+              capacityMap,
+              candidate.start,
+              candidate.end,
+              requiredUnits,
+            );
+
+          return {
+            ...candidate,
+            plan,
+          };
+        },
+      )
+      .filter(
+        (candidate) =>
+          candidate
+            .plan
+            .fits,
+      )
+      .sort(
+        (
+          a,
+          b,
+        ) =>
+          a.distanceToTarget
+          - b.distanceToTarget
+          || a.start
+            - b.start
+          || a.end
+            - b.end,
+      );
+
+  const selected = [];
+
+  const seen =
+    new Set();
+
+  for (
+    const candidate
+    of viable
+  ) {
+    const key =
+      `${
+        formatIsoDay(
+          candidate.start,
+        )
+      }_${
+        formatIsoDay(
+          candidate.end,
+        )
+      }`;
+
+    if (
+      seen.has(
+        key,
+      )
+    ) {
+      continue;
+    }
+
+    seen.add(
+      key,
+    );
+
+    selected.push(
+      candidate,
+    );
+
+    if (
+      selected.length
+      >= Math.max(
+        1,
+        Math.min(
+          10,
+          Number(limit)
+          || 5,
+        ),
+      )
+    ) {
+      break;
+    }
+  }
+
+  if (
+    !selected.length
+  ) {
+    return {
+      recommendedTargetDate:
+        formatIsoDay(
+          targetDay,
+        ),
+
+      options: [],
+
+      needsUrgencyReview:
+        true,
+    };
+  }
+
+  const options =
+    selected
+      .map(
+        (
+          candidate,
+          index,
+        ) => ({
+          start:
+            formatIsoDay(
+              candidate.start,
+            ),
+
+          end:
+            formatIsoDay(
+              candidate.end,
+            ),
+
+          recommended:
+            index === 0,
+        }),
+      );
+
+  return {
+    recommendedTargetDate:
+      formatIsoDay(
+        targetDay,
+      ),
+
+    options,
+
+    needsUrgencyReview:
+      false,
+  };
+}
+
+export async function planV2AllocationForWindow(
+  db,
+  {
+    start,
+    end,
+    pointsUnits,
+  },
+) {
+  const startDay =
+    parseIsoDay(
+      start,
+    );
+
+  const endDay =
+    parseIsoDay(
+      end,
     );
 
   if (
-    candidate
-    && force !== true
+    endDay
+    < startDay
   ) {
-    const error =
-      new Error(
-        'Ainda existe um pedido elegível para antecipação antes de abrir esta capacidade ao público.',
-      );
-
-    error.code =
-      'cascade_candidate_available';
-
-    error.suggestion = {
-      targetOrder:
-        candidate,
-
-      movableUnits:
-        Math.min(
-          totalUnits(
-            rows,
-          ),
-          candidate.movableUnits,
-        ),
-    };
-
-    throw error;
+    throw new Error(
+      'Janela de entrega inválida.',
+    );
   }
 
-  const releasedUnits =
-    totalUnits(
-      rows,
+  const requiredUnits =
+    Number.parseInt(
+      pointsUnits,
+      10,
     );
 
-  const stamp =
-    nowIso();
+  if (
+    !Number.isInteger(
+      requiredUnits,
+    )
+    || requiredUnits <= 0
+  ) {
+    throw new Error(
+      'Carga de produção inválida.',
+    );
+  }
 
-  await db.batch([
-    ...rows.map(
-      (row) =>
-        db
-          .prepare(
-            `
-              DELETE FROM v2_agenda_allocations
-              WHERE id = ?
-            `,
-          )
-          .bind(
-            row.id,
-          ),
-    ),
+  const settings =
+    await loadV2Settings(
+      db,
+    );
 
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (
-            ?,
-            'cascade_surplus_released',
-            'Saldo final da capacidade da cascata liberado para a agenda pública.',
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        source.id,
-        JSON.stringify({
-          releasedUnits,
+  const capacityMap =
+    await loadCapacityMap(
+      db,
+      startDay,
+      endDay,
+      settings,
+    );
 
-          releasedPoints:
-            releasedUnits
-            / 100,
-
-          forced:
-            force
-            === true,
-        }),
-        stamp,
-      ),
-
-    db
-      .prepare(
-        `
-          UPDATE v2_notifications
-          SET resolved_at = ?
-          WHERE
-            order_id = ?
-            AND event_code = 'CAPACITY_RELEASED'
-            AND resolved_at IS NULL
-        `,
-      )
-      .bind(
-        stamp,
-        source.id,
-      ),
-  ]);
-
-  return {
-    ok:
-      true,
-
-    releasedUnits,
-
-    releasedPoints:
-      releasedUnits
-      / 100,
-
-    publicCapacityChanged:
-      releasedUnits > 0,
-  };
+  return planAllocation(
+    capacityMap,
+    startDay,
+    endDay,
+    requiredUnits,
+  );
 }

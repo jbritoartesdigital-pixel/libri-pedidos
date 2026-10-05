@@ -9,6 +9,52 @@ import {
   statusClass,
 } from './admin-v2-core.js';
 
+function whatsappBr(value) {
+  const digits =
+    String(value || '')
+      .replace(/\D/g, '');
+
+  const local =
+    digits.startsWith('55')
+      ? digits.slice(2)
+      : digits;
+
+  if (local.length === 11) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  }
+
+  if (local.length === 10) {
+    return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  }
+
+  return String(value || '');
+}
+
+function deliveryLabel(detail) {
+  const start =
+    detail.order
+      ?.deliveryWindow
+      ?.start;
+
+  const end =
+    detail.order
+      ?.deliveryWindow
+      ?.end;
+
+  if (start && end) {
+    return `${dateBr(start)} a ${dateBr(end)}`;
+  }
+
+  if (
+    detail.urgency
+    && detail.order.status === 'awaiting_urgency_decision'
+  ) {
+    return 'Em análise';
+  }
+
+  return 'A definir';
+}
+
 const ACTION_LABELS = {
   start_production:
     'Iniciar produção',
@@ -216,10 +262,10 @@ export async function openOrder(code, onChanged = null) {
 
             <div class="order-meta">
               Cliente: ${esc(detail.order.customerName)}<br>
-              WhatsApp: ${esc(detail.order.whatsapp)}<br>
+              WhatsApp: ${esc(whatsappBr(detail.order.whatsapp))}<br>
               Festa: ${dateBr(detail.order.eventDate)}<br>
-              Entrega: ${dateBr(detail.order.deliveryWindow.start)} a ${dateBr(detail.order.deliveryWindow.end)}<br>
-              Próximo: ${esc(detail.order.nextAction || '')}
+              Entrega: ${esc(deliveryLabel(detail))}<br>
+              Próximo: ${esc(detail.order.nextAction || 'A definir')}
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">

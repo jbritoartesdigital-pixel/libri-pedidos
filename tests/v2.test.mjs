@@ -47,7 +47,9 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   assert.equal(approved.pricing.payment.depositCents, 4551); assert.equal(approved.pricing.payment.balanceCents, 4550);
   await assert.rejects(decideV2Urgency(DB, result.order.code, { decision: 'reject', note: 'Duplicada' }));
   const payment = await resumeV2Payment(request, e, token, await terms(DB));
-  assert.equal(mp.bodies[0].total_amount, '45.51'); assert.equal(payment.payment.ready, true);
+  assert.equal(mp.bodies[0].total_amount, '45.51');
+  assert.equal(mp.bodies[0].config.online.retries, undefined);
+  assert.equal(payment.payment.ready, true);
   const reused = await resumeV2Payment(request, e, token, await terms(DB)); assert.equal(reused.payment.checkoutUrl, payment.payment.checkoutUrl); assert.equal(mp.posts, 1);
   mp.approve(payment.payment.providerOrderId);
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);

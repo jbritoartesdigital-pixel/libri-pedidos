@@ -372,28 +372,43 @@ function summaryHtml(
 
   return `
     <section class="page-card">
-      <div class="page-head">
+      <div class="page-head ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? 'payment-head' : ''}">
         <span class="eyebrow">Seu pedido</span>
         <h1 class="page-title">
-          Oi, ${esc(area.customer.name)} 💛
+          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+            ? 'Pagamento pendente'
+            : `Oi, ${esc(area.customer.name)} 💛`}
         </h1>
         <p class="page-subtitle">
-          Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.
+          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+            ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
+            : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
         </p>
       </div>
 
       ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
       ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
       ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
-        <section class="card">
-          <h2>${area.urgency ? 'Pagamento do encaixe aprovado' : 'Retomar pagamento'}</h2>
-          <p>${area.urgency ? `Total com adicional de ${urgencyPercent}% após os descontos.` : 'Seu pedido e sua janela serão conferidos antes do pagamento.'}</p>
-          <p>Total: ${money(area.payment.totalCents)}</p>
+        <section class="card payment-priority">
+          <div class="payment-priority-top">
+            <div>
+              <span class="eyebrow">${area.urgency ? 'Encaixe aprovado' : 'Pagamento'}</span>
+              <strong class="payment-priority-total">${money(area.payment.totalCents)}</strong>
+            </div>
+            <small>${area.payment.method === 'pix' ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
+          </div>
+
           ${area.urgency && area.order.status === 'urgency_approved' ? `
-            <label><input type="radio" name="resumeMethod" value="pix" checked> Pix: entrada de 50%</label>
-            <label><input type="radio" name="resumeMethod" value="card"> Cartão: 100%</label>` : `<p>${area.payment.method === 'pix' ? 'Pix: entrada de 50%' : 'Cartão: 100%'}</p>`}
-          ${termsAlreadyAccepted ? '<div class="notice success">Condições do pedido já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
-          <button class="btn btn-primary" id="resumePayment">Ir para o pagamento</button>
+            <div class="payment-methods">
+              <label><input type="radio" name="resumeMethod" value="pix" checked> Pix • entrada de 50%</label>
+              <label><input type="radio" name="resumeMethod" value="card"> Cartão • 100%</label>
+            </div>` : ''}
+
+          ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
+
+          ${termsAlreadyAccepted ? '<div class="notice success compact-notice">Condições já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
+
+          <button class="btn btn-primary payment-main-cta" id="resumePayment">Pagar agora</button>
         </section>` : ''}
 
       <dl class="review-list">

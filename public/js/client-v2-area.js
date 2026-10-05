@@ -474,12 +474,11 @@ function summaryHtml(
 
         <div class="review-line">
           <dt>Pagamento</dt>
-          <dd>
+          <dd id="paymentReviewLine">
             ${
-              area.payment.method
-              === 'pix'
-                ? `Pix • entrada ${money(area.payment.depositCents)} • saldo ${money(area.payment.balanceCents)}`
-                : `Cartão • ${money(area.payment.totalCents)}`
+              isPix
+                ? `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`
+                : `Cartão • ${money(totalCents)}`
             }
           </dd>
         </div>
@@ -1128,6 +1127,11 @@ export async function startCustomerArea(
                   'paymentBreakdown',
                 );
 
+              const reviewLine =
+                document.getElementById(
+                  'paymentReviewLine',
+                );
+
               if (
                 !total
                 || !label
@@ -1171,6 +1175,13 @@ export async function startCustomerArea(
                   method === 'pix'
                     ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
                     : `Total do pedido: ${orderTotal}`;
+              }
+
+              if (reviewLine) {
+                reviewLine.textContent =
+                  method === 'pix'
+                    ? `Pix • entrada ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
+                    : `Cartão • ${money(Number(total.dataset.card))}`;
               }
             },
           );

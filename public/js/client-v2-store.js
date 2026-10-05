@@ -384,6 +384,27 @@ function addonGroupLabel(value) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function comboRequirements(
+  combo,
+) {
+  const labels =
+    (combo?.items || [])
+      .filter(
+        (item) =>
+          item.required !== false,
+      )
+      .map(
+        (item) =>
+          item.itemType === 'addon_group'
+            ? addonGroupLabel(
+                item.itemCode,
+              )
+            : item.itemCode,
+      );
+
+  return labels.join(' + ');
+}
+
 function addonGroups(
   addons,
 ) {
@@ -1014,6 +1035,24 @@ function renderConfiguration(
               </h2>
 
               <div class="grid two">
+                <label class="choice-card ${
+                  state.selection.comboCode
+                    ? ''
+                    : 'selected'
+                }">
+                  <input
+                    type="radio"
+                    name="combo"
+                    value=""
+                    ${state.selection.comboCode ? '' : 'checked'}
+                  >
+
+                  <span class="choice-main">
+                    <strong>Sem combo</strong>
+                    <small>Escolher os adicionais separadamente.</small>
+                  </span>
+                </label>
+
                 ${state.catalog.combos.map(
                   (combo) => `
                     <label class="choice-card ${
@@ -1036,7 +1075,12 @@ function renderConfiguration(
 
                       <span class="choice-main">
                         <strong>${esc(combo.name)}</strong>
-                        <small>${esc(combo.description || '')}</small>
+                        <small>
+                          ${esc(combo.description || '')}
+                          ${comboRequirements(combo)
+                            ? ` • Escolha acima: ${esc(comboRequirements(combo))}`
+                            : ''}
+                        </small>
                       </span>
                     </label>
                   `,
@@ -1155,6 +1199,11 @@ function renderConfiguration(
               input.value;
 
             persist(state);
+
+            renderConfiguration(
+              state,
+              render,
+            );
           },
         );
       },

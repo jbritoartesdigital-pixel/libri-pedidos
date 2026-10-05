@@ -936,8 +936,13 @@ export async function startCustomerArea(
         summaryHtml(area);
     }
 
+    const paymentFirst =
+      activeTab === 'summary'
+      && ['urgency_approved', 'awaiting_payment']
+        .includes(area.order.status);
+
     app.innerHTML = `
-      <div class="customer-layout">
+      <div class="customer-layout ${paymentFirst ? 'payment-first' : ''}">
         ${statusSidebar(area)}
 
         <div>

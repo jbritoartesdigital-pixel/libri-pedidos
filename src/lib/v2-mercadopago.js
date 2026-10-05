@@ -281,11 +281,6 @@ export async function createMercadoPagoCheckout(
   const hold = await env.DB.prepare(`SELECT token FROM v2_checkout_holds
     WHERE order_id = ? AND status IN ('active', 'expired') ORDER BY id DESC LIMIT 1`).bind(orderId).first();
   if (!hold) throw new Error('Reserva do pagamento não encontrada.');
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${orderId}:${hold.token}`)));
-  digest[6] = (digest[6] & 15) | 64;
-  digest[8] = (digest[8] & 63) | 128;
-  const hex = Array.from(digest.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
-  const idempotencyKey = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 
   const paymentType =
     paymentMethod
@@ -385,6 +380,46 @@ export async function createMercadoPagoCheckout(
         customerEmail,
     };
   }
+
+  // A chave representa esta tentativa exata. Se o payload mudar após uma
+  // correção de integração, uma nova chave é gerada; uma repetição idêntica
+  // continua usando a mesma chave para recuperar respostas incertas sem duplicar cobrança.
+  const idempotencySeed =
+    `${orderId}:${hold.token}:${JSON.stringify(body)}`;
+
+  const digest =
+    new Uint8Array(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(
+          idempotencySeed,
+        ),
+      ),
+    );
+
+  digest[6] =
+    (digest[6] & 15)
+    | 64;
+
+  digest[8] =
+    (digest[8] & 63)
+    | 128;
+
+  const hex =
+    Array.from(
+      digest.slice(
+        0,
+        16,
+      ),
+      (byte) =>
+        byte
+          .toString(16)
+          .padStart(2, '0'),
+    )
+      .join('');
+
+  const idempotencyKey =
+    `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 
   const mpOrder =
     await mpFetch(

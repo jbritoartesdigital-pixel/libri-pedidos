@@ -2224,7 +2224,7 @@ export async function startStore(
 
     state.step =
       Math.max(
-        1,
+        2,
         state.step,
       );
   }

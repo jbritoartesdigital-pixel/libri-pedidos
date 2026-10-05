@@ -529,3 +529,55 @@ button { -webkit-tap-highlight-color: transparent; }
   .order-card, .notification-card { grid-template-columns: 1fr; }
   .form-grid .full { grid-column: auto; }
 }
+
+
+/* Admin V2 mais legível no celular */
+@media (max-width: 620px) {
+  .sidebar { padding: 10px 12px 8px; }
+  .brand { margin-bottom: 8px; }
+
+  .nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    overflow: visible;
+  }
+
+  .nav-btn {
+    padding: 9px 5px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .main { padding: 10px; }
+
+  .topbar {
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .topbar h1 { font-size: 30px; }
+
+  .card,
+  .settings-card {
+    padding: 14px;
+  }
+
+  .settings-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .settings-tabs::-webkit-scrollbar { display: none; }
+  .settings-tab { flex: 0 0 auto; }
+  .toolbar .btn { flex: 1 1 145px; }
+  .form-grid { gap: 10px; }
+
+  .row-card,
+  .order-card,
+  .notification-card {
+    padding: 11px;
+  }
+}

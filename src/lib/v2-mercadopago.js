@@ -115,17 +115,30 @@ function paymentMethodConfig(
 }
 
 function mpErrorMessage(data) {
-  const direct = data?.message || data?.error || data?.status_detail;
-  if (direct) return String(direct);
   for (const collection of [data?.cause, data?.errors, data?.details]) {
     if (!Array.isArray(collection)) continue;
     for (const item of collection) {
       const detail = item?.description || item?.message || item?.detail;
       const code = item?.code || item?.error;
-      if (detail && code) return String(detail) + ' (' + String(code) + ')';
-      if (detail || code) return String(detail || code);
+      const property = item?.property || item?.field || item?.path;
+
+      if (detail && property) {
+        return String(detail) + ' [' + String(property) + ']';
+      }
+
+      if (detail && code) {
+        return String(detail) + ' (' + String(code) + ')';
+      }
+
+      if (detail || property || code) {
+        return String(detail || property || code);
+      }
     }
   }
+
+  const direct = data?.message || data?.error || data?.status_detail;
+  if (direct) return String(direct);
+
   return 'Mercado Pago recusou a solicitação.';
 }
 async function mpFetch(
@@ -330,10 +343,7 @@ export async function createMercadoPagoCheckout(
         auto_return:
           'all',
 
-        retries: {
-          allowed:
-            true,
-        },
+
       },
 
       payment_method:

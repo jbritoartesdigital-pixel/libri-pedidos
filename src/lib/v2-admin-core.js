@@ -389,10 +389,21 @@ export async function cancelV2Order(
           .toLowerCase();
 
       if (
-        ![
+        [
           'processed',
           'approved',
           'refunded',
+        ].includes(
+          remoteStatus,
+        )
+      ) {
+        throw new Error(
+          'O Mercado Pago informa pagamento processado neste pedido. Atualize o status antes de cancelar.',
+        );
+      }
+
+      if (
+        ![
           'canceled',
           'cancelled',
           'failed',
@@ -405,29 +416,41 @@ export async function cancelV2Order(
           env,
           providerOrderId,
         );
-
-        await env.DB
-          .prepare(
-            `
-              UPDATE v2_payments
-              SET
-                status = 'cancelled',
-                updated_at = ?
-              WHERE
-                provider = 'mercado_pago'
-                AND provider_order_id = ?
-                AND status = 'pending'
-            `,
-          )
-          .bind(
-            nowIso(),
-            providerOrderId,
-          )
-          .run();
       }
+
+      await env.DB
+        .prepare(
+          `
+            UPDATE v2_payments
+            SET
+              status = 'cancelled',
+              updated_at = ?
+            WHERE
+              provider = 'mercado_pago'
+              AND provider_order_id = ?
+              AND status = 'pending'
+          `,
+        )
+        .bind(
+          nowIso(),
+          providerOrderId,
+        )
+        .run();
     } catch (
       error
     ) {
+      if (
+        /pagamento processado/i
+          .test(
+            String(
+              error?.message
+              || '',
+            ),
+          )
+      ) {
+        throw error;
+      }
+
       console.error(
         'V2 cancel provider checkout failed',
         providerOrderId,

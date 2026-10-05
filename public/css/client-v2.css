@@ -1056,3 +1056,101 @@ a {
     grid-column: 1 / -1;
   }
 }
+
+
+/* Ajustes mobile-first V2 */
+.input-error,
+.select.input-error {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(165, 65, 65, 0.12) !important;
+}
+
+.urgency-preview {
+  margin-top: 12px;
+}
+
+@media (max-width: 540px) {
+  .site-header { padding-top: 10px; }
+
+  .app-shell {
+    width: min(100% - 16px, 1120px);
+    margin-top: 4px;
+    margin-bottom: 56px;
+  }
+
+  .page-card,
+  .hero-card {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .page-head { margin-bottom: 14px; }
+
+  .page-title {
+    margin-top: 6px;
+    font-size: clamp(28px, 8.5vw, 36px);
+    line-height: 1.02;
+  }
+
+  .page-subtitle,
+  .hero-card p {
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .hero-card h1 { font-size: 36px; }
+  .progress-shell { margin-bottom: 12px; }
+
+  .grid,
+  .product-grid,
+  .form-grid,
+  .delivery-grid {
+    gap: 10px;
+  }
+
+  .section-block { margin-top: 16px; }
+
+  .choice-card,
+  .delivery-card {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .product-card {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .product-card h3 { font-size: 18px; }
+  .product-card .price { margin-top: 10px; }
+
+  .input,
+  .textarea,
+  .select {
+    padding: 12px;
+  }
+
+  .review-line { padding: 8px 0; }
+
+  .terms-box {
+    margin-top: 14px;
+    padding: 13px;
+  }
+
+  .action-row {
+    margin-top: 18px;
+    margin-inline: -14px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .action-row .btn { min-height: 46px; }
+  .action-row .btn-ghost { flex: 0 0 auto; }
+  .action-row .btn-primary { flex: 1 1 190px; }
+
+  .quote-card,
+  .notice {
+    padding: 13px;
+  }
+
+  .notice { line-height: 1.45; }
+}

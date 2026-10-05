@@ -367,6 +367,9 @@ function tabButtons(
 function summaryHtml(
   area,
 ) {
+  const termsAlreadyAccepted = area.payment?.termsAccepted === true;
+  const urgencyPercent = Number(area.urgency?.percent || 0);
+
   return `
     <section class="page-card">
       <div class="page-head">
@@ -384,13 +387,12 @@ function summaryHtml(
       ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
         <section class="card">
           <h2>${area.urgency ? 'Pagamento do encaixe aprovado' : 'Retomar pagamento'}</h2>
-          <p>${area.urgency ? 'Total com adicional de 30% após os descontos.' : 'Seu pedido e sua janela serão conferidos antes do pagamento.'}</p>
+          <p>${area.urgency ? `Total com adicional de ${urgencyPercent}% após os descontos.` : 'Seu pedido e sua janela serão conferidos antes do pagamento.'}</p>
           <p>Total: ${money(area.payment.totalCents)}</p>
           ${area.urgency && area.order.status === 'urgency_approved' ? `
             <label><input type="radio" name="resumeMethod" value="pix" checked> Pix: entrada de 50%</label>
             <label><input type="radio" name="resumeMethod" value="card"> Cartão: 100%</label>` : `<p>${area.payment.method === 'pix' ? 'Pix: entrada de 50%' : 'Cartão: 100%'}</p>`}
-          <label><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label>
-          <button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>
+          ${termsAlreadyAccepted ? '<div class="notice success">Condições do pedido já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
           <button class="btn btn-primary" id="resumePayment">Ir para o pagamento</button>
         </section>` : ''}
 
@@ -977,14 +979,21 @@ export async function startCustomerArea(
       catch (error) { showToast(error.message); }
     });
     document.getElementById('resumePayment')?.addEventListener('click', async event => {
-      if (!document.getElementById('resumeTerms').checked) { showToast('Leia e aceite as condições.'); return; }
+      const needsTerms = area.payment?.termsAccepted !== true;
+      const termsControl = document.getElementById('resumeTerms');
+      if (needsTerms && !termsControl?.checked) { showToast('Leia e aceite as condições.'); return; }
       const button = event.currentTarget;
       button.disabled = true;
       try {
-        const terms = await loadTerms();
+        const payload = { clientRequestId: randomId(),
+          paymentMethod: document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method };
+        if (needsTerms) {
+          const terms = await loadTerms();
+          payload.termsAccepted = true;
+          payload.termsVersion = terms.version;
+        }
         const result = await api(`/api/v2/customer-area/${token}/payment`, {
-          method: 'POST', body: JSON.stringify({ clientRequestId: randomId(), termsAccepted: true,
-            termsVersion: terms.version, paymentMethod: document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method }),
+          method: 'POST', body: JSON.stringify(payload),
         });
         if (result.alreadyPaid) {
           area = await loadArea(); await render();
@@ -993,7 +1002,7 @@ export async function startCustomerArea(
         else throw new Error('Pagamento indisponível. Atualize o pedido.');
       } catch (error) {
         button.disabled = false; showToast(error.message);
-        if (error.data?.code === 'terms_changed') { paymentTerms = null; document.getElementById('resumeTerms').checked = false; }
+        if (error.data?.code === 'terms_changed') { paymentTerms = null; if (termsControl) termsControl.checked = false; }
       }
     });
 

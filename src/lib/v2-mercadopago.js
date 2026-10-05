@@ -114,6 +114,20 @@ function paymentMethodConfig(
   };
 }
 
+function mpErrorMessage(data) {
+  const direct = data?.message || data?.error || data?.status_detail;
+  if (direct) return String(direct);
+  for (const collection of [data?.cause, data?.errors, data?.details]) {
+    if (!Array.isArray(collection)) continue;
+    for (const item of collection) {
+      const detail = item?.description || item?.message || item?.detail;
+      const code = item?.code || item?.error;
+      if (detail && code) return String(detail) + ' (' + String(code) + ')';
+      if (detail || code) return String(detail || code);
+    }
+  }
+  return 'Mercado Pago recusou a solicitação.';
+}
 async function mpFetch(
   env,
   path,
@@ -187,14 +201,7 @@ async function mpFetch(
   }
 
   if (!response.ok) {
-    const message =
-      data
-        ?.message
-      || data
-        ?.error
-      || data
-        ?.status_detail
-      || 'Mercado Pago recusou a solicitação.';
+    const message = mpErrorMessage(data);
 
     const error =
       new Error(

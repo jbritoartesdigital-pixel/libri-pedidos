@@ -44,6 +44,15 @@ const EVENT_TYPES = [
   },
 ];
 
+const ADDON_GROUP_LABELS = {
+  confirmation: 'Confirmação de presença',
+  filter: 'Filtro personalizado',
+  save_the_date: 'Save the Date',
+  reminder: 'Lembrete',
+  moments: 'Libri Moments',
+  extras: 'Outros adicionais',
+};
+
 const STORE_KEY =
   'libriV2StoreState';
 
@@ -368,6 +377,12 @@ function eventLabel(
   )?.label
   || value
   || '';
+}
+
+function addonGroupLabel(value) {
+  const key = String(value || 'extras').trim();
+  if (ADDON_GROUP_LABELS[key]) return ADDON_GROUP_LABELS[key];
+  return key.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 function addonGroups(
@@ -941,7 +956,7 @@ function renderConfiguration(
               ([groupName, addons]) => `
                 <div class="section-block">
                   <span class="muted">
-                    ${esc(groupName)}
+                    ${esc(addonGroupLabel(groupName))}
                   </span>
 
                   <div class="grid two" style="margin-top:8px">
@@ -1409,14 +1424,15 @@ function renderDetails(
     .querySelectorAll(
       'input,select',
     )
-    .forEach(
-      (element) => {
-        element.addEventListener(
-          'change',
-          capture,
-        );
-      },
-    );
+    .forEach((element) => {
+      const update = () => {
+        element.classList.remove('input-error');
+        element.removeAttribute('aria-invalid');
+        capture();
+      };
+      element.addEventListener('input', update);
+      element.addEventListener('change', update);
+    });
 
   bindBack(
     state,
@@ -1432,17 +1448,24 @@ function renderDetails(
       async () => {
         capture();
 
-        if (
-          !state.customer.name
-          || !state.customer.whatsapp
-          || !state.event.type
-          || !state.event.honoreeName
-          || !state.event.date
-        ) {
-          showToast(
-            'Confira os campos obrigatórios.',
-          );
-
+        const requiredFields = [
+          { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
+          { value: state.customer.whatsapp, label: 'WhatsApp', id: 'whatsapp' },
+          { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
+          { value: state.event.honoreeName, label: 'Nome da criança, casal ou evento', id: 'honoreeName' },
+          { value: state.event.date, label: 'Data da festa', id: 'eventDate' },
+        ];
+        const missing = requiredFields.filter(field => !String(field.value || '').trim());
+        if (missing.length) {
+          for (const field of missing) {
+            const element = document.getElementById(field.id);
+            element?.classList.add('input-error');
+            element?.setAttribute('aria-invalid', 'true');
+          }
+          const first = document.getElementById(missing[0].id);
+          first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          first?.focus();
+          showToast(`Preencha: ${missing.map(field => field.label).join(', ')}.`);
           return;
         }
 
@@ -1514,6 +1537,12 @@ function renderDelivery(
     state.delivery?.options
     || [];
 
+  const urgencyPercent = Math.max(1, Math.min(100,
+    Number(state.catalog?.rules?.urgencyPercent || 30)));
+  const urgencyBaseCents = Number(state.quote?.subtotalCents ?? state.quote?.totalCents ?? 0);
+  const urgencyAmountCents = Math.round(urgencyBaseCents * urgencyPercent / 100);
+  const urgencyTotalCents = urgencyBaseCents + urgencyAmountCents;
+
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
@@ -1581,9 +1610,12 @@ function renderDelivery(
           `
           : `
             <div class="notice info">
-              Não encontramos uma janela normal disponível
-              antes da sua festa. A Libri precisa analisar
-              um possível encaixe.
+              <strong>Esta data precisa de análise de encaixe.</strong>
+              <div style="margin-top:6px">Se for aprovado, será aplicado um adicional de <strong>${urgencyPercent}%</strong> após os descontos. Nenhuma cobrança é feita agora.</div>
+            </div>
+            <div class="quote-card urgency-preview">
+              <div class="quote-row"><span>Adicional de urgência</span><strong>+ ${money(urgencyAmountCents)}</strong></div>
+              <div class="quote-row total"><span>Total se aprovado</span><strong>${money(urgencyTotalCents)}</strong></div>
             </div>
           `
       }

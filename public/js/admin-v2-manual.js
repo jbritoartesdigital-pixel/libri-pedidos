@@ -10,10 +10,9 @@ import {
 
 const EVENT_TYPES = [
   ['birthday', 'Aniversário'],
+  ['15_years', '15 Anos'],
   ['wedding', 'Casamento'],
-  ['baby_shower', 'Chá de bebê'],
-  ['reveal', 'Chá revelação'],
-  ['baptism', 'Batizado'],
+  ['celebration', 'Chá / Celebração'],
   ['other', 'Outro'],
 ];
 

@@ -49,10 +49,25 @@ loading();
 bootstrap()
   .catch(
     (error) => {
+      const route =
+        pathInfo();
+
+      const isCustomerArea =
+        route.mode
+        === 'area';
+
       errorPage(
         'Não conseguimos abrir esta página',
         error.message
         || 'Tente novamente em alguns instantes.',
+        isCustomerArea
+          ? {
+              actionHref:
+                window.location.href,
+              actionLabel:
+                'Tentar novamente',
+            }
+          : undefined,
       );
     },
   );

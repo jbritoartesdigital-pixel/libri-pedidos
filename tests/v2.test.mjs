@@ -48,7 +48,15 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   await assert.rejects(decideV2Urgency(DB, result.order.code, { decision: 'reject', note: 'Duplicada' }));
   const payment = await resumeV2Payment(request, e, token, await terms(DB));
   assert.equal(mp.bodies[0].total_amount, '45.51');
+  assert.equal(mp.bodies[0].capture_mode, undefined);
+  assert.equal(mp.bodies[0].expiration_time, undefined);
+  assert.equal(mp.bodies[0].description, undefined);
+  assert.equal(mp.bodies[0].config.statement_descriptor, undefined);
+  assert.equal(mp.bodies[0].config.online.auto_return, 'approved');
   assert.equal(mp.bodies[0].config.online.retries, undefined);
+  assert.deepEqual(Object.keys(mp.bodies[0].items[0]).sort(),
+    ['quantity', 'title', 'unit_price']);
+  assert.equal(mp.bodies[0].payer.email, 'test@example.com');
   assert.equal(payment.payment.ready, true);
   const reused = await resumeV2Payment(request, e, token, await terms(DB)); assert.equal(reused.payment.checkoutUrl, payment.payment.checkoutUrl); assert.equal(mp.posts, 1);
   mp.approve(payment.payment.providerOrderId);

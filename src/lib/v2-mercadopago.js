@@ -252,19 +252,6 @@ export async function createMercadoPagoCheckout(
       env.DB,
     );
 
-  const expiryMinutes =
-    Math.max(
-      5,
-      Math.min(
-        180,
-        v2IntSetting(
-          settings,
-          'mercado_pago_order_expiry_minutes',
-          25,
-        ),
-      ),
-    );
-
   const origin =
     new URL(
       request.url,
@@ -296,6 +283,8 @@ export async function createMercadoPagoCheckout(
     throw new Error('O valor do pagamento deve ser positivo em centavos.');
   }
 
+  // Payload deliberadamente enxuto: só enviamos campos necessários
+  // e configurações explicitamente documentadas para Checkout Pro via Orders.
   const body = {
     type:
       'online',
@@ -303,28 +292,37 @@ export async function createMercadoPagoCheckout(
     processing_mode:
       'manual',
 
-    capture_mode:
-      'automatic_async',
-
     total_amount:
       amount,
 
     external_reference:
       orderCode,
 
-    expiration_time:
-      `PT${expiryMinutes}M`,
+    payer:
+      customerEmail
+        ? {
+            email:
+              customerEmail,
+          }
+        : undefined,
 
-    description:
-      paymentMethod
-      === 'pix'
-        ? `Entrada ${orderCode}`
-        : `Pedido ${orderCode}`,
+    items: [
+      {
+        title:
+          paymentMethod
+          === 'pix'
+            ? `Entrada do pedido ${orderCode}`
+            : `Pedido ${orderCode}`,
+
+        quantity:
+          1,
+
+        unit_price:
+          amount,
+      },
+    ],
 
     config: {
-      statement_descriptor:
-        'LIBRI',
-
       online: {
         success_url:
           `${customerArea}?payment=success`,
@@ -336,9 +334,7 @@ export async function createMercadoPagoCheckout(
           `${customerArea}?payment=failure`,
 
         auto_return:
-          'all',
-
-
+          'approved',
       },
 
       payment_method:
@@ -347,38 +343,10 @@ export async function createMercadoPagoCheckout(
           settings,
         ),
     },
-
-    items: [
-      {
-        external_code:
-          orderCode,
-
-        title:
-          paymentMethod
-          === 'pix'
-            ? `Entrada do pedido ${orderCode}`
-            : `Pedido ${orderCode}`,
-
-        quantity:
-          1,
-
-        unit_measure:
-          'unit',
-
-        unit_price:
-          amount,
-
-        total_amount:
-          amount,
-      },
-    ],
   };
 
-  if (customerEmail) {
-    body.payer = {
-      email:
-        customerEmail,
-    };
+  if (!customerEmail) {
+    delete body.payer;
   }
 
   // A chave representa esta tentativa exata. Se o payload mudar após uma

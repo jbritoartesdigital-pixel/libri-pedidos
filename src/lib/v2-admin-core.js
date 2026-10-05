@@ -236,6 +236,274 @@ export async function deleteUnpaidV2Order(
   };
 }
 
+export async function cancelV2Order(
+  env,
+  orderCode,
+  {
+    reason = '',
+    note = '',
+  } = {},
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    );
+
+  const allowedReasons =
+    new Set([
+      'Não realizou pagamento',
+      'Cliente desistiu',
+      'Outro',
+    ]);
+
+  const selectedReason =
+    cleanText(
+      reason,
+      120,
+    );
+
+  if (
+    !allowedReasons
+      .has(
+        selectedReason,
+      )
+  ) {
+    throw new Error(
+      'Informe o motivo do cancelamento.',
+    );
+  }
+
+  const detail =
+    cleanText(
+      note,
+      1000,
+    );
+
+  if (
+    selectedReason === 'Outro'
+    && !detail
+  ) {
+    throw new Error(
+      'Descreva o motivo do cancelamento.',
+    );
+  }
+
+  const finalReason =
+    selectedReason === 'Outro'
+      ? `Outro: ${detail}`
+      : selectedReason;
+
+  const order =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            order_code,
+            status
+          FROM v2_orders
+          WHERE order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  if (
+    order.status
+    === 'cancelled'
+  ) {
+    return {
+      cancelled: true,
+      alreadyCancelled: true,
+      code:
+        order.order_code,
+      reason:
+        finalReason,
+    };
+  }
+
+  if (
+    order.status
+    === 'finalized'
+  ) {
+    throw new Error(
+      'Pedido finalizado não pode ser cancelado por esta ação.',
+    );
+  }
+
+  const providerPayments =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            provider_order_id
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+            AND status = 'pending'
+            AND provider_order_id IS NOT NULL
+          ORDER BY id DESC
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  for (
+    const payment
+    of providerPayments.results
+    || []
+  ) {
+    const providerOrderId =
+      String(
+        payment.provider_order_id
+        || '',
+      ).trim();
+
+    if (!providerOrderId) {
+      continue;
+    }
+
+    try {
+      const remote =
+        await fetchMercadoPagoOrder(
+          env,
+          providerOrderId,
+        );
+
+      const remoteStatus =
+        String(
+          remote?.status
+          || '',
+        )
+          .toLowerCase();
+
+      if (
+        ![
+          'processed',
+          'approved',
+          'refunded',
+          'canceled',
+          'cancelled',
+          'failed',
+          'expired',
+        ].includes(
+          remoteStatus,
+        )
+      ) {
+        await cancelMercadoPagoOrder(
+          env,
+          providerOrderId,
+        );
+      }
+    } catch (
+      error
+    ) {
+      console.error(
+        'V2 cancel provider checkout failed',
+        providerOrderId,
+        error?.message
+        || error,
+      );
+    }
+  }
+
+  const stamp =
+    nowIso();
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_checkout_holds
+          SET
+            status = 'cancelled',
+            updated_at = ?
+          WHERE
+            order_id = ?
+            AND status = 'active'
+        `,
+      )
+      .bind(
+        stamp,
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_agenda_allocations WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            status = 'cancelled',
+            next_action = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        `Cancelado • ${finalReason}`,
+        stamp,
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (
+            ?,
+            'order_cancelled',
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        order.id,
+        `Pedido cancelado: ${finalReason}.`,
+        JSON.stringify({
+          reason:
+            finalReason,
+        }),
+        stamp,
+      ),
+  ]);
+
+  return {
+    cancelled: true,
+    alreadyCancelled: false,
+    code:
+      order.order_code,
+    reason:
+      finalReason,
+  };
+}
+
 export async function cleanupAbandonedUnpaidV2Orders(
   env,
 ) {

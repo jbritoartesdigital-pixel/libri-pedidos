@@ -268,7 +268,7 @@ export async function openOrder(code, onChanged = null) {
               Próximo: ${esc(detail.order.nextAction || 'A definir')}
             </div>
 
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+            <div class="order-quick-actions">
               <a
                 class="btn btn-secondary"
                 href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\D/g,''))}"

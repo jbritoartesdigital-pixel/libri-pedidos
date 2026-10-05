@@ -7,6 +7,7 @@ import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-ad
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
+import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
 import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
@@ -309,6 +310,17 @@ test('scheduler repairs missing notifications, expires reservations and previews
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_previews').get().status, 'expired');
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE event_code = 'URGENCY_REQUESTED'").get().n, 1);
   assert.equal((await getV2CustomerArea(env(DB), result.order.publicToken)).urgency.status, 'pending');
+});
+
+test('public catalog exposes official combo composition', async () => {
+  const DB = database();
+  const catalog = await loadV2Catalog(DB);
+  assert.equal(catalog.combos.length, 5);
+  const complete = catalog.combos.find(item => item.code === 'libri_completo');
+  assert.deepEqual(
+    complete.items.map(item => item.itemCode).sort(),
+    ['confirmation', 'moments', 'reminder', 'save_the_date'],
+  );
 });
 
 test('official combos are seeded with the approved compositions and configurable zero discount', () => {

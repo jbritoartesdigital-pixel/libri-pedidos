@@ -892,7 +892,7 @@ export async function finalizeV2OrderToCascadePool(
             ?,
             'Capacidade para antecipar',
             ?,
-            '/admin/agenda',
+            '/admin-v2?view=agenda',
             'normal',
             0,
             ?

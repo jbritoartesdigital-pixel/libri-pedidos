@@ -18,6 +18,10 @@ export function renderStoreSettings(
         <h2>Empresa e pagamentos</h2>
       </div>
 
+      <div class="section-title" style="margin-top:4px">
+        <h3>Contato da Libri</h3>
+      </div>
+
       <div class="form-grid">
         <div class="field">
           <label for="companyName">Nome</label>
@@ -29,6 +33,37 @@ export function renderStoreSettings(
           <input id="companyWhatsapp" class="input" value="${esc(s.company.whatsapp)}">
         </div>
 
+        <div class="field">
+          <label for="companyEmail">E-mail</label>
+          <input id="companyEmail" class="input" type="email" value="${esc(s.company.email || '')}">
+        </div>
+
+        <div class="field">
+          <label for="companyInstagram">Instagram</label>
+          <input id="companyInstagram" class="input" value="${esc(s.company.instagram || '')}">
+        </div>
+
+        <div class="field">
+          <label for="companyCity">Cidade</label>
+          <input id="companyCity" class="input" value="${esc(s.company.city || '')}">
+        </div>
+
+        <div class="field">
+          <label for="companyState">Estado</label>
+          <input id="companyState" class="input" value="${esc(s.company.state || '')}">
+        </div>
+
+        <div class="field full">
+          <label for="companyAddress">Endereço da empresa <span class="muted">(opcional)</span></label>
+          <input id="companyAddress" class="input" value="${esc(s.company.address || '')}">
+        </div>
+      </div>
+
+      <div class="section-title" style="margin-top:20px">
+        <h3>Dados legais e saldo Pix</h3>
+      </div>
+
+      <div class="form-grid">
         <div class="field">
           <label for="companyLegalName">Nome legal</label>
           <input id="companyLegalName" class="input" value="${esc(s.company.legalName)}">
@@ -130,6 +165,31 @@ export function renderStoreSettings(
                   company_document:
                     document
                       .getElementById('companyDocument')
+                      .value
+                      .trim(),
+                  company_email:
+                    document
+                      .getElementById('companyEmail')
+                      .value
+                      .trim(),
+                  company_instagram:
+                    document
+                      .getElementById('companyInstagram')
+                      .value
+                      .trim(),
+                  company_address:
+                    document
+                      .getElementById('companyAddress')
+                      .value
+                      .trim(),
+                  company_city:
+                    document
+                      .getElementById('companyCity')
+                      .value
+                      .trim(),
+                  company_state:
+                    document
+                      .getElementById('companyState')
                       .value
                       .trim(),
                   balance_pix_key:

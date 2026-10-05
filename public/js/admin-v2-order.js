@@ -113,7 +113,7 @@ function briefingBlock(detail) {
           class="btn btn-secondary"
           type="button"
         >
-          Copiar resumo de produção
+          Copiar briefing
         </button>
 
         <button
@@ -238,6 +238,15 @@ export async function openOrder(code, onChanged = null) {
               >
                 Baixar pasta ZIP
               </a>
+
+              <a
+                class="btn btn-ghost"
+                href="${esc(detail.order.customerAreaPath || '#')}"
+                target="_blank"
+                rel="noopener"
+              >
+                Área da cliente
+              </a>
             </div>
           </section>
 
@@ -334,20 +343,83 @@ export async function openOrder(code, onChanged = null) {
           <section class="card">
             <div class="section-title">
               <h3>Prévia</h3>
+              <span class="status">${(detail.previews || []).length}</span>
             </div>
 
-            <div class="list">
+            <div class="field">
+              <label for="previewFile">Arquivo da prévia</label>
+              <input
+                id="previewFile"
+                class="input"
+                type="file"
+                accept="video/mp4,video/webm,image/jpeg,image/png,image/webp"
+              >
+            </div>
+
+            <div class="field" style="margin-top:10px">
+              <label for="previewWatermark">Texto da marca d'água</label>
+              <input
+                id="previewWatermark"
+                class="input"
+                value="PRÉVIA • ${esc(detail.order.code)}"
+              >
+            </div>
+
+            <label class="checkline" style="margin-top:10px">
+              <input id="previewProtected" type="checkbox">
+              <span>Confirmei que este arquivo é a cópia de prévia, já comprimida e com marca d'água.</span>
+            </label>
+
+            <button
+              id="publishPreview"
+              class="btn btn-primary"
+              type="button"
+              style="margin-top:10px"
+            >
+              Publicar prévia
+            </button>
+
+            <div class="list" style="margin-top:14px">
               ${(detail.previews || []).map(
                 (preview) => `
                   <div class="row-card">
                     <strong>
-                      v${preview.version} • ${esc(preview.status)}
+                      v${preview.version} • ${esc({
+                        active: 'Ativa',
+                        approved: 'Aprovada',
+                        expired: 'Expirada',
+                        replaced: 'Substituída',
+                        revoked: 'Revogada',
+                      }[preview.status] || preview.status)}
                     </strong>
 
                     <small>
                       ${esc(preview.mediaType)}
+                      ${preview.expiresAt ? ` • expira ${dateTimeBr(preview.expiresAt)}` : ''}
                       ${preview.approvedAt ? ` • aprovada ${dateTimeBr(preview.approvedAt)}` : ''}
                     </small>
+
+                    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
+                      ${preview.status === 'expired' ? `
+                        <button
+                          class="btn btn-secondary"
+                          type="button"
+                          data-preview-reactivate="${preview.id}"
+                        >
+                          Reativar
+                        </button>
+                      ` : ''}
+
+                      ${['active','expired'].includes(preview.status) ? `
+                        <button
+                          class="btn btn-ghost"
+                          type="button"
+                          data-preview-revoke="${preview.id}"
+                        >
+                          Retirar prévia
+                        </button>
+                      ` : ''}
+                    </div>
                   </div>
                 `,
               ).join('') || '<div class="empty">Nenhuma prévia publicada.</div>'}
@@ -399,6 +471,186 @@ export async function openOrder(code, onChanged = null) {
       } catch (error) { showToast(error.message); buttons.forEach(x => { x.disabled = false; }); }
     });
   });
+
+  document
+    .getElementById('publishPreview')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        const file =
+          document
+            .getElementById('previewFile')
+            ?.files
+            ?.[0];
+
+        if (!file) {
+          showToast('Selecione a prévia.');
+          return;
+        }
+
+        if (
+          !document
+            .getElementById('previewProtected')
+            ?.checked
+        ) {
+          showToast('Confirme a cópia com marca d’água.');
+          return;
+        }
+
+        const button =
+          event.currentTarget;
+
+        button.disabled = true;
+        button.textContent = 'Publicando...';
+
+        try {
+          const form =
+            new FormData();
+
+          form.append(
+            'file',
+            file,
+          );
+
+          form.append(
+            'watermarkConfirmed',
+            'true',
+          );
+
+          form.append(
+            'watermarkLabel',
+            document
+              .getElementById('previewWatermark')
+              .value
+              .trim(),
+          );
+
+          const result =
+            await api(
+              `/api/admin/v2/orders/${detail.order.code}/previews`,
+              {
+                method: 'POST',
+                body: form,
+              },
+            );
+
+          showToast('Prévia publicada ✓');
+
+          if (
+            result.client
+              ?.whatsappUrl
+            && confirm(
+              'Prévia publicada. Abrir o WhatsApp para enviar o link à cliente?',
+            )
+          ) {
+            window.open(
+              result.client.whatsappUrl,
+              '_blank',
+              'noopener',
+            );
+          }
+
+          close();
+
+          if (onChanged) {
+            await onChanged();
+          }
+
+          await openOrder(
+            detail.order.code,
+            onChanged,
+          );
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Publicar prévia';
+          showToast(error.message);
+        }
+      },
+    );
+
+  document
+    .querySelectorAll('[data-preview-reactivate]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            button.disabled = true;
+
+            try {
+              await api(
+                `/api/admin/v2/previews/${button.dataset.previewReactivate}/reactivate`,
+                {
+                  method: 'POST',
+                  body: '{}',
+                },
+              );
+
+              close();
+
+              if (onChanged) {
+                await onChanged();
+              }
+
+              await openOrder(
+                detail.order.code,
+                onChanged,
+              );
+
+              showToast('Prévia reativada ✓');
+            } catch (error) {
+              button.disabled = false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
+
+  document
+    .querySelectorAll('[data-preview-revoke]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            if (
+              !confirm(
+                'Retirar esta prévia da área da cliente?',
+              )
+            ) {
+              return;
+            }
+
+            button.disabled = true;
+
+            try {
+              await api(
+                `/api/admin/v2/previews/${button.dataset.previewRevoke}/revoke`,
+                {
+                  method: 'POST',
+                  body: '{}',
+                },
+              );
+
+              close();
+
+              if (onChanged) {
+                await onChanged();
+              }
+
+              await openOrder(
+                detail.order.code,
+                onChanged,
+              );
+
+              showToast('Prévia retirada.');
+            } catch (error) {
+              button.disabled = false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
 
   const refreshContracts =
     async () => {
@@ -678,7 +930,7 @@ export async function openOrder(code, onChanged = null) {
         await writeClipboard(
           detail.copy.production,
         );
-        showToast('Resumo copiado ✓');
+        showToast('Briefing copiado ✓');
       },
     );
 

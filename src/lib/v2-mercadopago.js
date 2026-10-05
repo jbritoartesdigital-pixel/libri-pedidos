@@ -74,34 +74,12 @@ function paymentMethodConfig(
       ),
     );
 
-  const installmentsCost =
-    String(
-      settings
-        ?.mercado_pago_installments_cost
-      || 'buyer',
-    )
-      .trim()
-      .toLowerCase()
-    === 'seller'
-      ? 'seller'
-      : 'buyer';
-
   return {
     default_type:
       'credit_card',
 
     max_installments:
       maxInstallments,
-
-    installments_cost:
-      installmentsCost,
-
-    installments: {
-      available: {
-        type:
-          'all',
-      },
-    },
 
     not_allowed_types: [
       'bank_transfer',

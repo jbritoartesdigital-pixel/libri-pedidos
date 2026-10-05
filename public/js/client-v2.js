@@ -56,17 +56,36 @@ bootstrap()
         route.mode
         === 'area';
 
-      errorPage(
-        'Não conseguimos abrir esta página',
-        error.message
-        || 'Tente novamente em alguns instantes.',
+      const expiredCustomerArea =
         isCustomerArea
-          ? {
-              actionHref:
-                window.location.href,
-              actionLabel:
-                'Tentar novamente',
-            }
+        && error.status === 404;
+
+      errorPage(
+        expiredCustomerArea
+          ? 'Este pedido não está mais disponível'
+          : 'Não conseguimos abrir esta página',
+        expiredCustomerArea
+          ? 'Se o pagamento não foi concluído dentro do prazo, a reserva expira. Você pode fazer um novo pedido.'
+          : (
+              error.message
+              || 'Tente novamente em alguns instantes.'
+            ),
+        isCustomerArea
+          ? (
+              expiredCustomerArea
+                ? {
+                    actionHref:
+                      '/pedido',
+                    actionLabel:
+                      'Fazer novo pedido',
+                  }
+                : {
+                    actionHref:
+                      window.location.href,
+                    actionLabel:
+                      'Tentar novamente',
+                  }
+            )
           : undefined,
       );
     },

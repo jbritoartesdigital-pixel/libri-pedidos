@@ -1,6 +1,7 @@
 import {
   api,
   app,
+  dateBr,
   debounce,
   esc,
   loading,
@@ -369,39 +370,91 @@ function summaryHtml(
 ) {
   const termsAlreadyAccepted = area.payment?.termsAccepted === true;
   const urgencyPercent = Number(area.urgency?.percent || 0);
+  const isPix = area.payment.method === 'pix';
+  const totalCents = Number(area.payment.totalCents || 0);
+  const pixDueCents = Math.round(totalCents * 0.5);
+  const pixBalanceCents = Math.max(0, totalCents - pixDueCents);
+  const dueNowCents = isPix
+    ? pixDueCents
+    : totalCents;
+  const paidCents = Number(area.payment.paidCents || 0);
+  const remainingCents = Number(area.payment.remainingCents ?? Math.max(0, totalCents - paidCents));
+  const hasPaid = paidCents > 0;
+  const capacityReview = area.payment?.capacityReview === true;
+  const awaitingInitialPayment =
+    ['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+    && !capacityReview;
+  const awaitingBalance = area.order.status === 'balance_pending';
+  const deliveryStart = area.order.deliveryWindow.start || '';
+  const deliveryEnd = area.order.deliveryWindow.end || '';
+  const deliveryLabel =
+    deliveryStart && deliveryEnd
+      ? `${dateBr(deliveryStart)} a ${dateBr(deliveryEnd)}`
+      : area.urgency?.status === 'pending'
+        ? 'Em análise'
+        : area.urgency?.status === 'rejected'
+          ? 'Encaixe não aprovado'
+          : 'A definir';
 
   return `
     <section class="page-card">
-      <div class="page-head ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? 'payment-head' : ''}">
+      <div class="page-head ${awaitingInitialPayment || awaitingBalance || capacityReview ? 'payment-head' : ''}">
         <span class="eyebrow">Seu pedido</span>
         <h1 class="page-title">
-          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
-            ? 'Pagamento pendente'
-            : `Oi, ${esc(area.customer.name)} 💛`}
+          ${capacityReview
+            ? 'Pagamento confirmado'
+            : awaitingInitialPayment
+              ? 'Pagamento pendente'
+              : awaitingBalance
+                ? 'Saldo pendente'
+                : `Oi, ${esc(area.customer.name)} 💛`}
         </h1>
         <p class="page-subtitle">
-          ${['urgency_approved', 'awaiting_payment'].includes(area.order.status)
-            ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
-            : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
+          ${capacityReview
+            ? 'A Libri está revisando sua janela de entrega. Nenhum novo pagamento é necessário.'
+            : awaitingInitialPayment
+              ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
+              : awaitingBalance
+                ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
+                : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
         </p>
       </div>
 
+      ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
+      ${capacityReview || area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo. Não é necessário pagar novamente.</div>' : ''}
+      ${area.payment?.returnState === 'checking' ? '<div class="notice info">Pagamento enviado. Estamos confirmando com o Mercado Pago.</div>' : ''}
+      ${area.payment?.returnState === 'pending' ? '<div class="notice info">Pagamento ainda pendente no Mercado Pago. Você pode atualizar o status em alguns instantes.</div>' : ''}
+      ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
       ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
       ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
-      ${['urgency_approved', 'awaiting_payment'].includes(area.order.status) ? `
+      ${awaitingInitialPayment ? `
         <section class="card payment-priority">
           <div class="payment-priority-top">
             <div>
-              <span class="eyebrow">${area.urgency ? 'Encaixe aprovado' : 'Pagamento'}</span>
-              <strong class="payment-priority-total">${money(area.payment.totalCents)}</strong>
+              <span class="eyebrow">${area.urgency ? 'Encaixe aprovado' : 'Pagamento agora'}</span>
+              <strong
+                id="paymentDueNow"
+                class="payment-priority-total"
+                data-pix="${pixDueCents}"
+                data-card="${totalCents}"
+              >${money(dueNowCents)}</strong>
             </div>
-            <small>${area.payment.method === 'pix' ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
+            <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
           </div>
+
+          <p
+            id="paymentBreakdown"
+            class="muted"
+            data-total="${totalCents}"
+            data-balance="${pixBalanceCents}"
+          >${isPix
+            ? `Total do pedido: ${money(totalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+            : `Total do pedido: ${money(totalCents)}`}</p>
 
           ${area.urgency && area.order.status === 'urgency_approved' ? `
             <div class="payment-methods">
-              <label><input type="radio" name="resumeMethod" value="pix" checked> Pix • entrada de 50%</label>
-              <label><input type="radio" name="resumeMethod" value="card"> Cartão • 100%</label>
+              <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
+              <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
             </div>` : ''}
 
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
@@ -411,6 +464,42 @@ function summaryHtml(
           <button class="btn btn-primary payment-main-cta" id="resumePayment">Pagar agora</button>
         </section>` : ''}
 
+      ${area.order.status === 'balance_pending' && isPix && remainingCents > 0 ? `
+        <section class="card payment-priority" id="balancePixCard">
+          <div class="payment-priority-top">
+            <div>
+              <span class="eyebrow">Saldo final</span>
+              <strong class="payment-priority-total">${money(remainingCents)}</strong>
+            </div>
+            <small>Pix direto para a Libri</small>
+          </div>
+
+          ${area.payment.balancePix?.recipient ? `<p class="muted">Recebedor: <strong>${esc(area.payment.balancePix.recipient)}</strong></p>` : ""}
+          ${area.payment.balancePix?.key ? `
+            <div class="notice info compact-notice">
+              <strong>Chave Pix</strong><br>
+              <span>${esc(area.payment.balancePix.key)}</span>
+            </div>
+            <button
+              class="btn btn-primary payment-main-cta"
+              id="copyBalancePix"
+              type="button"
+              data-pix-key="${esc(area.payment.balancePix.key)}"
+            >Copiar chave Pix</button>
+            ${area.support?.whatsappUrl ? `
+              <a
+                class="btn btn-ghost"
+                href="${esc(area.support.whatsappUrl)}"
+                target="_blank"
+                rel="noopener"
+                style="margin-top:8px"
+              >Já paguei • avisar a Libri</a>
+            ` : ''}
+            <p class="muted">Depois do Pix, avise a Libri para a confirmação do saldo e liberação da entrega.</p>
+          ` : `<div class="notice info">Entre em contato com a Libri para receber os dados do saldo.</div>`}
+        </section>
+      ` : ""}
+
       <dl class="review-list">
         <div class="review-line">
           <dt>Status</dt>
@@ -419,11 +508,7 @@ function summaryHtml(
 
         <div class="review-line">
           <dt>Janela de entrega</dt>
-          <dd>
-            ${esc(area.order.deliveryWindow.start || '')}
-            a
-            ${esc(area.order.deliveryWindow.end || '')}
-          </dd>
+          <dd>${esc(deliveryLabel)}</dd>
         </div>
 
         <div class="review-line">
@@ -447,12 +532,15 @@ function summaryHtml(
 
         <div class="review-line">
           <dt>Pagamento</dt>
-          <dd>
+          <dd id="paymentReviewLine">
             ${
-              area.payment.method
-              === 'pix'
-                ? `Pix • saldo ${money(area.payment.balanceCents)}`
-                : 'Cartão • pagamento integral'
+              isPix
+                ? (hasPaid
+                    ? `Pix • pago ${money(paidCents)} • saldo ${money(remainingCents)}`
+                    : `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`)
+                : (hasPaid
+                    ? `Cartão • pago ${money(paidCents)}`
+                    : `Cartão • ${money(totalCents)}`)
             }
           </dd>
         </div>
@@ -462,8 +550,9 @@ function summaryHtml(
         area.briefing.locked
           ? `
             <div class="notice info section-block">
-              O briefing será liberado assim que o pagamento for confirmado.
-              Se você acabou de pagar, pode atualizar esta página em alguns instantes.
+              ${capacityReview
+                ? 'Seu pagamento já foi confirmado. A Libri está revisando a janela de entrega antes de liberar o briefing.'
+                : 'O briefing será liberado assim que o pagamento for confirmado. Se você acabou de pagar, pode atualizar esta página em alguns instantes.'}
             </div>
           `
           : area.briefing.completed
@@ -488,13 +577,18 @@ function briefingHtml(
   if (
     area.briefing.locked
   ) {
+    const capacityReview =
+      area.payment?.capacityReview === true;
+
     return `
       <section class="page-card">
         <div class="page-head">
           <span class="eyebrow">Briefing</span>
-          <h1 class="page-title">Aguardando pagamento</h1>
+          <h1 class="page-title">${capacityReview ? 'Pagamento confirmado' : 'Aguardando pagamento'}</h1>
           <p class="page-subtitle">
-            Assim que o pagamento for confirmado, o briefing criativo é liberado aqui.
+            ${capacityReview
+              ? 'A Libri está revisando sua janela de entrega. O briefing será liberado assim que essa revisão terminar.'
+              : 'Assim que o pagamento for confirmado, o briefing criativo é liberado aqui.'}
           </p>
         </div>
 
@@ -887,6 +981,91 @@ export async function startCustomerArea(
   let area =
     await loadArea();
 
+  const returnUrl =
+    new URL(
+      window.location.href,
+    );
+
+  const paymentReturn =
+    returnUrl.searchParams.get(
+      'payment',
+    );
+
+  if (
+    [
+      'success',
+      'pending',
+      'failure',
+    ].includes(
+      paymentReturn,
+    )
+  ) {
+    if (
+      paymentReturn
+      === 'failure'
+    ) {
+      area.payment.returnState =
+        'failure';
+    } else if (
+      area.briefing.locked
+    ) {
+      try {
+        const result =
+          await api(
+            `/api/v2/customer-area/${token}/payment`,
+            {
+              method:
+                'POST',
+              body:
+                JSON.stringify({
+                  clientRequestId:
+                    randomId(),
+                  paymentMethod:
+                    area.payment.method,
+                }),
+            },
+          );
+
+        if (
+          result.alreadyPaid
+        ) {
+          area =
+            await loadArea();
+
+          area.payment.returnState =
+            result.capacityReview
+              ? 'capacity_review'
+              : 'confirmed';
+        } else {
+          area.payment.returnState =
+            paymentReturn
+            === 'success'
+              ? 'checking'
+              : 'pending';
+        }
+      } catch {
+        area.payment.returnState =
+          paymentReturn
+          === 'success'
+            ? 'checking'
+            : 'pending';
+      }
+    } else {
+      area.payment.returnState =
+        'confirmed';
+    }
+
+    returnUrl.searchParams.delete(
+      'payment',
+    );
+
+    history.replaceState(
+      null,
+      '',
+      returnUrl,
+    );
+  }
+
   setHelp(
     area.support.whatsappUrl,
   );
@@ -987,6 +1166,102 @@ export async function startCustomerArea(
               );
 
               await render();
+            },
+          );
+        },
+      );
+
+    document.getElementById('copyBalancePix')?.addEventListener('click', async (event) => {
+      const key = event.currentTarget.dataset.pixKey || '';
+      if (!key) return;
+      try {
+        await navigator.clipboard.writeText(key);
+        showToast('Chave Pix copiada ✓');
+      } catch {
+        showToast('Não foi possível copiar. Toque e segure a chave Pix para copiar.');
+      }
+    });
+
+    app
+      .querySelectorAll(
+        '[name="resumeMethod"]',
+      )
+      .forEach(
+        (control) => {
+          control.addEventListener(
+            'change',
+            () => {
+              const total =
+                document.getElementById(
+                  'paymentDueNow',
+                );
+
+              const label =
+                document.getElementById(
+                  'paymentDueLabel',
+                );
+
+              const breakdown =
+                document.getElementById(
+                  'paymentBreakdown',
+                );
+
+              const reviewLine =
+                document.getElementById(
+                  'paymentReviewLine',
+                );
+
+              if (
+                !total
+                || !label
+              ) {
+                return;
+              }
+
+              const method =
+                control.value;
+
+              total.textContent =
+                money(
+                  Number(
+                    method === 'pix'
+                      ? total.dataset.pix
+                      : total.dataset.card,
+                  ),
+                );
+
+              label.textContent =
+                method === 'pix'
+                  ? 'Pix • entrada de 50%'
+                  : 'Cartão • pagamento integral';
+
+              if (breakdown) {
+                const orderTotal =
+                  money(
+                    Number(
+                      breakdown.dataset.total,
+                    ),
+                  );
+
+                const balance =
+                  money(
+                    Number(
+                      breakdown.dataset.balance,
+                    ),
+                  );
+
+                breakdown.textContent =
+                  method === 'pix'
+                    ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
+                    : `Total do pedido: ${orderTotal}`;
+              }
+
+              if (reviewLine) {
+                reviewLine.textContent =
+                  method === 'pix'
+                    ? `Pix • entrada ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
+                    : `Cartão • ${money(Number(total.dataset.card))}`;
+              }
             },
           );
         },
@@ -1523,10 +1798,37 @@ export async function startCustomerArea(
             area =
               await loadArea();
 
+            if (
+              area.order.status
+              === 'balance_pending'
+            ) {
+              activeTab =
+                'summary';
+
+              const url =
+                new URL(
+                  window.location.href,
+                );
+
+              url.searchParams.set(
+                'tab',
+                'summary',
+              );
+
+              history.replaceState(
+                null,
+                '',
+                url,
+              );
+            }
+
             await render();
 
             showToast(
-              'Prévia aprovada ✓',
+              area.order.status
+              === 'balance_pending'
+                ? 'Prévia aprovada ✓ Agora falta apenas o saldo final.'
+                : 'Prévia aprovada ✓',
             );
           } catch (error) {
             button.disabled =

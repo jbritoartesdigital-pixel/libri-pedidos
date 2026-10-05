@@ -765,7 +765,7 @@ function buildSchema(
 
     field(
       'venue_address',
-      'Qual é o endereço que deve aparecer no convite?',
+      'Qual é o endereço do local da festa?',
       'textarea',
       {
         required:
@@ -1082,8 +1082,8 @@ function buildSchema(
       field(
         'interactive_resources',
         paidConfirmation
-          ? 'Quais recursos você quer além da Confirmação de Presença Libri?'
-          : 'Quais recursos você quer no convite?',
+          ? 'Quais opções você quer além da Confirmação de Presença Libri?'
+          : 'Quais opções você quer no convite?',
         'multi_choice',
         {
           multiple:
@@ -1095,7 +1095,7 @@ function buildSchema(
           help:
             paidConfirmation
               ? 'A Confirmação de Presença Libri já está incluída no pedido.'
-              : 'Você pode escolher até 3. As informações normais da festa não contam como recurso.',
+              : 'Você pode escolher até 3. As informações normais da festa não contam como opção.',
           options: [
             {
               value:
@@ -2270,6 +2270,8 @@ export async function getV2CustomerArea(
   const [
     number,
     modules,
+    paymentTotals,
+    balanceSettings,
   ] =
     await Promise.all([
       libriWhatsapp(env.DB),
@@ -2277,7 +2279,90 @@ export async function getV2CustomerArea(
         env.DB,
         context.order.id,
       ),
+      env.DB
+        .prepare(
+          `
+            SELECT
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN
+                      status = 'approved'
+                      AND payment_type != 'refund'
+                      THEN amount_cents
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS paid_cents,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN
+                      status = 'approved'
+                      AND payment_type = 'refund'
+                      THEN amount_cents
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS refunded_cents
+            FROM v2_payments
+            WHERE order_id = ?
+          `,
+        )
+        .bind(
+          context.order.id,
+        )
+        .first(),
+      env.DB
+        .prepare(
+          `
+            SELECT
+              MAX(
+                CASE
+                  WHEN key = 'balance_pix_key'
+                    THEN value
+                END
+              ) AS pix_key,
+              MAX(
+                CASE
+                  WHEN key = 'balance_pix_recipient_name'
+                    THEN value
+                END
+              ) AS recipient_name
+            FROM v2_settings
+            WHERE key IN (
+              'balance_pix_key',
+              'balance_pix_recipient_name'
+            )
+          `,
+        )
+        .first(),
     ]);
+
+  const paidCents =
+    Math.max(
+      0,
+      Number(
+        paymentTotals?.paid_cents
+        || 0,
+      )
+      - Number(
+        paymentTotals?.refunded_cents
+        || 0,
+      ),
+    );
+
+  const remainingCents =
+    Math.max(
+      0,
+      Number(
+        context.order.total_cents
+        || 0,
+      )
+      - paidCents,
+    );
 
   return {
     order: {
@@ -2346,6 +2431,33 @@ export async function getV2CustomerArea(
         Number(
           context.order.balance_cents || 0,
         ),
+      paidCents,
+      remainingCents,
+      capacityReview:
+        paidCents > 0
+        && context.order.briefing_status === 'locked'
+        && [
+          'awaiting_payment',
+          'urgency_approved',
+        ].includes(
+          context.order.status,
+        ),
+      balancePix:
+        context.order.status === 'balance_pending'
+        && context.order.payment_method === 'pix'
+          ? {
+              key:
+                String(
+                  balanceSettings?.pix_key
+                  || '',
+                ).trim(),
+              recipient:
+                String(
+                  balanceSettings?.recipient_name
+                  || '',
+                ).trim(),
+            }
+          : null,
       termsAccepted: Boolean(termsAcceptance),
       termsVersion: termsAcceptance?.terms_version || null,
     },

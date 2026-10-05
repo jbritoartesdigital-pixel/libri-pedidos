@@ -7,8 +7,322 @@ import {
   finalizeV2OrderToCascadePool,
 } from './v2-agenda-admin.js';
 
+import {
+  cancelMercadoPagoOrder,
+  fetchMercadoPagoOrder,
+} from './v2-mercadopago.js';
+
+import {
+  getV2FinanceSummary,
+} from './v2-finance.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
+
+const DELETABLE_UNPAID_STATUSES =
+  new Set([
+    'awaiting_urgency_decision',
+    'urgency_approved',
+    'awaiting_payment',
+    'cancelled',
+  ]);
+
+export async function deleteUnpaidV2Order(
+  env,
+  orderCode,
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    );
+
+  const order =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            order_code,
+            customer_id,
+            status,
+            briefing_status
+          FROM v2_orders
+          WHERE order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  const paid =
+    await env.DB
+      .prepare(
+        `
+          SELECT COUNT(*) AS n
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND status IN (
+              'approved',
+              'refunded'
+            )
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (
+    Number(
+      paid?.n
+      || 0,
+    ) > 0
+  ) {
+    throw new Error(
+      'Pedido com pagamento confirmado não pode ser excluído.',
+    );
+  }
+
+  if (
+    !DELETABLE_UNPAID_STATUSES
+      .has(
+        order.status,
+      )
+    || order.briefing_status
+      !== 'locked'
+  ) {
+    throw new Error(
+      'Só é possível excluir pedidos sem pagamento e antes do início do atendimento.',
+    );
+  }
+
+  const providerOrders =
+    await env.DB
+      .prepare(
+        `
+          SELECT provider_order_id
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+            AND status = 'pending'
+            AND provider_order_id IS NOT NULL
+          ORDER BY id DESC
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  for (
+    const payment
+    of providerOrders.results
+    || []
+  ) {
+    const providerOrderId =
+      String(
+        payment.provider_order_id
+        || '',
+      )
+        .trim();
+
+    if (!providerOrderId) {
+      continue;
+    }
+
+    const remote =
+      await fetchMercadoPagoOrder(
+        env,
+        providerOrderId,
+      );
+
+    const remoteStatus =
+      String(
+        remote?.status
+        || '',
+      )
+        .toLowerCase();
+
+    if (
+      [
+        'processed',
+        'refunded',
+      ].includes(
+        remoteStatus,
+      )
+    ) {
+      throw new Error(
+        'O Mercado Pago informa pagamento processado neste pedido. Atualize o status antes de qualquer exclusão.',
+      );
+    }
+
+    if (
+      ![
+        'canceled',
+        'cancelled',
+        'failed',
+        'expired',
+      ].includes(
+        remoteStatus,
+      )
+    ) {
+      await cancelMercadoPagoOrder(
+        env,
+        providerOrderId,
+      );
+    }
+  }
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        'DELETE FROM v2_checkout_requests WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_checkout_holds WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_orders WHERE id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+  ]);
+
+  await env.DB
+    .prepare(
+      `
+        DELETE FROM v2_customers
+        WHERE
+          id = ?
+          AND NOT EXISTS (
+            SELECT 1
+            FROM v2_orders
+            WHERE customer_id = ?
+          )
+      `,
+    )
+    .bind(
+      order.customer_id,
+      order.customer_id,
+    )
+    .run();
+
+  return {
+    deleted:
+      true,
+
+    code:
+      order.order_code,
+  };
+}
+
+export async function cleanupAbandonedUnpaidV2Orders(
+  env,
+) {
+  const rows =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            o.order_code
+          FROM v2_orders o
+          WHERE
+            o.status = 'awaiting_payment'
+            AND o.briefing_status = 'locked'
+            AND datetime(o.updated_at)
+              <= datetime('now', '-30 minutes')
+            AND EXISTS (
+              SELECT 1
+              FROM v2_checkout_holds h
+              WHERE h.order_id = o.id
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_checkout_holds active_hold
+              WHERE
+                active_hold.order_id = o.id
+                AND active_hold.status = 'active'
+                AND active_hold.expires_at > ?
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_payments paid
+              WHERE
+                paid.order_id = o.id
+                AND paid.status IN (
+                  'approved',
+                  'refunded'
+                )
+            )
+          ORDER BY
+            o.updated_at
+          LIMIT 20
+        `,
+      )
+      .bind(
+        nowIso(),
+      )
+      .all();
+
+  let deleted = 0;
+  let skipped = 0;
+
+  for (
+    const row
+    of rows.results
+    || []
+  ) {
+    try {
+      const result =
+        await deleteUnpaidV2Order(
+          env,
+          row.order_code,
+        );
+
+      if (
+        result?.deleted
+      ) {
+        deleted += 1;
+      }
+    } catch (
+      error
+    ) {
+      skipped += 1;
+
+      console.error(
+        'V2 abandoned order cleanup skipped',
+        row.order_code,
+        error?.message
+        || error,
+      );
+    }
+  }
+
+  return {
+    deleted,
+    skipped,
+  };
+}
 
 function cleanText(
   value,
@@ -1905,168 +2219,56 @@ async function capacitySnapshot(
 async function financeSnapshot(
   db,
 ) {
-  const range =
-    monthRangeSaoPaulo();
+  const finance =
+    await getV2FinanceSummary(
+      db,
+      {
+        preset:
+          'this_month',
+      },
+    );
 
-  const [
-    salesRow,
-    cashRow,
-    receivableRows,
-  ] =
-    await Promise.all([
-      db
-        .prepare(
-          `
-            SELECT
-              COALESCE(
-                SUM(total_cents),
-                0
-              ) AS sales_cents,
-
-              COALESCE(
-                SUM(combo_discount_cents),
-                0
-              ) AS combo_discount_cents,
-
-              COALESCE(
-                SUM(coupon_discount_cents),
-                0
-              ) AS coupon_discount_cents
-            FROM v2_order_pricing p
-            INNER JOIN v2_orders o
-              ON o.id = p.order_id
-            WHERE
-              o.created_at >= ?
-              AND o.created_at < ?
-              AND o.status != 'cancelled'
-          `,
-        )
-        .bind(
-          range.start,
-          range.next,
-        )
-        .first(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              COALESCE(
-                SUM(amount_cents),
-                0
-              ) AS cash_cents,
-
-              COALESCE(
-                SUM(fee_cents),
-                0
-              ) AS fee_cents
-            FROM v2_payments
-            WHERE
-              status = 'approved'
-              AND paid_at >= ?
-              AND paid_at < ?
-          `,
-        )
-        .bind(
-          range.start,
-          range.next,
-        )
-        .first(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              o.id,
-              p.total_cents,
-
-              COALESCE(
-                (
-                  SELECT SUM(
-                    pay.amount_cents
-                  )
-                  FROM v2_payments pay
-                  WHERE
-                    pay.order_id = o.id
-                    AND pay.status = 'approved'
-                ),
-                0
-              ) AS paid_cents
-            FROM v2_orders o
-            INNER JOIN v2_order_pricing p
-              ON p.order_id = o.id
-            WHERE
-              o.status NOT IN (
-                'cancelled',
-                'finalized'
-              )
-              AND p.payment_method = 'pix'
-          `,
-        )
-        .all(),
-    ]);
-
-  const receivableCents =
-    (
-      receivableRows
-        .results
-      || []
-    )
-      .reduce(
-        (
-          sum,
-          row,
-        ) =>
-          sum
-          + Math.max(
-            0,
-            Number(
-              row.total_cents
-              || 0,
-            )
-            - Number(
-              row.paid_cents
-              || 0,
-            ),
-          ),
-        0,
-      );
+  const summary =
+    finance.summary
+    || {};
 
   return {
     period: {
       start:
-        range.start,
+        finance.range?.start
+        || '',
       endExclusive:
-        range.next,
+        finance.range?.endExclusive
+        || '',
     },
+
     salesCents:
       Number(
-        salesRow
-          ?.sales_cents
+        summary.salesCents
         || 0,
       ),
+
     cashCents:
       Number(
-        cashRow
-          ?.cash_cents
+        summary.cashInCents
         || 0,
       ),
-    receivableCents,
+
+    receivableCents:
+      Number(
+        summary.openReceivableAllCents
+        || 0,
+      ),
+
     mercadoPagoFeeCents:
       Number(
-        cashRow
-          ?.fee_cents
+        summary.mercadoPagoFeeCents
         || 0,
       ),
+
     discountsCents:
       Number(
-        salesRow
-          ?.combo_discount_cents
-        || 0,
-      )
-      + Number(
-        salesRow
-          ?.coupon_discount_cents
+        summary.discountsCents
         || 0,
       ),
   };

@@ -7,6 +7,7 @@ import {
 import {
   addV2InternalNote,
   applyV2AdminAction,
+  deleteUnpaidV2Order,
   getV2AdminOrderDetail,
   getV2Central,
   listV2Production,
@@ -97,6 +98,40 @@ export async function handleAdminV2CoreApi(
       ok: true,
       detail,
     });
+  }
+
+  if (
+    detailMatch
+    && method
+    === 'DELETE'
+  ) {
+    try {
+      const result =
+        await deleteUnpaidV2Order(
+          env,
+          detailMatch[1],
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok: true,
+        result,
+      });
+    } catch (
+      error
+    ) {
+      return fail(
+        error?.message
+        || 'Não foi possível excluir este pedido.',
+        409,
+      );
+    }
   }
 
   const actionMatch =

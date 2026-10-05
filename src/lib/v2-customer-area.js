@@ -765,7 +765,7 @@ function buildSchema(
 
     field(
       'venue_address',
-      'Qual é o endereço que deve aparecer no convite?',
+      'Qual é o endereço do local da festa?',
       'textarea',
       {
         required:

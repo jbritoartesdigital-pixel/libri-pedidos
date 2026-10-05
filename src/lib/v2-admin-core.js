@@ -2343,6 +2343,197 @@ async function partiesForDay(
     );
 }
 
+async function upcomingParties(
+  db,
+  today,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            c.name AS customer_name
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          WHERE
+            o.event_date > ?
+            AND o.status NOT IN (
+              'cancelled'
+            )
+          ORDER BY
+            o.event_date,
+            o.created_at
+          LIMIT 12
+        `,
+      )
+      .bind(
+        today,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      eventDate:
+        row.event_date,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+    }),
+  );
+}
+
+async function centralPendingPayments(
+  db,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.status,
+            o.next_action,
+            c.name AS customer_name,
+            p.total_cents,
+            p.deposit_cents,
+            p.payment_method
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          INNER JOIN v2_order_pricing p
+            ON p.order_id = o.id
+          WHERE
+            o.status IN (
+              'awaiting_payment',
+              'urgency_approved'
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_payments paid
+              WHERE
+                paid.order_id = o.id
+                AND paid.status = 'approved'
+                AND paid.payment_type != 'refund'
+            )
+          ORDER BY
+            o.created_at DESC
+          LIMIT 12
+        `,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+      nextAction:
+        nextActionFromStatus(
+          row,
+        ),
+      totalCents:
+        Number(
+          row.total_cents
+          || 0,
+        ),
+      dueCents:
+        Number(
+          row.deposit_cents
+          || row.total_cents
+          || 0,
+        ),
+      paymentMethod:
+        row.payment_method,
+    }),
+  );
+}
+
+async function centralNewOrders(
+  db,
+) {
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            o.next_action,
+            c.name AS customer_name
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          WHERE
+            o.status IN (
+              'briefing_pending',
+              'ready_for_production'
+            )
+          ORDER BY
+            o.created_at DESC
+          LIMIT 12
+        `,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  ).map(
+    (row) => ({
+      code:
+        row.order_code,
+      honoreeName:
+        row.honoree_display_name,
+      customerName:
+        row.customer_name,
+      eventDate:
+        row.event_date,
+      status:
+        row.status,
+      statusLabel:
+        statusLabel(
+          row.status,
+        ),
+      nextAction:
+        nextActionFromStatus(
+          row,
+        ),
+    }),
+  );
+}
+
 async function upcomingDeliveries(
   db,
   today,
@@ -2677,6 +2868,9 @@ export async function getV2Central(
     attention,
     partiesToday,
     partiesTomorrow,
+    partiesUpcoming,
+    pendingPayments,
+    newOrders,
     deliveries,
     capacity,
     finance,
@@ -2692,6 +2886,16 @@ export async function getV2Central(
       partiesForDay(
         db,
         tomorrow,
+      ),
+      upcomingParties(
+        db,
+        today,
+      ),
+      centralPendingPayments(
+        db,
+      ),
+      centralNewOrders(
+        db,
       ),
       upcomingDeliveries(
         db,
@@ -2711,6 +2915,9 @@ export async function getV2Central(
     attention,
     partiesToday,
     partiesTomorrow,
+    partiesUpcoming,
+    pendingPayments,
+    newOrders,
     upcomingDeliveries:
       deliveries,
     capacity,

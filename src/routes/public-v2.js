@@ -17,6 +17,8 @@ import {
 } from '../lib/v2-agenda.js';
 
 import {
+  requestV2UrgencyReview,
+  startApprovedV2UrgencyCheckout,
   startV2Checkout,
   V2CheckoutError,
 } from '../lib/v2-checkout.js';
@@ -617,6 +619,81 @@ export async function handlePublicV2Api(
             quote.totalCents,
         },
       });
+    } catch (
+      error
+    ) {
+      return requestError(
+        error,
+      );
+    }
+  }
+
+  /* ==================================================
+     SOLICITAR ANÁLISE DE URGÊNCIA V2
+  ================================================== */
+
+  if (
+    method === 'POST'
+    && path
+      === '/api/v2/urgency/request'
+  ) {
+    try {
+      const body =
+        await readJson(
+          request,
+        );
+
+      const result =
+        await requestV2UrgencyReview(
+          request,
+          env,
+          body,
+        );
+
+      return json(
+        result,
+        201,
+      );
+    } catch (
+      error
+    ) {
+      return requestError(
+        error,
+      );
+    }
+  }
+
+  /* ==================================================
+     PAGAR URGÊNCIA APROVADA V2
+  ================================================== */
+
+  const urgencyCheckoutMatch =
+    path.match(
+      /^\/api\/v2\/urgency\/(ord_[a-f0-9]{36})\/checkout$/,
+    );
+
+  if (
+    method === 'POST'
+    && urgencyCheckoutMatch
+  ) {
+    try {
+      const body =
+        await readJson(
+          request,
+        );
+
+      const result =
+        await startApprovedV2UrgencyCheckout(
+          request,
+          env,
+          urgencyCheckoutMatch[1],
+          body,
+        );
+
+      return json(
+        result,
+        201,
+      );
     } catch (
       error
     ) {

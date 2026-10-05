@@ -19,6 +19,10 @@ import {
 } from './admin-v2-production.js';
 
 import {
+  renderManualOrder,
+} from './admin-v2-manual.js';
+
+import {
   openOrder,
 } from './admin-v2-order.js';
 
@@ -46,6 +50,7 @@ import {
 const ADMIN_VIEWS =
   new Set([
     'central',
+    'manual',
     'production',
     'agenda',
     'finance',
@@ -137,6 +142,10 @@ async function renderCurrent() {
       );
 
   if (
+    state.view === 'manual'
+  ) {
+    await renderManualOrder();
+  } else if (
     state.view === 'production'
   ) {
     await renderProduction(open);

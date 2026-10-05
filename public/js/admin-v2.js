@@ -43,6 +43,89 @@ import {
   renderSecurity,
 } from './admin-v2-security.js';
 
+const ADMIN_VIEWS =
+  new Set([
+    'central',
+    'production',
+    'agenda',
+    'finance',
+    'store',
+    'notifications',
+    'security',
+  ]);
+
+function syncNavActive() {
+  document
+    .querySelectorAll('[data-view]')
+    .forEach(
+      (button) =>
+        button.classList.toggle(
+          'active',
+          button.dataset.view
+          === state.view,
+        ),
+    );
+}
+
+function applyInitialView() {
+  const requested =
+    new URLSearchParams(
+      window.location.search,
+    )
+      .get(
+        'view',
+      );
+
+  if (
+    requested
+    && ADMIN_VIEWS
+      .has(
+        requested,
+      )
+  ) {
+    state.view =
+      requested;
+  }
+
+  syncNavActive();
+}
+
+function syncViewQuery() {
+  const url =
+    new URL(
+      window.location.href,
+    );
+
+  if (
+    state.view
+    && state.view
+      !== 'central'
+  ) {
+    url.searchParams
+      .set(
+        'view',
+        state.view,
+      );
+  } else {
+    url.searchParams
+      .delete(
+        'view',
+      );
+  }
+
+  history.replaceState(
+    {},
+    '',
+    `${
+      url.pathname
+    }${
+      url.search
+    }${
+      url.hash
+    }`,
+  );
+}
+
 async function renderCurrent() {
   loading();
 
@@ -85,8 +168,12 @@ async function renderCurrent() {
 }
 
 async function ready() {
+  applyInitialView();
+
   bindNav(
     async () => {
+      syncViewQuery();
+
       try {
         await renderCurrent();
       } catch (error) {
@@ -116,16 +203,8 @@ async function ready() {
         state.view =
           'notifications';
 
-        document
-          .querySelectorAll('[data-view]')
-          .forEach(
-            (button) =>
-              button.classList.toggle(
-                'active',
-                button.dataset.view
-                === 'notifications',
-              ),
-          );
+        syncNavActive();
+        syncViewQuery();
 
         await renderCurrent();
       },

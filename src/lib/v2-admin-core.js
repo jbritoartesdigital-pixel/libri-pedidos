@@ -12,6 +12,10 @@ import {
   fetchMercadoPagoOrder,
 } from './v2-mercadopago.js';
 
+import {
+  getV2FinanceSummary,
+} from './v2-finance.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -2195,184 +2199,56 @@ async function capacitySnapshot(
 async function financeSnapshot(
   db,
 ) {
-  const range =
-    monthRangeSaoPaulo();
+  const finance =
+    await getV2FinanceSummary(
+      db,
+      {
+        preset:
+          'this_month',
+      },
+    );
 
-  const [
-    salesRow,
-    cashRow,
-    receivableRows,
-  ] =
-    await Promise.all([
-      db
-        .prepare(
-          `
-            SELECT
-              COALESCE(
-                SUM(total_cents),
-                0
-              ) AS sales_cents,
-
-              COALESCE(
-                SUM(combo_discount_cents),
-                0
-              ) AS combo_discount_cents,
-
-              COALESCE(
-                SUM(coupon_discount_cents),
-                0
-              ) AS coupon_discount_cents
-            FROM v2_order_pricing p
-            INNER JOIN v2_orders o
-              ON o.id = p.order_id
-            WHERE
-              o.created_at >= ?
-              AND o.created_at < ?
-              AND o.status != 'cancelled'
-              AND EXISTS (
-                SELECT 1
-                FROM v2_payments sale_payment
-                WHERE
-                  sale_payment.order_id = o.id
-                  AND sale_payment.status = 'approved'
-                  AND sale_payment.payment_type != 'refund'
-              )
-          `,
-        )
-        .bind(
-          range.start,
-          range.next,
-        )
-        .first(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              COALESCE(
-                SUM(amount_cents),
-                0
-              ) AS cash_cents,
-
-              COALESCE(
-                SUM(fee_cents),
-                0
-              ) AS fee_cents
-            FROM v2_payments
-            WHERE
-              status = 'approved'
-              AND paid_at >= ?
-              AND paid_at < ?
-          `,
-        )
-        .bind(
-          range.start,
-          range.next,
-        )
-        .first(),
-
-      db
-        .prepare(
-          `
-            SELECT
-              o.id,
-              p.total_cents,
-
-              COALESCE(
-                (
-                  SELECT SUM(
-                    pay.amount_cents
-                  )
-                  FROM v2_payments pay
-                  WHERE
-                    pay.order_id = o.id
-                    AND pay.status = 'approved'
-                ),
-                0
-              ) AS paid_cents
-            FROM v2_orders o
-            INNER JOIN v2_order_pricing p
-              ON p.order_id = o.id
-            WHERE
-              o.status NOT IN (
-                'cancelled',
-                'finalized'
-              )
-              AND p.payment_method = 'pix'
-              AND EXISTS (
-                SELECT 1
-                FROM v2_payments initial_payment
-                WHERE
-                  initial_payment.order_id = o.id
-                  AND initial_payment.status = 'approved'
-                  AND initial_payment.payment_type != 'refund'
-              )
-          `,
-        )
-        .all(),
-    ]);
-
-  const receivableCents =
-    (
-      receivableRows
-        .results
-      || []
-    )
-      .reduce(
-        (
-          sum,
-          row,
-        ) =>
-          sum
-          + Math.max(
-            0,
-            Number(
-              row.total_cents
-              || 0,
-            )
-            - Number(
-              row.paid_cents
-              || 0,
-            ),
-          ),
-        0,
-      );
+  const summary =
+    finance.summary
+    || {};
 
   return {
     period: {
       start:
-        range.start,
+        finance.range?.start
+        || '',
       endExclusive:
-        range.next,
+        finance.range?.endExclusive
+        || '',
     },
+
     salesCents:
       Number(
-        salesRow
-          ?.sales_cents
+        summary.salesCents
         || 0,
       ),
+
     cashCents:
       Number(
-        cashRow
-          ?.cash_cents
+        summary.cashInCents
         || 0,
       ),
-    receivableCents,
+
+    receivableCents:
+      Number(
+        summary.openReceivableAllCents
+        || 0,
+      ),
+
     mercadoPagoFeeCents:
       Number(
-        cashRow
-          ?.fee_cents
+        summary.mercadoPagoFeeCents
         || 0,
       ),
+
     discountsCents:
       Number(
-        salesRow
-          ?.combo_discount_cents
-        || 0,
-      )
-      + Number(
-        salesRow
-          ?.coupon_discount_cents
+        summary.discountsCents
         || 0,
       ),
   };

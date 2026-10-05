@@ -97,7 +97,7 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
-  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
+  assert.equal(mp.bodies[0].config.payment_method.default_type, undefined);
   assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
   assert.equal(mp.bodies[0].config.payment_method.installments_cost, undefined);
   assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
@@ -105,6 +105,29 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
     ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
   const pricing = DB.sqlite.prepare('SELECT total_cents, deposit_cents, balance_cents FROM v2_order_pricing').get();
   assert.equal(pricing.total_cents, pricing.deposit_cents); assert.equal(pricing.balance_cents, 0);
+});
+
+test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({ event: { honoreeName: 'Troca método', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB, 'card') });
+
+  const first = await startV2Checkout(request, e, body);
+  assert.equal(first.payment.method, 'card');
+  assert.equal(first.payment.amountDueNowCents, first.payment.totalCents);
+
+  const switched = await resumeV2Payment(request, e, first.order.publicToken, {
+    clientRequestId: crypto.randomUUID(),
+    paymentMethod: 'pix',
+  });
+
+  assert.equal(switched.order.code, first.order.code);
+  assert.equal(switched.payment.method, 'pix');
+  assert.equal(switched.payment.amountDueNowCents, Math.round(switched.payment.totalCents * 0.5));
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT payment_method FROM v2_order_pricing').get().payment_method, 'pix');
+  assert.equal(mp.posts, 2);
+  assert.equal(mp.orders.get(first.payment.providerOrderId).status, 'cancelled');
 });
 
 test('admin can delete only unpaid pre-production orders and pending provider checkout is canceled', async t => {

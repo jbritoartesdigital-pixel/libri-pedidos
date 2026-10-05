@@ -34,7 +34,7 @@ function paymentBlock(detail) {
         <h3>Pagamento</h3>
       </div>
 
-      <div class="kpi-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="kpi-grid payment-kpi-grid">
         <div class="kpi">
           <span>Total</span>
           <strong>${money(detail.pricing.totalCents)}</strong>

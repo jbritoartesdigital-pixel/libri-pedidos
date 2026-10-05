@@ -1246,7 +1246,8 @@ export async function resumeV2Payment(request, env, token, body = {}) {
     const snapshot = safeJsonObject(order.pricing_snapshot_json);
     const plan = await planV2AllocationForWindow(env.DB, { start: order.delivery_start, end: order.delivery_end, pointsUnits: snapshot.pointsUnits });
     if (!plan.fits) throw new V2CheckoutError('A janela perdeu capacidade. Entre em contato com a Libri para revisar a entrega.', { status: 409, code: 'delivery_window_unavailable' });
-    const { terms, termsHash, evidence } = await urgencyTermsEvidence(request, env, body);
+    const { terms, termsHash, evidence, alreadyAccepted: termsAlreadyAccepted } =
+      await paymentTermsEvidence(request, env, body, order.id);
     const settings = await loadV2Settings(env.DB);
     const minutes = Math.max(v2IntSetting(settings, 'checkout_hold_minutes', 30), v2IntSetting(settings, 'mercado_pago_order_expiry_minutes', 25) + 5);
     const hold = await createCapacityHold(env.DB, {
@@ -1255,9 +1256,11 @@ export async function resumeV2Payment(request, env, token, body = {}) {
       defaultCapacityUnits: v2IntSetting(settings, 'default_sellable_points_per_day_units', 400),
     });
     try {
-      await env.DB.prepare(`INSERT INTO v2_order_terms_acceptances
-        (order_id, terms_version, terms_hash, accepted_at, evidence_json) VALUES (?, ?, ?, ?, ?)`)
-        .bind(order.id, terms.version, termsHash, nowIso(), JSON.stringify(evidence)).run();
+      if (!termsAlreadyAccepted) {
+        await env.DB.prepare(`INSERT INTO v2_order_terms_acceptances
+          (order_id, terms_version, terms_hash, accepted_at, evidence_json) VALUES (?, ?, ?, ?, ?)`)
+          .bind(order.id, terms.version, termsHash, nowIso(), JSON.stringify(evidence)).run();
+      }
       await createMercadoPagoCheckout(request, env, {
         orderId: order.id, orderCode: order.order_code, publicToken: token,
         paymentMethod: order.payment_method, amountDueNowCents: Number(order.deposit_cents), customerEmail: order.email,
@@ -2080,10 +2083,26 @@ async function createUrgencyRequestOrderRecords(
     eventDate,
     recommendedTargetDate,
     quote,
+    urgencyPercent,
   },
 ) {
   const stamp =
     nowIso();
+
+  const appliedUrgencyPercent = Math.max(1, Math.min(100,
+    Number.parseInt(urgencyPercent, 10) || 30));
+  const urgencyAmountCents = Math.round(Number(quote.subtotalCents || 0) * appliedUrgencyPercent / 100);
+  const projectedTotalCents = Number(quote.subtotalCents || 0) + urgencyAmountCents;
+  const projectedDepositPercent = quote.payment.method === 'card' ? 100 : 50;
+  const projectedDepositCents = Math.round(projectedTotalCents * projectedDepositPercent / 100);
+  const projectedBalanceCents = Math.max(0, projectedTotalCents - projectedDepositCents);
+  const projectedQuote = {
+    ...quote,
+    urgency: { approved: false, percent: appliedUrgencyPercent, amountCents: urgencyAmountCents },
+    totalCents: projectedTotalCents,
+    payment: { ...quote.payment, depositPercent: projectedDepositPercent,
+      depositCents: projectedDepositCents, balanceCents: projectedBalanceCents },
+  };
 
   const orderResult =
     await db
@@ -2255,8 +2274,8 @@ async function createUrgencyRequestOrderRecords(
             ?,
             ?,
             ?,
-            0,
-            0,
+            ?,
+            ?,
             ?,
             ?,
             ?,
@@ -2275,22 +2294,19 @@ async function createUrgencyRequestOrderRecords(
         quote.comboDiscountCents,
         quote.couponDiscountCents,
 
-        quote.totalCents,
+        appliedUrgencyPercent,
+        urgencyAmountCents,
+        projectedTotalCents,
 
         quote.payment
           .method,
 
-        quote.payment
-          .depositPercent,
-
-        quote.payment
-          .depositCents,
-
-        quote.payment
-          .balanceCents,
+        projectedDepositPercent,
+        projectedDepositCents,
+        projectedBalanceCents,
 
         JSON.stringify(
-          quote,
+          projectedQuote,
         ),
 
         stamp,
@@ -2336,7 +2352,7 @@ async function createUrgencyRequestOrderRecords(
           VALUES (
             ?,
             'pending',
-            30,
+            ?,
             NULL,
             NULL,
             ?
@@ -2345,6 +2361,7 @@ async function createUrgencyRequestOrderRecords(
       )
       .bind(
         orderId,
+        appliedUrgencyPercent,
         stamp,
       ),
 
@@ -2371,13 +2388,16 @@ async function createUrgencyRequestOrderRecords(
         orderId,
         JSON.stringify({
           urgencyPercent:
-            30,
+            appliedUrgencyPercent,
 
           subtotalCents:
             quote.subtotalCents,
 
           totalBeforeUrgencyCents:
             quote.totalCents,
+
+          urgencyAmountCents,
+          projectedTotalCents,
         }),
         stamp,
       ),
@@ -2512,6 +2532,16 @@ async function urgencyTermsEvidence(
   };
 }
 
+async function paymentTermsEvidence(request, env, body, orderId) {
+  const existing = await env.DB.prepare(
+    'SELECT terms_version, terms_hash FROM v2_order_terms_acceptances WHERE order_id = ? ORDER BY id DESC LIMIT 1',
+  ).bind(orderId).first();
+  if (existing) {
+    return { alreadyAccepted: true, terms: { version: existing.terms_version },
+      termsHash: existing.terms_hash, evidence: null };
+  }
+  return { alreadyAccepted: false, ...(await urgencyTermsEvidence(request, env, body)) };
+}
 export async function requestV2UrgencyReview(
   request,
   env,
@@ -2742,6 +2772,10 @@ export async function requestV2UrgencyReview(
       );
     }
 
+    const settings = await loadV2Settings(env.DB);
+    const urgencyPercent = Math.max(1, Math.min(100,
+      v2IntSetting(settings, 'urgency_percent', 30)));
+
     const customerId =
       await upsertCustomer(
         env.DB,
@@ -2782,6 +2816,7 @@ export async function requestV2UrgencyReview(
               .recommendedTargetDate,
 
           quote,
+          urgencyPercent,
         },
       );
 
@@ -2844,7 +2879,7 @@ export async function requestV2UrgencyReview(
           'pending',
 
         percent:
-          30,
+          urgencyPercent,
       },
 
       order: {
@@ -2934,9 +2969,11 @@ export async function repriceApprovedV2Urgency(
             combo_discount_cents,
             coupon_discount_cents,
             payment_method,
-            pricing_snapshot_json
-          FROM v2_order_pricing
-          WHERE order_id = ?
+            pricing_snapshot_json,
+            u.urgency_percent AS requested_urgency_percent
+          FROM v2_order_pricing p
+          LEFT JOIN v2_urgency_requests u ON u.order_id = p.order_id
+          WHERE p.order_id = ?
           LIMIT 1
         `,
       )
@@ -2978,8 +3015,8 @@ export async function repriceApprovedV2Urgency(
       || 0,
     );
 
-  const urgencyPercent =
-    30;
+  const urgencyPercent = Math.max(1, Math.min(100,
+    Number.parseInt(row.requested_urgency_percent, 10) || 30));
 
   const urgencyAmountCents =
     Math.round(
@@ -3047,7 +3084,7 @@ export async function repriceApprovedV2Urgency(
       `
         UPDATE v2_order_pricing
         SET
-          urgency_percent = 30,
+          urgency_percent = ?,
           urgency_amount_cents = ?,
           total_cents = ?,
           payment_method = ?,
@@ -3060,6 +3097,7 @@ export async function repriceApprovedV2Urgency(
       `,
     )
     .bind(
+      urgencyPercent,
       urgencyAmountCents,
       totalCents,
       method,
@@ -3321,16 +3359,8 @@ export async function startApprovedV2UrgencyCheckout(
       );
     }
 
-    const {
-      terms,
-      termsHash,
-      evidence,
-    } =
-      await urgencyTermsEvidence(
-        request,
-        env,
-        body,
-      );
+    const { terms, termsHash, evidence, alreadyAccepted: termsAlreadyAccepted } =
+      await paymentTermsEvidence(request, env, body, orderId);
 
     const storedSnapshot =
       safeJsonObject(
@@ -3442,35 +3472,37 @@ export async function startApprovedV2UrgencyCheckout(
     const stamp =
       nowIso();
 
-    await env.DB
-      .prepare(
-        `
-          INSERT INTO v2_order_terms_acceptances(
-            order_id,
-            terms_version,
-            terms_hash,
-            accepted_at,
-            evidence_json
-          )
-          VALUES (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?
-          )
-        `,
-      )
-      .bind(
-        orderId,
-        terms.version,
-        termsHash,
-        stamp,
-        JSON.stringify(
-          evidence,
-        ),
-      )
-      .run();
+    if (!termsAlreadyAccepted) {
+      await env.DB
+        .prepare(
+          `
+            INSERT INTO v2_order_terms_acceptances(
+              order_id,
+              terms_version,
+              terms_hash,
+              accepted_at,
+              evidence_json
+            )
+            VALUES (
+              ?,
+              ?,
+              ?,
+              ?,
+              ?
+            )
+          `,
+        )
+        .bind(
+          orderId,
+          terms.version,
+          termsHash,
+          stamp,
+          JSON.stringify(
+            evidence,
+          ),
+        )
+        .run();
+    }
 
     const mpCheckout =
       await createMercadoPagoCheckout(
@@ -3540,7 +3572,7 @@ export async function startApprovedV2UrgencyCheckout(
             deliveryEnd,
 
             urgencyPercent:
-              30,
+              pricing.urgencyPercent,
 
             urgencyAmountCents:
               pricing

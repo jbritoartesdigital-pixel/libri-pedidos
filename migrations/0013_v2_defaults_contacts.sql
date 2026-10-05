@@ -61,15 +61,16 @@ INSERT OR IGNORE INTO v2_combos(
   '{"includesInvitation":true}'
 );
 
-INSERT OR IGNORE INTO v2_combo_items(
-  combo_id,
-  item_type,
-  item_code,
-  required
-)
-SELECT id, 'addon_group', 'save_the_date', 1
-FROM v2_combos
-WHERE code = 'convite_save';
+INSERT INTO v2_combo_items(combo_id,item_type,item_code,required)
+SELECT c.id, 'addon_group', 'save_the_date', 1
+FROM v2_combos c
+WHERE c.code = 'convite_save'
+  AND NOT EXISTS (
+    SELECT 1 FROM v2_combo_items i
+    WHERE i.combo_id = c.id
+      AND i.item_type = 'addon_group'
+      AND i.item_code = 'save_the_date'
+  );
 
 INSERT OR IGNORE INTO v2_combo_items(
   combo_id,

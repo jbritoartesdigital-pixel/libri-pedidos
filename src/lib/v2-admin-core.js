@@ -7,8 +7,210 @@ import {
   finalizeV2OrderToCascadePool,
 } from './v2-agenda-admin.js';
 
+import {
+  cancelMercadoPagoOrder,
+  fetchMercadoPagoOrder,
+} from './v2-mercadopago.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
+
+const DELETABLE_UNPAID_STATUSES =
+  new Set([
+    'awaiting_urgency_decision',
+    'urgency_approved',
+    'awaiting_payment',
+    'cancelled',
+  ]);
+
+export async function deleteUnpaidV2Order(
+  env,
+  orderCode,
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    );
+
+  const order =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            order_code,
+            status,
+            briefing_status
+          FROM v2_orders
+          WHERE order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  const paid =
+    await env.DB
+      .prepare(
+        `
+          SELECT COUNT(*) AS n
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND status IN (
+              'approved',
+              'refunded'
+            )
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (
+    Number(
+      paid?.n
+      || 0,
+    ) > 0
+  ) {
+    throw new Error(
+      'Pedido com pagamento confirmado não pode ser excluído.',
+    );
+  }
+
+  if (
+    !DELETABLE_UNPAID_STATUSES
+      .has(
+        order.status,
+      )
+    || order.briefing_status
+      !== 'locked'
+  ) {
+    throw new Error(
+      'Só é possível excluir pedidos sem pagamento e antes do início do atendimento.',
+    );
+  }
+
+  const providerOrders =
+    await env.DB
+      .prepare(
+        `
+          SELECT provider_order_id
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+            AND status = 'pending'
+            AND provider_order_id IS NOT NULL
+          ORDER BY id DESC
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .all();
+
+  for (
+    const payment
+    of providerOrders.results
+    || []
+  ) {
+    const providerOrderId =
+      String(
+        payment.provider_order_id
+        || '',
+      )
+        .trim();
+
+    if (!providerOrderId) {
+      continue;
+    }
+
+    const remote =
+      await fetchMercadoPagoOrder(
+        env,
+        providerOrderId,
+      );
+
+    const remoteStatus =
+      String(
+        remote?.status
+        || '',
+      )
+        .toLowerCase();
+
+    if (
+      [
+        'processed',
+        'refunded',
+      ].includes(
+        remoteStatus,
+      )
+    ) {
+      throw new Error(
+        'O Mercado Pago informa pagamento processado neste pedido. Atualize o status antes de qualquer exclusão.',
+      );
+    }
+
+    if (
+      ![
+        'canceled',
+        'cancelled',
+        'failed',
+        'expired',
+      ].includes(
+        remoteStatus,
+      )
+    ) {
+      await cancelMercadoPagoOrder(
+        env,
+        providerOrderId,
+      );
+    }
+  }
+
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        'DELETE FROM v2_checkout_requests WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_checkout_holds WHERE order_id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+
+    env.DB
+      .prepare(
+        'DELETE FROM v2_orders WHERE id = ?',
+      )
+      .bind(
+        order.id,
+      ),
+  ]);
+
+  return {
+    deleted:
+      true,
+
+    code:
+      order.order_code,
+  };
+}
 
 function cleanText(
   value,

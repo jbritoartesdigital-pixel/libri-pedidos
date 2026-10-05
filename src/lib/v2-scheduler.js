@@ -1,6 +1,7 @@
 import { nowIso } from './http.js';
 import { syncMercadoPagoOrder } from './v2-mercadopago.js';
 import { createV2AdminNotification, runV2NotificationScheduler } from './v2-notifications.js';
+import { cleanupAbandonedUnpaidV2Orders } from './v2-admin-core.js';
 
 export async function runV2Scheduler(env) {
   const result = { synced: 0, failed: 0 };
@@ -37,6 +38,7 @@ export async function runV2Scheduler(env) {
       actionUrl: `/admin-v2?order=${encodeURIComponent(order.order_code)}`, priority: 'high',
       pushEligible: true, dedupeKey: `urgency-requested:${order.id}` });
   }
+  result.abandonedOrders = await cleanupAbandonedUnpaidV2Orders(env);
   result.notifications = await runV2NotificationScheduler(env);
   return result;
 }

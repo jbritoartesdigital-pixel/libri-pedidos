@@ -903,6 +903,89 @@ export async function startCustomerArea(
   let area =
     await loadArea();
 
+  const returnUrl =
+    new URL(
+      window.location.href,
+    );
+
+  const paymentReturn =
+    returnUrl.searchParams.get(
+      'payment',
+    );
+
+  if (
+    [
+      'success',
+      'pending',
+      'failure',
+    ].includes(
+      paymentReturn,
+    )
+  ) {
+    if (
+      paymentReturn
+      === 'failure'
+    ) {
+      area.payment.returnState =
+        'failure';
+    } else if (
+      area.briefing.locked
+    ) {
+      try {
+        const result =
+          await api(
+            `/api/v2/customer-area/${token}/payment`,
+            {
+              method:
+                'POST',
+              body:
+                JSON.stringify({
+                  clientRequestId:
+                    randomId(),
+                  paymentMethod:
+                    area.payment.method,
+                }),
+            },
+          );
+
+        if (
+          result.alreadyPaid
+        ) {
+          area =
+            await loadArea();
+
+          area.payment.returnState =
+            'confirmed';
+        } else {
+          area.payment.returnState =
+            paymentReturn
+            === 'success'
+              ? 'checking'
+              : 'pending';
+        }
+      } catch {
+        area.payment.returnState =
+          paymentReturn
+          === 'success'
+            ? 'checking'
+            : 'pending';
+      }
+    } else {
+      area.payment.returnState =
+        'confirmed';
+    }
+
+    returnUrl.searchParams.delete(
+      'payment',
+    );
+
+    history.replaceState(
+      null,
+      '',
+      returnUrl,
+    );
+  }
+
   setHelp(
     area.support.whatsappUrl,
   );
@@ -1003,6 +1086,53 @@ export async function startCustomerArea(
               );
 
               await render();
+            },
+          );
+        },
+      );
+
+    app
+      .querySelectorAll(
+        '[name="resumeMethod"]',
+      )
+      .forEach(
+        (control) => {
+          control.addEventListener(
+            'change',
+            () => {
+              const total =
+                document.getElementById(
+                  'paymentDueNow',
+                );
+
+              const label =
+                document.getElementById(
+                  'paymentDueLabel',
+                );
+
+              if (
+                !total
+                || !label
+              ) {
+                return;
+              }
+
+              const method =
+                control.value;
+
+              total.textContent =
+                money(
+                  Number(
+                    method === 'pix'
+                      ? total.dataset.pix
+                      : total.dataset.card,
+                  ),
+                );
+
+              label.textContent =
+                method === 'pix'
+                  ? 'Pix • entrada de 50%'
+                  : 'Cartão • pagamento integral';
             },
           );
         },

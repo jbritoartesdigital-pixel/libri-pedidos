@@ -2433,6 +2433,15 @@ export async function getV2CustomerArea(
         ),
       paidCents,
       remainingCents,
+      capacityReview:
+        paidCents > 0
+        && context.order.briefing_status === 'locked'
+        && [
+          'awaiting_payment',
+          'urgency_approved',
+        ].includes(
+          context.order.status,
+        ),
       balancePix:
         context.order.status === 'balance_pending'
         && context.order.payment_method === 'pix'

@@ -1082,8 +1082,8 @@ function buildSchema(
       field(
         'interactive_resources',
         paidConfirmation
-          ? 'Quais recursos você quer além da Confirmação de Presença Libri?'
-          : 'Quais recursos você quer no convite?',
+          ? 'Quais opções você quer além da Confirmação de Presença Libri?'
+          : 'Quais opções você quer no convite?',
         'multi_choice',
         {
           multiple:
@@ -1095,7 +1095,7 @@ function buildSchema(
           help:
             paidConfirmation
               ? 'A Confirmação de Presença Libri já está incluída no pedido.'
-              : 'Você pode escolher até 3. As informações normais da festa não contam como recurso.',
+              : 'Você pode escolher até 3. As informações normais da festa não contam como opção.',
           options: [
             {
               value:

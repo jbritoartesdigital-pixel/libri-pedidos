@@ -380,31 +380,38 @@ function summaryHtml(
   const paidCents = Number(area.payment.paidCents || 0);
   const remainingCents = Number(area.payment.remainingCents ?? Math.max(0, totalCents - paidCents));
   const hasPaid = paidCents > 0;
-  const awaitingInitialPayment = ['urgency_approved', 'awaiting_payment'].includes(area.order.status);
+  const capacityReview = area.payment?.capacityReview === true;
+  const awaitingInitialPayment =
+    ['urgency_approved', 'awaiting_payment'].includes(area.order.status)
+    && !capacityReview;
   const awaitingBalance = area.order.status === 'balance_pending';
 
   return `
     <section class="page-card">
-      <div class="page-head ${awaitingInitialPayment || awaitingBalance ? 'payment-head' : ''}">
+      <div class="page-head ${awaitingInitialPayment || awaitingBalance || capacityReview ? 'payment-head' : ''}">
         <span class="eyebrow">Seu pedido</span>
         <h1 class="page-title">
-          ${awaitingInitialPayment
-            ? 'Pagamento pendente'
-            : awaitingBalance
-              ? 'Saldo pendente'
-              : `Oi, ${esc(area.customer.name)} 💛`}
+          ${capacityReview
+            ? 'Pagamento confirmado'
+            : awaitingInitialPayment
+              ? 'Pagamento pendente'
+              : awaitingBalance
+                ? 'Saldo pendente'
+                : `Oi, ${esc(area.customer.name)} 💛`}
         </h1>
         <p class="page-subtitle">
-          ${awaitingInitialPayment
-            ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
-            : awaitingBalance
-              ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
-              : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
+          ${capacityReview
+            ? 'A Libri está revisando sua janela de entrega. Nenhum novo pagamento é necessário.'
+            : awaitingInitialPayment
+              ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
+              : awaitingBalance
+                ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
+                : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
         </p>
       </div>
 
       ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
-      ${area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo.</div>' : ''}
+      ${capacityReview || area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo. Não é necessário pagar novamente.</div>' : ''}
       ${area.payment?.returnState === 'checking' ? '<div class="notice info">Pagamento enviado. Estamos confirmando com o Mercado Pago.</div>' : ''}
       ${area.payment?.returnState === 'pending' ? '<div class="notice info">Pagamento ainda pendente no Mercado Pago. Você pode atualizar o status em alguns instantes.</div>' : ''}
       ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
@@ -527,8 +534,9 @@ function summaryHtml(
         area.briefing.locked
           ? `
             <div class="notice info section-block">
-              O briefing será liberado assim que o pagamento for confirmado.
-              Se você acabou de pagar, pode atualizar esta página em alguns instantes.
+              ${capacityReview
+                ? 'Seu pagamento já foi confirmado. A Libri está revisando a janela de entrega antes de liberar o briefing.'
+                : 'O briefing será liberado assim que o pagamento for confirmado. Se você acabou de pagar, pode atualizar esta página em alguns instantes.'}
             </div>
           `
           : area.briefing.completed
@@ -553,13 +561,18 @@ function briefingHtml(
   if (
     area.briefing.locked
   ) {
+    const capacityReview =
+      area.payment?.capacityReview === true;
+
     return `
       <section class="page-card">
         <div class="page-head">
           <span class="eyebrow">Briefing</span>
-          <h1 class="page-title">Aguardando pagamento</h1>
+          <h1 class="page-title">${capacityReview ? 'Pagamento confirmado' : 'Aguardando pagamento'}</h1>
           <p class="page-subtitle">
-            Assim que o pagamento for confirmado, o briefing criativo é liberado aqui.
+            ${capacityReview
+              ? 'A Libri está revisando sua janela de entrega. O briefing será liberado assim que essa revisão terminar.'
+              : 'Assim que o pagamento for confirmado, o briefing criativo é liberado aqui.'}
           </p>
         </div>
 

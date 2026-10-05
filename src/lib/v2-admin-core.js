@@ -212,6 +212,94 @@ export async function deleteUnpaidV2Order(
   };
 }
 
+export async function cleanupAbandonedUnpaidV2Orders(
+  env,
+) {
+  const rows =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            o.order_code
+          FROM v2_orders o
+          WHERE
+            o.status = 'awaiting_payment'
+            AND o.briefing_status = 'locked'
+            AND datetime(o.updated_at)
+              <= datetime('now', '-30 minutes')
+            AND EXISTS (
+              SELECT 1
+              FROM v2_checkout_holds h
+              WHERE h.order_id = o.id
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_checkout_holds active_hold
+              WHERE
+                active_hold.order_id = o.id
+                AND active_hold.status = 'active'
+                AND active_hold.expires_at > ?
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM v2_payments paid
+              WHERE
+                paid.order_id = o.id
+                AND paid.status IN (
+                  'approved',
+                  'refunded'
+                )
+            )
+          ORDER BY
+            o.updated_at
+          LIMIT 20
+        `,
+      )
+      .bind(
+        nowIso(),
+      )
+      .all();
+
+  let deleted = 0;
+  let skipped = 0;
+
+  for (
+    const row
+    of rows.results
+    || []
+  ) {
+    try {
+      const result =
+        await deleteUnpaidV2Order(
+          env,
+          row.order_code,
+        );
+
+      if (
+        result?.deleted
+      ) {
+        deleted += 1;
+      }
+    } catch (
+      error
+    ) {
+      skipped += 1;
+
+      console.error(
+        'V2 abandoned order cleanup skipped',
+        row.order_code,
+        error?.message
+        || error,
+      );
+    }
+  }
+
+  return {
+    deleted,
+    skipped,
+  };
+}
+
 function cleanText(
   value,
   maxLength = 4000,
@@ -2141,6 +2229,14 @@ async function financeSnapshot(
               o.created_at >= ?
               AND o.created_at < ?
               AND o.status != 'cancelled'
+              AND EXISTS (
+                SELECT 1
+                FROM v2_payments sale_payment
+                WHERE
+                  sale_payment.order_id = o.id
+                  AND sale_payment.status = 'approved'
+                  AND sale_payment.payment_type != 'refund'
+              )
           `,
         )
         .bind(
@@ -2203,6 +2299,14 @@ async function financeSnapshot(
                 'finalized'
               )
               AND p.payment_method = 'pix'
+              AND EXISTS (
+                SELECT 1
+                FROM v2_payments initial_payment
+                WHERE
+                  initial_payment.order_id = o.id
+                  AND initial_payment.status = 'approved'
+                  AND initial_payment.payment_type != 'refund'
+              )
           `,
         )
         .all(),

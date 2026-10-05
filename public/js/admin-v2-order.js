@@ -186,6 +186,20 @@ export async function openOrder(code, onChanged = null) {
   const detail =
     data.detail;
 
+  const canDelete =
+    Number(
+      detail.payment?.paidCents
+      || 0,
+    ) === 0
+    && [
+      'awaiting_urgency_decision',
+      'urgency_approved',
+      'awaiting_payment',
+      'cancelled',
+    ].includes(
+      detail.order.status,
+    );
+
   const close =
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
@@ -268,6 +282,21 @@ export async function openOrder(code, onChanged = null) {
                 `,
               ).join('')}
             </div>
+
+            ${canDelete ? `
+              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)">
+                <button
+                  id="deleteOrder"
+                  class="btn btn-danger"
+                  type="button"
+                >
+                  Excluir pedido
+                </button>
+                <small style="display:block;margin-top:7px">
+                  Disponível somente antes de qualquer pagamento confirmado.
+                </small>
+              </div>
+            ` : ''}
 
             <div class="field" style="margin-top:16px">
               <label for="internalNote">
@@ -553,6 +582,59 @@ export async function openOrder(code, onChanged = null) {
             }
           },
         ),
+    );
+
+  document
+    .getElementById('deleteOrder')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        if (
+          !confirm(
+            `Excluir ${detail.order.code} definitivamente? O checkout pendente também será cancelado.`,
+          )
+        ) {
+          return;
+        }
+
+        const button =
+          event.currentTarget;
+
+        button.disabled =
+          true;
+
+        button.textContent =
+          'Excluindo...';
+
+        try {
+          await api(
+            `/api/admin/v2/orders/${detail.order.code}`,
+            {
+              method:
+                'DELETE',
+            },
+          );
+
+          close();
+          showToast(
+            'Pedido excluído ✓',
+          );
+
+          if (onChanged) {
+            await onChanged();
+          }
+        } catch (error) {
+          button.disabled =
+            false;
+
+          button.textContent =
+            'Excluir pedido';
+
+          showToast(
+            error.message,
+          );
+        }
+      },
     );
 
   document

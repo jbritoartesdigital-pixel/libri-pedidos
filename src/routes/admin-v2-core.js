@@ -66,6 +66,12 @@ export async function handleAdminV2CoreApi(
                   'q',
                 )
               || '',
+            when:
+              url.searchParams
+                .get(
+                  'when',
+                )
+              || '',
           },
         ),
     });

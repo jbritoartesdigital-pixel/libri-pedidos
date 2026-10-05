@@ -385,6 +385,16 @@ function summaryHtml(
     ['urgency_approved', 'awaiting_payment'].includes(area.order.status)
     && !capacityReview;
   const awaitingBalance = area.order.status === 'balance_pending';
+  const deliveryStart = area.order.deliveryWindow.start || '';
+  const deliveryEnd = area.order.deliveryWindow.end || '';
+  const deliveryLabel =
+    deliveryStart && deliveryEnd
+      ? `${dateBr(deliveryStart)} a ${dateBr(deliveryEnd)}`
+      : area.urgency?.status === 'pending'
+        ? 'Em análise'
+        : area.urgency?.status === 'rejected'
+          ? 'Encaixe não aprovado'
+          : 'A definir';
 
   return `
     <section class="page-card">
@@ -498,11 +508,7 @@ function summaryHtml(
 
         <div class="review-line">
           <dt>Janela de entrega</dt>
-          <dd>
-            ${esc(dateBr(area.order.deliveryWindow.start || ''))}
-            a
-            ${esc(dateBr(area.order.deliveryWindow.end || ''))}
-          </dd>
+          <dd>${esc(deliveryLabel)}</dd>
         </div>
 
         <div class="review-line">

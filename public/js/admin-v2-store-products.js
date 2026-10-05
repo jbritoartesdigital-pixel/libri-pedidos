@@ -17,6 +17,17 @@ function productCard(
         • ${product.active ? 'ativo' : 'inativo'}
       </small>
 
+      ${product.active && product.slug ? `
+        <button
+          class="btn btn-secondary"
+          type="button"
+          data-copy-product-link="${esc(product.slug)}"
+          style="margin-top:8px"
+        >
+          Copiar link deste formato
+        </button>
+      ` : ''}
+
       <div class="list" style="margin-top:9px">
         ${(product.variants || []).map(
           (variant) => `
@@ -55,6 +66,54 @@ export function renderStoreProducts(
       ).join('')}
     </div>
   `;
+
+  panel
+    .querySelectorAll(
+      '[data-copy-product-link]',
+    )
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            const url =
+              `${window.location.origin}/pedido/${button.dataset.copyProductLink}`;
+
+            try {
+              await navigator
+                .clipboard
+                .writeText(
+                  url,
+                );
+
+              showToast('Link do formato copiado ✓');
+            } catch {
+              const area =
+                document.createElement('textarea');
+
+              area.value =
+                url;
+
+              area.style.position =
+                'fixed';
+
+              area.style.opacity =
+                '0';
+
+              document.body
+                .appendChild(
+                  area,
+                );
+
+              area.select();
+              document.execCommand('copy');
+              area.remove();
+
+              showToast('Link do formato copiado ✓');
+            }
+          },
+        ),
+    );
 
   panel
     .querySelectorAll(

@@ -110,8 +110,12 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
 
 test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
-  const body = input({ event: { honoreeName: 'Troca método', type: 'birthday', date: day(50) },
-    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB, 'card') });
+  const body = input({
+    event: { honoreeName: 'Troca método', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  });
 
   const first = await startV2Checkout(request, e, body);
   assert.equal(first.payment.method, 'card');

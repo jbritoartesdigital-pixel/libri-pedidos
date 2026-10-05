@@ -8,6 +8,7 @@ import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
+import { deleteUnpaidV2Order } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
@@ -90,8 +91,39 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
+  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
+  assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
+  assert.equal(mp.bodies[0].config.payment_method.installments_cost, undefined);
+  assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
+  assert.deepEqual(mp.bodies[0].config.payment_method.not_allowed_types,
+    ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
   const pricing = DB.sqlite.prepare('SELECT total_cents, deposit_cents, balance_cents FROM v2_order_pricing').get();
   assert.equal(pricing.total_cents, pricing.deposit_cents); assert.equal(pricing.balance_cents, 0);
+});
+
+test('admin can delete only unpaid pre-production orders and pending provider checkout is canceled', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({ event: { honoreeName: 'Teste apagar', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });
+  const checkout = await startV2Checkout(request, e, body);
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  const providerOrderId = checkout.payment.providerOrderId;
+
+  const deleted = await deleteUnpaidV2Order(e, checkout.order.code);
+  assert.equal(deleted.deleted, true);
+  assert.equal(mp.orders.get(providerOrderId).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE id = ?').get(orderId).n, 0);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id = ?').get(orderId).n, 0);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_requests WHERE order_id = ?').get(orderId).n, 0);
+
+  const paidBody = input({ clientRequestId: crypto.randomUUID(),
+    event: { honoreeName: 'Teste pago', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(20), end: day(22) }, ...await terms(DB) });
+  const paid = await startV2Checkout(request, e, paidBody);
+  mp.approve(paid.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, paid.payment.providerOrderId);
+  await assert.rejects(deleteUnpaidV2Order(e, paid.order.code), /pagamento confirmado/i);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(paid.order.code).n, 1);
 });
 
 test('normal checkout resumes expired payment in same order; stale payment cannot mutate paid order', async t => {

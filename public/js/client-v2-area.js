@@ -1769,10 +1769,37 @@ export async function startCustomerArea(
             area =
               await loadArea();
 
+            if (
+              area.order.status
+              === 'balance_pending'
+            ) {
+              activeTab =
+                'summary';
+
+              const url =
+                new URL(
+                  window.location.href,
+                );
+
+              url.searchParams.set(
+                'tab',
+                'summary',
+              );
+
+              history.replaceState(
+                null,
+                '',
+                url,
+              );
+            }
+
             await render();
 
             showToast(
-              'Prévia aprovada ✓',
+              area.order.status
+              === 'balance_pending'
+                ? 'Prévia aprovada ✓ Agora falta apenas o saldo final.'
+                : 'Prévia aprovada ✓',
             );
           } catch (error) {
             button.disabled =

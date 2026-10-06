@@ -182,6 +182,17 @@ export async function renderCentral(openOrder) {
     );
 
   viewRoot.innerHTML = `
+    <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
+      <a
+        class="btn btn-secondary"
+        href="/pedido?simular=1"
+        target="_blank"
+        rel="noopener"
+      >
+        Simular compra
+      </a>
+    </div>
+
     <section class="card attention-center">
       <div class="section-title">
         <div>

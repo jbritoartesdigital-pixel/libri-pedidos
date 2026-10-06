@@ -953,7 +953,7 @@ function orderWhatsappActions(
     orderCode:
       order.order_code,
     customerAreaUrl:
-      area,
+      `https://pedidos.libriconvites.com.br${area}`,
     balanceLabel:
       moneyLabel(
         payments
@@ -2841,7 +2841,7 @@ async function centralAttention(
           orderCode:
             row.order_code,
           customerAreaUrl:
-            `/meu-pedido/${row.public_token}`,
+            `https://pedidos.libriconvites.com.br/meu-pedido/${row.public_token}`,
           balanceLabel:
             moneyLabel(
               remainingBalanceCents,

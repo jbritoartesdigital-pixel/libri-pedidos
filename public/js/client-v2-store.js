@@ -341,7 +341,7 @@ function actionRow(
 function progress(
   state,
 ) {
-  const total = 8;
+  const total = 11;
   const current =
     Math.min(
       total,
@@ -820,74 +820,20 @@ function finalRecommendation(
     }
   }
 
+  if (
+    state.quote?.combo
+  ) {
+    return null;
+  }
+
   const groups =
     selectedAddonGroups(
       state,
     );
 
-  const eventTime =
-    Date.parse(
-      `${state.event.date}T12:00:00Z`,
-    );
-
-  const today =
-    new Date();
-
-  const todayUtc =
-    Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate(),
-      12,
-    );
-
-  const daysUntilEvent =
-    Number.isFinite(
-      eventTime,
-    )
-      ? Math.round(
-        (
-          eventTime
-          - todayUtc
-        )
-        / 86400000,
-      )
-      : null;
-
-  const referenceDays =
-    Number(
-      state.catalog.rules
-        ?.recommendedDeliveryDaysBeforeEvent
-      || 40,
-    );
-
   let preferredGroup = '';
 
   if (
-    Number.isFinite(
-      daysUntilEvent,
-    )
-    && daysUntilEvent
-      > referenceDays
-    && !groups.has(
-      'save_the_date',
-    )
-  ) {
-    preferredGroup =
-      'save_the_date';
-  } else if (
-    Number.isFinite(
-      daysUntilEvent,
-    )
-    && daysUntilEvent
-      <= referenceDays
-    && !groups.has(
-      'reminder',
-    )
-  ) {
-    preferredGroup =
-      'reminder';
-  } else if (
     [
       'cinematic_interactive',
       'interactive_essential',
@@ -1040,43 +986,8 @@ async function continueAfterRecommendation(
   state,
   render,
 ) {
-  if (
-    !(state.delivery?.options || [])
-      .length
-  ) {
-    const result =
-      await api(
-        '/api/v2/urgency/request',
-        {
-          method:
-            'POST',
-          body:
-            JSON.stringify({
-              clientRequestId:
-                state.clientRequestId,
-              customer:
-                state.customer,
-              event:
-                state.event,
-              selection:
-                state.selection,
-            }),
-        },
-      );
-
-    localStorage.removeItem(
-      STORE_KEY,
-    );
-
-    window.location.href =
-      result.order
-        .customerAreaPath;
-
-    return;
-  }
-
   state.step =
-    6;
+    7;
 
   persist(state);
   render();
@@ -1150,65 +1061,18 @@ async function refreshConfigurationQuote(
   }
 }
 
-function comboOfferHtml(
-  state,
+function totalOnlyHtml(
+  quote,
 ) {
-  const applied =
-    state.quote?.combo;
-
-  if (applied) {
-    return `
-      <div class="section-block">
-        <div class="notice success">
-          <strong>Combo aplicado: ${esc(applied.name)}</strong>
-          <div style="margin-top:6px">
-            Desconto: ${money(state.quote.comboDiscountCents || 0)}
-          </div>
-
-          <button
-            id="removeCombo"
-            class="btn btn-ghost"
-            type="button"
-            style="margin-top:10px"
-          >
-            Remover desconto do combo
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  const suggestion =
-    state.quote?.suggestedCombo;
-
-  if (!suggestion) {
+  if (!quote) {
     return '';
   }
 
   return `
-    <div class="section-block">
-      <div class="notice info">
-        <strong>
-          Suas escolhas formam o combo ${esc(suggestion.name)}
-        </strong>
-
-        ${suggestion.description
-          ? `<p class="muted" style="margin:6px 0 0">${esc(suggestion.description)}</p>`
-          : ''}
-
-        <div style="margin-top:6px">
-          Vantagem do combo:
-          <strong>-${money(suggestion.discountCents)}</strong>
-        </div>
-
-        <button
-          id="applySuggestedCombo"
-          class="btn btn-secondary"
-          type="button"
-          style="margin-top:10px"
-        >
-          Aplicar vantagem do combo
-        </button>
+    <div class="quote-card">
+      <div class="quote-row total">
+        <span>Total</span>
+        <strong>${money(quote.totalCents)}</strong>
       </div>
     </div>
   `;
@@ -1641,28 +1505,18 @@ function renderConfiguration(
   const currentVariant =
     variantFor(state);
 
-  const selectedAddons =
-    new Set(
-      state.selection.addonCodes
-      || [],
-    );
-
-  const groups =
-    addonGroups(
-      state.catalog.addons,
-    );
-
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
 
       <div class="page-head">
-        <span class="eyebrow">Monte seu pedido</span>
+        <span class="eyebrow">Configuração</span>
         <h1 class="page-title">
           ${esc(product.name)}
         </h1>
         <p class="page-subtitle">
-          Escolha apenas o que faz sentido para a sua festa.
+          Primeiro, escolha a versão do seu convite.
+          Os adicionais vêm depois da janela de entrega.
         </p>
       </div>
 
@@ -1696,88 +1550,6 @@ function renderConfiguration(
           : ''
       }
 
-      <div class="section-block">
-        <h2 class="section-title">
-          Quer adicionar algo?
-        </h2>
-
-        ${
-          groups.length
-            ? groups.map(
-              ([groupName, addons]) => `
-                <div class="section-block">
-                  <span class="muted">
-                    ${esc(addonGroupLabel(groupName))}
-                  </span>
-
-                  <div class="grid two" style="margin-top:8px">
-                    ${addons.map(
-                      (addon) => `
-                        <label class="choice-card ${
-                          selectedAddons.has(addon.code)
-                            ? 'selected'
-                            : ''
-                        }">
-                          <input
-                            type="checkbox"
-                            name="addon"
-                            value="${esc(addon.code)}"
-                            ${
-                              selectedAddons.has(addon.code)
-                                ? 'checked'
-                                : ''
-                            }
-                          >
-
-                          <span class="choice-main">
-                            <strong>${esc(addon.name)}</strong>
-                            <small>+ ${money(addon.priceCents)}</small>
-                          </span>
-                        </label>
-                      `,
-                    ).join('')}
-                  </div>
-                </div>
-              `,
-            ).join('')
-            : `
-              <div class="muted">
-                Nenhum adicional disponível no momento.
-              </div>
-            `
-        }
-      </div>
-
-      ${comboOfferHtml(state)}
-
-      <div class="section-block">
-        <button
-          id="toggleCoupon"
-          class="btn btn-link"
-          type="button"
-        >
-          Adicionar cupom
-        </button>
-
-        <div
-          id="couponBox"
-          class="field ${
-            state.selection.couponCode
-              ? ''
-              : 'hidden'
-          }"
-          style="max-width:360px"
-        >
-          <label for="couponCode">Cupom</label>
-          <input
-            id="couponCode"
-            class="input"
-            value="${esc(state.selection.couponCode || '')}"
-            autocomplete="off"
-          >
-        </div>
-      </div>
-
       ${actionRow()}
     </section>
   `;
@@ -1794,99 +1566,8 @@ function renderConfiguration(
             state.selection.variantCode =
               input.value;
 
-            await refreshConfigurationQuote(
-              state,
-            );
-
-            persist(state);
-            renderConfiguration(
-              state,
-              render,
-            );
-          },
-        );
-      },
-    );
-
-  app
-    .querySelectorAll(
-      '[name="addon"]',
-    )
-    .forEach(
-      (input) => {
-        input.addEventListener(
-          'change',
-          async () => {
-            const set =
-              new Set(
-                state.selection.addonCodes,
-              );
-
-            const changedAddon =
-              addonByCode(
-                state,
-                input.value,
-              );
-
-            if (
-              input.checked
-            ) {
-              if (
-                changedAddon?.group
-              ) {
-                for (
-                  const code
-                  of [
-                    ...set,
-                  ]
-                ) {
-                  const current =
-                    addonByCode(
-                      state,
-                      code,
-                    );
-
-                  if (
-                    current?.group
-                    === changedAddon.group
-                  ) {
-                    set.delete(
-                      code,
-                    );
-                  }
-                }
-              }
-
-              set.add(
-                input.value,
-              );
-            } else {
-              set.delete(
-                input.value,
-              );
-            }
-
-            state.selection.addonCodes =
-              [
-                ...set,
-              ];
-
-            const combo =
-              comboByCode(
-                state,
-                state.selection.comboCode,
-              );
-
-            if (
-              combo
-              && !comboMatchesSelection(
-                state,
-                combo,
-              )
-            ) {
-              state.selection.comboCode =
-                '';
-            }
+            state.selection.comboCode =
+              '';
 
             await refreshConfigurationQuote(
               state,
@@ -1899,100 +1580,6 @@ function renderConfiguration(
             );
           },
         );
-      },
-    );
-
-  document
-    .getElementById(
-      'applySuggestedCombo',
-    )
-    ?.addEventListener(
-      'click',
-      async () => {
-        const code =
-          state.quote
-            ?.suggestedCombo
-            ?.code
-          || '';
-
-        if (!code) {
-          return;
-        }
-
-        state.selection.comboCode =
-          code;
-
-        await refreshConfigurationQuote(
-          state,
-        );
-
-        persist(state);
-        renderConfiguration(
-          state,
-          render,
-        );
-      },
-    );
-
-  document
-    .getElementById(
-      'removeCombo',
-    )
-    ?.addEventListener(
-      'click',
-      async () => {
-        state.selection.comboCode =
-          '';
-
-        await refreshConfigurationQuote(
-          state,
-        );
-
-        persist(state);
-        renderConfiguration(
-          state,
-          render,
-        );
-      },
-    );
-
-  document
-    .getElementById(
-      'toggleCoupon',
-    )
-    .addEventListener(
-      'click',
-      () => {
-        document
-          .getElementById(
-            'couponBox',
-          )
-          .classList
-          .remove(
-            'hidden',
-          );
-
-        document
-          .getElementById(
-            'couponCode',
-          )
-          .focus();
-      },
-    );
-
-  document
-    .getElementById(
-      'couponCode',
-    )
-    ?.addEventListener(
-      'input',
-      (event) => {
-        state.selection.couponCode =
-          event.target.value
-            .trim()
-            .toUpperCase();
-
-        persist(state);
       },
     );
 
@@ -2045,48 +1632,16 @@ function renderDetails(
       ${progress(state)}
 
       <div class="page-head">
-        <span class="eyebrow">Seus dados</span>
+        <span class="eyebrow">Data da festa</span>
         <h1 class="page-title">
-          Agora, só o essencial
+          Quando vai acontecer?
         </h1>
         <p class="page-subtitle">
-          O briefing criativo completo vem depois do pagamento.
+          Com a data, eu consigo mostrar apenas as janelas de entrega que realmente cabem na agenda.
         </p>
       </div>
 
       <div class="form-grid">
-        <div class="field">
-          <label for="customerName">Seu nome</label>
-          <input
-            id="customerName"
-            class="input"
-            autocomplete="name"
-            value="${esc(state.customer.name)}"
-          >
-        </div>
-
-        <div class="field">
-          <label for="whatsapp">WhatsApp</label>
-          <input
-            id="whatsapp"
-            class="input"
-            inputmode="tel"
-            autocomplete="tel"
-            value="${esc(state.customer.whatsapp)}"
-          >
-        </div>
-
-        <div class="field">
-          <label for="email">E-mail <span class="muted">(opcional)</span></label>
-          <input
-            id="email"
-            class="input"
-            type="email"
-            autocomplete="email"
-            value="${esc(state.customer.email)}"
-          >
-        </div>
-
         ${
           !eventKnown
             ? `
@@ -2150,8 +1705,6 @@ function renderDetails(
         </div>
       </div>
 
-      ${quoteHtml(state.quote)}
-
       ${actionRow({
         nextLabel:
           'Ver datas de entrega',
@@ -2160,30 +1713,6 @@ function renderDetails(
   `;
 
   const capture = () => {
-    state.customer.name =
-      document
-        .getElementById(
-          'customerName',
-        )
-        .value
-        .trim();
-
-    state.customer.whatsapp =
-      document
-        .getElementById(
-          'whatsapp',
-        )
-        .value
-        .trim();
-
-    state.customer.email =
-      document
-        .getElementById(
-          'email',
-        )
-        .value
-        .trim();
-
     if (
       !eventKnown
     ) {
@@ -2250,8 +1779,6 @@ function renderDetails(
         capture();
 
         const requiredFields = [
-          { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
-          { value: state.customer.whatsapp, label: 'WhatsApp', id: 'whatsapp' },
           { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
           { value: state.event.honoreeName, label: 'Nome da criança, casal ou evento', id: 'honoreeName' },
           { value: state.event.date, label: 'Data da festa', id: 'eventDate' },
@@ -2494,6 +2021,241 @@ function renderDelivery(
         state.step = 5;
         persist(state);
         render();
+      },
+    );
+}
+
+function renderAddons(
+  state,
+  render,
+) {
+  const selectedAddons =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const groups =
+    addonGroups(
+      state.catalog.addons,
+    );
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Adicionais</span>
+        <h1 class="page-title">
+          Quer adicionar algo?
+        </h1>
+        <p class="page-subtitle">
+          Escolha normalmente o que fizer sentido. A recomendação final, se houver, aparece só depois.
+        </p>
+      </div>
+
+      ${
+        groups.length
+          ? groups.map(
+            ([groupName, addons]) => `
+              <div class="section-block">
+                <span class="muted">
+                  ${esc(addonGroupLabel(groupName))}
+                </span>
+
+                <div class="grid two" style="margin-top:8px">
+                  ${addons.map(
+                    (addon) => `
+                      <label class="choice-card ${
+                        selectedAddons.has(addon.code)
+                          ? 'selected'
+                          : ''
+                      }">
+                        <input
+                          type="checkbox"
+                          name="addon"
+                          value="${esc(addon.code)}"
+                          ${
+                            selectedAddons.has(addon.code)
+                              ? 'checked'
+                              : ''
+                          }
+                        >
+
+                        <span class="choice-main">
+                          <strong>${esc(addon.name)}</strong>
+                          <small>+ ${money(addon.priceCents)}</small>
+                        </span>
+                      </label>
+                    `,
+                  ).join('')}
+                </div>
+              </div>
+            `,
+          ).join('')
+          : `
+            <div class="muted">
+              Nenhum adicional disponível no momento.
+            </div>
+          `
+      }
+
+      ${totalOnlyHtml(state.quote)}
+
+      ${actionRow()}
+    </section>
+  `;
+
+  app
+    .querySelectorAll(
+      '[name="addon"]',
+    )
+    .forEach(
+      (input) => {
+        input.addEventListener(
+          'change',
+          async () => {
+            const set =
+              new Set(
+                state.selection.addonCodes,
+              );
+
+            const changedAddon =
+              addonByCode(
+                state,
+                input.value,
+              );
+
+            if (
+              input.checked
+            ) {
+              if (
+                changedAddon?.group
+              ) {
+                for (
+                  const code
+                  of [
+                    ...set,
+                  ]
+                ) {
+                  const current =
+                    addonByCode(
+                      state,
+                      code,
+                    );
+
+                  if (
+                    current?.group
+                    === changedAddon.group
+                  ) {
+                    set.delete(
+                      code,
+                    );
+                  }
+                }
+              }
+
+              set.add(
+                input.value,
+              );
+            } else {
+              set.delete(
+                input.value,
+              );
+            }
+
+            state.selection.addonCodes =
+              [
+                ...set,
+              ];
+
+            const combo =
+              comboByCode(
+                state,
+                state.selection.comboCode,
+              );
+
+            if (
+              combo
+              && !comboMatchesSelection(
+                state,
+                combo,
+              )
+            ) {
+              state.selection.comboCode =
+                '';
+            }
+
+            await refreshConfigurationQuote(
+              state,
+            );
+
+            persist(state);
+            renderAddons(
+              state,
+              render,
+            );
+          },
+        );
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        loading(
+          'Conferindo a agenda...',
+        );
+
+        try {
+          await updateQuote(state);
+
+          if (
+            (state.delivery?.options || [])
+              .length
+          ) {
+            const sameWindow =
+              await refreshDeliveryForSelection(
+                state,
+              );
+
+            if (!sameWindow) {
+              state.step =
+                4;
+
+              persist(state);
+              render();
+
+              showToast(
+                'Seus adicionais mudaram a carga do pedido. Escolha a janela de entrega disponível para essa nova configuração.',
+              );
+
+              return;
+            }
+          }
+
+          state.step = 6;
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderAddons(
+            state,
+            render,
+          );
+        }
       },
     );
 }
@@ -2782,6 +2544,414 @@ function renderRecommendation(
     );
 }
 
+function renderCustomer(
+  state,
+  render,
+) {
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Seus dados</span>
+        <h1 class="page-title">
+          Agora, só o essencial
+        </h1>
+        <p class="page-subtitle">
+          O briefing criativo completo vem somente depois da confirmação do pagamento.
+        </p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="customerName">Seu nome</label>
+          <input
+            id="customerName"
+            class="input"
+            autocomplete="name"
+            value="${esc(state.customer.name)}"
+          >
+        </div>
+
+        <div class="field">
+          <label for="whatsapp">WhatsApp</label>
+          <input
+            id="whatsapp"
+            class="input"
+            inputmode="tel"
+            autocomplete="tel"
+            value="${esc(state.customer.whatsapp)}"
+          >
+        </div>
+
+        <div class="field">
+          <label for="email">E-mail <span class="muted">(opcional)</span></label>
+          <input
+            id="email"
+            class="input"
+            type="email"
+            autocomplete="email"
+            value="${esc(state.customer.email)}"
+          >
+        </div>
+      </div>
+
+      <div class="section-block">
+        <button
+          id="toggleCoupon"
+          class="btn btn-link"
+          type="button"
+        >
+          Adicionar cupom
+        </button>
+
+        <div
+          id="couponBox"
+          class="field ${
+            state.selection.couponCode
+              ? ''
+              : 'hidden'
+          }"
+          style="max-width:360px"
+        >
+          <label for="couponCode">Cupom</label>
+          <input
+            id="couponCode"
+            class="input"
+            value="${esc(state.selection.couponCode || '')}"
+            autocomplete="off"
+          >
+        </div>
+      </div>
+
+      ${totalOnlyHtml(state.quote)}
+
+      ${actionRow({
+        nextLabel:
+          (state.delivery?.options || []).length
+            ? 'Revisar pedido'
+            : 'Enviar para análise de encaixe',
+      })}
+    </section>
+  `;
+
+  const capture = () => {
+    state.customer.name =
+      document
+        .getElementById(
+          'customerName',
+        )
+        .value
+        .trim();
+
+    state.customer.whatsapp =
+      document
+        .getElementById(
+          'whatsapp',
+        )
+        .value
+        .trim();
+
+    state.customer.email =
+      document
+        .getElementById(
+          'email',
+        )
+        .value
+        .trim();
+
+    state.selection.couponCode =
+      document
+        .getElementById(
+          'couponCode',
+        )
+        ?.value
+        .trim()
+        .toUpperCase()
+      || '';
+
+    persist(state);
+  };
+
+  app
+    .querySelectorAll(
+      'input',
+    )
+    .forEach((element) => {
+      const update = () => {
+        element.classList.remove('input-error');
+        element.removeAttribute('aria-invalid');
+        capture();
+      };
+      element.addEventListener('input', update);
+      element.addEventListener('change', update);
+    });
+
+  document
+    .getElementById(
+      'toggleCoupon',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        document
+          .getElementById(
+            'couponBox',
+          )
+          .classList
+          .remove(
+            'hidden',
+          );
+
+        document
+          .getElementById(
+            'couponCode',
+          )
+          .focus();
+      },
+    );
+
+  document
+    .getElementById(
+      'backBtn',
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        state.step = 5;
+        persist(state);
+        render();
+      },
+    );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        capture();
+
+        const requiredFields = [
+          { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
+          { value: state.customer.whatsapp, label: 'WhatsApp', id: 'whatsapp' },
+        ];
+        const missing = requiredFields.filter(field => !String(field.value || '').trim());
+
+        if (missing.length) {
+          for (const field of missing) {
+            const element = document.getElementById(field.id);
+            element?.classList.add('input-error');
+            element?.setAttribute('aria-invalid', 'true');
+          }
+
+          const first = document.getElementById(missing[0].id);
+          first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          first?.focus();
+
+          showToast(
+            `Preencha: ${missing.map(field => field.label).join(', ')}.`,
+          );
+
+          return;
+        }
+
+        loading(
+          (state.delivery?.options || []).length
+            ? 'Atualizando seu pedido...'
+            : 'Enviando para análise...',
+        );
+
+        try {
+          await updateQuote(state);
+
+          if (
+            !(state.delivery?.options || [])
+              .length
+          ) {
+            const result =
+              await api(
+                '/api/v2/urgency/request',
+                {
+                  method:
+                    'POST',
+                  body:
+                    JSON.stringify({
+                      clientRequestId:
+                        state.clientRequestId,
+                      customer:
+                        state.customer,
+                      event:
+                        state.event,
+                      selection:
+                        state.selection,
+                    }),
+                },
+              );
+
+            localStorage.removeItem(
+              STORE_KEY,
+            );
+
+            window.location.href =
+              result.order
+                .customerAreaPath;
+
+            return;
+          }
+
+          state.step = 8;
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderCustomer(
+            state,
+            render,
+          );
+        }
+      },
+    );
+}
+
+function renderReview(
+  state,
+  render,
+) {
+  const product =
+    productFor(state);
+
+  const variant =
+    variantFor(state);
+
+  const addons =
+    state.catalog.addons
+      ?.filter(
+        (addon) =>
+          state.selection.addonCodes
+            .includes(
+              addon.code,
+            ),
+      )
+    || [];
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Revisão</span>
+        <h1 class="page-title">
+          Confira seu pedido
+        </h1>
+        <p class="page-subtitle">
+          Depois desta revisão você escolhe a forma de pagamento.
+          O briefing criativo continua para depois da confirmação.
+        </p>
+      </div>
+
+      <dl class="review-list">
+        <div class="review-line">
+          <dt>Cliente</dt>
+          <dd>
+            ${esc(state.customer.name)}
+            •
+            ${esc(state.customer.whatsapp)}
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Evento</dt>
+          <dd>
+            ${esc(eventLabel(state.event.type))}
+            •
+            ${esc(state.event.honoreeName)}
+            •
+            ${esc(dateBr(state.event.date))}
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Convite</dt>
+          <dd>
+            ${esc(product?.name || '')}
+            ${
+              variant?.label
+                ? ` • ${esc(variant.label)}`
+                : ''
+            }
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Adicionais</dt>
+          <dd>
+            ${
+              addons.length
+                ? addons.map(
+                  (addon) =>
+                    esc(addon.name),
+                ).join(', ')
+                : 'Nenhum'
+            }
+          </dd>
+        </div>
+
+        <div class="review-line">
+          <dt>Entrega</dt>
+          <dd>
+            ${esc(dateBr(state.deliveryWindow?.start))}
+            a
+            ${esc(dateBr(state.deliveryWindow?.end))}
+          </dd>
+        </div>
+
+        ${
+          state.selection.couponCode
+            ? `
+              <div class="review-line">
+                <dt>Cupom</dt>
+                <dd>${esc(state.selection.couponCode)}</dd>
+              </div>
+            `
+            : ''
+        }
+      </dl>
+
+      <div class="section-block">
+        ${totalOnlyHtml(state.quote)}
+      </div>
+
+      ${actionRow({
+        nextLabel:
+          'Escolher pagamento',
+      })}
+    </section>
+  `;
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        state.step = 9;
+        persist(state);
+        render();
+      },
+    );
+}
+
 async function renderPayment(
   state,
   render,
@@ -2801,6 +2971,9 @@ async function renderPayment(
         <h1 class="page-title">
           Como você prefere pagar?
         </h1>
+        <p class="page-subtitle">
+          Na próxima etapa você lê e aceita as condições antes de abrir o Mercado Pago.
+        </p>
       </div>
 
       <div class="grid two">
@@ -2863,10 +3036,7 @@ async function renderPayment(
         ${quoteHtml(state.quote)}
       </div>
 
-      ${actionRow({
-        nextLabel:
-          'Revisar pedido',
-      })}
+      ${actionRow()}
     </section>
   `;
 
@@ -2913,108 +3083,30 @@ async function renderPayment(
     .addEventListener(
       'click',
       () => {
-        state.step = 7;
+        state.step = 10;
         persist(state);
         render();
       },
     );
 }
 
-function renderReview(
+function renderTerms(
   state,
   render,
 ) {
-  const product =
-    productFor(state);
-
-  const variant =
-    variantFor(state);
-
-  const addons =
-    state.catalog.addons
-      ?.filter(
-        (addon) =>
-          state.selection.addonCodes
-            .includes(
-              addon.code,
-            ),
-      )
-    || [];
-
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
 
       <div class="page-head">
-        <span class="eyebrow">Revisão</span>
+        <span class="eyebrow">Condições</span>
         <h1 class="page-title">
-          Tudo certo?
+          Só falta confirmar
         </h1>
         <p class="page-subtitle">
-          Depois desta etapa você vai para o Mercado Pago.
-          O briefing criativo fica para depois da confirmação.
+          Leia as condições do pedido e, depois do aceite, siga para o pagamento.
         </p>
       </div>
-
-      <dl class="review-list">
-        <div class="review-line">
-          <dt>Evento</dt>
-          <dd>
-            ${esc(eventLabel(state.event.type))}
-            •
-            ${esc(state.event.honoreeName)}
-            •
-            ${esc(dateBr(state.event.date))}
-          </dd>
-        </div>
-
-        <div class="review-line">
-          <dt>Convite</dt>
-          <dd>
-            ${esc(product?.name || '')}
-            ${
-              variant?.label
-                ? ` • ${esc(variant.label)}`
-                : ''
-            }
-          </dd>
-        </div>
-
-        <div class="review-line">
-          <dt>Adicionais</dt>
-          <dd>
-            ${
-              addons.length
-                ? addons.map(
-                  (addon) =>
-                    esc(addon.name),
-                ).join(', ')
-                : 'Nenhum'
-            }
-          </dd>
-        </div>
-
-        <div class="review-line">
-          <dt>Entrega</dt>
-          <dd>
-            ${esc(dateBr(state.deliveryWindow?.start))}
-            a
-            ${esc(dateBr(state.deliveryWindow?.end))}
-          </dd>
-        </div>
-
-        <div class="review-line">
-          <dt>Pagamento</dt>
-          <dd>
-            ${
-              state.selection.paymentMethod
-              === 'pix'
-                ? 'Pix • entrada de 50%'
-                : 'Cartão • pagamento integral'
-            }
-          </dd>
-        </div>
-      </dl>
 
       <div class="section-block">
         ${quoteHtml(state.quote)}
@@ -3201,7 +3293,7 @@ function renderReview(
               false;
 
             persist(state);
-            renderReview(
+            renderTerms(
               state,
               render,
             );
@@ -3367,7 +3459,7 @@ export async function startStore(
     if (
       state.step === 5
     ) {
-      renderRecommendation(
+      renderAddons(
         state,
         render,
       );
@@ -3378,6 +3470,39 @@ export async function startStore(
     if (
       state.step === 6
     ) {
+      renderRecommendation(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 7
+    ) {
+      renderCustomer(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 8
+    ) {
+      renderReview(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 9
+    ) {
       renderPayment(
         state,
         render,
@@ -3386,7 +3511,7 @@ export async function startStore(
       return;
     }
 
-    renderReview(
+    renderTerms(
       state,
       render,
     );

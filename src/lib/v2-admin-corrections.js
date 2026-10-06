@@ -1272,6 +1272,8 @@ export async function correctV2Payment(
           adminCorrection: {
             correctedAt:
               stamp,
+            manualOverride:
+              true,
             note:
               text(
                 body.note,

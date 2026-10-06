@@ -192,7 +192,7 @@ function orderCorrectionBlock(detail) {
           </select>
         </div>
 
-        <div class="field"><label for="correctDepositPercent">Entrada (%)</label><input id="correctDepositPercent" class="input" type="number" min="0" max="100" value="${esc(p.paymentMethod === 'card' ? 100 : (p.originalBalanceCents === 0 ? 100 : 50))}"></div>
+        <div class="field"><label for="correctDepositPercent">Entrada (%)</label><input id="correctDepositPercent" class="input" type="number" min="0" max="100" value="${esc(p.depositPercent ?? (p.paymentMethod === 'card' ? 100 : 50))}"></div>
         <div class="field"><label for="correctDeposit">Entrada contratada (R$)</label><input id="correctDeposit" class="input" inputmode="decimal" value="${moneyInputValue(p.depositCents)}"></div>
         <div class="field"><label for="correctBalance">Saldo contratado (R$)</label><input id="correctBalance" class="input" inputmode="decimal" value="${moneyInputValue(p.originalBalanceCents)}"></div>
         <div class="field full"><label for="correctOrderNote">Motivo / observação</label><input id="correctOrderNote" class="input" placeholder="Ex.: data antiga migrada incorretamente"></div>

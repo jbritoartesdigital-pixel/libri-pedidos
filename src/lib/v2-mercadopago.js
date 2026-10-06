@@ -1627,6 +1627,7 @@ async function syncMercadoPagoOrderUnlocked(
             p.method,
             p.payment_type,
             p.amount_cents,
+            p.provider_payload_json,
 
             o.order_code,
             o.customer_id,
@@ -1655,6 +1656,42 @@ async function syncMercadoPagoOrderUnlocked(
     return {
       found:
         false,
+    };
+  }
+
+  const localPayload =
+    (() => {
+      try {
+        return JSON.parse(
+          localPayment
+            .provider_payload_json
+          || '{}',
+        );
+      } catch {
+        return {};
+      }
+    })();
+
+  if (
+    localPayload
+      ?.adminCorrection
+      ?.manualOverride
+    === true
+  ) {
+    return {
+      found:
+        true,
+      manualOverride:
+        true,
+      paymentStatus:
+        localPayment
+          .local_payment_status,
+      orderId:
+        localPayment
+          .order_id,
+      orderCode:
+        localPayment
+          .order_code,
     };
   }
 

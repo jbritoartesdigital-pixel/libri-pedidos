@@ -1907,6 +1907,11 @@ export async function getV2AdminOrderDetail(
         ),
       paymentMethod:
         order.payment_method,
+      depositPercent:
+        Number(
+          order.deposit_percent
+          || 0,
+        ),
       depositCents:
         Number(
           order.deposit_cents

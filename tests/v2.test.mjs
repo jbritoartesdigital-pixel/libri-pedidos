@@ -17,6 +17,11 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { getV2FinanceDashboard } from '../src/lib/v2-finance.js';
+import {
+  correctV2Order,
+  correctV2Payment,
+  createV2ManualPaymentCorrection,
+} from '../src/lib/v2-admin-corrections.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -1192,6 +1197,114 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.notEqual(first.payment.providerOrderId, next.payment.providerOrderId);
   await syncMercadoPagoOrder(e, first.payment.providerOrderId);
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
+});
+
+test('admin corrections update orders and payments with audit history', async () => {
+  const DB = database();
+
+  const quote = await calculateCommercialV2Quote(
+    DB,
+    {
+      productCode: 'interactive_essential',
+      paymentMethod: 'pix',
+    },
+    {
+      eventType: 'birthday',
+    },
+  );
+
+  const delivery = await findV2DeliveryOptions(
+    DB,
+    {
+      eventDate: day(45),
+      pointsUnits: quote.pointsUnits,
+      limit: 3,
+    },
+  );
+
+  const checkout = await startV2Checkout(
+    request,
+    env(DB),
+    input({
+      event: {
+        honoreeName: 'Correção Admin',
+        type: 'birthday',
+        date: day(45),
+      },
+      selection: {
+        productCode: 'interactive_essential',
+        paymentMethod: 'pix',
+      },
+      deliveryWindow: {
+        start: delivery.options[0].start,
+        end: delivery.options[0].end,
+      },
+      ...await terms(DB),
+    }),
+  );
+
+  const correctedOrder = await correctV2Order(
+    DB,
+    checkout.order.code,
+    {
+      order: {
+        honoreeName: 'Correção Admin 2',
+        eventDate: day(46),
+        deliveryStart: delivery.options[0].start,
+        deliveryEnd: delivery.options[0].end,
+      },
+      pricing: {
+        totalCents: 3600,
+        depositCents: 1800,
+        balanceCents: 1800,
+      },
+      note: 'Correção de teste',
+    },
+  );
+
+  assert.equal(correctedOrder.corrected, true);
+
+  const orderRow = DB.sqlite.prepare(
+    'SELECT honoree_display_name FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+
+  assert.equal(orderRow.honoree_display_name, 'Correção Admin 2');
+
+  const manual = await createV2ManualPaymentCorrection(
+    DB,
+    checkout.order.code,
+    {
+      paymentType: 'balance',
+      amountCents: 1800,
+      paidAt: '2026-10-01T15:00:00.000Z',
+      note: 'Comprovante no WhatsApp',
+    },
+  );
+
+  assert.equal(manual.created, true);
+
+  const correctedPayment = await correctV2Payment(
+    DB,
+    checkout.order.code,
+    manual.paymentId,
+    {
+      amountCents: 1750,
+      feeCents: 0,
+      netCents: 1750,
+      status: 'approved',
+      note: 'Ajuste de valor',
+    },
+  );
+
+  assert.equal(correctedPayment.corrected, true);
+
+  const history = DB.sqlite.prepare(
+    "SELECT action_code FROM v2_order_history WHERE order_id=(SELECT id FROM v2_orders WHERE order_code=?)"
+  ).all(checkout.order.code).map(row => row.action_code);
+
+  assert.ok(history.includes('admin_order_corrected'));
+  assert.ok(history.includes('admin_payment_added'));
+  assert.ok(history.includes('admin_payment_corrected'));
 });
 
 test('briefing autosave is lossless, photos are optional and missing fields are localized', () => {

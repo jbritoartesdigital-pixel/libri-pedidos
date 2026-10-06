@@ -5,6 +5,7 @@ import {
 } from '../lib/http.js';
 
 import {
+  createV2FinancePayment,
   getV2FinanceDashboard,
   getV2FinanceSummary,
   updateV2FinancePayment,
@@ -110,6 +111,39 @@ export async function handleAdminFinanceV2Api(
         error
           ?.message
         || 'Não foi possível carregar o financeiro.',
+        422,
+      );
+    }
+  }
+
+  if (
+    method
+    === 'POST'
+    && path
+    === '/api/admin/v2/finance/payments'
+  ) {
+    try {
+      return json(
+        {
+          ok:
+            true,
+          result:
+            await createV2FinancePayment(
+              env.DB,
+              await readJson(
+                request,
+              ),
+            ),
+        },
+        201,
+      );
+    } catch (
+      error
+    ) {
+      return fail(
+        error
+          ?.message
+        || 'Não foi possível adicionar o lançamento.',
         422,
       );
     }

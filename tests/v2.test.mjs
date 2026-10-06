@@ -1321,12 +1321,28 @@ test('store client keeps the approved commercial journey and a single final reco
   );
   assert.match(addons, /refreshDeliveryForSelection/);
 
+  assert.match(addons, /data-addon-family/);
+  assert.match(addons, /activeAddonGroup/);
+
+  const addonGrouping = source.slice(
+    source.indexOf('function addonGroups('),
+    source.indexOf('async function updateQuote('),
+  );
+  assert.match(addonGrouping, /moments_extra/);
+  assert.match(addonGrouping, /!hasMoments/);
+
   const recommendation = source.slice(
     source.indexOf('function renderRecommendation('),
     source.indexOf('function renderCustomer('),
   );
-  assert.match(recommendation, /Continuar sem adicionais/);
-  assert.match(recommendation, /Aplicar combo|Adicionar/);
+  assert.match(recommendation, /promo-sheet/);
+  assert.match(recommendation, /Oferta para adicionar agora/);
+  assert.match(recommendation, /Agora não/);
+  assert.equal(
+    recommendation.includes('name="finalOfferAddon"'),
+    false,
+    'the final recommendation must be a compact one-click offer, not a second addon selection screen',
+  );
 
   const review = source.slice(
     source.indexOf('function renderReview('),

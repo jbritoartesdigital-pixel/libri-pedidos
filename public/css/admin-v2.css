@@ -931,6 +931,21 @@ button { -webkit-tap-highlight-color: transparent; }
   text-align: left;
 }
 
+.calendar-event.delivery {
+  background: #f3f6fb;
+  border-color: rgba(74, 93, 125, .22);
+}
+
+.calendar-event-kind {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
 .calendar-event strong,
 .calendar-event small {
   display: block;
@@ -998,6 +1013,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .legend-dot.event {
   background: var(--rose-soft);
   border-color: rgba(169, 87, 103, .3);
+}
+
+.legend-dot.delivery {
+  background: #dfe7f3;
+  border-color: rgba(74, 93, 125, .28);
 }
 
 .legend-dot.today {

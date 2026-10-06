@@ -14,6 +14,7 @@ import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSugges
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
+import { getV2FinanceDashboard } from '../src/lib/v2-finance.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -263,6 +264,57 @@ test('production search finds theme and exposes the planned card data', async t 
   assert.ok(rows[0].paidCents > 0);
 });
 
+test('finance does not pretend Mercado Pago fees are zero before reconciliation', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Financeiro', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeesComplete, false);
+  assert.equal(finance.summary.mercadoPagoFeePendingCount, 1);
+  assert.equal(finance.summary.netCashMovementComplete, false);
+  assert.equal(finance.movements[0].feeKnown, false);
+  assert.equal(finance.movements[0].netKnown, false);
+  assert.equal(finance.movements[0].netCents, null);
+});
+
+test('approved Mercado Pago payment reconciles real fee and net amount from Payments API', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Taxa real', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  mp.setFinanceDetails(checkout.payment.providerOrderId, {
+    feeCents: 237,
+  });
+  mp.approve(checkout.payment.providerOrderId);
+
+  const synced = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  assert.equal(synced.financeReconciled, true);
+
+  const payment = DB.sqlite.prepare(
+    'SELECT amount_cents, fee_cents, net_cents FROM v2_payments WHERE provider_order_id = ?'
+  ).get(checkout.payment.providerOrderId);
+
+  assert.equal(payment.fee_cents, 237);
+  assert.equal(payment.net_cents, payment.amount_cents - 237);
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeesComplete, true);
+  assert.equal(finance.summary.mercadoPagoFeeCents, 237);
+  assert.equal(finance.summary.netCashMovementComplete, true);
+  assert.equal(finance.movements[0].feeKnown, true);
+  assert.equal(finance.movements[0].feeCents, 237);
+  assert.equal(finance.movements[0].netKnown, true);
+});
+
 test('normal checkout resumes expired payment in same order; stale payment cannot mutate paid order', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({ event: { honoreeName: 'Teste', type: 'birthday', date: day(50) }, deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });
@@ -371,22 +423,37 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
-test('agenda range exposes contracted events on their party date', async t => {
+test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);
+  const deliveryStart = day(5);
+  const deliveryEnd = day(7);
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
-    deliveryWindow: { start: day(5), end: day(7) },
+    deliveryWindow: { start: deliveryStart, end: deliveryEnd },
     ...await terms(DB),
   }));
   mp.approve(checkout.payment.providerOrderId);
   await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
 
-  const agenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
-  assert.equal(agenda.days.length, 1);
-  assert.equal(agenda.days[0].events.length, 1);
-  assert.equal(agenda.days[0].events[0].code, checkout.order.code);
-  assert.equal(agenda.days[0].events[0].honoreeName, 'Festa Calendário');
+  const partyAgenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
+  assert.equal(partyAgenda.days.length, 1);
+  assert.equal(partyAgenda.days[0].events.length, 1);
+  assert.equal(partyAgenda.days[0].events[0].code, checkout.order.code);
+  assert.equal(partyAgenda.days[0].events[0].honoreeName, 'Festa Calendário');
+  assert.equal(partyAgenda.days[0].events[0].customerName, 'Cliente Teste');
+  assert.deepEqual(partyAgenda.days[0].events[0].deliveryWindow, {
+    start: deliveryStart,
+    end: deliveryEnd,
+  });
+
+  const deliveryAgenda = await getV2AgendaRange(DB, { start: deliveryEnd, end: deliveryEnd });
+  assert.equal(deliveryAgenda.days.length, 1);
+  assert.equal(deliveryAgenda.days[0].events.length, 0);
+  assert.equal(deliveryAgenda.days[0].deliveries.length, 1);
+  assert.equal(deliveryAgenda.days[0].deliveries[0].code, checkout.order.code);
+  assert.equal(deliveryAgenda.days[0].deliveries[0].customerName, 'Cliente Teste');
+  assert.equal(deliveryAgenda.days[0].deliveries[0].deliveryWindow.end, deliveryEnd);
 });
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {

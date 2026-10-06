@@ -19,6 +19,11 @@ export async function runV2Scheduler(env) {
           p.status = 'approved'
           AND (
             o.briefing_status = 'locked'
+            OR (
+              p.net_cents IS NULL
+              AND datetime(p.paid_at) >= datetime('now', '-1 day')
+              AND datetime(p.updated_at) < datetime('now', '-15 minutes')
+            )
             OR datetime(p.updated_at) < datetime('now', '-1 day')
           )
         )

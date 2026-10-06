@@ -863,6 +863,285 @@ function firstTransaction(
   );
 }
 
+function moneyToCents(
+  value,
+) {
+  const amount =
+    Number(
+      value,
+    );
+
+  if (
+    !Number.isFinite(
+      amount,
+    )
+  ) {
+    return null;
+  }
+
+  return Math.round(
+    amount
+    * 100,
+  );
+}
+
+function collectorFeeCents(
+  payment,
+) {
+  if (
+    !Array.isArray(
+      payment
+        ?.fee_details,
+    )
+  ) {
+    return null;
+  }
+
+  let total = 0;
+
+  for (
+    const fee
+    of payment
+      .fee_details
+  ) {
+    if (
+      String(
+        fee
+          ?.fee_payer
+        || '',
+      )
+        .toLowerCase()
+      !== 'collector'
+    ) {
+      continue;
+    }
+
+    const cents =
+      moneyToCents(
+        fee
+          ?.amount,
+      );
+
+    if (
+      cents === null
+    ) {
+      return null;
+    }
+
+    total += cents;
+  }
+
+  return total;
+}
+
+async function reconcileMercadoPagoFinance(
+  env,
+  localPayment,
+) {
+  const search =
+    await mpFetch(
+      env,
+      `/v1/payments/search?external_reference=${
+        encodeURIComponent(
+          localPayment
+            .order_code,
+        )
+      }&limit=20`,
+    );
+
+  const results =
+    Array.isArray(
+      search
+        ?.results,
+    )
+      ? search.results
+      : Array.isArray(
+        search,
+      )
+        ? (
+          search[0]
+            ?.results
+          || []
+        )
+        : [];
+
+  const expectedAmount =
+    Number(
+      localPayment
+        .amount_cents,
+    );
+
+  const candidates =
+    results
+      .filter(
+        (payment) =>
+          String(
+            payment
+              ?.status
+            || '',
+          )
+            .toLowerCase()
+          === 'approved'
+          && String(
+            payment
+              ?.external_reference
+            || '',
+          )
+          === String(
+            localPayment
+              .order_code,
+          )
+          && moneyToCents(
+            payment
+              ?.transaction_amount,
+          )
+          === expectedAmount,
+      )
+      .sort(
+        (
+          left,
+          right,
+        ) =>
+          Date.parse(
+            right
+              ?.date_approved
+            || right
+              ?.date_created
+            || 0,
+          )
+          - Date.parse(
+            left
+              ?.date_approved
+            || left
+              ?.date_created
+            || 0,
+          ),
+      );
+
+  const candidate =
+    candidates[0];
+
+  if (
+    !candidate
+      ?.id
+  ) {
+    return {
+      reconciled:
+        false,
+
+      reason:
+        'payment_not_found',
+    };
+  }
+
+  const payment =
+    await mpFetch(
+      env,
+      `/v1/payments/${
+        encodeURIComponent(
+          String(
+            candidate.id,
+          ),
+        )
+      }`,
+    );
+
+  if (
+    String(
+      payment
+        ?.status
+      || '',
+    )
+      .toLowerCase()
+    !== 'approved'
+    || String(
+      payment
+        ?.external_reference
+      || '',
+    )
+    !== String(
+      localPayment
+        .order_code,
+    )
+    || moneyToCents(
+      payment
+        ?.transaction_amount,
+    )
+    !== expectedAmount
+  ) {
+    return {
+      reconciled:
+        false,
+
+      reason:
+        'payment_mismatch',
+    };
+  }
+
+  const feeCents =
+    collectorFeeCents(
+      payment,
+    );
+
+  const netCents =
+    moneyToCents(
+      payment
+        ?.transaction_details
+        ?.net_received_amount,
+    );
+
+  if (
+    feeCents === null
+    || netCents === null
+    || feeCents < 0
+    || netCents < 0
+  ) {
+    return {
+      reconciled:
+        false,
+
+      reason:
+        'finance_details_unavailable',
+    };
+  }
+
+  await env.DB
+    .prepare(
+      `
+        UPDATE v2_payments
+        SET
+          fee_cents = ?,
+          net_cents = ?,
+          updated_at = ?
+        WHERE
+          id = ?
+          AND provider = 'mercado_pago'
+      `,
+    )
+    .bind(
+      feeCents,
+      netCents,
+      nowIso(),
+      localPayment
+        .payment_id,
+    )
+    .run();
+
+  return {
+    reconciled:
+      true,
+
+    feeCents,
+
+    netCents,
+
+    paymentId:
+      String(
+        payment.id,
+      ),
+  };
+}
+
 async function convertHoldToAgenda(
   db,
   orderId,
@@ -1496,6 +1775,29 @@ async function syncMercadoPagoOrderUnlocked(
     paymentStatus
     === 'approved'
   ) {
+    let financeReconciliation = {
+      reconciled:
+        false,
+    };
+
+    try {
+      financeReconciliation =
+        await reconcileMercadoPagoFinance(
+          env,
+          localPayment,
+        );
+    } catch (
+      error
+    ) {
+      console.error(
+        'V2 Mercado Pago finance reconciliation failed',
+        providerOrderId,
+        error
+          ?.message
+        || error,
+      );
+    }
+
     await commitV2CouponUse(
       env.DB,
       {
@@ -1668,6 +1970,10 @@ async function syncMercadoPagoOrderUnlocked(
           .order_code,
 
       paymentStatus,
+
+      financeReconciled:
+        financeReconciliation
+          .reconciled,
     };
   }
 

@@ -30,6 +30,13 @@ function whatsappBr(value) {
   return String(value || '');
 }
 
+function whatsappHref(number, message) {
+  const digits = String(number || '').replace(/\D/g, '');
+  return digits
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : '#';
+}
+
 function deliveryLabel(detail) {
   const start =
     detail.order
@@ -68,6 +75,10 @@ const ACTION_LABELS = {
     'Saldo recebido',
   finalize:
     'Finalizar pedido',
+  archive:
+    'Arquivar pedido',
+  unarchive:
+    'Restaurar pedido',
 };
 
 function paymentBlock(detail) {

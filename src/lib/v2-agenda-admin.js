@@ -1122,15 +1122,21 @@ export async function getV2AgendaRange(
                 o.event_date BETWEEN ? AND ?
                 OR o.delivery_end BETWEEN ? AND ?
               )
-              AND o.status IN (
-                'briefing_pending',
-                'ready_for_production',
-                'in_production',
-                'waiting_customer',
-                'adjustments',
-                'approved',
-                'balance_pending',
-                'ready_for_delivery'
+              AND (
+                o.status IN (
+                  'briefing_pending',
+                  'ready_for_production',
+                  'in_production',
+                  'waiting_customer',
+                  'adjustments',
+                  'approved',
+                  'balance_pending',
+                  'ready_for_delivery'
+                )
+                OR (
+                  o.status = 'finalized'
+                  AND o.event_date >= ?
+                )
               )
             ORDER BY
               o.event_date,
@@ -1143,6 +1149,7 @@ export async function getV2AgendaRange(
           rangeEnd,
           rangeStart,
           rangeEnd,
+          today,
         )
         .all(),
     ]);
@@ -1316,28 +1323,54 @@ export async function getV2AgendaRange(
     }
 
     if (
-      row.delivery_end
-      && row.delivery_end >= rangeStart
-      && row.delivery_end <= rangeEnd
+      row.status
+      !== 'finalized'
+      && row.delivery_start
+      && row.delivery_end
     ) {
-      if (
-        !deliveriesByDay[
-          row.delivery_end
-        ]
-      ) {
-        deliveriesByDay[
-          row.delivery_end
-        ] = [];
-      }
+      const visibleStart =
+        row.delivery_start
+        < rangeStart
+          ? rangeStart
+          : row.delivery_start;
 
-      deliveriesByDay[
+      const visibleEnd =
         row.delivery_end
-      ]
-        .push(
-          calendarOrder(
-            row,
-          ),
-        );
+        > rangeEnd
+          ? rangeEnd
+          : row.delivery_end;
+
+      if (
+        visibleStart
+        <= visibleEnd
+      ) {
+        for (
+          const deliveryDay
+          of listDays(
+            visibleStart,
+            visibleEnd,
+          )
+        ) {
+          if (
+            !deliveriesByDay[
+              deliveryDay
+            ]
+          ) {
+            deliveriesByDay[
+              deliveryDay
+            ] = [];
+          }
+
+          deliveriesByDay[
+            deliveryDay
+          ]
+            .push(
+              calendarOrder(
+                row,
+              ),
+            );
+        }
+      }
     }
   }
 

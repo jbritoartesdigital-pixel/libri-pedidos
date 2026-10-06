@@ -1095,3 +1095,85 @@ test('Worker serves only V2 runtime, redirects legacy pages and retires V1 APIs'
 
   await worker.scheduled({}, e, ctx); await ctx.pending;
 });
+
+
+test('store client keeps the approved commercial journey and a single final recommendation', () => {
+  const source = readFileSync(
+    new URL('../public/js/client-v2-store.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.equal(
+    source.includes('comboOfferHtml('),
+    false,
+    'combo must not be offered during configuration/addons',
+  );
+  assert.equal(
+    source.includes('recommendedDeliveryDaysBeforeEvent'),
+    false,
+    'delivery target must not become a commercial Save/Reminder cutoff',
+  );
+
+  const configuration = source.slice(
+    source.indexOf('function renderConfiguration('),
+    source.indexOf('function renderDetails('),
+  );
+  assert.equal(configuration.includes('name="addon"'), false);
+  assert.equal(configuration.includes('couponCode'), false);
+
+  const routerStart = source.indexOf(
+    '  const render = () => {',
+    source.indexOf('export async function startStore('),
+  );
+  const routerEnd = source.indexOf(
+    '\n\n  render();',
+    routerStart,
+  );
+  const router = source.slice(routerStart, routerEnd);
+
+  const orderedCalls = [
+    'renderConfiguration(',
+    'renderDetails(',
+    'renderDelivery(',
+    'renderAddons(',
+    'renderRecommendation(',
+    'renderCustomer(',
+    'renderReview(',
+    'renderPayment(',
+    'renderTerms(',
+  ];
+
+  let lastIndex = -1;
+  for (const call of orderedCalls) {
+    const index = router.indexOf(call);
+    assert.ok(index > lastIndex, `${call} must appear in the approved order`);
+    lastIndex = index;
+  }
+
+  const addons = source.slice(
+    source.indexOf('function renderAddons('),
+    source.indexOf('function renderRecommendation('),
+  );
+  assert.match(addons, /refreshDeliveryForSelection/);
+
+  const recommendation = source.slice(
+    source.indexOf('function renderRecommendation('),
+    source.indexOf('function renderCustomer('),
+  );
+  assert.match(recommendation, /Continuar sem adicionais/);
+  assert.match(recommendation, /Aplicar combo|Adicionar/);
+
+  const review = source.slice(
+    source.indexOf('function renderReview('),
+    source.indexOf('async function renderPayment('),
+  );
+  assert.equal(review.includes('termsAccepted'), false);
+  assert.equal(review.includes('paymentMethod'), false);
+
+  const terms = source.slice(
+    source.indexOf('function renderTerms('),
+    source.indexOf('export async function startStore('),
+  );
+  assert.match(terms, /termsAccepted/);
+  assert.match(terms, /\/api\/v2\/checkout\/start/);
+});

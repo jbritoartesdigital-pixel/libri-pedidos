@@ -1175,7 +1175,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
 
   assert.match(finance, /Adicionar lançamento/);
   assert.match(finance, /Reembolso \/ ajuste negativo/);
-  assert.match(finance, /finance_payment/);
+  assert.match(finance, /\/api\/admin\/v2\/finance\/payments/);
 
   assert.match(admin, /renderArchived/);
   assert.match(adminHtml, /data-view="archived"/);

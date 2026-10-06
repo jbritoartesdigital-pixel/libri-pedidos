@@ -70,50 +70,197 @@ const ACTION_LABELS = {
     'Finalizar pedido',
 };
 
+const ORDER_STATUS_OPTIONS = [
+  ['awaiting_urgency_decision', 'Encaixe em análise'],
+  ['urgency_approved', 'Encaixe aprovado'],
+  ['awaiting_payment', 'Aguardando pagamento'],
+  ['briefing_pending', 'Briefing pendente'],
+  ['ready_for_production', 'Pronto para produção'],
+  ['in_production', 'Em produção'],
+  ['waiting_customer', 'Aguardando cliente'],
+  ['adjustments', 'Ajustes'],
+  ['approved', 'Aprovado'],
+  ['balance_pending', 'Saldo pendente'],
+  ['ready_for_delivery', 'Pronto para entrega'],
+  ['finalized', 'Finalizado'],
+  ['cancelled', 'Cancelado'],
+];
+
+const BRIEFING_STATUS_OPTIONS = [
+  ['locked', 'Bloqueado'],
+  ['available', 'Disponível'],
+  ['in_progress', 'Em preenchimento'],
+  ['completed', 'Concluído'],
+];
+
+const EVENT_TYPE_OPTIONS = [
+  ['birthday', 'Aniversário'],
+  ['15_years', '15 Anos'],
+  ['wedding', 'Casamento'],
+  ['celebration', 'Chá / Celebração'],
+  ['other', 'Outro'],
+];
+
+function moneyInputValue(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
+
+function centsFromInput(element) {
+  const value = Number(String(element?.value || '0').replace(',', '.'));
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error('Confira os valores financeiros.');
+  }
+  return Math.round(value * 100);
+}
+
+function dateTimeLocalValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = number => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function selectedOptions(options, current) {
+  return options.map(([value, label]) => `
+    <option value="${esc(value)}" ${value === current ? 'selected' : ''}>
+      ${esc(label)}
+    </option>
+  `).join('');
+}
+
+function orderCorrectionBlock(detail) {
+  const o = detail.order;
+  const p = detail.pricing;
+
+  return `
+    <details class="card">
+      <summary style="cursor:pointer">
+        <strong>Correção administrativa</strong>
+        <span class="muted"> • pedido, cliente, datas e valores</span>
+      </summary>
+
+      <div class="notice info section-block">
+        Use quando algum dado ficou errado. Toda correção fica registrada no histórico.
+        Se a janela mudar em um pedido ativo, a capacidade é validada antes de salvar.
+      </div>
+
+      <div class="form-grid">
+        <div class="field"><label for="correctCustomerName">Cliente</label><input id="correctCustomerName" class="input" value="${esc(o.customerName || '')}"></div>
+        <div class="field"><label for="correctWhatsapp">WhatsApp</label><input id="correctWhatsapp" class="input" value="${esc(o.whatsapp || '')}"></div>
+        <div class="field"><label for="correctEmail">E-mail</label><input id="correctEmail" class="input" value="${esc(o.email || '')}"></div>
+        <div class="field"><label for="correctHonoree">Pessoa / evento</label><input id="correctHonoree" class="input" value="${esc(o.honoreeName || '')}"></div>
+
+        <div class="field">
+          <label for="correctEventType">Tipo de evento</label>
+          <select id="correctEventType" class="select">${selectedOptions(EVENT_TYPE_OPTIONS, o.eventType)}</select>
+        </div>
+
+        <div class="field"><label for="correctEventSubtype">Subtipo</label><input id="correctEventSubtype" class="input" value="${esc(o.eventSubtype || '')}"></div>
+        <div class="field"><label for="correctEventDate">Data da festa</label><input id="correctEventDate" class="input" type="date" value="${esc(o.eventDate || '')}"></div>
+        <div class="field"><label for="correctDeliveryStart">Início da entrega</label><input id="correctDeliveryStart" class="input" type="date" value="${esc(o.deliveryWindow?.start || '')}"></div>
+        <div class="field"><label for="correctDeliveryEnd">Fim da entrega</label><input id="correctDeliveryEnd" class="input" type="date" value="${esc(o.deliveryWindow?.end || '')}"></div>
+
+        <div class="field">
+          <label for="correctStatus">Status do pedido</label>
+          <select id="correctStatus" class="select">${selectedOptions(ORDER_STATUS_OPTIONS, o.status)}</select>
+        </div>
+
+        <div class="field">
+          <label for="correctBriefingStatus">Status do briefing</label>
+          <select id="correctBriefingStatus" class="select">${selectedOptions(BRIEFING_STATUS_OPTIONS, o.briefingStatus)}</select>
+        </div>
+
+        <div class="field full"><label for="correctNextAction">Próxima ação</label><input id="correctNextAction" class="input" value="${esc(o.nextAction || '')}"></div>
+      </div>
+
+      <h4 style="margin:18px 0 8px">Valores contratados</h4>
+
+      <div class="form-grid">
+        <div class="field"><label for="correctSubtotal">Subtotal (R$)</label><input id="correctSubtotal" class="input" inputmode="decimal" value="${moneyInputValue(p.subtotalCents)}"></div>
+        <div class="field"><label for="correctComboDiscount">Desconto combo (R$)</label><input id="correctComboDiscount" class="input" inputmode="decimal" value="${moneyInputValue(p.comboDiscountCents)}"></div>
+        <div class="field"><label for="correctCouponDiscount">Desconto cupom (R$)</label><input id="correctCouponDiscount" class="input" inputmode="decimal" value="${moneyInputValue(p.couponDiscountCents)}"></div>
+        <div class="field"><label for="correctUrgencyPercent">Urgência (%)</label><input id="correctUrgencyPercent" class="input" type="number" min="0" max="100" value="${esc(p.urgencyPercent || 0)}"></div>
+        <div class="field"><label for="correctUrgencyAmount">Valor urgência (R$)</label><input id="correctUrgencyAmount" class="input" inputmode="decimal" value="${moneyInputValue(p.urgencyAmountCents)}"></div>
+        <div class="field"><label for="correctTotal">Total (R$)</label><input id="correctTotal" class="input" inputmode="decimal" value="${moneyInputValue(p.totalCents)}"></div>
+
+        <div class="field">
+          <label for="correctPaymentMethod">Pagamento</label>
+          <select id="correctPaymentMethod" class="select">
+            <option value="pix" ${p.paymentMethod === 'pix' ? 'selected' : ''}>Pix</option>
+            <option value="card" ${p.paymentMethod === 'card' ? 'selected' : ''}>Cartão</option>
+          </select>
+        </div>
+
+        <div class="field"><label for="correctDepositPercent">Entrada (%)</label><input id="correctDepositPercent" class="input" type="number" min="0" max="100" value="${esc(p.paymentMethod === 'card' ? 100 : (p.originalBalanceCents === 0 ? 100 : 50))}"></div>
+        <div class="field"><label for="correctDeposit">Entrada contratada (R$)</label><input id="correctDeposit" class="input" inputmode="decimal" value="${moneyInputValue(p.depositCents)}"></div>
+        <div class="field"><label for="correctBalance">Saldo contratado (R$)</label><input id="correctBalance" class="input" inputmode="decimal" value="${moneyInputValue(p.originalBalanceCents)}"></div>
+        <div class="field full"><label for="correctOrderNote">Motivo / observação</label><input id="correctOrderNote" class="input" placeholder="Ex.: data antiga migrada incorretamente"></div>
+      </div>
+
+      <button id="saveOrderCorrection" class="btn btn-primary" type="button">Salvar correção</button>
+    </details>
+  `;
+}
+
 function paymentBlock(detail) {
-  const p =
-    detail.payment;
+  const p = detail.payment;
 
   return `
     <section class="card">
-      <div class="section-title">
-        <h3>Pagamento</h3>
-      </div>
+      <div class="section-title"><h3>Pagamento</h3></div>
 
       <div class="kpi-grid payment-kpi-grid">
-        <div class="kpi">
-          <span>Total</span>
-          <strong>${money(detail.pricing.totalCents)}</strong>
-        </div>
-
-        <div class="kpi">
-          <span>Pago</span>
-          <strong>${money(p.paidCents)}</strong>
-        </div>
-
-        <div class="kpi">
-          <span>Saldo</span>
-          <strong>${money(p.remainingBalanceCents)}</strong>
-        </div>
+        <div class="kpi"><span>Total</span><strong>${money(detail.pricing.totalCents)}</strong></div>
+        <div class="kpi"><span>Pago</span><strong>${money(p.paidCents)}</strong></div>
+        <div class="kpi"><span>Saldo</span><strong>${money(p.remainingBalanceCents)}</strong></div>
       </div>
 
       <div class="list" style="margin-top:12px">
-        ${(p.payments || []).map(
-          (item) => `
-            <div class="row-card">
-              <strong>
-                ${esc(item.method || item.provider)}
-                • ${money(item.amount_cents ?? item.amountCents)}
-              </strong>
+        ${(p.payments || []).map((item) => `
+          <div class="row-card">
+            <strong>${esc(item.method || item.provider)} • ${money(item.amount_cents ?? item.amountCents)}</strong>
+            <small>
+              ${esc(item.status)}
+              ${item.paid_at || item.paidAt ? ` • ${dateTimeBr(item.paid_at || item.paidAt)}` : ''}
+              • ${esc(item.provider)}
+            </small>
 
-              <small>
-                ${esc(item.status)}
-                ${item.paid_at || item.paidAt ? ` • ${dateTimeBr(item.paid_at || item.paidAt)}` : ''}
-              </small>
-            </div>
-          `,
-        ).join('')}
+            <details data-payment-editor="${item.id}" style="margin-top:8px">
+              <summary style="cursor:pointer">Corrigir pagamento</summary>
+
+              <div class="form-grid" style="margin-top:10px">
+                <div class="field"><label>Tipo</label><select class="select" data-pay-field="paymentType">${selectedOptions([['deposit','Entrada'],['full_payment','Pagamento integral'],['balance','Saldo'],['refund','Reembolso']], item.payment_type)}</select></div>
+                <div class="field"><label>Método</label><select class="select" data-pay-field="method">${selectedOptions([['pix','Pix'],['card','Cartão']], item.method)}</select></div>
+                <div class="field"><label>Status</label><select class="select" data-pay-field="status">${selectedOptions([['pending','Pendente'],['approved','Aprovado'],['rejected','Rejeitado'],['cancelled','Cancelado'],['refunded','Reembolsado'],['expired','Expirado']], item.status)}</select></div>
+                <div class="field"><label>Valor (R$)</label><input class="input" data-pay-field="amount" inputmode="decimal" value="${moneyInputValue(item.amount_cents ?? item.amountCents)}"></div>
+                <div class="field"><label>Taxa (R$)</label><input class="input" data-pay-field="fee" inputmode="decimal" value="${moneyInputValue(item.fee_cents ?? item.feeCents)}"></div>
+                <div class="field"><label>Líquido (R$)</label><input class="input" data-pay-field="net" inputmode="decimal" value="${item.net_cents === null || item.net_cents === undefined ? '' : moneyInputValue(item.net_cents)}"></div>
+                <div class="field"><label>Parcelas</label><input class="input" data-pay-field="installments" type="number" min="1" value="${esc(item.installments || '')}"></div>
+                <div class="field"><label>Data/hora paga</label><input class="input" data-pay-field="paidAt" type="datetime-local" value="${esc(dateTimeLocalValue(item.paid_at || item.paidAt))}"></div>
+                <div class="field full"><label>Motivo / observação</label><input class="input" data-pay-field="note" placeholder="Ex.: taxa importada incorretamente"></div>
+              </div>
+
+              ${item.provider === 'mercado_pago' ? '<small class="muted">Uma nova conciliação do Mercado Pago pode atualizar taxa/líquido novamente.</small>' : ''}
+
+              <button class="btn btn-secondary" type="button" data-save-payment="${item.id}" style="margin-top:8px">Salvar correção</button>
+            </details>
+          </div>
+        `).join('')}
       </div>
+
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer">Registrar pagamento Pix manual</summary>
+
+        <div class="form-grid" style="margin-top:10px">
+          <div class="field"><label for="manualPaymentType">Tipo</label><select id="manualPaymentType" class="select"><option value="deposit">Entrada</option><option value="balance" selected>Saldo</option><option value="full_payment">Pagamento integral</option><option value="refund">Reembolso</option></select></div>
+          <div class="field"><label for="manualPaymentAmount">Valor (R$)</label><input id="manualPaymentAmount" class="input" inputmode="decimal"></div>
+          <div class="field"><label for="manualPaymentPaidAt">Data/hora</label><input id="manualPaymentPaidAt" class="input" type="datetime-local"></div>
+          <div class="field full"><label for="manualPaymentNote">Observação</label><input id="manualPaymentNote" class="input" placeholder="Ex.: comprovante recebido no WhatsApp"></div>
+        </div>
+
+        <button id="addManualPayment" class="btn btn-secondary" type="button">Registrar pagamento</button>
+      </details>
     </section>
   `;
 }
@@ -298,6 +445,8 @@ export async function openOrder(code, onChanged = null) {
 
           ${paymentBlock(detail)}
         </div>
+
+        ${orderCorrectionBlock(detail)}
 
         ${detail.order.status === 'awaiting_urgency_decision' ? `
           <section class="card">
@@ -539,6 +688,120 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  document
+    .getElementById('saveOrderCorrection')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+
+      try {
+        await api(`/api/admin/v2/orders/${detail.order.code}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            order: {
+              customerName: document.getElementById('correctCustomerName').value.trim(),
+              whatsapp: document.getElementById('correctWhatsapp').value.trim(),
+              email: document.getElementById('correctEmail').value.trim(),
+              honoreeName: document.getElementById('correctHonoree').value.trim(),
+              eventType: document.getElementById('correctEventType').value,
+              eventSubtype: document.getElementById('correctEventSubtype').value.trim(),
+              eventDate: document.getElementById('correctEventDate').value,
+              deliveryStart: document.getElementById('correctDeliveryStart').value,
+              deliveryEnd: document.getElementById('correctDeliveryEnd').value,
+              status: document.getElementById('correctStatus').value,
+              briefingStatus: document.getElementById('correctBriefingStatus').value,
+              nextAction: document.getElementById('correctNextAction').value.trim(),
+            },
+            pricing: {
+              subtotalCents: centsFromInput(document.getElementById('correctSubtotal')),
+              comboDiscountCents: centsFromInput(document.getElementById('correctComboDiscount')),
+              couponDiscountCents: centsFromInput(document.getElementById('correctCouponDiscount')),
+              urgencyPercent: Number(document.getElementById('correctUrgencyPercent').value || 0),
+              urgencyAmountCents: centsFromInput(document.getElementById('correctUrgencyAmount')),
+              totalCents: centsFromInput(document.getElementById('correctTotal')),
+              paymentMethod: document.getElementById('correctPaymentMethod').value,
+              depositPercent: Number(document.getElementById('correctDepositPercent').value || 0),
+              depositCents: centsFromInput(document.getElementById('correctDeposit')),
+              balanceCents: centsFromInput(document.getElementById('correctBalance')),
+            },
+            note: document.getElementById('correctOrderNote').value.trim(),
+          }),
+        });
+
+        close();
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+        showToast('Correção salva ✓');
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    });
+
+  document
+    .querySelectorAll('[data-save-payment]')
+    .forEach(button => button.addEventListener('click', async () => {
+      const editor = document.querySelector(`[data-payment-editor="${CSS.escape(button.dataset.savePayment)}"]`);
+      if (!editor) return;
+      const field = name => editor.querySelector(`[data-pay-field="${name}"]`);
+      button.disabled = true;
+
+      try {
+        const net = field('net');
+        const installments = field('installments');
+
+        await api(`/api/admin/v2/orders/${detail.order.code}/payments/${button.dataset.savePayment}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            paymentType: field('paymentType').value,
+            method: field('method').value,
+            status: field('status').value,
+            amountCents: centsFromInput(field('amount')),
+            feeCents: centsFromInput(field('fee')),
+            netCents: net.value.trim() ? centsFromInput(net) : null,
+            installments: installments.value ? Number(installments.value) : null,
+            paidAt: field('paidAt').value || null,
+            note: field('note').value.trim(),
+          }),
+        });
+
+        close();
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+        showToast('Pagamento corrigido ✓');
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    }));
+
+  document
+    .getElementById('addManualPayment')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+
+      try {
+        await api(`/api/admin/v2/orders/${detail.order.code}/payments`, {
+          method: 'POST',
+          body: JSON.stringify({
+            paymentType: document.getElementById('manualPaymentType').value,
+            amountCents: centsFromInput(document.getElementById('manualPaymentAmount')),
+            paidAt: document.getElementById('manualPaymentPaidAt').value || null,
+            note: document.getElementById('manualPaymentNote').value.trim(),
+          }),
+        });
+
+        close();
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+        showToast('Pagamento registrado ✓');
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    });
 
   document.querySelectorAll('[data-urgency-decision]').forEach(button => {
     button.addEventListener('click', async () => {

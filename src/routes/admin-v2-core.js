@@ -15,6 +15,12 @@ import {
   markV2CongratulationsSent,
 } from '../lib/v2-admin-core.js';
 
+import {
+  correctV2Order,
+  correctV2Payment,
+  createV2ManualPaymentCorrection,
+} from '../lib/v2-admin-corrections.js';
+
 export async function handleAdminV2CoreApi(
   request,
   env,
@@ -110,6 +116,42 @@ export async function handleAdminV2CoreApi(
   if (
     detailMatch
     && method
+    === 'PATCH'
+  ) {
+    try {
+      const result =
+        await correctV2Order(
+          env.DB,
+          detailMatch[1],
+          await readJson(
+            request,
+          ),
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok:
+          true,
+        result,
+      });
+    } catch (error) {
+      return fail(
+        error?.message
+        || 'Não foi possível corrigir este pedido.',
+        422,
+      );
+    }
+  }
+
+  if (
+    detailMatch
+    && method
     === 'DELETE'
   ) {
     try {
@@ -187,6 +229,97 @@ export async function handleAdminV2CoreApi(
         error?.message
         || 'Não foi possível cancelar este pedido.',
         409,
+      );
+    }
+  }
+
+  const paymentCorrectionMatch =
+    path
+      .match(
+        /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/payments\/(\d+)$/,
+      );
+
+  if (
+    paymentCorrectionMatch
+    && method
+    === 'PATCH'
+  ) {
+    try {
+      const result =
+        await correctV2Payment(
+          env.DB,
+          paymentCorrectionMatch[1],
+          Number.parseInt(
+            paymentCorrectionMatch[2],
+            10,
+          ),
+          await readJson(
+            request,
+          ),
+        );
+
+      if (!result) {
+        return fail(
+          'Pagamento não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok:
+          true,
+        result,
+      });
+    } catch (error) {
+      return fail(
+        error?.message
+        || 'Não foi possível corrigir este pagamento.',
+        422,
+      );
+    }
+  }
+
+  const paymentCreateMatch =
+    path
+      .match(
+        /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/payments$/,
+      );
+
+  if (
+    paymentCreateMatch
+    && method
+    === 'POST'
+  ) {
+    try {
+      const result =
+        await createV2ManualPaymentCorrection(
+          env.DB,
+          paymentCreateMatch[1],
+          await readJson(
+            request,
+          ),
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json(
+        {
+          ok:
+            true,
+          result,
+        },
+        201,
+      );
+    } catch (error) {
+      return fail(
+        error?.message
+        || 'Não foi possível registrar este pagamento.',
+        422,
       );
     }
   }

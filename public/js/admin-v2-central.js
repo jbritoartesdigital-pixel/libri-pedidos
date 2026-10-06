@@ -10,67 +10,6 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
-function whatsappHref(
-  number,
-  message,
-) {
-  const digits =
-    String(
-      number
-      || '',
-    )
-      .replace(
-        /\D/g,
-        '',
-      );
-
-  return digits
-    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
-    : '#';
-}
-
-function attentionMessage(
-  item,
-) {
-  const area =
-    item.customerAreaPath
-      ? new URL(
-          item.customerAreaPath,
-          window.location.origin,
-        ).href
-      : '';
-
-  const reason =
-    item.attentionReason
-    || item.nextAction
-    || '';
-
-  if (
-    item.status
-    === 'briefing_pending'
-  ) {
-    return `Oi, ${item.customerName}! 💛 O briefing do convite de ${item.honoreeName} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. ${area ? `Continue por aqui: ${area}?tab=briefing` : ''}`;
-  }
-
-  if (
-    item.status
-    === 'waiting_customer'
-    || item.status
-      === 'adjustments'
-  ) {
-    return `Oi, ${item.customerName}! 💛 Estou passando sobre o pedido ${item.code}, de ${item.honoreeName}. Há uma etapa aguardando sua conferência. ${area ? `Você pode acessar por aqui: ${area}` : ''}`;
-  }
-
-  if (
-    item.status
-    === 'balance_pending'
-  ) {
-    return `Oi, ${item.customerName}! 💛 Passando sobre o saldo pendente do pedido ${item.code}, de ${item.honoreeName}. ${area ? `Os dados estão na sua área: ${area}` : ''}`;
-  }
-
-  return `Oi, ${item.customerName}! 💛 Estou entrando em contato sobre o pedido ${item.code}, de ${item.honoreeName}. ${reason}`;
-}
-
 function attentionRow(item) {
   return `
     <div class="row-card">
@@ -94,11 +33,11 @@ function attentionRow(item) {
       </button>
 
       ${
-        item.whatsapp
+        item.quickWhatsappUrl
           ? `
             <a
               class="btn btn-ghost btn-small"
-              href="${esc(whatsappHref(item.whatsapp, attentionMessage(item)))}"
+              href="${esc(item.quickWhatsappUrl)}"
               target="_blank"
               rel="noopener"
               style="margin-top:9px"

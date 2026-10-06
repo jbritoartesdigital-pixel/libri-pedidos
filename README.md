@@ -1,6 +1,6 @@
 # LIBRI PEDIDOS V2
 
-Portal V2 em /pedido, área da cliente em /meu-pedido/<token> e Admin em /admin-v2. O portal V1 em / e seu Admin em /admin/ permanecem disponíveis.
+Portal oficial em /pedido, área da cliente em /meu-pedido/<token> e Admin em /admin-v2. A V1 foi aposentada do runtime; / e /admin redirecionam para a V2. As tabelas legadas permanecem no D1 como arquivo histórico e a migration 0014 importa pedidos V1 para as estruturas V2 sem apagar a origem.
 
 ## Fluxo implementado
 
@@ -15,7 +15,8 @@ Portal V2 em /pedido, área da cliente em /meu-pedido/<token> e Admin em /admin-
 - Pagamento tardio sem capacidade gera alerta no Admin e mantém o briefing bloqueado para revisão.
 - Cron a cada cinco minutos: sincronização de pagamentos, notificações e Web Push, eventos do dia em São Paulo, expiração de reservas/prévias e limpeza de desafios e operações abandonadas.
 - Agenda administrativa restaurada: dias, períodos, sugestões de cascata, antecipação e liberação explícita de excedente.
-- D1, R2 privado, Static Assets, Passkey e Web Push mantidos. Nenhuma migration nova.
+- D1, R2 privado, Static Assets, Passkey e Web Push mantidos.
+- Pedidos V1 são importados de forma idempotente para clientes, pedidos, itens, briefing, preços, pagamentos manuais confirmados, termos, histórico, notas e agenda V2.
 
 ## Validação
 
@@ -28,7 +29,7 @@ pnpm test
 pnpm exec wrangler deploy --dry-run --outdir .wrangler/validation
 ```
 
-O check percorre todos os JS/MJS de src, public, scripts e tests, aplica node --check, confere imports relativos e bindings. Os testes aplicam as 12 migrations existentes em SQLite em memória e exercitam os fluxos V2 e rotas V1.
+O check percorre todos os JS/MJS de src, public, scripts e tests, aplica node --check, confere imports relativos e bindings. Os testes aplicam todas as migrations em SQLite em memória, validam a importação idempotente do legado e exercitam os fluxos V2.
 
 Mercado Pago é simulado nos testes: nenhum pagamento real é criado. Testes locais não confirmam credenciais, Webhooks, push em dispositivos ou configuração da conta Cloudflare.
 

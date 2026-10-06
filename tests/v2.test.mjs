@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
@@ -31,13 +32,109 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 13);
+  const DB = database(); assert.equal(DB.migrationCount, 14);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_instagram'").get().value, '@libriconvites');
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
+});
+
+test('legacy V1 orders migrate idempotently into the V2 model without deleting source data', () => {
+  const DB = database();
+  const legacyToken = 'ord_' + 'b'.repeat(36);
+
+  DB.sqlite.prepare(`
+    INSERT INTO orders(
+      order_code, public_token, customer_name, whatsapp,
+      honoree_name, display_name, age,
+      event_date, event_time, venue_name, venue_address, location_url, theme,
+      experience, format, addons_json, briefing_json, pricing_json,
+      subtotal_cents, urgency_enabled, urgency_percent, urgency_amount_cents,
+      total_cents, deposit_percent, deposit_cents, balance_cents,
+      terms_version, terms_accepted_at, portfolio_consent,
+      status, photos_status, entry_status, mascot_status, speech_mode,
+      speech_status, invitation_status, balance_status,
+      production_started_at, production_deadline_at,
+      created_at, updated_at, finalized_at
+    )
+    VALUES (
+      'LIBRI-0999', ?, 'Cliente Legada', '5561999999999',
+      'Aurora Legada', 'Aurora', 5,
+      '2026-12-20', '16:00', 'Salão', 'Rua Teste', 'https://maps.example/teste', 'Jardim',
+      'full', 'interactive',
+      '{"confirmation":true,"extraPerson":1,"photoAlbumPlan":"festa","photoAlbumExtra100":1}',
+      '{"mustHave":"Borboletas","speechPreference":"libri"}',
+      '{"productCents":18000,"addonsCents":11900}',
+      29900, 1, 30, 8970,
+      38870, 50, 19435, 19435,
+      '1.0', '2026-10-01T12:00:00.000Z', 1,
+      'producing', 'approved', 'confirmed', 'approved', 'libri',
+      'not_required', 'producing', 'waiting',
+      '2026-10-02T12:00:00.000Z', '2026-10-10T12:00:00.000Z',
+      '2026-10-01T12:00:00.000Z', '2026-10-03T12:00:00.000Z', '2026-10-03T12:00:00.000Z'
+    )
+  `).run(legacyToken);
+
+  const legacyId = DB.sqlite.prepare("SELECT id FROM orders WHERE order_code='LIBRI-0999'").get().id;
+  DB.sqlite.prepare(`
+    INSERT INTO order_history(order_id, action_code, description, metadata_json, created_at)
+    VALUES (?, 'update_entry_status', 'Entrada confirmada', '{}', '2026-10-01T13:00:00.000Z')
+  `).run(legacyId);
+  DB.sqlite.prepare(`
+    INSERT INTO internal_notes(order_id, note, created_at)
+    VALUES (?, 'Manter detalhe aprovado pela cliente.', '2026-10-02T14:00:00.000Z')
+  `).run(legacyId);
+
+  const migration = readFileSync('migrations/0014_v1_to_v2_retirement.sql', 'utf8');
+  DB.sqlite.exec(migration);
+  DB.sqlite.exec(migration);
+
+  const migrated = DB.sqlite.prepare(`
+    SELECT o.*, c.name AS customer_name, c.whatsapp
+    FROM v2_orders o
+    JOIN v2_customers c ON c.id = o.customer_id
+    WHERE o.order_code='LIBRI-0999'
+  `).get();
+
+  assert.equal(migrated.public_token, legacyToken);
+  assert.equal(migrated.customer_name, 'Cliente Legada');
+  assert.equal(migrated.whatsapp, '5561999999999');
+  assert.equal(migrated.honoree_display_name, 'Aurora');
+  assert.equal(migrated.status, 'in_production');
+  assert.equal(migrated.briefing_status, 'completed');
+  assert.equal(migrated.delivery_end, '2026-10-10');
+
+  const briefing = JSON.parse(DB.sqlite.prepare(
+    "SELECT data_json FROM v2_briefings WHERE order_id=?"
+  ).get(migrated.id).data_json);
+  assert.equal(briefing.theme_or_style, 'Jardim');
+  assert.equal(briefing.event_time, '16:00');
+  assert.equal(briefing.mustHave, 'Borboletas');
+
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_order_items WHERE order_id=?"
+  ).get(migrated.id).n, 5);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=? AND status='approved'"
+  ).get(migrated.id).n, 1);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_order_terms_acceptances WHERE order_id=?"
+  ).get(migrated.id).n, 1);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_internal_notes WHERE order_id=?"
+  ).get(migrated.id).n, 1);
+  assert.ok(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id=?"
+  ).get(migrated.id).n > 0);
+
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_orders WHERE order_code='LIBRI-0999'"
+  ).get().n, 1);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM orders WHERE order_code='LIBRI-0999'"
+  ).get().n, 1);
 });
 
 test('urgency: request, approval, exact discounted price, Pix, repeated webhook and production preservation', async t => {
@@ -583,14 +680,30 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
 });
 
-test('Worker V1/V2 public routes, Admin authentication, static shells and scheduler remain available', async () => {
+test('Worker serves only V2 runtime, redirects legacy pages and retires V1 APIs', async () => {
   const DB = database(); const e = env(DB); delete e.MERCADO_PAGO_ACCESS_TOKEN;
   const served = []; e.ASSETS = { async fetch(r) { served.push(new URL(r.url).pathname); return new Response('shell'); } };
   const ctx = { waitUntil(p) { this.pending = p; } };
-  for (const path of ['/api/catalog', '/api/v2/catalog']) assert.equal((await worker.fetch(new Request(`https://example.com${path}`), e, ctx)).status, 200);
+
+  assert.equal((await worker.fetch(new Request('https://example.com/api/v2/catalog'), e, ctx)).status, 200);
+  for (const path of ['/api/catalog', '/api/orders', '/api/admin/orders']) {
+    assert.equal((await worker.fetch(new Request(`https://example.com${path}`), e, ctx)).status, 410);
+  }
+
   const unauth = await worker.fetch(new Request('https://example.com/api/admin/v2/orders/LIBRI-1001/urgency', { method: 'POST' }), e, ctx);
   assert.equal(unauth.status, 401);
-  for (const path of ['/pedido', '/admin-v2', '/meu-pedido/ord_' + 'a'.repeat(36), '/']) assert.equal((await worker.fetch(new Request(`https://example.com${path}`), e, ctx)).status, 200);
-  assert.deepEqual(served, ['/client-v2.html', '/admin-v2.html', '/client-v2.html', '/']);
+
+  for (const path of ['/pedido', '/admin-v2', '/meu-pedido/ord_' + 'a'.repeat(36)]) {
+    assert.equal((await worker.fetch(new Request(`https://example.com${path}`), e, ctx)).status, 200);
+  }
+
+  const root = await worker.fetch(new Request('https://example.com/'), e, ctx);
+  const admin = await worker.fetch(new Request('https://example.com/admin'), e, ctx);
+  assert.equal(root.status, 308);
+  assert.equal(root.headers.get('location'), 'https://example.com/pedido');
+  assert.equal(admin.status, 308);
+  assert.equal(admin.headers.get('location'), 'https://example.com/admin-v2');
+  assert.deepEqual(served, ['/client-v2.html', '/admin-v2.html', '/client-v2.html']);
+
   await worker.scheduled({}, e, ctx); await ctx.pending;
 });

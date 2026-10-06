@@ -4,31 +4,6 @@ import {
 } from './lib/http.js';
 
 /* ==================================================
-   ADMIN V1 | LEGADO
-================================================== */
-
-import {
-  handleAdminAuthApi,
-  requireAdminAuth,
-} from './routes/admin-auth.js';
-
-import {
-  handleAdminEditApi,
-} from './routes/admin-edit.js';
-
-import {
-  handleAdminManualApi,
-} from './routes/admin-manual.js';
-
-import {
-  handleAdminWorkflowV2Api,
-} from './routes/admin-workflow-v2.js';
-
-import {
-  handleAdminApi,
-} from './routes/admin.js';
-
-/* ==================================================
    ADMIN V2 | PASSKEY
 ================================================== */
 
@@ -96,13 +71,6 @@ import {
   handleCustomerContractsV2Api,
 } from './routes/customer-contracts-v2.js';
 
-/* ==================================================
-   PÚBLICO V1 | LEGADO
-================================================== */
-
-import {
-  handlePublicApi,
-} from './routes/public.js';
 import { runV2Scheduler } from './lib/v2-scheduler.js';
 
 /* ==================================================
@@ -168,6 +136,40 @@ function isAdminV2Page(
 ) {
   return pathname === '/admin-v2'
     || pathname === '/admin-v2/';
+}
+
+function redirectTo(
+  request,
+  pathname,
+) {
+  const target =
+    new URL(
+      request.url,
+    );
+
+  target.pathname =
+    pathname;
+
+  target.search = '';
+
+  return Response.redirect(
+    target.toString(),
+    308,
+  );
+}
+
+function isLegacyPublicApi(
+  pathname,
+) {
+  return (
+    pathname === '/api/catalog'
+    || pathname === '/api/terms/current'
+    || pathname === '/api/quote'
+    || pathname === '/api/orders'
+    || pathname.startsWith('/api/orders/')
+    || pathname === '/api/drafts'
+    || pathname.startsWith('/api/drafts/')
+  );
 }
 
 async function serveStaticShell(
@@ -421,28 +423,8 @@ export default {
         }
 
         /* ==================================================
-           ADMIN V1 | LEGADO
+           ADMIN V1 | APOSENTADO
         ================================================== */
-
-        if (
-          url.pathname
-            .startsWith(
-              '/api/admin/auth/',
-            )
-        ) {
-          const authResponse =
-            await handleAdminAuthApi(
-              request,
-              env,
-              url,
-            );
-
-          return authResponse
-            || fail(
-              'Rota de autenticação não encontrada.',
-              404,
-            );
-        }
 
         if (
           url.pathname
@@ -450,46 +432,13 @@ export default {
               '/api/admin/',
             )
         ) {
-          const authFailure =
-            await requireAdminAuth(
-              request,
-              env,
-            );
-
-          if (
-            authFailure
-          ) {
-            return authFailure;
-          }
-
-          const handlers = [
-            handleAdminEditApi,
-            handleAdminManualApi,
-            handleAdminWorkflowV2Api,
-            handleAdminApi,
-          ];
-
-          for (
-            const handler
-            of handlers
-          ) {
-            const response =
-              await handler(
-                request,
-                env,
-                url,
-              );
-
-            if (
-              response
-            ) {
-              return response;
-            }
-          }
-
           return fail(
-            'Rota administrativa não encontrada.',
-            404,
+            'O Admin antigo foi aposentado. Use /admin-v2.',
+            410,
+            {
+              redirect:
+                '/admin-v2',
+            },
           );
         }
 
@@ -511,21 +460,28 @@ export default {
         }
 
         /* ==================================================
-           PÚBLICO V1 | LEGADO
+           PÚBLICO V1 | APOSENTADO
         ================================================== */
 
-        const publicResponse =
-          await handlePublicApi(
-            request,
-            env,
-            url,
+        if (
+          isLegacyPublicApi(
+            url.pathname,
+          )
+        ) {
+          return fail(
+            'O portal antigo foi aposentado. Use /pedido.',
+            410,
+            {
+              redirect:
+                '/pedido',
+            },
           );
+        }
 
-        return publicResponse
-          || fail(
-            'Rota não encontrada.',
-            404,
-          );
+        return fail(
+          'Rota não encontrada.',
+          404,
+        );
       } catch (
         error
       ) {
@@ -557,6 +513,39 @@ export default {
     }
 
     /* ==================================================
+       REDIRECIONAMENTOS DO PORTAL LEGADO
+    ================================================== */
+
+    if (
+      [
+        '/',
+        '/index.html',
+      ].includes(
+        url.pathname,
+      )
+    ) {
+      return redirectTo(
+        request,
+        '/pedido',
+      );
+    }
+
+    if (
+      [
+        '/admin',
+        '/admin/',
+        '/admin.html',
+      ].includes(
+        url.pathname,
+      )
+    ) {
+      return redirectTo(
+        request,
+        '/admin-v2',
+      );
+    }
+
+    /* ==================================================
        SHELL VISUAL V2
     ================================================== */
 
@@ -585,7 +574,7 @@ export default {
     }
 
     /* ==================================================
-       ARQUIVOS ESTÁTICOS / V1
+       ARQUIVOS ESTÁTICOS
     ================================================== */
 
     return env.ASSETS.fetch(

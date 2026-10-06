@@ -2364,6 +2364,16 @@ export async function getV2CustomerArea(
       - paidCents,
     );
 
+  const capacityReview =
+    paidCents > 0
+    && context.order.briefing_status === 'locked'
+    && [
+      'awaiting_payment',
+      'urgency_approved',
+    ].includes(
+      context.order.status,
+    );
+
   return {
     order: {
       code:
@@ -2389,11 +2399,15 @@ export async function getV2CustomerArea(
       status:
         context.order.status,
       statusLabel:
-        statusLabel(
-          context.order.status,
-        ),
+        capacityReview
+          ? 'Pagamento confirmado • revisão da agenda'
+          : statusLabel(
+              context.order.status,
+            ),
       nextAction:
-        context.order.next_action,
+        capacityReview
+          ? 'Pagamento confirmado • revisão da agenda'
+          : context.order.next_action,
       source:
         context.order.source,
     },
@@ -2433,15 +2447,7 @@ export async function getV2CustomerArea(
         ),
       paidCents,
       remainingCents,
-      capacityReview:
-        paidCents > 0
-        && context.order.briefing_status === 'locked'
-        && [
-          'awaiting_payment',
-          'urgency_approved',
-        ].includes(
-          context.order.status,
-        ),
+      capacityReview,
       balancePix:
         context.order.status === 'balance_pending'
         && context.order.payment_method === 'pix'

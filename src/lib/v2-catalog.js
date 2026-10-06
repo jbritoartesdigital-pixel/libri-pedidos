@@ -130,6 +130,8 @@ export async function loadV2Catalog(db) {
               code,
               name,
               description,
+              discount_type,
+              discount_value,
               config_json
             FROM v2_combos
             WHERE active = 1
@@ -303,6 +305,15 @@ export async function loadV2Catalog(db) {
           description:
             row.description
             || '',
+
+          discountType:
+            row.discount_type,
+
+          discountValue:
+            Number(
+              row.discount_value
+              || 0,
+            ),
 
           config:
             parseJson(

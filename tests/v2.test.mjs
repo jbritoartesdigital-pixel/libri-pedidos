@@ -565,6 +565,8 @@ test('public catalog exposes official combo composition', async () => {
   const catalog = await loadV2Catalog(DB);
   assert.equal(catalog.combos.length, 5);
   const complete = catalog.combos.find(item => item.code === 'libri_completo');
+  assert.equal(complete.discountValue, 0);
+  assert.equal(complete.discountType, 'percent');
   assert.deepEqual(
     complete.items.map(item => item.itemCode).sort(),
     ['confirmation', 'moments', 'reminder', 'save_the_date'],
@@ -765,6 +767,21 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
   assert.match(
     source,
     /Suas escolhas formam o combo/,
+  );
+
+  assert.match(
+    source,
+    /Continuar sem adicionais/,
+  );
+
+  assert.match(
+    source,
+    /recommendedShortScenes/,
+  );
+
+  assert.match(
+    source,
+    /recommendedCompleteScenes/,
   );
 });
 

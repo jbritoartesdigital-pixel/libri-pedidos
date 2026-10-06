@@ -368,6 +368,7 @@ export function renderStoreCombos(
                     === button.dataset.editCombo,
                 ),
               config,
+              config,
               reload,
             ),
         ),
@@ -376,6 +377,7 @@ export function renderStoreCombos(
 
 function couponEditor(
   coupon,
+  config,
   reload,
 ) {
   const editing =
@@ -482,6 +484,59 @@ function couponEditor(
               <option value="0" ${coupon?.active === false ? 'selected' : ''}>Não</option>
             </select>
           </div>
+
+          <div class="field">
+            <label for="couponAdminMinScenes">Mínimo de cenas</label>
+            <input id="couponAdminMinScenes" class="input" type="number" min="1" max="8" value="${esc(coupon?.restrictions?.minScenes ?? '')}" placeholder="Qualquer">
+          </div>
+
+          <div class="field">
+            <label for="couponAdminMaxScenes">Máximo de cenas</label>
+            <input id="couponAdminMaxScenes" class="input" type="number" min="1" max="8" value="${esc(coupon?.restrictions?.maxScenes ?? '')}" placeholder="Qualquer">
+          </div>
+        </div>
+
+        <div class="section-block">
+          <strong>Produtos permitidos</strong>
+          <div class="grid two" style="margin-top:8px">
+            ${(config.products || []).map(product => `
+              <label class="checkline">
+                <input type="checkbox" name="couponProduct" value="${esc(product.code)}" ${(coupon?.restrictions?.productCodes || []).includes(product.code) ? 'checked' : ''}>
+                <span>${esc(product.name)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="section-block">
+          <strong>Eventos permitidos</strong>
+          <div class="grid two" style="margin-top:8px">
+            ${[
+              ['birthday','Aniversário'],
+              ['15_years','15 Anos'],
+              ['wedding','Casamento'],
+              ['celebration','Chá / Celebração'],
+              ['other','Outro'],
+            ].map(([value,label]) => `
+              <label class="checkline">
+                <input type="checkbox" name="couponEvent" value="${esc(value)}" ${(coupon?.restrictions?.eventTypes || []).includes(value) ? 'checked' : ''}>
+                <span>${esc(label)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="section-block">
+          <strong>Adicionais permitidos</strong>
+          <div class="grid two" style="margin-top:8px">
+            ${(config.addons || []).map(addon => `
+              <label class="checkline">
+                <input type="checkbox" name="couponAddon" value="${esc(addon.code)}" ${(coupon?.restrictions?.addonCodes || []).includes(addon.code) ? 'checked' : ''}>
+                <span>${esc(addon.name)}</span>
+              </label>
+            `).join('')}
+          </div>
+          <small class="muted">Sem seleção = vale para todos.</small>
         </div>
 
         <button
@@ -578,9 +633,40 @@ function couponEditor(
                     document
                       .getElementById('couponAdminActive')
                       .value === '1',
-                  restrictions:
-                    coupon?.restrictions
-                    || {},
+                  restrictions: {
+                    productCodes:
+                      [
+                        ...document.querySelectorAll(
+                          '[name="couponProduct"]:checked',
+                        ),
+                      ].map(
+                        input => input.value,
+                      ),
+                    eventTypes:
+                      [
+                        ...document.querySelectorAll(
+                          '[name="couponEvent"]:checked',
+                        ),
+                      ].map(
+                        input => input.value,
+                      ),
+                    addonCodes:
+                      [
+                        ...document.querySelectorAll(
+                          '[name="couponAddon"]:checked',
+                        ),
+                      ].map(
+                        input => input.value,
+                      ),
+                    minScenes:
+                      nullableNumber(
+                        'couponAdminMinScenes',
+                      ),
+                    maxScenes:
+                      nullableNumber(
+                        'couponAdminMaxScenes',
+                      ),
+                  },
                 }),
             },
           );
@@ -648,6 +734,7 @@ export function renderStoreCoupons(
       () =>
         couponEditor(
           null,
+          config,
           reload,
         ),
     );

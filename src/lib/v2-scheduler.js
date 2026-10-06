@@ -5,10 +5,28 @@ import { cleanupAbandonedUnpaidV2Orders } from './v2-admin-core.js';
 
 export async function runV2Scheduler(env) {
   const result = { synced: 0, failed: 0 };
-  const pending = await env.DB.prepare(`SELECT provider_order_id FROM v2_payments
-    WHERE provider = 'mercado_pago' AND provider_order_id IS NOT NULL
-      AND (status = 'pending' OR (status = 'approved' AND datetime(updated_at) < datetime('now', '-1 day')))
-    ORDER BY updated_at, id LIMIT 20`).all();
+  const pending = await env.DB.prepare(`SELECT p.provider_order_id
+    FROM v2_payments p
+    INNER JOIN v2_orders o
+      ON o.id = p.order_id
+    WHERE
+      p.provider = 'mercado_pago'
+      AND p.provider_order_id IS NOT NULL
+      AND (
+        p.status = 'pending'
+        OR (
+          p.status = 'approved'
+          AND (
+            (
+              o.briefing_status = 'locked'
+              AND o.status IN ('awaiting_payment', 'urgency_approved')
+            )
+            OR datetime(p.updated_at) < datetime('now', '-1 day')
+          )
+        )
+      )
+    ORDER BY p.updated_at, p.id
+    LIMIT 20`).all();
   for (const payment of pending.results || []) {
     try { await syncMercadoPagoOrder(env, payment.provider_order_id); result.synced++; }
     catch (error) {

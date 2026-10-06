@@ -1344,10 +1344,51 @@ export async function startCustomerArea(
             'Atualizando status...',
           );
 
-          area =
-            await loadArea();
+          try {
+            if (
+              area.briefing?.locked
+              && Number(
+                area.payment?.paidCents
+                || 0,
+              ) > 0
+            ) {
+              await api(
+                `/api/v2/customer-area/${token}/payment`,
+                {
+                  method: 'POST',
+                  body:
+                    JSON.stringify({
+                      clientRequestId:
+                        randomId(),
+                      paymentMethod:
+                        area.payment.method,
+                    }),
+                },
+              );
+            }
 
-          await render();
+            area =
+              await loadArea();
+
+            await render();
+
+            if (
+              !area.briefing?.locked
+            ) {
+              showToast(
+                'Pagamento confirmado. Briefing liberado ✓',
+              );
+            }
+          } catch (error) {
+            area =
+              await loadArea();
+
+            await render();
+
+            showToast(
+              error.message,
+            );
+          }
         },
       );
   }

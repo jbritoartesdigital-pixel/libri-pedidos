@@ -379,6 +379,32 @@ test('uncertain provider response is recovered with same idempotency key and no 
   assert.equal(recovered.payment.providerOrderId, first.payment.providerOrderId); assert.equal(mp.posts, 1);
 });
 
+test('approved payment repairs a lost checkout hold and unlocks briefing when capacity still fits', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const body = input({
+    event: { honoreeName: 'Pagamento recente', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  });
+
+  const checkout = await startV2Checkout(request, e, body);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET status='cancelled' WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)")
+    .run(checkout.order.code);
+
+  mp.approve(checkout.payment.providerOrderId);
+  const result = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  assert.equal(result.approved, true);
+  assert.equal(result.capacityReview, undefined);
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations').get().n > 0);
+
+  const order = DB.sqlite.prepare('SELECT status, briefing_status FROM v2_orders WHERE order_code = ?')
+    .get(checkout.order.code);
+
+  assert.equal(order.status, 'briefing_pending');
+  assert.equal(order.briefing_status, 'available');
+});
+
 test('late accredited payment does not oversell capacity; repeated review is deduplicated', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB); const a = await urgency(DB);
   await decideV2Urgency(DB, a.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });

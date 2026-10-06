@@ -1335,10 +1335,8 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(central, /attentionReason/);
   assert.match(central, /WhatsApp/);
 
-  assert.match(order, /Cobrar briefing/);
-  assert.match(order, /Prévia disponível/);
-  assert.match(order, /Saldo pendente/);
-  assert.match(order, /Pedido finalizado/);
+  assert.match(order, /detail\.whatsappActions/);
+  assert.match(order, /Mensagens rápidas/);
   assert.match(order, /Arquivar pedido/);
   assert.match(order, /Restaurar pedido/);
 

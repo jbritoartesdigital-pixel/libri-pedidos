@@ -1456,6 +1456,10 @@ test('store client keeps the approved commercial journey and a single final reco
     'groups with a single visible addon must render directly instead of opening a tab',
   );
   assert.match(addons, /addon-single/);
+  assert.match(addons, /addonExplanationHtml/);
+  assert.match(source, /Confirmação de presença vinculada ao seu convite/);
+  assert.match(source, /Pode ser preparado para Instagram ou para o App Libri/);
+  assert.match(source, /Até \${Number\(config\.photoLimit\)} fotos/);
 
   const addonGrouping = source.slice(
     source.indexOf('function addonGroups('),
@@ -1511,6 +1515,14 @@ test('store client keeps the approved commercial journey and a single final reco
   );
   assert.match(recommendation, /promo-sheet/);
   assert.match(recommendation, /Oferta para adicionar agora/);
+  assert.match(recommendation, /addonExplanationHtml/);
+  assert.match(recommendation, /O que muda no seu pedido/);
+
+  const addonExplanation = source.slice(
+    source.indexOf('function addonExplanation('),
+    source.indexOf('function addonFamilySummary('),
+  );
+  assert.match(addonExplanation, /O que você leva/);
   assert.match(recommendation, /Deixar interativo por/);
   assert.match(recommendation, /replaceState/);
 

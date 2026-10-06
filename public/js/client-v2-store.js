@@ -1232,6 +1232,175 @@ function addonGroups(
   ];
 }
 
+function addonExplanation(
+  addon,
+) {
+  if (!addon) {
+    return null;
+  }
+
+  const config =
+    addon.config
+    || {};
+
+  if (
+    addon.group
+    === 'confirmation'
+  ) {
+    return {
+      intro:
+        'Confirmação de presença vinculada ao seu convite.',
+      items: [
+        'Depois da compra, você escolhe se a confirmação será livre ou por lista de convidados.',
+        'Se escolher lista, os nomes são informados no briefing.',
+      ],
+    };
+  }
+
+  if (
+    addon.group
+    === 'filter'
+  ) {
+    return {
+      intro:
+        'Filtro personalizado para o seu evento.',
+      items: [
+        'Pode ser preparado para Instagram ou para o App Libri.',
+        'No Álbum da Festa, o filtro do App Libri já está incluído e não é cobrado separado.',
+      ],
+    };
+  }
+
+  if (
+    addon.group
+    === 'save_the_date'
+  ) {
+    return {
+      intro:
+        'Uma peça extra para avisar a data da festa com antecedência.',
+      items: [
+        addon.code
+          .includes(
+            'animated',
+          )
+          ? 'Versão animada.'
+          : 'Versão estática.',
+        'É entregue separadamente do convite principal para você enviar antes.',
+      ],
+    };
+  }
+
+  if (
+    addon.group
+    === 'reminder'
+  ) {
+    return {
+      intro:
+        'Uma peça extra para lembrar os convidados quando a festa estiver mais perto.',
+      items: [
+        addon.code
+          .includes(
+            'animated',
+          )
+          ? 'Versão animada.'
+          : 'Versão estática.',
+        'É entregue separadamente para facilitar o reenvio próximo ao evento.',
+      ],
+    };
+  }
+
+  if (
+    addon.group
+    === 'moments'
+  ) {
+    const items = [];
+
+    if (
+      Number(
+        config.photoLimit,
+      ) > 0
+    ) {
+      items.push(
+        `Até ${Number(config.photoLimit)} fotos.`,
+      );
+    }
+
+    if (
+      Number(
+        config.availabilityDays,
+      ) > 0
+    ) {
+      items.push(
+        `Período de disponibilidade: ${Number(config.availabilityDays)} dias.`,
+      );
+    }
+
+    if (
+      config.filterIncluded
+    ) {
+      items.push(
+        'Filtro personalizado para o App Libri incluído.',
+      );
+    }
+
+    return {
+      intro:
+        'Álbum digital da festa para guardar as fotos enviadas pelos convidados.',
+      items,
+    };
+  }
+
+  if (
+    addon.group
+    === 'moments_extra'
+  ) {
+    return {
+      intro:
+        'Complemento do Álbum da Festa.',
+      items: [
+        `Acrescenta ${Number(config.extraPhotos || 100)} fotos ao limite do plano escolhido.`,
+      ],
+    };
+  }
+
+  return null;
+}
+
+function addonExplanationHtml(
+  addon,
+) {
+  const explanation =
+    addonExplanation(
+      addon,
+    );
+
+  if (!explanation) {
+    return '';
+  }
+
+  return `
+    <div class="addon-explanation">
+      <strong>O que você leva</strong>
+      <p>${esc(explanation.intro)}</p>
+      ${
+        explanation.items
+          ?.length
+          ? `
+            <ul>
+              ${explanation.items
+                .map(
+                  (item) =>
+                    `<li>${esc(item)}</li>`,
+                )
+                .join('')}
+            </ul>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
 function addonFamilySummary(
   state,
   addons,
@@ -2405,6 +2574,7 @@ function renderAddons(
                         <span class="choice-main">
                           <strong>${esc(addon.name)}</strong>
                           <small>+ ${money(addon.priceCents)}</small>
+                          ${addonExplanationHtml(addon)}
                         </span>
                       </label>
                     `;
@@ -2460,6 +2630,7 @@ function renderAddons(
                                     <span class="choice-main">
                                       <strong>${esc(addon.name)}</strong>
                                       <small>+ ${money(addon.priceCents)}</small>
+                                      ${addonExplanationHtml(addon)}
                                     </span>
                                   </label>
                                 `,
@@ -2802,6 +2973,29 @@ function renderRecommendation(
                 </p>
               `
               : ''
+        }
+
+        ${
+          promoAddon
+            ? addonExplanationHtml(
+              promoAddon,
+            )
+            : offer.kind
+              === 'product_upgrade'
+                ? `
+                  <div class="addon-explanation">
+                    <strong>O que muda no seu pedido</strong>
+                    <p>${esc(
+                      offer.product.shortDescription
+                      || 'Seu convite passa para a versão interativa correspondente.',
+                    )}</p>
+                    <ul>
+                      <li>Você mantém a mesma quantidade de cenas.</li>
+                      <li>O valor exibido é somente a diferença para o upgrade.</li>
+                    </ul>
+                  </div>
+                `
+                : ''
         }
 
         <div class="promo-actions">

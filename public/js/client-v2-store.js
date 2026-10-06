@@ -4332,7 +4332,9 @@ function renderTerms(
           }
 
           localStorage.removeItem(
-            STORE_KEY,
+            storeKeyFor(
+              state.simulationMode,
+            ),
           );
 
           window.location.href =

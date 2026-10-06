@@ -1515,8 +1515,14 @@ test('store client keeps the approved commercial journey and a single final reco
   );
   assert.match(recommendation, /promo-sheet/);
   assert.match(recommendation, /Oferta para adicionar agora/);
-  assert.match(recommendation, /O que você leva/);
+  assert.match(recommendation, /addonExplanationHtml/);
   assert.match(recommendation, /O que muda no seu pedido/);
+
+  const addonExplanation = source.slice(
+    source.indexOf('function addonExplanation('),
+    source.indexOf('function addonFamilySummary('),
+  );
+  assert.match(addonExplanation, /O que você leva/);
   assert.match(recommendation, /Deixar interativo por/);
   assert.match(recommendation, /replaceState/);
 

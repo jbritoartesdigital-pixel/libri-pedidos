@@ -856,6 +856,29 @@ function allowedActions(
   const actions = [];
 
   if (
+    row.archived_at
+  ) {
+    return [
+      'unarchive',
+    ];
+  }
+
+  if (
+    [
+      'finalized',
+      'cancelled',
+    ].includes(
+      row.status,
+    )
+    && row.event_date
+      < dateKeyInSaoPaulo()
+  ) {
+    actions.push(
+      'archive',
+    );
+  }
+
+  if (
     row.status
     === 'ready_for_production'
     || row.status
@@ -1870,6 +1893,9 @@ export async function getV2AdminOrderDetail(
         order.updated_at,
       finalizedAt:
         order.finalized_at,
+      archivedAt:
+        order.archived_at
+        || null,
     },
 
     items,
@@ -1953,6 +1979,7 @@ export async function listV2Production(
   } = {},
 ) {
   const clauses = [
+    'o.archived_at IS NULL',
     `o.status NOT IN (
       'cancelled',
       'finalized',
@@ -2238,12 +2265,16 @@ export async function listV2Production(
 async function centralAttention(
   db,
 ) {
+  const today =
+    dateKeyInSaoPaulo();
+
   const result =
     await db
       .prepare(
         `
           SELECT
             o.order_code,
+            o.public_token,
             o.honoree_display_name,
             o.event_date,
             o.status,
@@ -2251,31 +2282,69 @@ async function centralAttention(
             o.delivery_start,
             o.delivery_end,
 
-            c.name AS customer_name
+            c.name AS customer_name,
+            c.whatsapp,
+
+            EXISTS(
+              SELECT 1
+              FROM v2_previews p
+              WHERE
+                p.order_id = o.id
+                AND p.status = 'active'
+            ) AS has_active_preview
           FROM v2_orders o
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
-          WHERE o.status IN (
-            'awaiting_urgency_decision',
-            'ready_for_production',
-            'adjustments',
-            'balance_pending'
-          )
+          WHERE
+            o.archived_at IS NULL
+            AND (
+              o.status IN (
+                'awaiting_urgency_decision',
+                'briefing_pending',
+                'ready_for_production',
+                'waiting_customer',
+                'adjustments',
+                'balance_pending',
+                'ready_for_delivery'
+              )
+              OR o.event_date = ?
+              OR (
+                o.delivery_start IS NOT NULL
+                AND o.delivery_end IS NOT NULL
+                AND ? BETWEEN o.delivery_start AND o.delivery_end
+                AND o.status NOT IN (
+                  'cancelled',
+                  'finalized'
+                )
+              )
+            )
           ORDER BY
-            CASE o.status
-              WHEN 'awaiting_urgency_decision' THEN 0
-              WHEN 'adjustments' THEN 1
-              WHEN 'balance_pending' THEN 2
-              WHEN 'ready_for_production' THEN 3
-              ELSE 4
+            CASE
+              WHEN o.status = 'awaiting_urgency_decision' THEN 0
+              WHEN o.status = 'adjustments' THEN 1
+              WHEN o.status = 'waiting_customer' THEN 2
+              WHEN o.status = 'balance_pending' THEN 3
+              WHEN o.status = 'briefing_pending' THEN 4
+              WHEN o.delivery_start IS NOT NULL
+                AND ? BETWEEN o.delivery_start AND o.delivery_end THEN 5
+              WHEN o.event_date = ? THEN 6
+              WHEN o.status = 'ready_for_production' THEN 7
+              ELSE 8
             END,
             COALESCE(
               o.delivery_start,
+              o.event_date,
               '9999-12-31'
             ),
             o.created_at
-          LIMIT 50
+          LIMIT 80
         `,
+      )
+      .bind(
+        today,
+        today,
+        today,
+        today,
       )
       .all();
 
@@ -2284,32 +2353,102 @@ async function centralAttention(
     || []
   )
     .map(
-      (row) => ({
-        code:
-          row.order_code,
-        honoreeName:
-          row.honoree_display_name,
-        customerName:
-          row.customer_name,
-        eventDate:
-          row.event_date,
-        status:
-          row.status,
-        statusLabel:
-          statusLabel(
-            row.status,
-          ),
-        nextAction:
+      (row) => {
+        let reason =
           nextActionFromStatus(
             row,
-          ),
-        deliveryWindow: {
-          start:
-            row.delivery_start,
-          end:
-            row.delivery_end,
-        },
-      }),
+          );
+
+        if (
+          row.status
+          === 'awaiting_urgency_decision'
+        ) {
+          reason =
+            'Analisar pedido de encaixe';
+        } else if (
+          row.status
+          === 'briefing_pending'
+        ) {
+          reason =
+            'Briefing pendente da cliente';
+        } else if (
+          (
+            row.status
+            === 'waiting_customer'
+            || row.status
+              === 'adjustments'
+          )
+          && row.has_active_preview
+        ) {
+          reason =
+            'Prévia aguardando retorno da cliente';
+        } else if (
+          row.status
+          === 'balance_pending'
+        ) {
+          reason =
+            'Saldo pendente';
+        } else if (
+          row.delivery_start
+          && row.delivery_end
+          && today
+            >= row.delivery_start
+          && today
+            <= row.delivery_end
+        ) {
+          reason =
+            'Dentro da faixa de entrega hoje';
+        } else if (
+          row.event_date
+          === today
+        ) {
+          reason =
+            'Festa hoje';
+        } else if (
+          row.status
+          === 'ready_for_delivery'
+        ) {
+          reason =
+            'Pedido pronto para entrega';
+        }
+
+        return {
+          code:
+            row.order_code,
+          honoreeName:
+            row.honoree_display_name,
+          customerName:
+            row.customer_name,
+          whatsapp:
+            row.whatsapp,
+          customerAreaPath:
+            `/meu-pedido/${row.public_token}`,
+          eventDate:
+            row.event_date,
+          status:
+            row.status,
+          statusLabel:
+            statusLabel(
+              row.status,
+            ),
+          nextAction:
+            nextActionFromStatus(
+              row,
+            ),
+          attentionReason:
+            reason,
+          hasActivePreview:
+            Boolean(
+              row.has_active_preview,
+            ),
+          deliveryWindow: {
+            start:
+              row.delivery_start,
+            end:
+              row.delivery_end,
+          },
+        };
+      },
     );
 }
 
@@ -2340,7 +2479,8 @@ async function partiesForDay(
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
           WHERE
-            o.event_date = ?
+            o.archived_at IS NULL
+            AND o.event_date = ?
             AND o.status IN (
               'briefing_pending',
               'ready_for_production',
@@ -2413,7 +2553,8 @@ async function upcomingParties(
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
           WHERE
-            o.event_date > ?
+            o.archived_at IS NULL
+            AND o.event_date > ?
             AND o.status IN (
               'briefing_pending',
               'ready_for_production',
@@ -2481,7 +2622,8 @@ async function centralPendingPayments(
           INNER JOIN v2_order_pricing p
             ON p.order_id = o.id
           WHERE
-            o.status IN (
+            o.archived_at IS NULL
+            AND o.status IN (
               'awaiting_payment',
               'urgency_approved'
             )
@@ -2556,7 +2698,8 @@ async function centralNewOrders(
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
           WHERE
-            o.status IN (
+            o.archived_at IS NULL
+            AND o.status IN (
               'briefing_pending',
               'ready_for_production'
             )
@@ -2610,7 +2753,8 @@ async function upcomingDeliveries(
             o.delivery_end
           FROM v2_orders o
           WHERE
-            o.status NOT IN (
+            o.archived_at IS NULL
+            AND o.status NOT IN (
               'cancelled',
               'finalized'
             )
@@ -2912,6 +3056,109 @@ async function financeSnapshot(
   };
 }
 
+export async function listV2ArchivedOrders(
+  db,
+  {
+    q = '',
+    limit = 80,
+  } = {},
+) {
+  const search =
+    cleanText(
+      q,
+      120,
+    );
+
+  const safeLimit =
+    Math.max(
+      1,
+      Math.min(
+        200,
+        Number.parseInt(
+          limit,
+          10,
+        )
+        || 80,
+      ),
+    );
+
+  const pattern =
+    `%${search}%`;
+
+  const result =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.order_code,
+            o.honoree_display_name,
+            o.event_date,
+            o.status,
+            o.next_action,
+            o.archived_at,
+            c.name AS customer_name,
+            c.whatsapp
+          FROM v2_orders o
+          INNER JOIN v2_customers c
+            ON c.id = o.customer_id
+          WHERE
+            o.archived_at IS NOT NULL
+            AND (
+              ? = ''
+              OR o.order_code LIKE ?
+              OR o.honoree_display_name LIKE ?
+              OR c.name LIKE ?
+              OR c.whatsapp LIKE ?
+            )
+          ORDER BY
+            o.archived_at DESC,
+            o.event_date DESC,
+            o.id DESC
+          LIMIT ?
+        `,
+      )
+      .bind(
+        search,
+        pattern,
+        pattern,
+        pattern,
+        pattern,
+        safeLimit,
+      )
+      .all();
+
+  return (
+    result.results
+    || []
+  )
+    .map(
+      (row) => ({
+        code:
+          row.order_code,
+        honoreeName:
+          row.honoree_display_name,
+        customerName:
+          row.customer_name,
+        whatsapp:
+          row.whatsapp,
+        eventDate:
+          row.event_date,
+        status:
+          row.status,
+        statusLabel:
+          statusLabel(
+            row.status,
+          ),
+        nextAction:
+          nextActionFromStatus(
+            row,
+          ),
+        archivedAt:
+          row.archived_at,
+      }),
+    );
+}
+
 export async function getV2Central(
   db,
 ) {
@@ -3139,19 +3386,6 @@ export async function applyV2AdminAction(
     return null;
   }
 
-  if (
-    [
-      'cancelled',
-      'finalized',
-    ].includes(
-      order.status,
-    )
-  ) {
-    throw new Error(
-      'Este pedido já está encerrado.',
-    );
-  }
-
   const payments =
     await paymentSummary(
       db,
@@ -3176,6 +3410,90 @@ export async function applyV2AdminAction(
 
   const stamp =
     nowIso();
+
+  if (
+    action
+    === 'archive'
+  ) {
+    await db
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            archived_at = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        stamp,
+        stamp,
+        order.id,
+      )
+      .run();
+
+    await insertHistory(
+      db,
+      order.id,
+      'order_archived',
+      'Pedido arquivado no admin.',
+    );
+
+    return {
+      status:
+        order.status,
+      archived:
+        true,
+    };
+  }
+
+  if (
+    action
+    === 'unarchive'
+  ) {
+    await db
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            archived_at = NULL,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        stamp,
+        order.id,
+      )
+      .run();
+
+    await insertHistory(
+      db,
+      order.id,
+      'order_unarchived',
+      'Pedido restaurado dos arquivados.',
+    );
+
+    return {
+      status:
+        order.status,
+      archived:
+        false,
+    };
+  }
+
+  if (
+    [
+      'cancelled',
+      'finalized',
+    ].includes(
+      order.status,
+    )
+  ) {
+    throw new Error(
+      'Este pedido já está encerrado.',
+    );
+  }
 
   if (
     action

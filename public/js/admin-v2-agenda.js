@@ -731,6 +731,11 @@ export async function renderAgenda(
       ?.candidates
     || [];
 
+  const releaseable =
+    cascadeData.cascade
+      ?.releaseable
+    || [];
+
   viewRoot.innerHTML = `
     <div class="agenda-toolbar">
       <div class="agenda-month-nav">
@@ -894,6 +899,38 @@ export async function renderAgenda(
           `
           : empty('Nenhuma antecipação sugerida agora.')
       }
+
+      ${
+        releaseable.length
+          ? `
+            <div class="section-title" style="margin-top:16px">
+              <h3>Excedente sem candidato</h3>
+            </div>
+
+            <div class="list">
+              ${releaseable.map(
+                (item) => `
+                  <div class="row-card">
+                    <strong>${esc(item.sourceOrderCode)}</strong>
+                    <small>
+                      ${(Number(item.pointsUnits || 0) / 100).toFixed(1)} pt sem cliente elegível para antecipação.
+                    </small>
+
+                    <button
+                      class="btn btn-secondary"
+                      type="button"
+                      data-release-source="${esc(item.sourceOrderCode)}"
+                      style="margin-top:8px"
+                    >
+                      Liberar excedente para venda
+                    </button>
+                  </div>
+                `,
+              ).join('')}
+            </div>
+          `
+          : ''
+      }
     </section>
   `;
 
@@ -1010,6 +1047,41 @@ export async function renderAgenda(
               );
 
               showToast('Produção antecipada ✓');
+
+              await renderAgenda(
+                openOrder,
+                activeMonth,
+              );
+            } catch (error) {
+              button.disabled = false;
+              showToast(error.message);
+            }
+          },
+        ),
+    );
+  viewRoot
+    .querySelectorAll('[data-release-source]')
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            button.disabled = true;
+
+            try {
+              await api(
+                '/api/admin/v2/agenda/cascade/release',
+                {
+                  method: 'POST',
+                  body:
+                    JSON.stringify({
+                      sourceOrderCode:
+                        button.dataset.releaseSource,
+                    }),
+                },
+              );
+
+              showToast('Capacidade excedente liberada ✓');
 
               await renderAgenda(
                 openOrder,

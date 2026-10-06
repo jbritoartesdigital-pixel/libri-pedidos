@@ -12,6 +12,7 @@ import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
 import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
+import { findV2DeliveryOptions, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
@@ -779,6 +780,36 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
+test('delivery windows are capacity-driven instead of fixed to 3 or 4 days', async () => {
+  const DB = database();
+
+  for (let offset = 1; offset <= 8; offset += 1) {
+    await setV2AgendaDay(DB, day(offset), {
+      sellableCapacityUnits: 100,
+      internalBufferUnits: 100,
+      blocked: offset === 3,
+    });
+  }
+
+  const delivery = await findV2DeliveryOptions(DB, {
+    eventDate: day(60),
+    pointsUnits: 500,
+    limit: 6,
+  });
+
+  assert.ok(delivery.options.length > 0);
+  assert.ok(delivery.options.some(option => {
+    const start = new Date(option.start + 'T12:00:00Z');
+    const end = new Date(option.end + 'T12:00:00Z');
+    return Math.round((end - start) / 86400000) + 1 > 4;
+  }));
+
+  await assert.doesNotReject(validateV2DeliveryWindow(DB, {
+    eventDate: day(60),
+    start: delivery.options[0].start,
+    end: delivery.options[0].end,
+  }));
+});
 test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);
@@ -817,7 +848,7 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   const edited = await setV2AgendaDay(DB, day(3), { sellableCapacityUnits: 200, internalBufferUnits: 100 });
   assert.equal(edited.sellableCapacityUnits, 200);
   assert.equal((await getV2AgendaRange(DB, { start: day(3), end: day(4) })).days.length, 2);
-  assert.deepEqual(await getV2CascadeSuggestions(DB), { suggestions: [] });
+  assert.deepEqual(await getV2CascadeSuggestions(DB), { suggestions: [], releaseable: [] });
   const a = await urgency(DB); const b = await requestV2UrgencyReview(request, env(DB), input());
   const rows = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders ORDER BY id').all();
   DB.sqlite.prepare("UPDATE v2_orders SET status='finalized' WHERE id=?").run(rows[0].id);
@@ -826,6 +857,10 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   for (const [i,d] of [[0,3],[1,5]]) DB.sqlite.prepare('INSERT INTO v2_agenda_allocations(order_id,day,points_units) VALUES (?,?,100)').run(rows[i].id,day(d));
   assert.equal((await getV2CascadeSuggestions(DB)).suggestions.length, 1);
   assert.equal((await anticipateV2Production(DB, { sourceOrderCode: a.order.code, targetOrderCode: b.order.code })).movedUnits, 100);
+  const afterAnticipation = await getV2CascadeSuggestions(DB);
+  assert.equal(afterAnticipation.suggestions.length, 0);
+  assert.equal(afterAnticipation.releaseable.length, 1);
+  assert.equal(afterAnticipation.releaseable[0].sourceOrderCode, a.order.code);
   assert.equal((await releaseV2CascadeSurplus(DB, { sourceOrderCode: a.order.code })).releasedUnits, 100);
 });
 

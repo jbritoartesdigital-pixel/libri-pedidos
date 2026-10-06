@@ -96,6 +96,11 @@ export function renderStoreSettings(
         </div>
 
         <div class="field">
+          <label for="minimumDays">Prazo mínimo antes da festa</label>
+          <input id="minimumDays" class="input" type="number" min="0" value="${esc(s.agenda.minimumDeliveryDaysBeforeEvent)}">
+        </div>
+
+        <div class="field">
           <label for="urgencyPercent">Urgência %</label>
           <input id="urgencyPercent" class="input" type="number" value="30" readonly>
         </div>
@@ -204,6 +209,10 @@ export function renderStoreSettings(
                   recommended_delivery_days_before_event:
                     document
                       .getElementById('recommendedDays')
+                      .value,
+                  minimum_delivery_days_before_event:
+                    document
+                      .getElementById('minimumDays')
                       .value,
                   urgency_percent:
                     document

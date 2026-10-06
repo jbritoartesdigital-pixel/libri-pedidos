@@ -1618,10 +1618,10 @@ function buildSchema(
       uploadRule(
         'person_photos',
         'person',
-        2,
+        0,
         5,
         'Fotos da pessoa que pode aparecer',
-        'Envie de 2 a 5 fotos nítidas. Não precisa escolher uma favorita.',
+        'Opcional. Se quiser enviar, você pode adicionar até 5 fotos nítidas.',
       ),
     );
 
@@ -1785,6 +1785,30 @@ function progressFor(
   );
 }
 
+function uploadSection(
+  fieldKey,
+) {
+  if (
+    [
+      'person_photos',
+      'outfit_photos',
+    ].includes(
+      fieldKey,
+    )
+  ) {
+    return 'appearance';
+  }
+
+  if (
+    fieldKey
+    === 'reference_files'
+  ) {
+    return 'references';
+  }
+
+  return 'addons';
+}
+
 function validationErrors(
   schema,
   data,
@@ -1839,6 +1863,10 @@ function validationErrors(
           'upload',
         key:
           rule.fieldKey,
+        section:
+          uploadSection(
+            rule.fieldKey,
+          ),
         message:
           `${rule.label}: envie pelo menos ${rule.min}.`,
       });
@@ -1852,6 +1880,10 @@ function validationErrors(
           'upload',
         key:
           rule.fieldKey,
+        section:
+          uploadSection(
+            rule.fieldKey,
+          ),
         message:
           `${rule.label}: máximo de ${rule.max}.`,
       });

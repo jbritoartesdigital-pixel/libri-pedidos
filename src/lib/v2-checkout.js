@@ -399,9 +399,7 @@ async function upsertCustomer(
   );
 }
 
-function orderItemRows(
-  quote,
-) {
+function orderItemRows(quote) {
   const rows = [];
 
   rows.push({
@@ -474,6 +472,37 @@ function orderItemRows(
       configuration:
         addon.config
         || {},
+    });
+  }
+
+  if (
+    quote.combo
+  ) {
+    rows.push({
+      itemType:
+        'combo_adjustment',
+
+      itemCode:
+        quote.combo
+          .code,
+
+      name:
+        quote.combo
+          .name,
+
+      unitPriceCents:
+        0,
+
+      pointsUnits:
+        0,
+
+      configuration: {
+        discountCents:
+          Number(
+            quote.comboDiscountCents
+            || 0,
+          ),
+      },
     });
   }
 

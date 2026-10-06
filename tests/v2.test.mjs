@@ -17,6 +17,11 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { getV2FinanceDashboard } from '../src/lib/v2-finance.js';
+import {
+  correctV2Order,
+  correctV2Payment,
+  createV2ManualPaymentCorrection,
+} from '../src/lib/v2-admin-corrections.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -33,7 +38,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 16);
+  const DB = database(); assert.equal(DB.migrationCount, 17);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -137,6 +142,93 @@ test('legacy V1 orders migrate idempotently into the V2 model without deleting s
   assert.equal(DB.sqlite.prepare(
     "SELECT COUNT(*) AS n FROM orders WHERE order_code='LIBRI-0999'"
   ).get().n, 1);
+});
+
+test('legacy finalized orders never keep fabricated future delivery windows', () => {
+  const DB = database();
+
+  const finishedToken = 'ord_' + 'd'.repeat(36);
+  const inferredToken = 'ord_' + 'e'.repeat(36);
+
+  DB.sqlite.prepare(`
+    INSERT INTO orders(
+      order_code, public_token, customer_name, whatsapp,
+      honoree_name, display_name, age,
+      event_date, event_time, venue_name, venue_address, location_url, theme,
+      experience, format, addons_json, briefing_json, pricing_json,
+      subtotal_cents, urgency_enabled, urgency_percent, urgency_amount_cents,
+      total_cents, deposit_percent, deposit_cents, balance_cents,
+      terms_version, terms_accepted_at, portfolio_consent,
+      status, photos_status, entry_status, mascot_status, speech_mode,
+      speech_status, invitation_status, balance_status,
+      production_started_at, production_deadline_at,
+      created_at, updated_at, finalized_at
+    )
+    VALUES
+      (
+        'LIBRI-0997', ?, 'Cliente Finalizada', '5561777777777',
+        'Finalizado Real', 'Finalizado Real', 5,
+        '2026-08-30', '18:00', 'Salão', 'Rua', '', 'Tema',
+        'full', 'interactive', '{}', '{}', '{}',
+        10000, 0, 0, 0, 10000, 50, 5000, 5000,
+        '1.0', '2026-07-01T12:00:00.000Z', 1,
+        'finished', 'approved', 'confirmed', 'approved', 'libri',
+        'not_required', 'approved', 'confirmed',
+        '2026-07-02T12:00:00.000Z', '2026-08-27T12:00:00.000Z',
+        '2026-07-01T12:00:00.000Z', '2026-07-20T12:00:00.000Z', '2026-07-20T12:00:00.000Z'
+      ),
+      (
+        'LIBRI-0996', ?, 'Cliente Inferida', '5561666666666',
+        'Finalizado Inferido', 'Finalizado Inferido', 5,
+        '2026-08-25', '18:00', 'Salão', 'Rua', '', 'Tema',
+        'full', 'interactive', '{}', '{}', '{}',
+        10000, 0, 0, 0, 10000, 50, 5000, 5000,
+        '1.0', '2026-07-01T12:00:00.000Z', 1,
+        'producing', 'approved', 'confirmed', 'approved', 'libri',
+        'not_required', 'approved', 'waiting',
+        '2026-07-02T12:00:00.000Z', '2026-08-22T12:00:00.000Z',
+        '2026-07-01T12:00:00.000Z', '2026-10-06T12:00:00.000Z', '2026-10-06T12:00:00.000Z'
+      )
+  `).run(finishedToken, inferredToken);
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0014_v1_to_v2_retirement.sql',
+      'utf8',
+    ),
+  );
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0015_fix_legacy_finalized_finance.sql',
+      'utf8',
+    ),
+  );
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0017_fix_legacy_delivery_dates.sql',
+      'utf8',
+    ),
+  );
+
+  const finished = DB.sqlite.prepare(
+    "SELECT status, delivery_start, delivery_end, recommended_target_date FROM v2_orders WHERE order_code='LIBRI-0997'"
+  ).get();
+
+  assert.equal(finished.status, 'finalized');
+  assert.equal(finished.delivery_start, '2026-07-20');
+  assert.equal(finished.delivery_end, '2026-07-20');
+  assert.equal(finished.recommended_target_date, null);
+
+  const inferred = DB.sqlite.prepare(
+    "SELECT status, delivery_start, delivery_end, recommended_target_date FROM v2_orders WHERE order_code='LIBRI-0996'"
+  ).get();
+
+  assert.equal(inferred.status, 'finalized');
+  assert.equal(inferred.delivery_start, null);
+  assert.equal(inferred.delivery_end, null);
+  assert.equal(inferred.recommended_target_date, null);
 });
 
 test('legacy repair finalizes delivered historical orders and moves imported payments off migration month', async () => {
@@ -784,6 +876,121 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
     source,
     /recommendedCompleteScenes/,
   );
+
+  assert.equal(
+    source.includes(
+      'comboOfferHtml(state)',
+    ),
+    false,
+  );
+
+  assert.equal(
+    source.includes(
+      'referenceDays',
+    ),
+    false,
+  );
+
+  assert.match(
+    source,
+    /Ver como funciona/,
+  );
+
+  assert.match(
+    source,
+    /Conhecer/,
+  );
+
+  assert.match(
+    source,
+    /back:\s*!state\.deepProductSlug/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 3[\s\S]*renderPartyDate/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 5[\s\S]*renderAddons/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 7[\s\S]*renderDetails/,
+  );
+});
+
+test('checkout snapshots the applied combo as an order item', async () => {
+  const DB = database();
+
+  DB.sqlite.prepare(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = 500
+    WHERE code = 'convite_save'
+  `).run();
+
+  const selection = {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: ['save_static'],
+    comboCode: 'convite_save',
+  };
+
+  const quote = await calculateCommercialV2Quote(
+    DB,
+    selection,
+    {
+      eventType: 'birthday',
+    },
+  );
+
+  const delivery = await findV2DeliveryOptions(
+    DB,
+    {
+      eventDate: day(60),
+      pointsUnits: quote.pointsUnits,
+      limit: 3,
+    },
+  );
+
+  assert.ok(delivery.options.length > 0);
+
+  const checkout = await startV2Checkout(
+    request,
+    env(DB),
+    input({
+      event: {
+        honoreeName: 'Combo Snapshot',
+        type: 'birthday',
+        date: day(60),
+      },
+      selection,
+      deliveryWindow: {
+        start: delivery.options[0].start,
+        end: delivery.options[0].end,
+      },
+      ...await terms(DB),
+    }),
+  );
+
+  const orderId = DB.sqlite.prepare(
+    'SELECT id FROM v2_orders WHERE order_code = ?',
+  ).get(checkout.order.code).id;
+
+  const comboItem = DB.sqlite.prepare(`
+    SELECT item_code, name_snapshot, unit_price_cents, points_units, configuration_json
+    FROM v2_order_items
+    WHERE order_id = ? AND item_type = 'combo_adjustment'
+  `).get(orderId);
+
+  assert.equal(comboItem.item_code, 'convite_save');
+  assert.equal(comboItem.name_snapshot, 'Convite + Save');
+  assert.equal(comboItem.unit_price_cents, 0);
+  assert.equal(comboItem.points_units, 0);
+  assert.equal(JSON.parse(comboItem.configuration_json).discountCents, 500);
 });
 
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
@@ -992,6 +1199,160 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
 });
 
+test('admin corrections update orders and payments with audit history', async () => {
+  const DB = database();
+
+  const quote = await calculateCommercialV2Quote(
+    DB,
+    {
+      productCode: 'interactive_essential',
+      paymentMethod: 'pix',
+    },
+    {
+      eventType: 'birthday',
+    },
+  );
+
+  const delivery = await findV2DeliveryOptions(
+    DB,
+    {
+      eventDate: day(45),
+      pointsUnits: quote.pointsUnits,
+      limit: 3,
+    },
+  );
+
+  const checkout = await startV2Checkout(
+    request,
+    env(DB),
+    input({
+      event: {
+        honoreeName: 'Correção Admin',
+        type: 'birthday',
+        date: day(45),
+      },
+      selection: {
+        productCode: 'interactive_essential',
+        paymentMethod: 'pix',
+      },
+      deliveryWindow: {
+        start: delivery.options[0].start,
+        end: delivery.options[0].end,
+      },
+      ...await terms(DB),
+    }),
+  );
+
+  const correctedOrder = await correctV2Order(
+    DB,
+    checkout.order.code,
+    {
+      order: {
+        honoreeName: 'Correção Admin 2',
+        eventDate: day(46),
+        deliveryStart: delivery.options[0].start,
+        deliveryEnd: delivery.options[0].end,
+      },
+      pricing: {
+        totalCents: 3600,
+        depositCents: 1800,
+        balanceCents: 1800,
+      },
+      note: 'Correção de teste',
+    },
+  );
+
+  assert.equal(correctedOrder.corrected, true);
+
+  const orderRow = DB.sqlite.prepare(
+    'SELECT honoree_display_name FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+
+  assert.equal(orderRow.honoree_display_name, 'Correção Admin 2');
+
+  const manual = await createV2ManualPaymentCorrection(
+    DB,
+    checkout.order.code,
+    {
+      paymentType: 'balance',
+      amountCents: 1800,
+      paidAt: '2026-10-01T15:00:00.000Z',
+      note: 'Comprovante no WhatsApp',
+    },
+  );
+
+  assert.equal(manual.created, true);
+
+  const correctedPayment = await correctV2Payment(
+    DB,
+    checkout.order.code,
+    manual.paymentId,
+    {
+      amountCents: 1750,
+      feeCents: 0,
+      netCents: 1750,
+      status: 'approved',
+      note: 'Ajuste de valor',
+    },
+  );
+
+  assert.equal(correctedPayment.corrected, true);
+
+  const history = DB.sqlite.prepare(
+    "SELECT action_code FROM v2_order_history WHERE order_id=(SELECT id FROM v2_orders WHERE order_code=?)"
+  ).all(checkout.order.code).map(row => row.action_code);
+
+  assert.ok(history.includes('admin_order_corrected'));
+  assert.ok(history.includes('admin_payment_added'));
+  assert.ok(history.includes('admin_payment_corrected'));
+});
+
+test('briefing autosave is lossless, photos are optional and missing fields are localized', () => {
+  const customerArea =
+    readFileSync(
+      'src/lib/v2-customer-area.js',
+      'utf8',
+    );
+
+  const clientArea =
+    readFileSync(
+      'public/js/client-v2-area.js',
+      'utf8',
+    );
+
+  assert.match(
+    customerArea,
+    /'person_photos',[\s\S]*?'person',[\s\S]*?0,[\s\S]*?5,/,
+  );
+
+  assert.equal(
+    clientArea.includes(
+      'debounce,',
+    ),
+    false,
+  );
+
+  assert.match(
+    clientArea,
+    /pendingAutosavePatch/,
+  );
+
+  assert.match(
+    clientArea,
+    /await flushAutosave\(\);[\s\S]*briefing\/submit/,
+  );
+
+  assert.match(
+    clientArea,
+    /sectionTitles/,
+  );
+
+  assert.match(
+    customerArea,
+    /section:[\s\S]*uploadSection/,
+  );
+});
+
 test('admin and briefing surfaces expose the remaining Project Bible controls', () => {
   const central =
     readFileSync(
@@ -1014,6 +1375,12 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
   const commercial =
     readFileSync(
       'public/js/admin-v2-store-commercial.js',
+      'utf8',
+    );
+
+  const settings =
+    readFileSync(
+      'public/js/admin-v2-store-settings.js',
       'utf8',
     );
 
@@ -1065,6 +1432,11 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
   assert.match(
     commercial,
     /Adicionais permitidos/,
+  );
+
+  assert.match(
+    settings,
+    /Prazo mínimo antes da festa/,
   );
 });
 

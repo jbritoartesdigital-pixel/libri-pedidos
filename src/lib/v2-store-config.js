@@ -22,6 +22,7 @@ const SETTINGS_ALLOWLIST =
     'default_sellable_points_per_day_units',
     'default_internal_buffer_points_per_day_units',
     'recommended_delivery_days_before_event',
+    'minimum_delivery_days_before_event',
     'urgency_percent',
     'pix_deposit_percent',
     'preview_expiry_hours',
@@ -53,6 +54,14 @@ const INTEGER_SETTINGS =
       'recommended_delivery_days_before_event',
       {
         min: 1,
+        max: 365,
+      },
+    ],
+
+    [
+      'minimum_delivery_days_before_event',
+      {
+        min: 0,
         max: 365,
       },
     ],
@@ -1128,6 +1137,19 @@ export async function getV2StoreConfig(
             10,
           )
           || 40,
+
+        minimumDeliveryDaysBeforeEvent:
+          Number.isInteger(
+            Number.parseInt(
+              settings.minimum_delivery_days_before_event,
+              10,
+            ),
+          )
+            ? Number.parseInt(
+              settings.minimum_delivery_days_before_event,
+              10,
+            )
+            : 3,
 
         urgencyPercent:
           30,

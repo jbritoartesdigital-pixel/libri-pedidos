@@ -155,6 +155,9 @@ async function loadCapacityMap(
   startDay,
   endDay,
   settings,
+  {
+    excludeOrderId = null,
+  } = {},
 ) {
   const defaultCapacity =
     v2IntSetting(
@@ -204,12 +207,18 @@ async function loadCapacityMap(
             WHERE
               day >= ?
               AND day <= ?
+              AND (
+                ? IS NULL
+                OR order_id != ?
+              )
             GROUP BY day
           `,
         )
         .bind(
           formatIsoDay(startDay),
           formatIsoDay(endDay),
+          excludeOrderId,
+          excludeOrderId,
         )
         .all(),
 
@@ -227,6 +236,11 @@ async function loadCapacityMap(
               AND a.day <= ?
               AND h.status = 'active'
               AND h.expires_at > ?
+              AND (
+                ? IS NULL
+                OR h.order_id IS NULL
+                OR h.order_id != ?
+              )
             GROUP BY a.day
           `,
         )
@@ -234,6 +248,8 @@ async function loadCapacityMap(
           formatIsoDay(startDay),
           formatIsoDay(endDay),
           new Date().toISOString(),
+          excludeOrderId,
+          excludeOrderId,
         )
         .all(),
     ]);
@@ -793,6 +809,7 @@ export async function planV2AllocationForWindow(
     start,
     end,
     pointsUnits,
+    excludeOrderId = null,
   },
 ) {
   const startDay =
@@ -842,6 +859,9 @@ export async function planV2AllocationForWindow(
       startDay,
       endDay,
       settings,
+      {
+        excludeOrderId,
+      },
     );
 
   return planAllocation(

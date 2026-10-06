@@ -2,7 +2,6 @@ import {
   api,
   app,
   dateBr,
-  debounce,
   esc,
   loading,
   modal,
@@ -1394,47 +1393,138 @@ export async function startCustomerArea(
       );
   }
 
-  const autosave =
-    debounce(
-      async (
+  let autosaveTimer =
+    null;
+
+  let pendingAutosavePatch =
+    {};
+
+  let pendingAutosaveSection =
+    '';
+
+  let saveChain =
+    Promise.resolve();
+
+  function applyBriefingSaveResult(
+    data,
+  ) {
+    area.briefing.data =
+      data.result.data;
+
+    area.briefing.progress =
+      data.result.progress;
+
+    area.briefing.schema =
+      data.result.schema;
+
+    area.briefing.currentSection =
+      data.result.currentSection;
+  }
+
+  function saveBriefingPatch(
+    currentSection,
+    patch,
+  ) {
+    const run =
+      async () => {
+        const data =
+          await api(
+            `/api/v2/customer-area/${token}/briefing`,
+            {
+              method:
+                'PATCH',
+              body:
+                JSON.stringify({
+                  currentSection,
+                  data:
+                    patch,
+                }),
+            },
+          );
+
+        applyBriefingSaveResult(
+          data,
+        );
+
+        return data;
+      };
+
+    saveChain =
+      saveChain
+        .catch(
+          () => undefined,
+        )
+        .then(
+          run,
+        );
+
+    return saveChain;
+  }
+
+  function queueAutosave(
+    currentSection,
+    patch,
+  ) {
+    pendingAutosaveSection =
+      currentSection;
+
+    pendingAutosavePatch = {
+      ...pendingAutosavePatch,
+      ...patch,
+    };
+
+    window.clearTimeout(
+      autosaveTimer,
+    );
+
+    autosaveTimer =
+      window.setTimeout(
+        () => {
+          flushAutosave()
+            .catch(
+              (error) =>
+                showToast(
+                  `Não foi possível salvar: ${error.message}`,
+                ),
+            );
+        },
+        450,
+      );
+  }
+
+  async function flushAutosave() {
+    window.clearTimeout(
+      autosaveTimer,
+    );
+
+    autosaveTimer =
+      null;
+
+    const patch =
+      pendingAutosavePatch;
+
+    const currentSection =
+      pendingAutosaveSection;
+
+    pendingAutosavePatch =
+      {};
+
+    pendingAutosaveSection =
+      '';
+
+    if (
+      Object.keys(
+        patch,
+      ).length
+    ) {
+      await saveBriefingPatch(
         currentSection,
         patch,
-      ) => {
-        try {
-          const data =
-            await api(
-              `/api/v2/customer-area/${token}/briefing`,
-              {
-                method:
-                  'PATCH',
-                body:
-                  JSON.stringify({
-                    currentSection,
-                    data:
-                      patch,
-                  }),
-              },
-            );
-
-          area.briefing.data =
-            data.result.data;
-
-          area.briefing.progress =
-            data.result.progress;
-
-          area.briefing.schema =
-            data.result.schema;
-
-          area.briefing.currentSection =
-            data.result.currentSection;
-        } catch (error) {
-          showToast(
-            `Não foi possível salvar: ${error.message}`,
-          );
-        }
-      },
-      450,
-    );
+      );
+    } else {
+      await saveChain;
+    }
+  }
 
   function bindBriefing() {
     if (
@@ -1495,24 +1585,44 @@ export async function startCustomerArea(
               area.briefing.data[key] =
                 value;
 
-              await autosave(
-                sectionId,
-                {
-                  [key]:
-                    value,
-                },
-              );
+              try {
+                if (
+                  control.type
+                  === 'radio'
+                  || control.dataset.multi
+                    === '1'
+                ) {
+                  await flushAutosave();
 
-              if (
-                control.type
-                === 'radio'
-                || control.dataset.multi
-                === '1'
-              ) {
-                area =
-                  await loadArea();
+                  await saveBriefingPatch(
+                    sectionId,
+                    {
+                      [key]:
+                        value,
+                    },
+                  );
 
-                await render();
+                  area =
+                    await loadArea();
+
+                  await render();
+
+                  return;
+                }
+
+                queueAutosave(
+                  sectionId,
+                  {
+                    [key]:
+                      value,
+                  },
+                );
+
+                await flushAutosave();
+              } catch (error) {
+                showToast(
+                  `Não foi possível salvar: ${error.message}`,
+                );
               }
             },
           );
@@ -1533,7 +1643,7 @@ export async function startCustomerArea(
               ] =
                 control.value;
 
-              autosave(
+              queueAutosave(
                 sectionId,
                 {
                   [control.dataset.field]:
@@ -1728,6 +1838,8 @@ export async function startCustomerArea(
           const next =
             sections[index - 1];
 
+          await flushAutosave();
+
           await api(
             `/api/v2/customer-area/${token}/briefing`,
             {
@@ -1763,6 +1875,8 @@ export async function startCustomerArea(
           if (!next) {
             return;
           }
+
+          await flushAutosave();
 
           await api(
             `/api/v2/customer-area/${token}/briefing`,
@@ -1806,6 +1920,8 @@ export async function startCustomerArea(
             'Enviando...';
 
           try {
+            await flushAutosave();
+
             const data =
               await api(
                 `/api/v2/customer-area/${token}/briefing/submit`,
@@ -1861,15 +1977,94 @@ export async function startCustomerArea(
             if (
               missing.length
             ) {
+              const sectionTitles =
+                new Map(
+                  (
+                    area.briefing.schema
+                      ?.sections
+                    || []
+                  )
+                    .map(
+                      (section) => [
+                        section.id,
+                        section.title,
+                      ],
+                    ),
+                );
+
+              const firstSection =
+                missing.find(
+                  (item) =>
+                    item.section,
+                )
+                  ?.section
+                || '';
+
+              if (
+                firstSection
+                && firstSection
+                  !== area.briefing.currentSection
+              ) {
+                try {
+                  await api(
+                    `/api/v2/customer-area/${token}/briefing`,
+                    {
+                      method:
+                        'PATCH',
+                      body:
+                        JSON.stringify({
+                          currentSection:
+                            firstSection,
+                          data:
+                            {},
+                        }),
+                    },
+                  );
+
+                  area =
+                    await loadArea();
+
+                  await render();
+                } catch {
+                  // O resumo das pendências continua disponível mesmo se
+                  // não for possível trocar de seção automaticamente.
+                }
+              }
+
               modal(
                 'Ainda falta um pouquinho',
                 `
+                  <p>
+                    Confira estas pendências antes de enviar:
+                  </p>
+
                   <div class="notice error">
                     ${missing.map(
-                      (item) =>
-                        `<div>• ${esc(item.message)}</div>`,
+                      (item) => {
+                        const section =
+                          sectionTitles.get(
+                            item.section,
+                          )
+                          || 'Briefing';
+
+                        return `
+                          <div style="margin-bottom:10px">
+                            <strong>${esc(section)}</strong><br>
+                            <span>• ${esc(item.message)}</span>
+                          </div>
+                        `;
+                      },
                     ).join('')}
                   </div>
+
+                  ${firstSection
+                    ? `
+                      <small>
+                        A primeira seção com pendência já ficou aberta atrás desta mensagem.
+                      </small>
+                    `
+                    : ''
+                  }
                 `,
               );
 

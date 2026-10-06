@@ -252,7 +252,7 @@ test('legacy paid historical order is finalized even when V1 invitation approval
       'producing', 'approved', 'confirmed', 'approved', 'libri',
       'not_required', 'waiting', 'confirmed',
       '2026-07-03T12:00:00.000Z', '2026-07-10T12:00:00.000Z',
-      '2026-07-01T12:00:00.000Z', '2026-10-06T01:00:00.000Z', NULL
+      '2026-07-01T12:00:00.000Z', '2026-10-06T01:00:00.000Z', '2026-08-15T23:00:00.000Z'
     )
   `).run(legacyToken);
 

@@ -81,6 +81,84 @@ const ACTION_LABELS = {
     'Restaurar pedido',
 };
 
+function quickWhatsappMessages(
+  detail,
+) {
+  const area =
+    new URL(
+      detail.order.customerAreaPath,
+      window.location.origin,
+    ).href;
+
+  const customer =
+    detail.order.customerName;
+
+  const honoree =
+    detail.order.honoreeName;
+
+  const messages = [];
+
+  if (
+    Number(
+      detail.briefing
+        ?.completionPercent
+      || 0,
+    ) < 100
+  ) {
+    messages.push({
+      label:
+        'Cobrar briefing',
+      text:
+        `Oi, ${customer}! 💛 O briefing do convite de ${honoree} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. Continue por aqui: ${area}?tab=briefing`,
+    });
+  }
+
+  if (
+    (detail.previews || [])
+      .some(
+        (preview) =>
+          preview.status
+          === 'active',
+      )
+  ) {
+    messages.push({
+      label:
+        'Prévia disponível',
+      text:
+        `Oi, ${customer}! 💛 A prévia do convite de ${honoree} já está disponível para conferência: ${area}?tab=preview`,
+    });
+  }
+
+  if (
+    Number(
+      detail.payment
+        ?.remainingBalanceCents
+      || 0,
+    ) > 0
+  ) {
+    messages.push({
+      label:
+        'Saldo pendente',
+      text:
+        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, está com saldo de ${money(detail.payment.remainingBalanceCents)} pendente. Os dados estão na sua área: ${area}`,
+    });
+  }
+
+  if (
+    detail.order.status
+    === 'finalized'
+  ) {
+    messages.push({
+      label:
+        'Pedido finalizado',
+      text:
+        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, foi finalizado. Obrigada por confiar na Libri Convites! ${area}`,
+    });
+  }
+
+  return messages;
+}
+
 function paymentBlock(detail) {
   const p =
     detail.payment;

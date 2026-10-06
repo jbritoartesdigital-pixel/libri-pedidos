@@ -114,9 +114,27 @@ export async function renderProduction(openOrder) {
           (order) => `
             <article class="order-card">
               <div>
-                <span class="status ${statusClass(order.status)}">
-                  ${esc(order.statusLabel)}
-                </span>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <span class="status ${statusClass(order.status)}">
+                    ${esc(order.statusLabel)}
+                  </span>
+
+                  ${
+                    order.risk
+                      ? `
+                        <span class="risk-badge risk-${esc(order.risk.level)}">
+                          Prazo: ${esc(order.risk.label)}
+                        </span>
+                      `
+                      : ''
+                  }
+                </div>
+
+                ${
+                  order.risk?.reason
+                    ? `<small class="risk-reason">${esc(order.risk.reason)}</small>`
+                    : ''
+                }
 
                 <h3>
                   ${esc(order.code)} • ${esc(order.honoreeName)}

@@ -29,7 +29,46 @@ function movementLabel(
     return 'Saldo';
   }
 
+  if (
+    row.paymentType
+    === 'full_payment'
+  ) {
+    return 'Pagamento integral';
+  }
+
   return 'Entrada';
+}
+
+function todaySaoPaulo() {
+  const parts =
+    new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone:
+          'America/Sao_Paulo',
+        year:
+          'numeric',
+        month:
+          '2-digit',
+        day:
+          '2-digit',
+      },
+    )
+      .formatToParts(
+        new Date(),
+      );
+
+  const map =
+    Object.fromEntries(
+      parts.map(
+        (part) => [
+          part.type,
+          part.value,
+        ],
+      ),
+    );
+
+  return `${map.year}-${map.month}-${map.day}`;
 }
 
 export async function renderFinance() {
@@ -78,6 +117,14 @@ export async function renderFinance() {
         placeholder="Buscar pedido ou cliente"
         style="max-width:300px"
       >
+
+      <button
+        id="addFinancePayment"
+        class="btn btn-primary"
+        type="button"
+      >
+        Adicionar lançamento
+      </button>
     </div>
 
     <div id="financeContent"></div>
@@ -301,7 +348,10 @@ export async function renderFinance() {
                               <td>${esc(row.orderCode || '')}</td>
                               <td>${esc(row.customerName || '')}</td>
                               <td>${esc(dateBr(row.paidAt || ''))}</td>
-                              <td>${esc(movementLabel(row))}</td>
+                              <td>
+                                ${esc(movementLabel(row))}
+                                ${row.note ? `<small style="display:block;margin-top:3px">${esc(row.note)}</small>` : ''}
+                              </td>
                               <td>${esc(row.method || row.provider || '')}</td>
                               <td>${money(row.amountCents)}</td>
                               <td>${row.feeKnown ? money(row.feeCents) : 'A conciliar'}</td>
@@ -598,6 +648,198 @@ export async function renderFinance() {
           },
         );
     };
+
+  document
+    .getElementById(
+      'addFinancePayment',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        const close =
+          modal(
+            'Adicionar lançamento',
+            `
+              <div class="form-grid">
+                <div class="field">
+                  <label for="financeNewOrder">Pedido</label>
+                  <input
+                    id="financeNewOrder"
+                    class="input"
+                    placeholder="LIBRI-1001"
+                    autocomplete="off"
+                  >
+                </div>
+
+                <div class="field">
+                  <label for="financeNewType">Tipo</label>
+                  <select
+                    id="financeNewType"
+                    class="select"
+                  >
+                    <option value="deposit">Entrada</option>
+                    <option value="balance">Saldo</option>
+                    <option value="full_payment">Pagamento integral</option>
+                    <option value="refund">Reembolso / ajuste negativo</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="financeNewAmount">Valor</label>
+                  <input
+                    id="financeNewAmount"
+                    class="input"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="0,00"
+                  >
+                </div>
+
+                <div class="field">
+                  <label for="financeNewDate">Data</label>
+                  <input
+                    id="financeNewDate"
+                    class="input"
+                    type="date"
+                    value="${todaySaoPaulo()}"
+                  >
+                </div>
+
+                <div class="field full">
+                  <label for="financeNewNote">Observação</label>
+                  <textarea
+                    id="financeNewNote"
+                    class="textarea"
+                    placeholder="Ex.: saldo recebido por Pix fora do sistema"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="notice info" style="margin-top:14px">
+                O lançamento ficará registrado no histórico do pedido. O sistema não permite receber acima do saldo aberto nem reembolsar acima do valor realmente recebido.
+              </div>
+
+              <div class="action-row">
+                <span></span>
+                <button
+                  id="saveNewFinancePayment"
+                  class="btn btn-primary"
+                  type="button"
+                >
+                  Salvar lançamento
+                </button>
+              </div>
+            `,
+          );
+
+        document
+          .getElementById(
+            'saveNewFinancePayment',
+          )
+          .addEventListener(
+            'click',
+            async (event) => {
+              const orderCode =
+                document
+                  .getElementById(
+                    'financeNewOrder',
+                  )
+                  .value
+                  .trim()
+                  .toUpperCase();
+
+              const amount =
+                Number(
+                  document
+                    .getElementById(
+                      'financeNewAmount',
+                    )
+                    .value,
+                );
+
+              const paidDate =
+                document
+                  .getElementById(
+                    'financeNewDate',
+                  )
+                  .value;
+
+              const paymentType =
+                document
+                  .getElementById(
+                    'financeNewType',
+                  )
+                  .value;
+
+              const note =
+                document
+                  .getElementById(
+                    'financeNewNote',
+                  )
+                  .value
+                  .trim();
+
+              if (
+                !/^LIBRI-\d+$/
+                  .test(
+                    orderCode,
+                  )
+                || !Number.isFinite(
+                  amount,
+                )
+                || amount <= 0
+                || !paidDate
+              ) {
+                showToast(
+                  'Confira pedido, valor e data.',
+                );
+                return;
+              }
+
+              const button =
+                event.currentTarget;
+
+              button.disabled =
+                true;
+
+              try {
+                await api(
+                  '/api/admin/v2/finance/payments',
+                  {
+                    method:
+                      'POST',
+                    body:
+                      JSON.stringify({
+                        orderCode,
+                        amountCents:
+                          Math.round(
+                            amount
+                            * 100,
+                          ),
+                        paidDate,
+                        paymentType,
+                        note,
+                      }),
+                  },
+                );
+
+                close();
+                showToast(
+                  'Lançamento registrado ✓',
+                );
+                await load();
+              } catch (error) {
+                button.disabled =
+                  false;
+                showToast(
+                  error.message,
+                );
+              }
+            },
+          );
+      },
+    );
 
   preset
     .addEventListener(

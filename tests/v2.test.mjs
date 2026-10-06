@@ -1075,10 +1075,11 @@ test('normal delivery offers 3-day commercial windows while agenda uses only nee
   );
 });
 
-test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
+test('agenda shows the full 3-day delivery window and keeps today parties after delivery is finalized', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);
   const deliveryStart = day(5);
+  const deliveryMiddle = day(6);
   const deliveryEnd = day(7);
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
@@ -1088,47 +1089,69 @@ test('agenda separates party date from delivery deadline and exposes customer id
   mp.approve(checkout.payment.providerOrderId);
   await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
 
-  const partyAgenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
-  assert.equal(partyAgenda.days.length, 1);
-  assert.equal(partyAgenda.days[0].events.length, 1);
-  assert.equal(partyAgenda.days[0].events[0].code, checkout.order.code);
-  assert.equal(partyAgenda.days[0].events[0].honoreeName, 'Festa Calendário');
-  assert.equal(partyAgenda.days[0].events[0].customerName, 'Cliente Teste');
-  assert.deepEqual(partyAgenda.days[0].events[0].deliveryWindow, {
+  const deliveryAgenda = await getV2AgendaRange(DB, {
     start: deliveryStart,
     end: deliveryEnd,
   });
 
-  const deliveryAgenda = await getV2AgendaRange(DB, { start: deliveryEnd, end: deliveryEnd });
-  assert.equal(deliveryAgenda.days.length, 1);
-  assert.equal(deliveryAgenda.days[0].events.length, 0);
-  assert.equal(deliveryAgenda.days[0].deliveries.length, 1);
-  assert.equal(deliveryAgenda.days[0].deliveries[0].code, checkout.order.code);
-  assert.equal(deliveryAgenda.days[0].deliveries[0].customerName, 'Cliente Teste');
-  assert.equal(deliveryAgenda.days[0].deliveries[0].deliveryWindow.end, deliveryEnd);
+  for (const visibleDay of [deliveryStart, deliveryMiddle, deliveryEnd]) {
+    const dayRow = deliveryAgenda.days.find(item => item.day === visibleDay);
+    assert.ok(dayRow);
+    assert.equal(
+      dayRow.deliveries.some(item => item.code === checkout.order.code),
+      true,
+      'the promised delivery window must be visible on all three customer-facing days',
+    );
+  }
 
   const orderId = DB.sqlite.prepare(
     'SELECT id FROM v2_orders WHERE order_code = ?'
   ).get(checkout.order.code).id;
 
   DB.sqlite.prepare(
-    "UPDATE v2_orders SET status='finalized', finalized_at=datetime('now') WHERE id=?"
-  ).run(orderId);
+    "UPDATE v2_orders SET status='finalized', finalized_at=datetime('now'), event_date=? WHERE id=?"
+  ).run(day(0), orderId);
 
-  const afterFinalized = await getV2AgendaRange(DB, {
-    start: deliveryStart,
-    end: eventDate,
+  const todayAgenda = await getV2AgendaRange(DB, {
+    start: day(0),
+    end: day(0),
   });
 
   assert.equal(
-    afterFinalized.days.some(day =>
-      day.events.some(item => item.code === checkout.order.code)
-      || day.deliveries.some(item => item.code === checkout.order.code)
+    todayAgenda.days[0].events.some(item => item.code === checkout.order.code),
+    true,
+    'a party happening today must remain visible even when the invitation was already delivered/finalized',
+  );
+
+  const finalizedDeliveryAgenda = await getV2AgendaRange(DB, {
+    start: deliveryStart,
+    end: deliveryEnd,
+  });
+
+  assert.equal(
+    finalizedDeliveryAgenda.days.some(dayRow =>
+      dayRow.deliveries.some(item => item.code === checkout.order.code)
     ),
     false,
-    'finalized orders must not remain as visible party/delivery cards in the agenda',
+    'finalized delivery cards must disappear after delivery is completed',
+  );
+
+  DB.sqlite.prepare(
+    'UPDATE v2_orders SET event_date=? WHERE id=?'
+  ).run(day(-1), orderId);
+
+  const pastAgenda = await getV2AgendaRange(DB, {
+    start: day(-1),
+    end: day(-1),
+  });
+
+  assert.equal(
+    pastAgenda.days[0].events.some(item => item.code === checkout.order.code),
+    false,
+    'old finalized parties must not clutter the visual agenda',
   );
 });
+
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {
   const DB = database();

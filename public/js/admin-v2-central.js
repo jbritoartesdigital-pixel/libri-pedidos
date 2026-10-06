@@ -10,27 +10,105 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
+function whatsappHref(
+  number,
+  message,
+) {
+  const digits =
+    String(
+      number
+      || '',
+    )
+      .replace(
+        /\D/g,
+        '',
+      );
+
+  return digits
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : '#';
+}
+
+function attentionMessage(
+  item,
+) {
+  const area =
+    item.customerAreaPath
+      ? new URL(
+          item.customerAreaPath,
+          window.location.origin,
+        ).href
+      : '';
+
+  const reason =
+    item.attentionReason
+    || item.nextAction
+    || '';
+
+  if (
+    item.status
+    === 'briefing_pending'
+  ) {
+    return `Oi, ${item.customerName}! 💛 O briefing do convite de ${item.honoreeName} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. ${area ? `Continue por aqui: ${area}?tab=briefing` : ''}`;
+  }
+
+  if (
+    item.status
+    === 'waiting_customer'
+    || item.status
+      === 'adjustments'
+  ) {
+    return `Oi, ${item.customerName}! 💛 Estou passando sobre o pedido ${item.code}, de ${item.honoreeName}. Há uma etapa aguardando sua conferência. ${area ? `Você pode acessar por aqui: ${area}` : ''}`;
+  }
+
+  if (
+    item.status
+    === 'balance_pending'
+  ) {
+    return `Oi, ${item.customerName}! 💛 Passando sobre o saldo pendente do pedido ${item.code}, de ${item.honoreeName}. ${area ? `Os dados estão na sua área: ${area}` : ''}`;
+  }
+
+  return `Oi, ${item.customerName}! 💛 Estou entrando em contato sobre o pedido ${item.code}, de ${item.honoreeName}. ${reason}`;
+}
+
 function attentionRow(item) {
   return `
-    <button
-      class="row-card"
-      type="button"
-      data-open-order="${esc(item.code)}"
-      style="text-align:left;cursor:pointer"
-    >
-      <span class="status ${statusClass(item.status)}">
-        ${esc(item.statusLabel)}
-      </span>
+    <div class="row-card">
+      <button
+        class="attention-main"
+        type="button"
+        data-open-order="${esc(item.code)}"
+      >
+        <span class="status ${statusClass(item.status)}">
+          ${esc(item.statusLabel)}
+        </span>
 
-      <strong style="margin-top:7px">
-        ${esc(item.code)} • ${esc(item.honoreeName)}
-      </strong>
+        <strong style="margin-top:7px">
+          ${esc(item.code)} • ${esc(item.honoreeName)}
+        </strong>
 
-      <small>
-        ${esc(item.customerName)}
-        • ${esc(item.nextAction || '')}
-      </small>
-    </button>
+        <small>
+          ${esc(item.customerName)}
+          • ${esc(item.attentionReason || item.nextAction || '')}
+        </small>
+      </button>
+
+      ${
+        item.whatsapp
+          ? `
+            <a
+              class="btn btn-ghost btn-small"
+              href="${esc(whatsappHref(item.whatsapp, attentionMessage(item)))}"
+              target="_blank"
+              rel="noopener"
+              style="margin-top:9px"
+            >
+              WhatsApp
+            </a>
+          `
+          : ''
+      }
+    </div>
   `;
 }
 
@@ -104,7 +182,25 @@ export async function renderCentral(openOrder) {
     );
 
   viewRoot.innerHTML = `
-    <div class="kpi-grid">
+    <section class="card attention-center">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">Prioridade</span>
+          <h2 style="margin:4px 0 0">Hoje precisa da sua atenção</h2>
+        </div>
+        <span class="status">${c.attention.length}</span>
+      </div>
+
+      <div class="list">
+        ${
+          c.attention.length
+            ? c.attention.map(attentionRow).join('')
+            : empty('Nada pedindo sua atenção agora ✨')
+        }
+      </div>
+    </section>
+
+    <div class="kpi-grid" style="margin-top:14px">
       <article class="kpi">
         <span>Vendas do mês</span>
         <strong>${money(c.finance.salesCents)}</strong>
@@ -244,21 +340,6 @@ export async function renderCentral(openOrder) {
     </div>
 
     <div class="section-grid">
-      <section class="card">
-        <div class="section-title">
-          <h2>Precisa da sua atenção</h2>
-          <span class="status">${c.attention.length}</span>
-        </div>
-
-        <div class="list">
-          ${
-            c.attention.length
-              ? c.attention.map(attentionRow).join('')
-              : empty('Nada urgente por aqui ✨')
-          }
-        </div>
-      </section>
-
       <section class="card">
         <div class="section-title">
           <h2>Próximas entregas</h2>

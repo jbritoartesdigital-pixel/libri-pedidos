@@ -35,8 +35,21 @@ function normalizeAddonCodes(
           !== 'moments_extra_100',
     );
 
+  /*
+   * +100 fotos é complemento de um plano Moments.
+   * Nunca pode existir ou ser cobrado sozinho.
+   */
+  const normalized =
+    hasMoments
+      ? codes
+      : codes.filter(
+        (code) =>
+          code
+          !== 'moments_extra_100',
+      );
+
   if (!hasMoments) {
-    return codes;
+    return normalized;
   }
 
   /*
@@ -45,7 +58,7 @@ function normalizeAddonCodes(
    * Nunca cobramos filtro
    * avulso junto com Moments.
    */
-  return codes.filter(
+  return normalized.filter(
     (code) =>
       code
       !== 'custom_filter',

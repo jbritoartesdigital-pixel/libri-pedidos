@@ -125,6 +125,9 @@ function emptyState(
     quote:
       null,
 
+    activeAddonGroup:
+      '',
+
     termsAccepted:
       false,
 
@@ -994,17 +997,60 @@ async function continueAfterRecommendation(
 }
 
 function addonGroups(
-  addons,
+  state,
 ) {
   const groups =
     new Map();
 
+  const selected =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const hasMoments =
+    [
+      ...selected,
+    ]
+      .some(
+        (code) =>
+          addonByCode(
+            state,
+            code,
+          )
+            ?.group
+          === 'moments',
+      );
+
   for (
     const addon
-    of addons || []
+    of state.catalog.addons
+    || []
   ) {
+    if (
+      addon.group
+      === 'moments_extra'
+      && !hasMoments
+    ) {
+      continue;
+    }
+
+    if (
+      addon.group
+      === 'filter'
+      && hasMoments
+    ) {
+      continue;
+    }
+
     const key =
-      addon.group || 'extras';
+      addon.group
+      === 'moments_extra'
+        ? 'moments'
+        : (
+          addon.group
+          || 'extras'
+        );
 
     if (!groups.has(key)) {
       groups.set(
@@ -1021,6 +1067,64 @@ function addonGroups(
   return [
     ...groups.entries(),
   ];
+}
+
+function addonFamilySummary(
+  state,
+  addons,
+) {
+  const selected =
+    addons.filter(
+      (addon) =>
+        (
+          state.selection.addonCodes
+          || []
+        ).includes(
+          addon.code,
+        ),
+    );
+
+  if (
+    selected.length
+  ) {
+    return selected
+      .map(
+        (addon) =>
+          addon.name,
+      )
+      .join(' + ');
+  }
+
+  const prices =
+    addons
+      .filter(
+        (addon) =>
+          addon.group
+          !== 'moments_extra',
+      )
+      .map(
+        (addon) =>
+          Number(
+            addon.priceCents
+            || 0,
+          ),
+      )
+      .filter(
+        (value) =>
+          value > 0,
+      );
+
+  if (!prices.length) {
+    return 'Ver opções';
+  }
+
+  return `A partir de ${
+    money(
+      Math.min(
+        ...prices,
+      ),
+    )
+  }`;
 }
 
 async function updateQuote(
@@ -1881,8 +1985,8 @@ function renderDelivery(
           Escolha uma janela
         </h1>
         <p class="page-subtitle">
-          A janela é o período prometido para entrega.
-          A produção pode começar antes.
+          Escolha uma faixa de 3 dias para o prazo de entrega.
+          A produção pode ser concluída em menos dias dentro dessa faixa.
         </p>
       </div>
 
@@ -2029,6 +2133,41 @@ function renderAddons(
   state,
   render,
 ) {
+  const normalizedSelection =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const hasMomentsBase =
+    [
+      ...normalizedSelection,
+    ]
+      .some(
+        (code) =>
+          addonByCode(
+            state,
+            code,
+          )
+            ?.group
+          === 'moments',
+      );
+
+  if (!hasMomentsBase) {
+    normalizedSelection.delete(
+      'moments_extra_100',
+    );
+  } else {
+    normalizedSelection.delete(
+      'custom_filter',
+    );
+  }
+
+  state.selection.addonCodes =
+    [
+      ...normalizedSelection,
+    ];
+
   const selectedAddons =
     new Set(
       state.selection.addonCodes
@@ -2037,8 +2176,12 @@ function renderAddons(
 
   const groups =
     addonGroups(
-      state.catalog.addons,
+      state,
     );
+
+  const activeGroup =
+    state.activeAddonGroup
+    || '';
 
   app.innerHTML = `
     <section class="page-card">
@@ -2050,49 +2193,92 @@ function renderAddons(
           Quer adicionar algo?
         </h1>
         <p class="page-subtitle">
-          Escolha normalmente o que fizer sentido. A recomendação final, se houver, aparece só depois.
+          Abra somente o adicional que quiser conhecer. Você pode seguir sem adicionar nada.
         </p>
       </div>
 
       ${
         groups.length
-          ? groups.map(
-            ([groupName, addons]) => `
-              <div class="section-block">
-                <span class="muted">
-                  ${esc(addonGroupLabel(groupName))}
-                </span>
+          ? `
+            <div class="addon-families">
+              ${groups.map(
+                ([groupName, addons]) => {
+                  const open =
+                    activeGroup
+                    === groupName;
 
-                <div class="grid two" style="margin-top:8px">
-                  ${addons.map(
-                    (addon) => `
-                      <label class="choice-card ${
-                        selectedAddons.has(addon.code)
-                          ? 'selected'
-                          : ''
-                      }">
-                        <input
-                          type="checkbox"
-                          name="addon"
-                          value="${esc(addon.code)}"
-                          ${
-                            selectedAddons.has(addon.code)
-                              ? 'checked'
-                              : ''
-                          }
-                        >
+                  const familySelected =
+                    addons.some(
+                      (addon) =>
+                        selectedAddons.has(
+                          addon.code,
+                        ),
+                    );
 
-                        <span class="choice-main">
-                          <strong>${esc(addon.name)}</strong>
-                          <small>+ ${money(addon.priceCents)}</small>
+                  return `
+                    <div class="addon-family ${
+                      open
+                        ? 'open'
+                        : ''
+                    } ${
+                      familySelected
+                        ? 'selected'
+                        : ''
+                    }">
+                      <button
+                        class="addon-family-toggle"
+                        type="button"
+                        data-addon-family="${esc(groupName)}"
+                      >
+                        <span class="addon-family-copy">
+                          <strong>${esc(addonGroupLabel(groupName))}</strong>
+                          <small>${esc(addonFamilySummary(state, addons))}</small>
                         </span>
-                      </label>
-                    `,
-                  ).join('')}
-                </div>
-              </div>
-            `,
-          ).join('')
+
+                        <span class="addon-family-action">
+                          ${open ? 'Fechar' : 'Ver opções'}
+                        </span>
+                      </button>
+
+                      ${
+                        open
+                          ? `
+                            <div class="addon-family-options grid two">
+                              ${addons.map(
+                                (addon) => `
+                                  <label class="choice-card ${
+                                    selectedAddons.has(addon.code)
+                                      ? 'selected'
+                                      : ''
+                                  }">
+                                    <input
+                                      type="checkbox"
+                                      name="addon"
+                                      value="${esc(addon.code)}"
+                                      ${
+                                        selectedAddons.has(addon.code)
+                                          ? 'checked'
+                                          : ''
+                                      }
+                                    >
+
+                                    <span class="choice-main">
+                                      <strong>${esc(addon.name)}</strong>
+                                      <small>+ ${money(addon.priceCents)}</small>
+                                    </span>
+                                  </label>
+                                `,
+                              ).join('')}
+                            </div>
+                          `
+                          : ''
+                      }
+                    </div>
+                  `;
+                },
+              ).join('')}
+            </div>
+          `
           : `
             <div class="muted">
               Nenhum adicional disponível no momento.
@@ -2105,6 +2291,31 @@ function renderAddons(
       ${actionRow()}
     </section>
   `;
+
+  app
+    .querySelectorAll(
+      '[data-addon-family]',
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            state.activeAddonGroup =
+              state.activeAddonGroup
+              === button.dataset.addonFamily
+                ? ''
+                : button.dataset.addonFamily;
+
+            persist(state);
+            renderAddons(
+              state,
+              render,
+            );
+          },
+        );
+      },
+    );
 
   app
     .querySelectorAll(
@@ -2155,12 +2366,41 @@ function renderAddons(
                 }
               }
 
+              if (
+                changedAddon?.group
+                === 'moments'
+              ) {
+                set.delete(
+                  'custom_filter',
+                );
+              }
+
               set.add(
                 input.value,
               );
             } else {
               set.delete(
                 input.value,
+              );
+            }
+
+            const hasMoments =
+              [
+                ...set,
+              ]
+                .some(
+                  (code) =>
+                    addonByCode(
+                      state,
+                      code,
+                    )
+                      ?.group
+                    === 'moments',
+                );
+
+            if (!hasMoments) {
+              set.delete(
+                'moments_extra_100',
               );
             }
 
@@ -2284,83 +2524,104 @@ function renderRecommendation(
     return;
   }
 
-  const choices =
+  const promoAddon =
     offer.kind
     === 'addon'
-      ? offer.choices
-      : [];
+      ? (
+        offer.choices
+        || []
+      )
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(
+              a.priceCents
+              || 0,
+            )
+            - Number(
+              b.priceCents
+              || 0,
+            ),
+        )
+        [0]
+      : null;
 
   app.innerHTML = `
-    <section class="page-card">
+    <section class="page-card promo-stage">
       ${progress(state)}
 
       <div class="page-head">
-        <span class="eyebrow">Antes de fechar</span>
+        <span class="eyebrow">Pedido configurado</span>
         <h1 class="page-title">
-          ${esc(recommendationTitle(offer))}
+          Está quase pronto
         </h1>
         <p class="page-subtitle">
-          Só uma recomendação, com base no seu pedido. Você pode seguir sem adicionar nada.
+          Antes de seguir para seus dados, há só uma oferta opcional para este pedido.
         </p>
       </div>
 
-      ${offer.kind === 'combo'
-        ? `
-          <div class="notice info">
-            <strong>${esc(offer.combo.name)}</strong>
-            ${offer.combo.description ? `<p class="muted">${esc(offer.combo.description)}</p>` : ''}
-            <p>
-              Economia:
-              <strong>-${money(offer.combo.discountCents || 0)}</strong>
-            </p>
-          </div>
-        `
-        : `
-          <div class="grid two">
-            ${choices.map(
-              (addon) => `
-                <label class="choice-card">
-                  <input
-                    type="radio"
-                    name="finalOfferAddon"
-                    value="${esc(addon.code)}"
-                  >
-                  <span class="choice-main">
-                    <strong>${esc(addon.name)}</strong>
-                    <small>+ ${money(addon.priceCents)}</small>
-                  </span>
-                </label>
-              `,
-            ).join('')}
-          </div>
+      ${totalOnlyHtml(state.quote)}
 
-          ${offer.combo
+      <div class="promo-sheet" role="dialog" aria-label="Oferta opcional">
+        <span class="promo-kicker">Oferta para adicionar agora</span>
+
+        <strong class="promo-title">
+          ${esc(recommendationTitle(offer))}
+        </strong>
+
+        ${
+          offer.kind
+          === 'combo'
             ? `
-              <div class="notice info section-block">
-                Ao adicionar, suas escolhas completam o combo
+              <p class="promo-copy">
+                Suas escolhas já liberaram
                 <strong>${esc(offer.combo.name)}</strong>.
-              </div>
+                Aplique agora e economize
+                <strong>${money(offer.combo.discountCents || 0)}</strong>.
+              </p>
             `
-            : ''}
-        `
-      }
+            : promoAddon
+              ? `
+                <p class="promo-copy">
+                  Leve
+                  <strong>${esc(promoAddon.name)}</strong>
+                  por mais
+                  <strong>${money(promoAddon.priceCents)}</strong>
+                  neste pedido.
+                  ${
+                    offer.combo
+                      ? ` Ao adicionar, você completa o combo <strong>${esc(offer.combo.name)}</strong>.`
+                      : ''
+                  }
+                </p>
+              `
+              : ''
+        }
 
-      <div class="action-row">
-        <button
-          id="skipFinalOffer"
-          class="btn btn-ghost"
-          type="button"
-        >
-          Continuar sem adicionais
-        </button>
+        <div class="promo-actions">
+          <button
+            id="skipFinalOffer"
+            class="btn btn-ghost"
+            type="button"
+          >
+            Agora não
+          </button>
 
-        <button
-          id="acceptFinalOffer"
-          class="btn btn-primary btn-large"
-          type="button"
-        >
-          ${offer.kind === 'combo' ? 'Aplicar combo' : 'Adicionar'}
-        </button>
+          <button
+            id="acceptFinalOffer"
+            class="btn btn-primary"
+            type="button"
+          >
+            ${
+              offer.kind
+              === 'combo'
+                ? `Aplicar e economizar ${money(offer.combo.discountCents || 0)}`
+                : promoAddon
+                  ? `Adicionar por ${money(promoAddon.priceCents)}`
+                  : 'Adicionar'
+            }
+          </button>
+        </div>
       </div>
     </section>
   `;
@@ -2436,17 +2697,14 @@ function renderRecommendation(
           }
 
           const selected =
-            document.querySelector(
-              '[name="finalOfferAddon"]:checked',
-            )
-              ?.value;
+            promoAddon
+              ?.code;
 
           if (!selected) {
-            showToast(
-              'Escolha uma opção para adicionar.',
+            await continueAfterRecommendation(
+              state,
+              render,
             );
-            button.disabled =
-              false;
             return;
           }
 
@@ -2483,6 +2741,15 @@ function renderRecommendation(
                 );
               }
             }
+          }
+
+          if (
+            addon?.group
+            === 'moments'
+          ) {
+            set.delete(
+              'custom_filter',
+            );
           }
 
           set.add(

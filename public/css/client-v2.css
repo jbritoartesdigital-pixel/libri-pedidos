@@ -1572,3 +1572,37 @@ a {
     width: 100%;
   }
 }
+
+
+.addon-explanation {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  background: rgba(120, 99, 105, 0.06);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.addon-explanation > strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.addon-explanation p {
+  margin: 0;
+}
+
+.addon-explanation ul {
+  margin: 7px 0 0;
+  padding-left: 18px;
+}
+
+.addon-explanation li + li {
+  margin-top: 3px;
+}
+
+.promo-sheet .addon-explanation {
+  margin-top: 12px;
+}

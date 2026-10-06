@@ -1516,7 +1516,7 @@ function buildSchema(
         'text',
         {
           help:
-            'O filtro do Libri Moments é usado no App Libri.',
+            'O filtro do Álbum da Festa é usado no App Libri.',
         },
       ),
     );

@@ -448,7 +448,10 @@ export async function openOrder(code, onChanged = null) {
                         ? 'btn-success'
                         : action === 'balance_received'
                           ? 'btn-warning'
-                          : 'btn-primary'
+                          : action === 'archive'
+                            || action === 'unarchive'
+                            ? 'btn-ghost'
+                            : 'btn-primary'
                     }"
                     type="button"
                     data-order-action="${esc(action)}"
@@ -1011,6 +1014,24 @@ export async function openOrder(code, onChanged = null) {
               action === 'finalize'
               && !confirm(
                 'Finalizar este pedido? A capacidade liberada entra no fluxo de antecipação em cascata.',
+              )
+            ) {
+              return;
+            }
+
+            if (
+              action === 'archive'
+              && !confirm(
+                'Arquivar este pedido? Ele sairá das telas operacionais e continuará disponível em Arquivados.',
+              )
+            ) {
+              return;
+            }
+
+            if (
+              action === 'unarchive'
+              && !confirm(
+                'Restaurar este pedido para fora dos Arquivados?',
               )
             ) {
               return;

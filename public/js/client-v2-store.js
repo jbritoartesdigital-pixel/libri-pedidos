@@ -2193,7 +2193,7 @@ function renderAddons(
           Quer adicionar algo?
         </h1>
         <p class="page-subtitle">
-          Abra somente o adicional que quiser conhecer. Você pode seguir sem adicionar nada.
+          Se houver mais de uma opção, abra para escolher. Adicionais simples podem ser marcados direto.
         </p>
       </div>
 
@@ -2214,6 +2214,38 @@ function renderAddons(
                           addon.code,
                         ),
                     );
+
+                  if (
+                    addons.length
+                    === 1
+                  ) {
+                    const addon =
+                      addons[0];
+
+                    return `
+                      <label class="choice-card addon-single ${
+                        selectedAddons.has(addon.code)
+                          ? 'selected'
+                          : ''
+                      }">
+                        <input
+                          type="checkbox"
+                          name="addon"
+                          value="${esc(addon.code)}"
+                          ${
+                            selectedAddons.has(addon.code)
+                              ? 'checked'
+                              : ''
+                          }
+                        >
+
+                        <span class="choice-main">
+                          <strong>${esc(addon.name)}</strong>
+                          <small>+ ${money(addon.priceCents)}</small>
+                        </span>
+                      </label>
+                    `;
+                  }
 
                   return `
                     <div class="addon-family ${

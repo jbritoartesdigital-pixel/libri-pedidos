@@ -1177,3 +1177,49 @@ test('store client keeps the approved commercial journey and a single final reco
   assert.match(terms, /termsAccepted/);
   assert.match(terms, /\/api\/v2\/checkout\/start/);
 });
+
+
+test('briefing client serializes fast choices and validates each step', () => {
+  const source = readFileSync(
+    new URL('../public/js/client-v2-area.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /let briefingSaveQueue\s*=\s*Promise\.resolve\(\)/);
+  assert.match(source, /function enqueueBriefingSave\(/);
+  assert.match(source, /async function saveBriefingNow\(/);
+  assert.match(source, /function scheduleBriefingSave\(/);
+  assert.match(source, /function missingBriefingItems\(/);
+  assert.match(source, /Falta preencher nesta etapa/);
+
+  assert.equal(
+    source.includes('await autosave('),
+    false,
+    'choice controls must not await a debounced function that returns before persistence',
+  );
+
+  const bindStart = source.indexOf('function bindBriefing()');
+  const bindEnd = source.indexOf('function bindPreview()', bindStart);
+  const briefingBinding = source.slice(bindStart, bindEnd);
+
+  assert.match(
+    briefingBinding,
+    /await saveBriefingNow\(\s*sectionId,/,
+  );
+  assert.match(
+    briefingBinding,
+    /briefingChoiceRevision/,
+  );
+  assert.match(
+    briefingBinding,
+    /missingBriefingItems\(\s*area,/,
+  );
+
+  const submitStart = briefingBinding.indexOf("'briefingSubmit'");
+  const submitBlock = briefingBinding.slice(submitStart);
+  assert.match(
+    submitBlock,
+    /await saveBriefingNow\(\s*sectionId,\s*\{\}/,
+    'pending briefing changes must be flushed before final validation',
+  );
+});

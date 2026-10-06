@@ -12,6 +12,7 @@ import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
 import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
+import { findV2DeliveryOptions, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
@@ -32,11 +33,12 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 15);
+  const DB = database(); assert.equal(DB.migrationCount, 16);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_instagram'").get().value, '@libriconvites');
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notification_preferences WHERE event_code IN ('EVENT_TOMORROW','DELIVERY_TOMORROW','ACTION_REQUIRED')").get().n, 3);
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
 });
@@ -298,9 +300,9 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
-  assert.equal(mp.bodies[0].config.payment_method.default_type, undefined);
+  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
   assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
-  assert.equal(mp.bodies[0].config.payment_method.installments_cost, undefined);
+  assert.equal(mp.bodies[0].config.payment_method.installments_cost, 'buyer');
   assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
   assert.deepEqual(mp.bodies[0].config.payment_method.not_allowed_types,
     ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
@@ -564,6 +566,8 @@ test('public catalog exposes official combo composition', async () => {
   const catalog = await loadV2Catalog(DB);
   assert.equal(catalog.combos.length, 5);
   const complete = catalog.combos.find(item => item.code === 'libri_completo');
+  assert.equal(complete.discountValue, 0);
+  assert.equal(complete.discountType, 'percent');
   assert.deepEqual(
     complete.items.map(item => item.itemCode).sort(),
     ['confirmation', 'moments', 'reminder', 'save_the_date'],
@@ -591,6 +595,197 @@ test('official combos are seeded with the approved compositions and configurable
   assert.ok(rows.every(row => row.discount_value === 0));
 });
 
+test('combo is suggested only after its real addons are selected and never injects items', async () => {
+  const DB = database();
+
+  DB.sqlite.prepare(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = 700
+    WHERE code = 'antes_festa'
+  `).run();
+
+  const selection = {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: [
+      'save_animated',
+      'reminder_static',
+    ],
+  };
+
+  const suggested =
+    await calculateCommercialV2Quote(
+      DB,
+      selection,
+    );
+
+  assert.equal(suggested.combo, null);
+  assert.equal(
+    suggested.suggestedCombo.code,
+    'antes_festa',
+  );
+  assert.equal(
+    suggested.suggestedCombo.discountCents,
+    700,
+  );
+  assert.deepEqual(
+    suggested.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const applied =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        ...selection,
+        comboCode:
+          'antes_festa',
+      },
+    );
+
+  assert.equal(
+    applied.combo.code,
+    'antes_festa',
+  );
+  assert.equal(
+    applied.suggestedCombo,
+    null,
+  );
+  assert.deepEqual(
+    applied.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const removed =
+    await calculateCommercialV2Quote(
+      DB,
+      selection,
+    );
+
+  assert.deepEqual(
+    removed.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const missingRequirement =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        ...selection,
+        addonCodes: [
+          'save_animated',
+        ],
+      },
+    );
+
+  assert.equal(
+    missingRequirement.suggestedCombo,
+    null,
+  );
+});
+
+test('most complete eligible configured combo is the single public suggestion', async () => {
+  const DB = database();
+
+  DB.sqlite.exec(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = CASE code
+          WHEN 'convite_save' THEN 100
+          WHEN 'antes_festa' THEN 200
+          WHEN 'organizacao' THEN 200
+          WHEN 'festa_completa' THEN 300
+          WHEN 'libri_completo' THEN 400
+          ELSE 0
+        END;
+  `);
+
+  const quote =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        productCode:
+          'interactive_essential',
+        paymentMethod:
+          'pix',
+        addonCodes: [
+          'save_static',
+          'reminder_animated',
+          'confirmation_libri',
+          'moments_premium',
+        ],
+      },
+    );
+
+  assert.equal(
+    quote.suggestedCombo.code,
+    'libri_completo',
+  );
+
+  assert.equal(
+    quote.suggestedCombo.discountCents,
+    400,
+  );
+});
+
+test('public store does not expose a fixed combo chooser or auto-add combo items', () => {
+  const source =
+    readFileSync(
+      'public/js/client-v2-store.js',
+      'utf8',
+    );
+
+  assert.equal(
+    source.includes(
+      '<strong>Sem combo</strong>',
+    ),
+    false,
+  );
+
+  assert.equal(
+    source.includes(
+      'ensureComboSelections',
+    ),
+    false,
+  );
+
+  assert.match(
+    source,
+    /Suas escolhas formam o combo/,
+  );
+
+  assert.match(
+    source,
+    /Continuar sem adicionais/,
+  );
+
+  assert.match(
+    source,
+    /recommendedShortScenes/,
+  );
+
+  assert.match(
+    source,
+    /recommendedCompleteScenes/,
+  );
+});
+
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
@@ -603,6 +798,36 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
+test('delivery windows are capacity-driven instead of fixed to 3 or 4 days', async () => {
+  const DB = database();
+
+  for (let offset = 1; offset <= 35; offset += 1) {
+    await setV2AgendaDay(DB, day(offset), {
+      sellableCapacityUnits: 100,
+      internalBufferUnits: 100,
+      blocked: offset === 22,
+    });
+  }
+
+  const delivery = await findV2DeliveryOptions(DB, {
+    eventDate: day(60),
+    pointsUnits: 500,
+    limit: 6,
+  });
+
+  assert.ok(delivery.options.length > 0);
+  assert.ok(delivery.options.some(option => {
+    const start = new Date(option.start + 'T12:00:00Z');
+    const end = new Date(option.end + 'T12:00:00Z');
+    return Math.round((end - start) / 86400000) + 1 > 4;
+  }));
+
+  await assert.doesNotReject(validateV2DeliveryWindow(DB, {
+    eventDate: day(60),
+    start: delivery.options[0].start,
+    end: delivery.options[0].end,
+  }));
+});
 test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);
@@ -641,7 +866,7 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   const edited = await setV2AgendaDay(DB, day(3), { sellableCapacityUnits: 200, internalBufferUnits: 100 });
   assert.equal(edited.sellableCapacityUnits, 200);
   assert.equal((await getV2AgendaRange(DB, { start: day(3), end: day(4) })).days.length, 2);
-  assert.deepEqual(await getV2CascadeSuggestions(DB), { suggestions: [] });
+  assert.deepEqual(await getV2CascadeSuggestions(DB), { suggestions: [], releaseable: [] });
   const a = await urgency(DB); const b = await requestV2UrgencyReview(request, env(DB), input());
   const rows = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders ORDER BY id').all();
   DB.sqlite.prepare("UPDATE v2_orders SET status='finalized' WHERE id=?").run(rows[0].id);
@@ -650,6 +875,10 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   for (const [i,d] of [[0,3],[1,5]]) DB.sqlite.prepare('INSERT INTO v2_agenda_allocations(order_id,day,points_units) VALUES (?,?,100)').run(rows[i].id,day(d));
   assert.equal((await getV2CascadeSuggestions(DB)).suggestions.length, 1);
   assert.equal((await anticipateV2Production(DB, { sourceOrderCode: a.order.code, targetOrderCode: b.order.code })).movedUnits, 100);
+  const afterAnticipation = await getV2CascadeSuggestions(DB);
+  assert.equal(afterAnticipation.suggestions.length, 0);
+  assert.equal(afterAnticipation.releaseable.length, 1);
+  assert.equal(afterAnticipation.releaseable[0].sourceOrderCode, a.order.code);
   assert.equal((await releaseV2CascadeSurplus(DB, { sourceOrderCode: a.order.code })).releasedUnits, 100);
 });
 
@@ -761,6 +990,82 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.notEqual(first.payment.providerOrderId, next.payment.providerOrderId);
   await syncMercadoPagoOrder(e, first.payment.providerOrderId);
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
+});
+
+test('admin and briefing surfaces expose the remaining Project Bible controls', () => {
+  const central =
+    readFileSync(
+      'public/js/admin-v2-central.js',
+      'utf8',
+    );
+
+  const production =
+    readFileSync(
+      'public/js/admin-v2-production.js',
+      'utf8',
+    );
+
+  const area =
+    readFileSync(
+      'public/js/client-v2-area.js',
+      'utf8',
+    );
+
+  const commercial =
+    readFileSync(
+      'public/js/admin-v2-store-commercial.js',
+      'utf8',
+    );
+
+  assert.match(
+    central,
+    /Festas de amanhã/,
+  );
+
+  assert.match(
+    production,
+    /Aprovados/,
+  );
+
+  assert.match(
+    production,
+    /Finalizados/,
+  );
+
+  assert.match(
+    area,
+    /Observação desta referência/,
+  );
+
+  assert.match(
+    area,
+    /controlslist="nodownload noremoteplayback"/,
+  );
+
+  assert.match(
+    area,
+    /Quero falar de um ajuste/,
+  );
+
+  assert.match(
+    area,
+    /Está aprovado ✓/,
+  );
+
+  assert.match(
+    commercial,
+    /Produtos permitidos/,
+  );
+
+  assert.match(
+    commercial,
+    /Eventos permitidos/,
+  );
+
+  assert.match(
+    commercial,
+    /Adicionais permitidos/,
+  );
 });
 
 test('Worker serves only V2 runtime, redirects legacy pages and retires V1 APIs', async () => {

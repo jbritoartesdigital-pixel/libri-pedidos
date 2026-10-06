@@ -61,6 +61,28 @@ function dateKeyInSaoPaulo() {
   return `${map.year}-${map.month}-${map.day}`;
 }
 
+function addIsoDays(
+  day,
+  amount,
+) {
+  const date =
+    new Date(
+      `${day}T12:00:00Z`,
+    );
+
+  date.setUTCDate(
+    date.getUTCDate()
+    + amount,
+  );
+
+  return date
+    .toISOString()
+    .slice(
+      0,
+      10,
+    );
+}
+
 function pushConfigured(
   env,
 ) {
@@ -1383,11 +1405,246 @@ export async function createTodayEventNotifications(
   };
 }
 
+export async function createUpcomingOperationalNotifications(
+  env,
+) {
+  const today =
+    dateKeyInSaoPaulo();
+
+  const tomorrow =
+    addIsoDays(
+      today,
+      1,
+    );
+
+  const [
+    events,
+    deliveries,
+    actions,
+  ] =
+    await Promise.all([
+      env.DB
+        .prepare(
+          `
+            SELECT
+              o.id,
+              o.order_code,
+              o.honoree_display_name,
+              c.name AS customer_name
+            FROM v2_orders o
+            INNER JOIN v2_customers c
+              ON c.id = o.customer_id
+            WHERE
+              o.event_date = ?
+              AND o.status != 'cancelled'
+              AND EXISTS (
+                SELECT 1
+                FROM v2_payments pay
+                WHERE
+                  pay.order_id = o.id
+                  AND pay.status = 'approved'
+              )
+          `,
+        )
+        .bind(
+          tomorrow,
+        )
+        .all(),
+
+      env.DB
+        .prepare(
+          `
+            SELECT
+              o.id,
+              o.order_code,
+              o.honoree_display_name,
+              c.name AS customer_name
+            FROM v2_orders o
+            INNER JOIN v2_customers c
+              ON c.id = o.customer_id
+            WHERE
+              o.delivery_end = ?
+              AND o.status NOT IN (
+                'cancelled',
+                'finalized'
+              )
+              AND EXISTS (
+                SELECT 1
+                FROM v2_payments pay
+                WHERE
+                  pay.order_id = o.id
+                  AND pay.status = 'approved'
+              )
+          `,
+        )
+        .bind(
+          tomorrow,
+        )
+        .all(),
+
+      env.DB
+        .prepare(
+          `
+            SELECT
+              o.id,
+              o.order_code,
+              o.honoree_display_name,
+              o.status,
+              o.next_action
+            FROM v2_orders o
+            WHERE
+              o.status IN (
+                'awaiting_urgency_decision',
+                'ready_for_production',
+                'adjustments',
+                'ready_for_delivery'
+              )
+              AND (
+                o.status = 'awaiting_urgency_decision'
+                OR EXISTS (
+                  SELECT 1
+                  FROM v2_payments pay
+                  WHERE
+                    pay.order_id = o.id
+                    AND pay.status = 'approved'
+                )
+              )
+          `,
+        )
+        .all(),
+    ]);
+
+  let eventTomorrow = 0;
+  let deliveryTomorrow = 0;
+  let actionRequired = 0;
+
+  for (
+    const row
+    of events.results
+    || []
+  ) {
+    const notification =
+      await createV2AdminNotification(
+        env,
+        {
+          eventCode:
+            'EVENT_TOMORROW',
+          orderId:
+            row.id,
+          title:
+            'Festa amanhã 🎂',
+          body:
+            `${row.honoree_display_name} • ${row.customer_name}`,
+          actionUrl:
+            `/admin-v2?order=${encodeURIComponent(row.order_code)}`,
+          priority:
+            'normal',
+          pushEligible:
+            true,
+          dedupeKey:
+            `event_tomorrow:${tomorrow}:${row.id}`,
+        },
+      );
+
+    if (
+      notification.created
+    ) {
+      eventTomorrow += 1;
+    }
+  }
+
+  for (
+    const row
+    of deliveries.results
+    || []
+  ) {
+    const notification =
+      await createV2AdminNotification(
+        env,
+        {
+          eventCode:
+            'DELIVERY_TOMORROW',
+          orderId:
+            row.id,
+          title:
+            'Entrega amanhã',
+          body:
+            `${row.order_code} • ${row.honoree_display_name}`,
+          actionUrl:
+            `/admin-v2?order=${encodeURIComponent(row.order_code)}`,
+          priority:
+            'high',
+          pushEligible:
+            true,
+          dedupeKey:
+            `delivery_tomorrow:${tomorrow}:${row.id}`,
+        },
+      );
+
+    if (
+      notification.created
+    ) {
+      deliveryTomorrow += 1;
+    }
+  }
+
+  for (
+    const row
+    of actions.results
+    || []
+  ) {
+    const notification =
+      await createV2AdminNotification(
+        env,
+        {
+          eventCode:
+            'ACTION_REQUIRED',
+          orderId:
+            row.id,
+          title:
+            'Pedido aguardando sua ação',
+          body:
+            `${row.order_code} • ${row.next_action || row.honoree_display_name}`,
+          actionUrl:
+            `/admin-v2?order=${encodeURIComponent(row.order_code)}`,
+          priority:
+            row.status
+            === 'awaiting_urgency_decision'
+              ? 'high'
+              : 'normal',
+          pushEligible:
+            true,
+          dedupeKey:
+            `action_required:${row.status}:${row.id}`,
+        },
+      );
+
+    if (
+      notification.created
+    ) {
+      actionRequired += 1;
+    }
+  }
+
+  return {
+    day:
+      tomorrow,
+    eventTomorrow,
+    deliveryTomorrow,
+    actionRequired,
+  };
+}
+
 export async function runV2NotificationScheduler(
   env,
 ) {
   const daily =
     await createTodayEventNotifications(
+      env,
+    );
+
+  const upcoming =
+    await createUpcomingOperationalNotifications(
       env,
     );
 
@@ -1398,6 +1655,7 @@ export async function runV2NotificationScheduler(
 
   return {
     daily,
+    upcoming,
     push,
   };
 }

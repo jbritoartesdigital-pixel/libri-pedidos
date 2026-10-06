@@ -401,17 +401,19 @@ function planAllocation(
 }
 
 function buildCandidateWindows({
+  capacityMap,
   firstPossibleDay,
   lastPossibleEnd,
   targetDay,
+  requiredUnits,
 }) {
   const candidates = [];
 
-  const windowLengths = [
-    3,
-    4,
-  ];
-
+  /*
+   * A janela é uma promessa de entrega, não um bloco fixo.
+   * Para cada possível início, encontramos o primeiro dia em que
+   * a capacidade acumulada realmente comporta a carga do pedido.
+   */
   for (
     let start =
       new Date(
@@ -427,44 +429,49 @@ function buildCandidateWindows({
         1,
       )
   ) {
-    for (
-      const length
-      of windowLengths
-    ) {
-      const end =
-        addDays(
-          start,
-          length - 1,
-        );
-
-      if (
-        end
-        > lastPossibleEnd
-      ) {
-        continue;
-      }
-
-      const midpoint =
-        new Date(
-          (
-            start.getTime()
-            + end.getTime()
-          )
-          / 2,
-        );
-
-      candidates.push({
+    const plan =
+      planAllocation(
+        capacityMap,
         start,
-        end,
-        distanceToTarget:
-          Math.abs(
-            diffDays(
-              midpoint,
-              targetDay,
-            ),
-          ),
-      });
+        lastPossibleEnd,
+        requiredUnits,
+      );
+
+    if (
+      !plan.fits
+      || !plan.allocation.length
+    ) {
+      continue;
     }
+
+    const end =
+      parseIsoDay(
+        plan.allocation[
+          plan.allocation.length - 1
+        ].day,
+      );
+
+    const midpoint =
+      new Date(
+        (
+          start.getTime()
+          + end.getTime()
+        )
+        / 2,
+      );
+
+    candidates.push({
+      start,
+      end,
+      distanceToTarget:
+        Math.abs(
+          diffDays(
+            midpoint,
+            targetDay,
+          ),
+        ),
+      plan,
+    });
   }
 
   return candidates;
@@ -499,26 +506,6 @@ export async function validateV2DeliveryWindow(
   ) {
     throw new Error(
       'Janela de entrega inválida.',
-    );
-  }
-
-  const daysInWindow =
-    diffDays(
-      endDay,
-      startDay,
-    )
-    + 1;
-
-  if (
-    ![
-      3,
-      4,
-    ].includes(
-      daysInWindow,
-    )
-  ) {
-    throw new Error(
-      'Escolha uma das janelas de entrega disponíveis.',
     );
   }
 
@@ -650,11 +637,21 @@ export async function findV2DeliveryOptions(
     };
   }
 
+  const capacityMap =
+    await loadCapacityMap(
+      db,
+      firstPossibleDay,
+      lastPossibleEnd,
+      settings,
+    );
+
   const candidates =
     buildCandidateWindows({
+      capacityMap,
       firstPossibleDay,
       lastPossibleEnd,
       targetDay,
+      requiredUnits,
     });
 
   if (
@@ -673,38 +670,8 @@ export async function findV2DeliveryOptions(
     };
   }
 
-  const capacityMap =
-    await loadCapacityMap(
-      db,
-      firstPossibleDay,
-      lastPossibleEnd,
-      settings,
-    );
-
   const viable =
     candidates
-      .map(
-        (candidate) => {
-          const plan =
-            planAllocation(
-              capacityMap,
-              candidate.start,
-              candidate.end,
-              requiredUnits,
-            );
-
-          return {
-            ...candidate,
-            plan,
-          };
-        },
-      )
-      .filter(
-        (candidate) =>
-          candidate
-            .plan
-            .fits,
-      )
       .sort(
         (
           a,

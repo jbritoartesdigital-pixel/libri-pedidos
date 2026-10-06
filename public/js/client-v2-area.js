@@ -245,6 +245,24 @@ function uploadRuleHtml(
                 <small>${esc(upload.note || '')}</small>
               </div>
 
+              ${
+                rule.notesPerFile
+                  ? `
+                    <div class="field full" style="grid-column:1/-1">
+                      <label for="upload-note-${upload.id}">
+                        Observação desta referência
+                      </label>
+                      <textarea
+                        id="upload-note-${upload.id}"
+                        class="textarea"
+                        data-upload-note="${upload.id}"
+                        placeholder="O que você gostou ou quer aproveitar como direção?"
+                      >${esc(upload.note || '')}</textarea>
+                    </div>
+                  `
+                  : ''
+              }
+
               <button
                 class="btn btn-danger"
                 type="button"
@@ -815,8 +833,11 @@ async function previewHtml(
                 <video
                   class="preview-media"
                   controls
+                  controlslist="nodownload noremoteplayback"
+                  disablepictureinpicture
                   playsinline
                   preload="metadata"
+                  draggable="false"
                   src="${esc(preview.contentPath)}"
                 ></video>
               `
@@ -825,6 +846,7 @@ async function previewHtml(
                   class="preview-media"
                   src="${esc(preview.contentPath)}"
                   alt="Prévia do convite"
+                  draggable="false"
                 >
               `
             : `
@@ -1329,6 +1351,26 @@ export async function startCustomerArea(
       }
     });
 
+    app
+      .querySelectorAll(
+        '.preview-media',
+      )
+      .forEach(
+        (media) => {
+          media.addEventListener(
+            'contextmenu',
+            (event) =>
+              event.preventDefault(),
+          );
+
+          media.addEventListener(
+            'dragstart',
+            (event) =>
+              event.preventDefault(),
+          );
+        },
+      );
+
     bindBriefing();
     bindPreview();
     bindContract();
@@ -1562,6 +1604,57 @@ export async function startCustomerArea(
                 input.disabled =
                   false;
 
+                showToast(
+                  error.message,
+                );
+              }
+            },
+          );
+        },
+      );
+
+    app
+      .querySelectorAll(
+        '[data-upload-note]',
+      )
+      .forEach(
+        (control) => {
+          control.addEventListener(
+            'change',
+            async () => {
+              try {
+                await api(
+                  `/api/v2/customer-area/${token}/briefing/uploads/${control.dataset.uploadNote}`,
+                  {
+                    method:
+                      'PATCH',
+                    body:
+                      JSON.stringify({
+                        note:
+                          control.value
+                            .trim(),
+                      }),
+                  },
+                );
+
+                const upload =
+                  area.briefing.uploads
+                    .find(
+                      item =>
+                        String(item.id)
+                        === String(control.dataset.uploadNote),
+                    );
+
+                if (upload) {
+                  upload.note =
+                    control.value
+                      .trim();
+                }
+
+                showToast(
+                  'Observação salva ✓',
+                );
+              } catch (error) {
                 showToast(
                   error.message,
                 );

@@ -147,6 +147,24 @@ export async function renderCentral(openOrder) {
 
       <section class="card">
         <div class="section-title">
+          <h2>Festas de amanhã</h2>
+          <span class="status">${(c.partiesTomorrow || []).length}</span>
+        </div>
+
+        <div class="list">
+          ${
+            (c.partiesTomorrow || []).length
+              ? c.partiesTomorrow.map(
+                (item) =>
+                  partyRow(item, false),
+              ).join('')
+              : empty('Nenhuma festa amanhã.')
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
           <h2>Próximas festas</h2>
           <span class="status">${(c.partiesUpcoming || []).length}</span>
         </div>

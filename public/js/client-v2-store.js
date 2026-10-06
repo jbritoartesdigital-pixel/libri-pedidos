@@ -262,8 +262,28 @@ function selectProduct(
   state.selection.productSlug =
     product.slug;
 
+  const shortDefault =
+    Number(
+      product.config
+        ?.recommendedShortScenes
+      || 3,
+    );
+
   const variant =
-    product.variants
+    (
+      product.pricingMode
+      === 'scene_count'
+        ? product.variants
+          ?.find(
+            (item) =>
+              Number(
+                item.sceneCount,
+              )
+              === shortDefault,
+          )
+        : null
+    )
+    || product.variants
       ?.find(
         (item) =>
           item.isDefault,
@@ -321,7 +341,7 @@ function actionRow(
 function progress(
   state,
 ) {
-  const total = 7;
+  const total = 8;
   const current =
     Math.min(
       total,
@@ -414,100 +434,652 @@ function comboByCode(
   || null;
 }
 
-function comboRequiredGroups(
+function comboMatchesSelection(
+  state,
   combo,
 ) {
+  const selectedCodes =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const selectedGroups =
+    new Set(
+      [
+        ...selectedCodes,
+      ]
+        .map(
+          (code) =>
+            addonByCode(
+              state,
+              code,
+            )
+              ?.group,
+        )
+        .filter(
+          Boolean,
+        ),
+    );
+
+  const product =
+    productFor(
+      state,
+    );
+
   return (
     combo?.items
     || []
   )
     .filter(
       (item) =>
-        item.required !== false
-        && item.itemType === 'addon_group',
+        item.required
+        !== false,
     )
-    .map(
-      (item) =>
-        item.itemCode,
+    .every(
+      (item) => {
+        if (
+          item.itemType
+          === 'main_product'
+        ) {
+          return item.itemCode
+            === product?.code;
+        }
+
+        if (
+          item.itemType
+          === 'addon'
+        ) {
+          return selectedCodes.has(
+            item.itemCode,
+          );
+        }
+
+        if (
+          item.itemType
+          === 'addon_group'
+        ) {
+          return selectedGroups.has(
+            item.itemCode,
+          );
+        }
+
+        return false;
+      },
     );
 }
 
-function ensureComboSelections(
+function sceneVariantsHtml(
+  product,
+  currentVariant,
+) {
+  if (
+    product.pricingMode
+    !== 'scene_count'
+  ) {
+    return (
+      product.variants
+      || []
+    )
+      .map(
+        (variant) => `
+          <label class="choice-card ${currentVariant?.code === variant.code ? 'selected' : ''}">
+            <input
+              type="radio"
+              name="variant"
+              value="${esc(variant.code)}"
+              ${currentVariant?.code === variant.code ? 'checked' : ''}
+            >
+            <span class="choice-main">
+              <strong>${esc(variant.label)}</strong>
+              <small>${money(variant.priceCents)}</small>
+            </span>
+          </label>
+        `,
+      )
+      .join('');
+  }
+
+  const groups = [
+    {
+      label:
+        'Mais curto',
+      min:
+        1,
+      max:
+        4,
+      defaultScene:
+        Number(
+          product.config
+            ?.recommendedShortScenes
+          || 3,
+        ),
+    },
+    {
+      label:
+        'Mais completo',
+      min:
+        5,
+      max:
+        8,
+      defaultScene:
+        Number(
+          product.config
+            ?.recommendedCompleteScenes
+          || 6,
+        ),
+    },
+  ];
+
+  return groups
+    .map(
+      (group) => `
+        <div class="section-block">
+          <span class="muted">
+            ${esc(group.label)}
+          </span>
+
+          <div class="grid two" style="margin-top:8px">
+            ${(product.variants || [])
+              .filter(
+                (variant) =>
+                  Number(
+                    variant.sceneCount,
+                  )
+                  >= group.min
+                  && Number(
+                    variant.sceneCount,
+                  )
+                  <= group.max,
+              )
+              .map(
+                (variant) => `
+                  <label class="choice-card ${currentVariant?.code === variant.code ? 'selected' : ''}">
+                    <input
+                      type="radio"
+                      name="variant"
+                      value="${esc(variant.code)}"
+                      ${currentVariant?.code === variant.code ? 'checked' : ''}
+                    >
+
+                    <span class="choice-main">
+                      <strong>${esc(variant.label)}</strong>
+                      <small>
+                        ${money(variant.priceCents)}
+                        ${Number(variant.sceneCount) === group.defaultScene ? ' • padrão desta faixa' : ''}
+                      </small>
+                    </span>
+                  </label>
+                `,
+              )
+              .join('')}
+          </div>
+        </div>
+      `,
+    )
+    .join('');
+}
+
+function selectedAddonGroups(
+  state,
+) {
+  return new Set(
+    (state.selection.addonCodes || [])
+      .map(
+        (code) =>
+          addonByCode(
+            state,
+            code,
+          )
+            ?.group,
+      )
+      .filter(
+        Boolean,
+      ),
+  );
+}
+
+function comboMissingGroups(
   state,
   combo,
 ) {
-  const selected =
+  const selectedCodes =
     new Set(
-      state.selection.addonCodes,
+      state.selection.addonCodes
+      || [],
     );
 
-  for (
-    const group
-    of comboRequiredGroups(
-      combo,
-    )
-  ) {
-    const hasGroup =
-      [
-        ...selected,
-      ]
-        .some(
-          (code) =>
-            addonByCode(
-              state,
-              code,
-            )
-              ?.group
-            === group,
-        );
+  const groups =
+    selectedAddonGroups(
+      state,
+    );
 
-    if (hasGroup) {
+  const missing = [];
+
+  for (
+    const item
+    of combo?.items
+    || []
+  ) {
+    if (
+      item.required
+      === false
+    ) {
       continue;
     }
 
-    const fallback =
-      (
-        state.catalog?.addons
-        || []
+    if (
+      item.itemType
+      === 'addon'
+      && !selectedCodes.has(
+        item.itemCode,
       )
-        .find(
-          (addon) =>
-            addon.group
-            === group,
-        );
+    ) {
+      missing.push({
+        type:
+          'addon',
+        code:
+          item.itemCode,
+      });
+    }
 
-    if (fallback) {
-      selected.add(
-        fallback.code,
-      );
+    if (
+      item.itemType
+      === 'addon_group'
+      && !groups.has(
+        item.itemCode,
+      )
+    ) {
+      missing.push({
+        type:
+          'group',
+        code:
+          item.itemCode,
+      });
     }
   }
 
-  state.selection.addonCodes =
-    [
-      ...selected,
-    ];
+  return missing;
 }
 
-function comboRequirements(
-  combo,
+function finalRecommendation(
+  state,
 ) {
-  const labels =
-    (combo?.items || [])
+  if (
+    state.quote
+      ?.suggestedCombo
+  ) {
+    return {
+      kind:
+        'combo',
+      combo:
+        state.quote
+          .suggestedCombo,
+    };
+  }
+
+  const configuredCombos =
+    (
+      state.catalog.combos
+      || []
+    )
       .filter(
-        (item) =>
-          item.required !== false,
+        (combo) =>
+          Number(
+            combo.discountValue
+            || 0,
+          )
+          > 0,
       )
       .map(
-        (item) =>
-          item.itemType === 'addon_group'
-            ? addonGroupLabel(
-                item.itemCode,
+        (combo) => ({
+          combo,
+          missing:
+            comboMissingGroups(
+              state,
+              combo,
+            ),
+        }),
+      )
+      .filter(
+        (entry) =>
+          entry.missing.length
+          === 1,
+      )
+      .sort(
+        (
+          left,
+          right,
+        ) =>
+          (
+            right.combo.items
+              ?.filter(
+                item =>
+                  item.required
+                  !== false,
               )
-            : item.itemCode,
+              .length
+            || 0
+          )
+          - (
+            left.combo.items
+              ?.filter(
+                item =>
+                  item.required
+                  !== false,
+              )
+              .length
+            || 0
+          ),
       );
 
-  return labels.join(' + ');
+  if (
+    configuredCombos.length
+  ) {
+    const entry =
+      configuredCombos[0];
+
+    const missing =
+      entry.missing[0];
+
+    const choices =
+      missing.type
+      === 'addon'
+        ? [
+          addonByCode(
+            state,
+            missing.code,
+          ),
+        ]
+          .filter(Boolean)
+        : (
+          state.catalog.addons
+          || []
+        )
+          .filter(
+            addon =>
+              addon.group
+              === missing.code,
+          );
+
+    if (
+      choices.length
+    ) {
+      return {
+        kind:
+          'addon',
+        group:
+          missing.type
+          === 'group'
+            ? missing.code
+            : choices[0].group,
+        choices,
+        combo:
+          entry.combo,
+      };
+    }
+  }
+
+  const groups =
+    selectedAddonGroups(
+      state,
+    );
+
+  const eventTime =
+    Date.parse(
+      `${state.event.date}T12:00:00Z`,
+    );
+
+  const today =
+    new Date();
+
+  const todayUtc =
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate(),
+      12,
+    );
+
+  const daysUntilEvent =
+    Number.isFinite(
+      eventTime,
+    )
+      ? Math.round(
+        (
+          eventTime
+          - todayUtc
+        )
+        / 86400000,
+      )
+      : null;
+
+  const referenceDays =
+    Number(
+      state.catalog.rules
+        ?.recommendedDeliveryDaysBeforeEvent
+      || 40,
+    );
+
+  let preferredGroup = '';
+
+  if (
+    Number.isFinite(
+      daysUntilEvent,
+    )
+    && daysUntilEvent
+      > referenceDays
+    && !groups.has(
+      'save_the_date',
+    )
+  ) {
+    preferredGroup =
+      'save_the_date';
+  } else if (
+    Number.isFinite(
+      daysUntilEvent,
+    )
+    && daysUntilEvent
+      <= referenceDays
+    && !groups.has(
+      'reminder',
+    )
+  ) {
+    preferredGroup =
+      'reminder';
+  } else if (
+    [
+      'cinematic_interactive',
+      'interactive_essential',
+      'interactive_animated',
+      'interactive_gif',
+      'book',
+      'infinite',
+    ].includes(
+      productFor(state)
+        ?.code,
+    )
+    && !groups.has(
+      'confirmation',
+    )
+  ) {
+    preferredGroup =
+      'confirmation';
+  } else if (
+    !groups.has(
+      'moments',
+    )
+  ) {
+    preferredGroup =
+      'moments';
+  }
+
+  if (!preferredGroup) {
+    return null;
+  }
+
+  const choices =
+    (
+      state.catalog.addons
+      || []
+    )
+      .filter(
+        addon =>
+          addon.group
+          === preferredGroup,
+      );
+
+  return choices.length
+    ? {
+      kind:
+        'addon',
+      group:
+        preferredGroup,
+      choices,
+      combo:
+        null,
+    }
+    : null;
+}
+
+function recommendationTitle(
+  offer,
+) {
+  if (
+    offer?.kind
+    === 'combo'
+  ) {
+    return `Suas escolhas formam o combo ${offer.combo.name}`;
+  }
+
+  if (
+    offer?.combo
+  ) {
+    return `Falta só um item para o combo ${offer.combo.name}`;
+  }
+
+  return {
+    save_the_date:
+      'Uma sugestão para avisar com antecedência',
+    reminder:
+      'Uma sugestão para perto da festa',
+    confirmation:
+      'Quer organizar as confirmações também?',
+    moments:
+      'Quer guardar as fotos dos convidados?',
+  }[
+    offer?.group
+  ]
+  || 'Uma última sugestão';
+}
+
+async function refreshDeliveryForSelection(
+  state,
+) {
+  const data =
+    await api(
+      '/api/v2/delivery-options',
+      {
+        method:
+          'POST',
+        body:
+          JSON.stringify({
+            selection:
+              state.selection,
+            eventType:
+              state.event.type
+              || null,
+            eventDate:
+              state.event.date,
+            limit:
+              6,
+          }),
+      },
+    );
+
+  state.delivery =
+    data.delivery;
+
+  const stillAvailable =
+    (
+      data.delivery.options
+      || []
+    )
+      .find(
+        option =>
+          option.start
+          === state.deliveryWindow
+            ?.start
+          && option.end
+          === state.deliveryWindow
+            ?.end,
+      );
+
+  if (
+    stillAvailable
+  ) {
+    state.deliveryWindow =
+      stillAvailable;
+    return true;
+  }
+
+  state.deliveryWindow =
+    data.delivery.options
+      ?.find(
+        option =>
+          option.recommended,
+      )
+    || data.delivery.options
+      ?.[0]
+    || null;
+
+  return false;
+}
+
+async function continueAfterRecommendation(
+  state,
+  render,
+) {
+  if (
+    !(state.delivery?.options || [])
+      .length
+  ) {
+    const result =
+      await api(
+        '/api/v2/urgency/request',
+        {
+          method:
+            'POST',
+          body:
+            JSON.stringify({
+              clientRequestId:
+                state.clientRequestId,
+              customer:
+                state.customer,
+              event:
+                state.event,
+              selection:
+                state.selection,
+            }),
+        },
+      );
+
+    localStorage.removeItem(
+      STORE_KEY,
+    );
+
+    window.location.href =
+      result.order
+        .customerAreaPath;
+
+    return;
+  }
+
+  state.step =
+    6;
+
+  persist(state);
+  render();
 }
 
 function addonGroups(
@@ -563,6 +1135,83 @@ async function updateQuote(
 
   state.quote =
     data.quote;
+}
+
+async function refreshConfigurationQuote(
+  state,
+) {
+  try {
+    await updateQuote(
+      state,
+    );
+  } catch {
+    state.quote =
+      null;
+  }
+}
+
+function comboOfferHtml(
+  state,
+) {
+  const applied =
+    state.quote?.combo;
+
+  if (applied) {
+    return `
+      <div class="section-block">
+        <div class="notice success">
+          <strong>Combo aplicado: ${esc(applied.name)}</strong>
+          <div style="margin-top:6px">
+            Desconto: ${money(state.quote.comboDiscountCents || 0)}
+          </div>
+
+          <button
+            id="removeCombo"
+            class="btn btn-ghost"
+            type="button"
+            style="margin-top:10px"
+          >
+            Remover desconto do combo
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const suggestion =
+    state.quote?.suggestedCombo;
+
+  if (!suggestion) {
+    return '';
+  }
+
+  return `
+    <div class="section-block">
+      <div class="notice info">
+        <strong>
+          Suas escolhas formam o combo ${esc(suggestion.name)}
+        </strong>
+
+        ${suggestion.description
+          ? `<p class="muted" style="margin:6px 0 0">${esc(suggestion.description)}</p>`
+          : ''}
+
+        <div style="margin-top:6px">
+          Vantagem do combo:
+          <strong>-${money(suggestion.discountCents)}</strong>
+        </div>
+
+        <button
+          id="applySuggestedCombo"
+          class="btn btn-secondary"
+          type="button"
+          style="margin-top:10px"
+        >
+          Aplicar vantagem do combo
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function quoteHtml(
@@ -749,7 +1398,7 @@ function renderEventGate(
       (input) =>
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             state.event.type =
               input.value;
 
@@ -960,7 +1609,7 @@ function renderProducts(
     )
     .addEventListener(
       'click',
-      () => {
+      async () => {
         if (
           !productFor(state)
         ) {
@@ -970,6 +1619,10 @@ function renderProducts(
 
           return;
         }
+
+        await refreshConfigurationQuote(
+          state,
+        );
 
         state.step = 2;
         persist(state);
@@ -1032,44 +1685,11 @@ function renderConfiguration(
                 </p>
               ` : ''}
 
-              <div class="grid two">
-                ${product.variants.map(
-                  (variant) => `
-                    <label class="choice-card ${
-                      currentVariant?.code
-                      === variant.code
-                        ? 'selected'
-                        : ''
-                    }">
-                      <input
-                        type="radio"
-                        name="variant"
-                        value="${esc(variant.code)}"
-                        ${
-                          currentVariant?.code
-                          === variant.code
-                            ? 'checked'
-                            : ''
-                        }
-                      >
-
-                      <span class="choice-main">
-                        <strong>
-                          ${esc(variant.label)}
-                        </strong>
-
-                        <small>
-                          ${money(variant.priceCents)}
-                          ${
-                            variant.sceneCount
-                              ? ` • ${variant.sceneCount} cena${variant.sceneCount === 1 ? '' : 's'}`
-                              : ''
-                          }
-                        </small>
-                      </span>
-                    </label>
-                  `,
-                ).join('')}
+              <div>
+                ${sceneVariantsHtml(
+                  product,
+                  currentVariant,
+                )}
               </div>
             </div>
           `
@@ -1128,73 +1748,7 @@ function renderConfiguration(
         }
       </div>
 
-      ${
-        Array.isArray(
-          state.catalog.combos,
-        )
-        && state.catalog.combos.length
-          ? `
-            <div class="section-block">
-              <h2 class="section-title">
-                Combos
-              </h2>
-
-              <div class="grid two">
-                <label class="choice-card ${
-                  state.selection.comboCode
-                    ? ''
-                    : 'selected'
-                }">
-                  <input
-                    type="radio"
-                    name="combo"
-                    value=""
-                    ${state.selection.comboCode ? '' : 'checked'}
-                  >
-
-                  <span class="choice-main">
-                    <strong>Sem combo</strong>
-                    <small>Escolher os adicionais separadamente.</small>
-                  </span>
-                </label>
-
-                ${state.catalog.combos.map(
-                  (combo) => `
-                    <label class="choice-card ${
-                      state.selection.comboCode
-                      === combo.code
-                        ? 'selected'
-                        : ''
-                    }">
-                      <input
-                        type="radio"
-                        name="combo"
-                        value="${esc(combo.code)}"
-                        ${
-                          state.selection.comboCode
-                          === combo.code
-                            ? 'checked'
-                            : ''
-                        }
-                      >
-
-                      <span class="choice-main">
-                        <strong>${esc(combo.name)}</strong>
-                        <small>
-                          ${esc(combo.description || '')}
-                          ${comboRequirements(combo)
-                            ? ` • Escolha acima: ${esc(comboRequirements(combo))}`
-                            : ''}
-                        </small>
-                      </span>
-                    </label>
-                  `,
-                ).join('')}
-              </div>
-            </div>
-          `
-          : ''
-      }
+      ${comboOfferHtml(state)}
 
       <div class="section-block">
         <button
@@ -1236,9 +1790,13 @@ function renderConfiguration(
       (input) => {
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             state.selection.variantCode =
               input.value;
+
+            await refreshConfigurationQuote(
+              state,
+            );
 
             persist(state);
             renderConfiguration(
@@ -1258,7 +1816,7 @@ function renderConfiguration(
       (input) => {
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             const set =
               new Set(
                 state.selection.addonCodes,
@@ -1319,39 +1877,20 @@ function renderConfiguration(
                 state.selection.comboCode,
               );
 
-            if (combo) {
-              const selectedGroups =
-                new Set(
-                  state.selection.addonCodes
-                    .map(
-                      (code) =>
-                        addonByCode(
-                          state,
-                          code,
-                        )
-                          ?.group,
-                    )
-                    .filter(
-                      Boolean,
-                    ),
-                );
-
-              const stillMatches =
-                comboRequiredGroups(
-                  combo,
-                )
-                  .every(
-                    (group) =>
-                      selectedGroups.has(
-                        group,
-                      ),
-                  );
-
-              if (!stillMatches) {
-                state.selection.comboCode =
-                  '';
-              }
+            if (
+              combo
+              && !comboMatchesSelection(
+                state,
+                combo,
+              )
+            ) {
+              state.selection.comboCode =
+                '';
             }
+
+            await refreshConfigurationQuote(
+              state,
+            );
 
             persist(state);
             renderConfiguration(
@@ -1363,38 +1902,56 @@ function renderConfiguration(
       },
     );
 
-  app
-    .querySelectorAll(
-      '[name="combo"]',
+  document
+    .getElementById(
+      'applySuggestedCombo',
     )
-    .forEach(
-      (input) => {
-        input.addEventListener(
-          'change',
-          () => {
-            state.selection.comboCode =
-              input.value;
+    ?.addEventListener(
+      'click',
+      async () => {
+        const code =
+          state.quote
+            ?.suggestedCombo
+            ?.code
+          || '';
 
-            const combo =
-              comboByCode(
-                state,
-                input.value,
-              );
+        if (!code) {
+          return;
+        }
 
-            if (combo) {
-              ensureComboSelections(
-                state,
-                combo,
-              );
-            }
+        state.selection.comboCode =
+          code;
 
-            persist(state);
+        await refreshConfigurationQuote(
+          state,
+        );
 
-            renderConfiguration(
-              state,
-              render,
-            );
-          },
+        persist(state);
+        renderConfiguration(
+          state,
+          render,
+        );
+      },
+    );
+
+  document
+    .getElementById(
+      'removeCombo',
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
+        state.selection.comboCode =
+          '';
+
+        await refreshConfigurationQuote(
+          state,
+        );
+
+        persist(state);
+        renderConfiguration(
+          state,
+          render,
         );
       },
     );
@@ -1916,23 +2473,11 @@ function renderDelivery(
       'click',
       async () => {
         if (!options.length) {
-          const button = document.getElementById('nextBtn');
-          button.disabled = true;
-          try {
-            const result = await api('/api/v2/urgency/request', {
-              method: 'POST', body: JSON.stringify({ clientRequestId: state.clientRequestId,
-                customer: state.customer, event: state.event, selection: state.selection }),
-            });
-            localStorage.removeItem(STORE_KEY);
-            window.location.href = result.order.customerAreaPath;
-          } catch (error) {
-            button.disabled = false;
-            showToast(error.message);
-            if (error.data?.code === 'regular_delivery_available') {
-              state.delivery = error.data.details.delivery;
-              renderDelivery(state, render);
-            }
-          }
+          state.step =
+            5;
+
+          persist(state);
+          render();
           return;
         }
 
@@ -1949,6 +2494,290 @@ function renderDelivery(
         state.step = 5;
         persist(state);
         render();
+      },
+    );
+}
+
+function renderRecommendation(
+  state,
+  render,
+) {
+  const offer =
+    finalRecommendation(
+      state,
+    );
+
+  if (!offer) {
+    continueAfterRecommendation(
+      state,
+      render,
+    )
+      .catch(
+        error =>
+          showToast(
+            error.message,
+          ),
+      );
+
+    return;
+  }
+
+  const choices =
+    offer.kind
+    === 'addon'
+      ? offer.choices
+      : [];
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Antes de fechar</span>
+        <h1 class="page-title">
+          ${esc(recommendationTitle(offer))}
+        </h1>
+        <p class="page-subtitle">
+          Só uma recomendação, com base no seu pedido. Você pode seguir sem adicionar nada.
+        </p>
+      </div>
+
+      ${offer.kind === 'combo'
+        ? `
+          <div class="notice info">
+            <strong>${esc(offer.combo.name)}</strong>
+            ${offer.combo.description ? `<p class="muted">${esc(offer.combo.description)}</p>` : ''}
+            <p>
+              Economia:
+              <strong>-${money(offer.combo.discountCents || 0)}</strong>
+            </p>
+          </div>
+        `
+        : `
+          <div class="grid two">
+            ${choices.map(
+              (addon) => `
+                <label class="choice-card">
+                  <input
+                    type="radio"
+                    name="finalOfferAddon"
+                    value="${esc(addon.code)}"
+                  >
+                  <span class="choice-main">
+                    <strong>${esc(addon.name)}</strong>
+                    <small>+ ${money(addon.priceCents)}</small>
+                  </span>
+                </label>
+              `,
+            ).join('')}
+          </div>
+
+          ${offer.combo
+            ? `
+              <div class="notice info section-block">
+                Ao adicionar, suas escolhas completam o combo
+                <strong>${esc(offer.combo.name)}</strong>.
+              </div>
+            `
+            : ''}
+        `
+      }
+
+      <div class="action-row">
+        <button
+          id="skipFinalOffer"
+          class="btn btn-ghost"
+          type="button"
+        >
+          Continuar sem adicionais
+        </button>
+
+        <button
+          id="acceptFinalOffer"
+          class="btn btn-primary btn-large"
+          type="button"
+        >
+          ${offer.kind === 'combo' ? 'Aplicar combo' : 'Adicionar'}
+        </button>
+      </div>
+    </section>
+  `;
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'skipFinalOffer',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        loading(
+          'Continuando...',
+        );
+
+        try {
+          await continueAfterRecommendation(
+            state,
+            render,
+          );
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderRecommendation(
+            state,
+            render,
+          );
+        }
+      },
+    );
+
+  document
+    .getElementById(
+      'acceptFinalOffer',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        const button =
+          document
+            .getElementById(
+              'acceptFinalOffer',
+            );
+
+        button.disabled =
+          true;
+
+        try {
+          if (
+            offer.kind
+            === 'combo'
+          ) {
+            state.selection.comboCode =
+              offer.combo.code;
+
+            await updateQuote(
+              state,
+            );
+
+            await continueAfterRecommendation(
+              state,
+              render,
+            );
+
+            return;
+          }
+
+          const selected =
+            document.querySelector(
+              '[name="finalOfferAddon"]:checked',
+            )
+              ?.value;
+
+          if (!selected) {
+            showToast(
+              'Escolha uma opção para adicionar.',
+            );
+            button.disabled =
+              false;
+            return;
+          }
+
+          const addon =
+            addonByCode(
+              state,
+              selected,
+            );
+
+          const set =
+            new Set(
+              state.selection.addonCodes,
+            );
+
+          if (
+            addon?.group
+          ) {
+            for (
+              const code
+              of [
+                ...set,
+              ]
+            ) {
+              if (
+                addonByCode(
+                  state,
+                  code,
+                )
+                  ?.group
+                === addon.group
+              ) {
+                set.delete(
+                  code,
+                );
+              }
+            }
+          }
+
+          set.add(
+            selected,
+          );
+
+          state.selection.addonCodes =
+            [
+              ...set,
+            ];
+
+          if (
+            offer.combo
+          ) {
+            state.selection.comboCode =
+              offer.combo.code;
+          }
+
+          await updateQuote(
+            state,
+          );
+
+          const sameWindow =
+            await refreshDeliveryForSelection(
+              state,
+            );
+
+          if (
+            (state.delivery?.options || [])
+              .length
+            && !sameWindow
+          ) {
+            state.step =
+              4;
+
+            persist(state);
+            render();
+
+            showToast(
+              'Esse adicional mudou a disponibilidade. Escolha a nova janela de entrega.',
+            );
+
+            return;
+          }
+
+          await continueAfterRecommendation(
+            state,
+            render,
+          );
+        } catch (error) {
+          button.disabled =
+            false;
+
+          showToast(
+            error.message,
+          );
+        }
       },
     );
 }
@@ -2084,7 +2913,7 @@ async function renderPayment(
     .addEventListener(
       'click',
       () => {
-        state.step = 6;
+        state.step = 7;
         persist(state);
         render();
       },
@@ -2388,7 +3217,7 @@ function renderReview(
             error.data?.code
             === 'delivery_window_unavailable'
           ) {
-            state.step = 3;
+            state.step = 4;
             state.deliveryWindow =
               null;
             persist(state);
@@ -2466,6 +3295,10 @@ export async function startStore(
       product,
     );
 
+    await refreshConfigurationQuote(
+      state,
+    );
+
     state.step =
       Math.max(
         2,
@@ -2533,6 +3366,17 @@ export async function startStore(
 
     if (
       state.step === 5
+    ) {
+      renderRecommendation(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 6
     ) {
       renderPayment(
         state,

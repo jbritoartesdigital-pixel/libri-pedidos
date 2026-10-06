@@ -1509,17 +1509,40 @@ export async function getV2CascadeSuggestions(db) {
   const sources = await db.prepare(`SELECT DISTINCT o.id, o.order_code FROM v2_orders o JOIN v2_agenda_allocations a
     ON a.order_id = o.id WHERE o.status = 'finalized' AND a.day >= ? ORDER BY o.id`).bind(todayInSaoPaulo()).all();
   const suggestions = [];
+  const releaseable = [];
+
   for (const source of sources.results || []) {
     const pool = await futureAllocations(db, source.id);
     if (!pool.length) continue;
+
     const candidate = await bestCandidateForPool(db, source.id, pool[0].day);
-    if (!candidate) continue;
+
+    if (!candidate) {
+      releaseable.push({
+        sourceOrderCode: source.order_code,
+        pointsUnits: totalUnits(pool),
+      });
+      continue;
+    }
+
     const target = await futureAllocations(db, candidate.id, { ascending: false });
     const plan = pairCascadeMoves(pool, target);
-    if (plan.movedUnits) suggestions.push({ sourceOrderCode: source.order_code,
-      targetOrderCode: candidate.code, pointsUnits: plan.movedUnits });
+
+    if (plan.movedUnits) {
+      suggestions.push({
+        sourceOrderCode: source.order_code,
+        targetOrderCode: candidate.code,
+        pointsUnits: plan.movedUnits,
+      });
+    } else {
+      releaseable.push({
+        sourceOrderCode: source.order_code,
+        pointsUnits: totalUnits(pool),
+      });
+    }
   }
-  return { suggestions };
+
+  return { suggestions, releaseable };
 }
 
 export async function anticipateV2Production(db, { sourceOrderCode, targetOrderCode, pointsUnits = null }) {

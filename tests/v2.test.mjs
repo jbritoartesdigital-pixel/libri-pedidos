@@ -362,6 +362,7 @@ test('agenda range exposes contracted events on their party date', async t => {
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
     deliveryWindow: { start: day(5), end: day(7) },
+    ...await terms(DB),
   }));
   mp.approve(checkout.payment.providerOrderId);
   await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
@@ -437,6 +438,7 @@ test('approved payment rebuilds a missing temporary hold and unlocks briefing wh
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Reserva perdida', type: 'birthday', date: day(50) },
     deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
   }));
 
   const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
@@ -456,6 +458,7 @@ test('scheduler repairs a paid order left locked after the temporary hold disapp
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Reparo automático', type: 'birthday', date: day(50) },
     deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
   }));
 
   const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;

@@ -300,7 +300,7 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
-  assert.equal(mp.bodies[0].config.payment_method.default_type, undefined);
+  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
   assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
   assert.equal(mp.bodies[0].config.payment_method.installments_cost, 'buyer');
   assert.equal(mp.bodies[0].config.payment_method.installments, undefined);

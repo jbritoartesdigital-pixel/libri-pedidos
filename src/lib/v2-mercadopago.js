@@ -75,6 +75,9 @@ function paymentMethodConfig(
     );
 
   return {
+    default_type:
+      'credit_card',
+
     max_installments:
       maxInstallments,
 

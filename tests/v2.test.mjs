@@ -891,7 +891,7 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
 
   assert.match(
     source,
-    /Continuar sem adicionais/,
+    /Agora não/,
   );
 
   assert.match(

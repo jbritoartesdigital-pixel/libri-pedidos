@@ -1469,7 +1469,16 @@ test('store client keeps the approved commercial journey and a single final reco
     source.indexOf('function recommendationTitle('),
   );
 
-  assert.match(recommendationLogic, /product_upgrade/);
+  const upgradeLogic = source.slice(
+    source.indexOf('function interactiveUpgradeOffer('),
+    source.indexOf('function progressiveAddonOffer('),
+  );
+
+  assert.match(upgradeLogic, /product_upgrade/);
+  assert.match(upgradeLogic, /cinematic_video/);
+  assert.match(upgradeLogic, /cinematic_interactive/);
+  assert.match(upgradeLogic, /sceneCount/);
+
   assert.match(recommendationLogic, /cinematic_video/);
   assert.match(recommendationLogic, /groups\.size\s*===\s*0/);
   assert.match(recommendationLogic, /progressiveAddonOffer\(\s*state,\s*'confirmation'/);

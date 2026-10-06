@@ -1985,8 +1985,8 @@ function renderDelivery(
           Escolha uma janela
         </h1>
         <p class="page-subtitle">
-          A janela é o período prometido para entrega.
-          A produção pode começar antes.
+          Escolha uma faixa de 3 dias para o prazo de entrega.
+          A produção pode ser concluída em menos dias dentro dessa faixa.
         </p>
       </div>
 
@@ -2133,6 +2133,41 @@ function renderAddons(
   state,
   render,
 ) {
+  const normalizedSelection =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const hasMomentsBase =
+    [
+      ...normalizedSelection,
+    ]
+      .some(
+        (code) =>
+          addonByCode(
+            state,
+            code,
+          )
+            ?.group
+          === 'moments',
+      );
+
+  if (!hasMomentsBase) {
+    normalizedSelection.delete(
+      'moments_extra_100',
+    );
+  } else {
+    normalizedSelection.delete(
+      'custom_filter',
+    );
+  }
+
+  state.selection.addonCodes =
+    [
+      ...normalizedSelection,
+    ];
+
   const selectedAddons =
     new Set(
       state.selection.addonCodes

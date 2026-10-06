@@ -13,6 +13,7 @@ import {
   getV2Central,
   listV2Production,
   markV2CongratulationsSent,
+  recoverPaidV2Order,
 } from '../lib/v2-admin-core.js';
 
 export async function handleAdminV2CoreApi(
@@ -137,6 +138,53 @@ export async function handleAdminV2CoreApi(
         error?.message
         || 'Não foi possível excluir este pedido.',
         409,
+      );
+    }
+  }
+
+  const recoverPaymentMatch =
+    path
+      .match(
+        /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/recover-payment$/,
+      );
+
+  if (
+    recoverPaymentMatch
+    && method === 'POST'
+  ) {
+    try {
+      const result =
+        await recoverPaidV2Order(
+          env,
+          recoverPaymentMatch[1],
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok: true,
+        result,
+      });
+    } catch (
+      error
+    ) {
+      return fail(
+        error?.message
+        || 'Não foi possível revalidar o pagamento.',
+        error?.code === 'capacity_review_required'
+          ? 409
+          : 422,
+        error?.code
+          ? {
+              code:
+                error.code,
+            }
+          : undefined,
       );
     }
   }

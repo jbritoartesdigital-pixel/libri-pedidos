@@ -10,6 +10,7 @@ import {
 import {
   cancelMercadoPagoOrder,
   fetchMercadoPagoOrder,
+  syncMercadoPagoOrder,
 } from './v2-mercadopago.js';
 
 import {
@@ -26,6 +27,144 @@ const DELETABLE_UNPAID_STATUSES =
     'awaiting_payment',
     'cancelled',
   ]);
+
+export async function recoverPaidV2Order(
+  env,
+  orderCode,
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    );
+
+  const order =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            id,
+            order_code,
+            status,
+            briefing_status
+          FROM v2_orders
+          WHERE order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    return null;
+  }
+
+  if (
+    order.briefing_status
+    !== 'locked'
+  ) {
+    return {
+      recovered:
+        true,
+      alreadyUnlocked:
+        true,
+      code:
+        order.order_code,
+      status:
+        order.status,
+      briefingStatus:
+        order.briefing_status,
+    };
+  }
+
+  const payment =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            provider_order_id
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND provider = 'mercado_pago'
+            AND status = 'approved'
+            AND provider_order_id IS NOT NULL
+          ORDER BY id DESC
+          LIMIT 1
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (!payment?.provider_order_id) {
+    throw new Error(
+      'Não existe pagamento aprovado do Mercado Pago para revalidar.',
+    );
+  }
+
+  const sync =
+    await syncMercadoPagoOrder(
+      env,
+      payment.provider_order_id,
+    );
+
+  const current =
+    await env.DB
+      .prepare(
+        `
+          SELECT
+            status,
+            briefing_status,
+            next_action
+          FROM v2_orders
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (
+    current?.briefing_status
+    === 'locked'
+  ) {
+    const error =
+      new Error(
+        'O pagamento está confirmado, mas a agenda ainda precisa de revisão manual.',
+      );
+
+    error.code =
+      'capacity_review_required';
+
+    error.details =
+      sync;
+
+    throw error;
+  }
+
+  return {
+    recovered:
+      true,
+    alreadyUnlocked:
+      false,
+    code:
+      order.order_code,
+    status:
+      current?.status
+      || '',
+    briefingStatus:
+      current?.briefing_status
+      || '',
+    nextAction:
+      current?.next_action
+      || '',
+  };
+}
 
 export async function deleteUnpaidV2Order(
   env,

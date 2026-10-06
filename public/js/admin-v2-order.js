@@ -246,6 +246,19 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const canRecoverPaid =
+    Number(
+      detail.payment?.paidCents
+      || 0,
+    ) > 0
+    && detail.order.briefingStatus === 'locked'
+    && [
+      'awaiting_payment',
+      'urgency_approved',
+    ].includes(
+      detail.order.status,
+    );
+
   const close =
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
@@ -317,6 +330,22 @@ export async function openOrder(code, onChanged = null) {
             <div class="section-title">
               <h3>Ações</h3>
             </div>
+
+            ${canRecoverPaid ? `
+              <div class="notice info" style="margin-bottom:12px">
+                O pagamento já está confirmado, mas o briefing ainda está travado.
+                Revalide a reserva para liberar o próximo passo.
+              </div>
+
+              <button
+                id="recoverPaidOrder"
+                class="btn btn-primary"
+                type="button"
+                style="margin-bottom:12px"
+              >
+                Revalidar pagamento e liberar briefing
+              </button>
+            ` : ''}
 
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               ${(detail.allowedActions || []).map(
@@ -921,6 +950,41 @@ export async function openOrder(code, onChanged = null) {
             }
           },
         ),
+    );
+
+  document
+    .getElementById('recoverPaidOrder')
+    ?.addEventListener(
+      'click',
+      async (event) => {
+        const button =
+          event.currentTarget;
+
+        button.disabled = true;
+        button.textContent = 'Revalidando...';
+
+        try {
+          await api(
+            `/api/admin/v2/orders/${detail.order.code}/recover-payment`,
+            {
+              method: 'POST',
+              body: '{}',
+            },
+          );
+
+          close();
+
+          if (onChanged) {
+            await onChanged();
+          }
+
+          showToast('Pagamento revalidado e briefing liberado ✓');
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Revalidar pagamento e liberar briefing';
+          showToast(error.message);
+        }
+      },
     );
 
   document

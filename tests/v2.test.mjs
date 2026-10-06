@@ -1511,9 +1511,17 @@ test('store client keeps the approved commercial journey and a single final reco
   );
   assert.match(recommendation, /promo-sheet/);
   assert.match(recommendation, /Oferta para adicionar agora/);
-  assert.match(recommendation, /Quer deixar seu convite interativo/);
   assert.match(recommendation, /Deixar interativo por/);
   assert.match(recommendation, /replaceState/);
+
+  const recommendationTitle = source.slice(
+    source.indexOf('function recommendationTitle('),
+    source.indexOf('async function refreshDeliveryForSelection('),
+  );
+  assert.match(
+    recommendationTitle,
+    /Quer deixar seu convite interativo/,
+  );
   assert.match(recommendation, /Agora não/);
   assert.equal(
     recommendation.includes('name="finalOfferAddon"'),

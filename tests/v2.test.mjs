@@ -33,7 +33,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 16);
+  const DB = database(); assert.equal(DB.migrationCount, 17);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -220,6 +220,125 @@ test('legacy repair finalizes delivered historical orders and moves imported pay
   assert.equal(finance.summary.openReceivableAllCents, 0);
   assert.equal(finance.receivables.some(item => item.orderCode === 'LIBRI-0998'), false);
   assert.equal(finance.movements.some(item => item.orderCode === 'LIBRI-0998'), false);
+});
+
+
+test('legacy paid historical order is finalized even when V1 invitation approval flag was stale', async () => {
+  const DB = database();
+
+  const legacyToken = 'ord_' + 'd'.repeat(36);
+  DB.sqlite.prepare(`
+    INSERT INTO orders(
+      order_code, public_token, customer_name, whatsapp,
+      honoree_name, display_name, age,
+      event_date, event_time, venue_name, venue_address, location_url, theme,
+      experience, format, addons_json, briefing_json, pricing_json,
+      subtotal_cents, urgency_enabled, urgency_percent, urgency_amount_cents,
+      total_cents, deposit_percent, deposit_cents, balance_cents,
+      terms_version, terms_accepted_at, portfolio_consent,
+      status, photos_status, entry_status, mascot_status, speech_mode,
+      speech_status, invitation_status, balance_status,
+      production_started_at, production_deadline_at,
+      created_at, updated_at, finalized_at
+    )
+    VALUES (
+      'LIBRI-0997', ?, 'Cliente Histórica Paga', '5561777777777',
+      'Evento Pago', 'Evento Pago', 6,
+      '2026-08-15', '17:00', 'Salão', 'Rua Histórica', '', 'Tema antigo',
+      'full', 'interactive', '{}', '{"mustHave":"Histórico pago"}', '{}',
+      10000, 0, 0, 0,
+      10000, 50, 5000, 5000,
+      '1.0', '2026-07-01T12:00:00.000Z', 1,
+      'producing', 'approved', 'confirmed', 'approved', 'libri',
+      'not_required', 'waiting', 'confirmed',
+      '2026-07-03T12:00:00.000Z', '2026-07-10T12:00:00.000Z',
+      '2026-07-01T12:00:00.000Z', '2026-10-06T01:00:00.000Z', '2026-08-15T23:00:00.000Z'
+    )
+  `).run(legacyToken);
+
+  const migration14 = readFileSync('migrations/0014_v1_to_v2_retirement.sql', 'utf8');
+  const migration15 = readFileSync('migrations/0015_fix_legacy_finalized_finance.sql', 'utf8');
+  const migration17 = readFileSync('migrations/0017_fix_legacy_paid_history.sql', 'utf8');
+
+  DB.sqlite.exec(migration14);
+
+  assert.equal(
+    DB.sqlite.prepare(
+      "SELECT status FROM v2_orders WHERE order_code='LIBRI-0997'"
+    ).get().status,
+    'in_production',
+  );
+
+  DB.sqlite.exec(migration15);
+
+  assert.equal(
+    DB.sqlite.prepare(
+      "SELECT status FROM v2_orders WHERE order_code='LIBRI-0997'"
+    ).get().status,
+    'in_production',
+    '0015 did not cover a stale invitation flag despite historical full payment',
+  );
+
+  assert.ok(
+    DB.sqlite.prepare(`
+      SELECT COUNT(*) AS n
+      FROM v2_agenda_allocations
+      WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0997')
+    `).get().n > 0,
+  );
+
+  DB.sqlite.exec(migration17);
+  DB.sqlite.exec(migration17);
+
+  const repaired = DB.sqlite.prepare(`
+    SELECT status, next_action, finalized_at
+    FROM v2_orders
+    WHERE order_code='LIBRI-0997'
+  `).get();
+
+  assert.equal(repaired.status, 'finalized');
+  assert.match(repaired.next_action, /Finalizado/);
+  assert.ok(repaired.finalized_at);
+
+  assert.equal(
+    DB.sqlite.prepare(`
+      SELECT COUNT(*) AS n
+      FROM v2_agenda_allocations
+      WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0997')
+    `).get().n,
+    0,
+  );
+
+  const payments = DB.sqlite.prepare(`
+    SELECT payment_type, paid_at
+    FROM v2_payments
+    WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0997')
+    ORDER BY payment_type
+  `).all();
+
+  assert.equal(payments.length, 2);
+  assert.ok(
+    payments.every(
+      payment =>
+        payment.paid_at.startsWith('2026-07-01'),
+    ),
+  );
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.receivableCents, 0);
+  assert.equal(finance.summary.openReceivableAllCents, 0);
+  assert.equal(
+    finance.receivables.some(
+      item => item.orderCode === 'LIBRI-0997',
+    ),
+    false,
+  );
+  assert.equal(
+    finance.movements.some(
+      item => item.orderCode === 'LIBRI-0997',
+    ),
+    false,
+  );
 });
 
 test('urgency: request, approval, exact discounted price, Pix, repeated webhook and production preservation', async t => {

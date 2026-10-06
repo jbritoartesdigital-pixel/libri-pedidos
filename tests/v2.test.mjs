@@ -182,7 +182,7 @@ test('legacy finalized orders never keep fabricated future delivery windows', ()
         'producing', 'approved', 'confirmed', 'approved', 'libri',
         'not_required', 'approved', 'waiting',
         '2026-07-02T12:00:00.000Z', '2026-08-22T12:00:00.000Z',
-        '2026-07-01T12:00:00.000Z', '2026-10-06T12:00:00.000Z', NULL
+        '2026-07-01T12:00:00.000Z', '2026-10-06T12:00:00.000Z', '2026-10-06T12:00:00.000Z'
       )
   `).run(finishedToken, inferredToken);
 

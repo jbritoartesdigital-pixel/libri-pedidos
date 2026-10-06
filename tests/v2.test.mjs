@@ -597,7 +597,7 @@ test('finance admin can correct direct Pix but not Mercado Pago reconciliation',
 
   const edited = await updateV2FinancePayment(DB, directPix.id, {
     amountCents: 2500,
-    paidDate: day(6),
+    paidDate: day(-1),
     paymentType: 'balance',
   });
 
@@ -618,7 +618,7 @@ test('finance admin can correct direct Pix but not Mercado Pago reconciliation',
   await assert.rejects(
     updateV2FinancePayment(DB, mercadoPago.id, {
       amountCents: 1,
-      paidDate: day(6),
+      paidDate: day(-1),
       paymentType: 'deposit',
     }),
     /Mercado Pago/,

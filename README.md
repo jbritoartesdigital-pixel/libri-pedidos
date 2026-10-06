@@ -17,6 +17,7 @@ Portal oficial em /pedido, área da cliente em /meu-pedido/<token> e Admin em /a
 - Agenda administrativa restaurada: dias, períodos, sugestões de cascata, antecipação e liberação explícita de excedente.
 - D1, R2 privado, Static Assets, Passkey e Web Push mantidos.
 - Pedidos V1 são importados de forma idempotente para clientes, pedidos, itens, briefing, preços, pagamentos manuais confirmados, termos, histórico, notas e agenda V2.
+- Pedidos legados já entregues/finalizados não ficam como saldo a receber; pagamentos importados sem data explícita usam a data original do pedido, nunca a data da migração.
 
 ## Validação
 

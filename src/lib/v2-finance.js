@@ -443,6 +443,7 @@ async function summaryForRange(
                   WHEN
                     provider = 'mercado_pago'
                     AND payment_type != 'refund'
+                    AND net_cents IS NOT NULL
                     THEN fee_cents
                   ELSE 0
                 END
@@ -454,10 +455,26 @@ async function summaryForRange(
               SUM(
                 CASE
                   WHEN
+                    provider = 'mercado_pago'
+                    AND payment_type != 'refund'
+                    AND net_cents IS NULL
+                    THEN 1
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS mercado_pago_fee_pending_count,
+
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN
                     payment_type != 'refund'
                     AND net_cents IS NOT NULL
                     THEN net_cents
-                  WHEN payment_type != 'refund'
+                  WHEN
+                    payment_type != 'refund'
+                    AND provider != 'mercado_pago'
                     THEN amount_cents - fee_cents
                   ELSE 0
                 END
@@ -551,6 +568,12 @@ async function summaryForRange(
         ?.mercado_pago_fee_cents,
     );
 
+  const mercadoPagoFeePendingCount =
+    numberValue(
+      cash
+        ?.mercado_pago_fee_pending_count,
+    );
+
   const netBeforeRefunds =
     numberValue(
       cash
@@ -592,6 +615,16 @@ async function summaryForRange(
 
     mercadoPagoFeeCents:
       feesCents,
+
+    mercadoPagoFeePendingCount,
+
+    mercadoPagoFeesComplete:
+      mercadoPagoFeePendingCount
+      === 0,
+
+    netCashMovementComplete:
+      mercadoPagoFeePendingCount
+      === 0,
 
     comboDiscountCents:
       numberValue(
@@ -1063,6 +1096,17 @@ async function movementsForRange(
           row.payment_type
           === 'refund';
 
+        const feeKnown =
+          isRefund
+          || row.provider
+            !== 'mercado_pago'
+          || (
+            row.net_cents
+            !== null
+            && row.net_cents
+              !== undefined
+          );
+
         const signedGrossCents =
           isRefund
             ? -amountCents
@@ -1071,17 +1115,19 @@ async function movementsForRange(
         const signedNetCents =
           isRefund
             ? -amountCents
-            : (
-              row.net_cents
-              === null
-              || row.net_cents
-              === undefined
-                ? amountCents
-                  - feeCents
-                : numberValue(
-                  row.net_cents,
-                )
-            );
+            : feeKnown
+              ? (
+                row.net_cents
+                === null
+                || row.net_cents
+                === undefined
+                  ? amountCents
+                    - feeCents
+                  : numberValue(
+                    row.net_cents,
+                  )
+              )
+              : null;
 
         return {
           id:
@@ -1128,8 +1174,13 @@ async function movementsForRange(
               ? 0
               : feeCents,
 
+          feeKnown,
+
           netCents:
             signedNetCents,
+
+          netKnown:
+            feeKnown,
 
           direction:
             isRefund

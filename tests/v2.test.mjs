@@ -14,6 +14,7 @@ import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSugges
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
+import { getV2FinanceDashboard } from '../src/lib/v2-finance.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -261,6 +262,25 @@ test('production search finds theme and exposes the planned card data', async t 
   assert.equal(rows[0].theme, 'Jardim Encantado');
   assert.ok(rows[0].productName);
   assert.ok(rows[0].paidCents > 0);
+});
+
+test('finance does not pretend Mercado Pago fees are zero before reconciliation', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Financeiro', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeesComplete, false);
+  assert.equal(finance.summary.mercadoPagoFeePendingCount, 1);
+  assert.equal(finance.summary.netCashMovementComplete, false);
+  assert.equal(finance.movements[0].feeKnown, false);
+  assert.equal(finance.movements[0].netKnown, false);
+  assert.equal(finance.movements[0].netCents, null);
 });
 
 test('normal checkout resumes expired payment in same order; stale payment cannot mutate paid order', async t => {

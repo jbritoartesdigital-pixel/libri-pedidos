@@ -233,8 +233,13 @@ export async function renderFinance() {
           <article class="kpi">
             <span>Taxas Mercado Pago</span>
             <strong>
-              ${money(summary.mercadoPagoFeeCents)}
+              ${summary.mercadoPagoFeesComplete
+                ? money(summary.mercadoPagoFeeCents)
+                : 'A conciliar'}
             </strong>
+            ${summary.mercadoPagoFeesComplete
+              ? ''
+              : `<small>${Number(summary.mercadoPagoFeePendingCount || 0)} pagamento(s)</small>`}
           </article>
 
           <article class="kpi">
@@ -254,7 +259,9 @@ export async function renderFinance() {
           <article class="kpi">
             <span>Movimento líquido</span>
             <strong>
-              ${money(summary.netCashMovementCents)}
+              ${summary.netCashMovementComplete
+                ? money(summary.netCashMovementCents)
+                : 'A conciliar'}
             </strong>
           </article>
         </div>
@@ -291,8 +298,8 @@ export async function renderFinance() {
                               <td>${esc(movementLabel(row))}</td>
                               <td>${esc(row.method || row.provider || '')}</td>
                               <td>${money(row.amountCents)}</td>
-                              <td>${money(row.feeCents)}</td>
-                              <td>${money(row.netCents)}</td>
+                              <td>${row.feeKnown ? money(row.feeCents) : 'A conciliar'}</td>
+                              <td>${row.netKnown ? money(row.netCents) : 'A conciliar'}</td>
                             </tr>
                           `,
                         ).join('')}

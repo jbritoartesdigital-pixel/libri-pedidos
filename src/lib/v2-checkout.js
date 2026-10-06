@@ -1548,6 +1548,51 @@ export async function startV2Checkout(
       },
     );
 
+    /*
+     * O frontend nunca é autoridade da agenda.
+     * A janela enviada precisa continuar entre as opções
+     * que o motor de capacidade ofereceria agora.
+     */
+    const delivery =
+      await findV2DeliveryOptions(
+        env.DB,
+        {
+          eventDate,
+          pointsUnits:
+            quote.pointsUnits,
+          limit:
+            10,
+        },
+      );
+
+    const offeredWindow =
+      (
+        delivery.options
+        || []
+      )
+        .some(
+          (option) =>
+            option.start
+            === deliveryStart
+            && option.end
+            === deliveryEnd,
+        );
+
+    if (!offeredWindow) {
+      throw new V2CheckoutError(
+        'Essa janela não está mais disponível. Escolha outra opção de entrega.',
+        {
+          status:
+            409,
+          code:
+            'delivery_window_unavailable',
+          details: {
+            delivery,
+          },
+        },
+      );
+    }
+
     const plan =
       await planV2AllocationForWindow(
         env.DB,
@@ -1690,19 +1735,6 @@ export async function startV2Checkout(
           )
           : null,
     };
-
-    const delivery =
-      await findV2DeliveryOptions(
-        env.DB,
-        {
-          eventDate,
-          pointsUnits:
-            quote.pointsUnits,
-
-          limit:
-            10,
-        },
-      );
 
     const recommendedTargetDate =
       delivery

@@ -882,6 +882,48 @@ test('restored agenda day/period and cascade suggestions run against actual sche
   assert.equal((await releaseV2CascadeSurplus(DB, { sourceOrderCode: a.order.code })).releasedUnits, 100);
 });
 
+test('checkout rejects a client-tampered delivery window that was not offered by the capacity engine', async () => {
+  const DB = database();
+  const e = env(DB);
+
+  await setV2AgendaDay(DB, day(10), {
+    sellableCapacityUnits: 400,
+    internalBufferUnits: 100,
+  });
+
+  const body =
+    input({
+      event: {
+        honoreeName: 'Janela adulterada',
+        type: 'birthday',
+        date: day(60),
+      },
+      deliveryWindow: {
+        start: day(10),
+        end: day(20),
+      },
+      ...await terms(DB),
+    });
+
+  await assert.rejects(
+    startV2Checkout(
+      request,
+      e,
+      body,
+    ),
+    error =>
+      error.code
+      === 'delivery_window_unavailable',
+  );
+
+  assert.equal(
+    DB.sqlite.prepare(
+      'SELECT COUNT(*) AS n FROM v2_orders',
+    ).get().n,
+    0,
+  );
+});
+
 test('normal delivery availability prevents urgency request', async () => {
   const DB = database();
   await assert.rejects(requestV2UrgencyReview(request, env(DB), input({ event: { honoreeName: 'Teste', date: day(50) } })), error => error.code === 'regular_delivery_available');

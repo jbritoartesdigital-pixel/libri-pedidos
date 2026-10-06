@@ -9,6 +9,9 @@ const DAY_MS =
   * 60
   * 1000;
 
+const NORMAL_DELIVERY_WINDOW_DAYS =
+  3;
+
 function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/
     .test(
@@ -410,10 +413,20 @@ function buildCandidateWindows({
   const candidates = [];
 
   /*
-   * A janela é uma promessa de entrega, não um bloco fixo.
-   * Para cada possível início, encontramos o primeiro dia em que
-   * a capacidade acumulada realmente comporta a carga do pedido.
+   * A cliente sempre recebe uma faixa comercial fixa de 3 dias.
+   * A agenda, porém, reserva apenas os dias realmente necessários
+   * dentro dessa faixa. Se toda a carga couber em um único dia,
+   * somente esse dia aparece como produção interna.
    */
+  const lastPossibleStart =
+    addDays(
+      lastPossibleEnd,
+      -(
+        NORMAL_DELIVERY_WINDOW_DAYS
+        - 1
+      ),
+    );
+
   for (
     let start =
       new Date(
@@ -421,7 +434,7 @@ function buildCandidateWindows({
           .getTime(),
       );
 
-    start <= lastPossibleEnd;
+    start <= lastPossibleStart;
 
     start =
       addDays(
@@ -429,11 +442,18 @@ function buildCandidateWindows({
         1,
       )
   ) {
+    const end =
+      addDays(
+        start,
+        NORMAL_DELIVERY_WINDOW_DAYS
+        - 1,
+      );
+
     const plan =
       planAllocation(
         capacityMap,
         start,
-        lastPossibleEnd,
+        end,
         requiredUnits,
       );
 
@@ -443,13 +463,6 @@ function buildCandidateWindows({
     ) {
       continue;
     }
-
-    const end =
-      parseIsoDay(
-        plan.allocation[
-          plan.allocation.length - 1
-        ].day,
-      );
 
     const midpoint =
       new Date(
@@ -503,9 +516,15 @@ export async function validateV2DeliveryWindow(
   if (
     endDay
     < startDay
+    || diffDays(
+      endDay,
+      startDay,
+    )
+      !== NORMAL_DELIVERY_WINDOW_DAYS
+        - 1
   ) {
     throw new Error(
-      'Janela de entrega inválida.',
+      'A janela normal de entrega deve ter 3 dias.',
     );
   }
 

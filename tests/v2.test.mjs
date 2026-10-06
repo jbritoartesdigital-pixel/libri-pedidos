@@ -10,13 +10,14 @@ import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { applyV2AdminAction, cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2ArchivedOrders, listV2Production } from '../src/lib/v2-admin-core.js';
+import { applyV2AdminAction, cancelV2Order, deleteUnpaidV2Order, getV2AdminOrderDetail, getV2Central, listV2ArchivedOrders, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
+import { updateV2Settings } from '../src/lib/v2-store-config.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -1097,6 +1098,166 @@ test('manual finance entries are audited and bounded by real order values', asyn
   );
 });
 
+test('admin final checklist blocks incomplete delivery and requires manual final-file confirmation', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Checklist Final', type: 'birthday', date: day(40) },
+    deliveryWindow: { start: day(8), end: day(10) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const order = DB.sqlite.prepare(
+    'SELECT id, order_code FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+
+  const incomplete = await getV2AdminOrderDetail(DB, order.order_code);
+  assert.equal(incomplete.finalizeChecklist.ready, false);
+  assert.equal(
+    incomplete.finalizeChecklist.items.find(item => item.code === 'briefing').ok,
+    false,
+  );
+  assert.equal(
+    incomplete.finalizeChecklist.items.find(item => item.code === 'preview').ok,
+    false,
+  );
+
+  const remaining = incomplete.payment.remainingBalanceCents;
+  assert.ok(remaining > 0);
+
+  await createV2FinancePayment(DB, {
+    orderCode: order.order_code,
+    amountCents: remaining,
+    paidDate: day(-1),
+    paymentType: 'balance',
+    note: 'Saldo para teste do checklist',
+  });
+
+  DB.sqlite.prepare(`
+    UPDATE v2_briefings
+    SET completion_percent=100, completed_at=datetime('now'), updated_at=datetime('now')
+    WHERE order_id=?
+  `).run(order.id);
+
+  const preview = DB.sqlite.prepare(`
+    INSERT INTO v2_previews(
+      order_id, version_number, media_type, preview_r2_key,
+      watermark_label, status, expires_at, created_at
+    )
+    VALUES (?,1,'image',?,'PRÉVIA','approved',datetime('now','+1 day'),datetime('now'))
+  `).run(order.id, `test/checklist-${order.id}.webp`);
+
+  DB.sqlite.prepare(`
+    INSERT INTO v2_preview_approvals(preview_id, order_id, approved_at, evidence_json)
+    VALUES (?, ?, datetime('now'), '{}')
+  `).run(Number(preview.lastInsertRowid), order.id);
+
+  DB.sqlite.prepare(`
+    UPDATE v2_orders
+    SET briefing_status='completed', status='ready_for_delivery', updated_at=datetime('now')
+    WHERE id=?
+  `).run(order.id);
+
+  const ready = await getV2AdminOrderDetail(DB, order.order_code);
+  assert.equal(ready.finalizeChecklist.ready, true);
+  assert.equal(ready.finalizeChecklist.items.every(item => item.ok), true);
+
+  await assert.rejects(
+    applyV2AdminAction(DB, order.order_code, 'finalize'),
+    /arquivo ou link final/i,
+  );
+
+  const finalized = await applyV2AdminAction(
+    DB,
+    order.order_code,
+    'finalize',
+    { finalDeliveryConfirmed: true },
+  );
+
+  assert.equal(finalized.status, 'finalized');
+});
+
+test('admin deadline risk reflects proximity and ready-for-delivery state', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Risco Prazo', type: 'birthday', date: day(30) },
+    deliveryWindow: { start: day(8), end: day(10) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  DB.sqlite.prepare(`
+    UPDATE v2_orders
+    SET status='in_production', delivery_start=?, delivery_end=?, updated_at=datetime('now')
+    WHERE order_code=?
+  `).run(day(0), day(2), checkout.order.code);
+
+  let orders = await listV2Production(DB);
+  let row = orders.find(item => item.code === checkout.order.code);
+  assert.equal(row.risk.level, 'priority');
+  assert.match(row.risk.reason, /faixa de entrega está em andamento/i);
+
+  DB.sqlite.prepare(`
+    UPDATE v2_orders
+    SET status='ready_for_delivery', delivery_start=?, delivery_end=?, updated_at=datetime('now')
+    WHERE order_code=?
+  `).run(day(0), day(2), checkout.order.code);
+
+  orders = await listV2Production(DB);
+  row = orders.find(item => item.code === checkout.order.code);
+  assert.equal(row.risk.level, 'low');
+  assert.equal(row.risk.label, 'Tranquilo');
+});
+
+test('WhatsApp quick-message templates are editable and rendered in admin order details', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  await updateV2Settings(DB, {
+    whatsapp_template_briefing:
+      'Olá {cliente}. Pedido {pedido} de {homenageado}. Continue: {link}',
+    whatsapp_template_preview:
+      'Prévia de {homenageado}: {link}',
+    whatsapp_template_balance:
+      'Saldo {saldo} do pedido {pedido}: {link}',
+    whatsapp_template_finalized:
+      'Finalizado {pedido} para {cliente}: {link}',
+  });
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Template WhatsApp', type: 'birthday', date: day(30) },
+    deliveryWindow: { start: day(8), end: day(10) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  const briefingAction = detail.whatsappActions.find(item => item.code === 'briefing');
+
+  assert.ok(briefingAction);
+  assert.match(briefingAction.message, /Olá Cliente Teste/);
+  assert.match(briefingAction.message, new RegExp(checkout.order.code));
+  assert.match(briefingAction.message, /Template WhatsApp/);
+  assert.match(
+    briefingAction.message,
+    /https:\/\/pedidos\.libriconvites\.com\.br\/meu-pedido\//,
+  );
+  assert.match(briefingAction.url, /^https:\/\/wa\.me\//);
+});
+
 test('final polish surfaces progressive reasons, safer delivery changes, next steps, quick WhatsApp and isolated simulation', () => {
   const store = readFileSync(
     new URL('../public/js/client-v2-store.js', import.meta.url),
@@ -1124,6 +1285,14 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   );
   const adminHtml = readFileSync(
     new URL('../public/admin-v2.html', import.meta.url),
+    'utf8',
+  );
+  const storeSettings = readFileSync(
+    new URL('../public/js/admin-v2-store-settings.js', import.meta.url),
+    'utf8',
+  );
+  const production = readFileSync(
+    new URL('../public/js/admin-v2-production.js', import.meta.url),
     'utf8',
   );
 
@@ -1166,10 +1335,8 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(central, /attentionReason/);
   assert.match(central, /WhatsApp/);
 
-  assert.match(order, /Cobrar briefing/);
-  assert.match(order, /Prévia disponível/);
-  assert.match(order, /Saldo pendente/);
-  assert.match(order, /Pedido finalizado/);
+  assert.match(order, /detail\.whatsappActions/);
+  assert.match(order, /Mensagens rápidas/);
   assert.match(order, /Arquivar pedido/);
   assert.match(order, /Restaurar pedido/);
 
@@ -1179,6 +1346,22 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
 
   assert.match(admin, /renderArchived/);
   assert.match(adminHtml, /data-view="archived"/);
+
+  assert.match(order, /Checklist antes de finalizar/);
+  assert.match(order, /finalDeliveryConfirmed/);
+  assert.match(order, /detail\.whatsappActions/);
+  assert.match(order, /risk-badge/);
+
+  assert.match(production, /Prazo:/);
+  assert.match(production, /order\.risk/);
+
+  assert.match(storeSettings, /Mensagens rápidas do WhatsApp/);
+  assert.match(storeSettings, /whatsappBriefingTemplate/);
+  assert.match(storeSettings, /whatsappPreviewTemplate/);
+  assert.match(storeSettings, /whatsappBalanceTemplate/);
+  assert.match(storeSettings, /whatsappFinalizedTemplate/);
+  assert.match(storeSettings, /\{cliente\}/);
+  assert.match(storeSettings, /\{saldo\}/);
 });
 
 test('public store does not expose a fixed combo chooser or auto-add combo items', () => {

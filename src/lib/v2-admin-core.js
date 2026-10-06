@@ -16,6 +16,11 @@ import {
   getV2FinanceSummary,
 } from './v2-finance.js';
 
+import {
+  loadV2WhatsappTemplates,
+  renderV2WhatsappTemplate,
+} from './v2-whatsapp-templates.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -723,6 +728,352 @@ function addDays(
       '0',
     ),
   ].join('-');
+}
+
+function moneyLabel(
+  cents,
+) {
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style:
+        'currency',
+      currency:
+        'BRL',
+    },
+  ).format(
+    Number(
+      cents
+      || 0,
+    )
+    / 100,
+  );
+}
+
+function deliveryRisk(
+  row,
+  today =
+    dateKeyInSaoPaulo(),
+) {
+  if (
+    [
+      'finalized',
+      'cancelled',
+    ].includes(
+      row.status,
+    )
+  ) {
+    return {
+      level:
+        'closed',
+      label:
+        'Encerrado',
+      reason:
+        'Pedido encerrado.',
+    };
+  }
+
+  if (
+    !row.delivery_start
+    || !row.delivery_end
+  ) {
+    return {
+      level:
+        'attention',
+      label:
+        'Atenção',
+      reason:
+        'Janela de entrega ainda não definida.',
+    };
+  }
+
+  if (
+    row.status
+    === 'ready_for_delivery'
+  ) {
+    return {
+      level:
+        'low',
+      label:
+        'Tranquilo',
+      reason:
+        'Pedido pronto para entrega.',
+    };
+  }
+
+  if (
+    row.delivery_end
+    < today
+  ) {
+    return {
+      level:
+        'priority',
+      label:
+        'Prioridade',
+      reason:
+        'A faixa de entrega já terminou.',
+    };
+  }
+
+  if (
+    row.delivery_start
+    <= today
+    && row.delivery_end
+      >= today
+  ) {
+    return {
+      level:
+        'priority',
+      label:
+        'Prioridade',
+      reason:
+        'A faixa de entrega está em andamento e o pedido ainda não está pronto.',
+    };
+  }
+
+  if (
+    row.delivery_start
+    <= addDays(
+      today,
+      2,
+    )
+  ) {
+    return {
+      level:
+        'attention',
+      label:
+        'Atenção',
+      reason:
+        'A faixa de entrega começa em até 2 dias.',
+    };
+  }
+
+  return {
+    level:
+      'low',
+    label:
+      'Tranquilo',
+    reason:
+      'Há folga antes da faixa de entrega.',
+  };
+}
+
+function finalizeChecklistFrom(
+  order,
+  payments,
+  briefing,
+  previews,
+) {
+  const items = [
+    {
+      code:
+        'briefing',
+      label:
+        'Briefing concluído',
+      ok:
+        order.briefing_status
+        === 'completed'
+        || Number(
+          briefing
+            ?.completionPercent
+          || 0,
+        ) >= 100,
+    },
+    {
+      code:
+        'preview',
+      label:
+        'Prévia aprovada pela cliente',
+      ok:
+        (
+          previews
+          || []
+        )
+          .some(
+            (preview) =>
+              Boolean(
+                preview.approvedAt,
+              )
+              || preview.status
+                === 'approved',
+          ),
+    },
+    {
+      code:
+        'payment',
+      label:
+        'Saldo totalmente resolvido',
+      ok:
+        Number(
+          payments
+            ?.remainingBalanceCents
+          || 0,
+        ) === 0,
+    },
+    {
+      code:
+        'delivery_window',
+      label:
+        'Faixa de entrega definida',
+      ok:
+        Boolean(
+          order.delivery_start
+          && order.delivery_end,
+        ),
+    },
+  ];
+
+  return {
+    ready:
+      items.every(
+        (item) =>
+          item.ok,
+      ),
+    items,
+    manualConfirmationLabel:
+      'Arquivo ou link final conferido e pronto para entrega',
+  };
+}
+
+function orderWhatsappActions(
+  order,
+  briefing,
+  previews,
+  payments,
+  templates,
+) {
+  const area =
+    `/meu-pedido/${order.public_token}`;
+
+  const values = {
+    customerName:
+      order.customer_name,
+    honoreeName:
+      order.honoree_display_name,
+    orderCode:
+      order.order_code,
+    customerAreaUrl:
+      `https://pedidos.libriconvites.com.br${area}`,
+    balanceLabel:
+      moneyLabel(
+        payments
+          ?.remainingBalanceCents
+        || 0,
+      ),
+  };
+
+  const actions = [];
+
+  if (
+    Number(
+      briefing
+        ?.completionPercent
+      || 0,
+    ) < 100
+  ) {
+    const message =
+      renderV2WhatsappTemplate(
+        templates.briefing,
+        values,
+      );
+
+    actions.push({
+      code:
+        'briefing',
+      label:
+        'Cobrar briefing',
+      message,
+      url:
+        whatsappUrl(
+          order.whatsapp,
+          message,
+        ),
+    });
+  }
+
+  if (
+    (
+      previews
+      || []
+    )
+      .some(
+        (preview) =>
+          preview.status
+          === 'active',
+      )
+  ) {
+    const message =
+      renderV2WhatsappTemplate(
+        templates.preview,
+        values,
+      );
+
+    actions.push({
+      code:
+        'preview',
+      label:
+        'Prévia disponível',
+      message,
+      url:
+        whatsappUrl(
+          order.whatsapp,
+          message,
+        ),
+    });
+  }
+
+  if (
+    Number(
+      payments
+        ?.remainingBalanceCents
+      || 0,
+    ) > 0
+  ) {
+    const message =
+      renderV2WhatsappTemplate(
+        templates.balance,
+        values,
+      );
+
+    actions.push({
+      code:
+        'balance',
+      label:
+        'Saldo pendente',
+      message,
+      url:
+        whatsappUrl(
+          order.whatsapp,
+          message,
+        ),
+    });
+  }
+
+  if (
+    order.status
+    === 'finalized'
+  ) {
+    const message =
+      renderV2WhatsappTemplate(
+        templates.finalized,
+        values,
+      );
+
+    actions.push({
+      code:
+        'finalized',
+      label:
+        'Pedido finalizado',
+      message,
+      url:
+        whatsappUrl(
+          order.whatsapp,
+          message,
+        ),
+    });
+  }
+
+  return actions;
 }
 
 function monthRangeSaoPaulo(
@@ -1839,6 +2190,19 @@ export async function getV2AdminOrderDetail(
       uploads,
     );
 
+  const whatsappTemplates =
+    await loadV2WhatsappTemplates(
+      db,
+    );
+
+  const finalizeChecklist =
+    finalizeChecklistFrom(
+      order,
+      payments,
+      briefing,
+      previews,
+    );
+
   return {
     order: {
       id:
@@ -1884,6 +2248,10 @@ export async function getV2AdminOrderDetail(
       urgency:
         Boolean(
           order.urgency_enabled,
+        ),
+      risk:
+        deliveryRisk(
+          order,
         ),
       briefingStatus:
         order.briefing_status,
@@ -1961,6 +2329,17 @@ export async function getV2AdminOrderDetail(
       production:
         texts.production,
     },
+
+    finalizeChecklist,
+
+    whatsappActions:
+      orderWhatsappActions(
+        order,
+        briefing,
+        previews,
+        payments,
+        whatsappTemplates,
+      ),
 
     allowedActions:
       allowedActions(
@@ -2239,6 +2618,11 @@ export async function listV2Production(
           end:
             row.delivery_end,
         },
+        risk:
+          deliveryRisk(
+            row,
+            today,
+          ),
         totalCents:
           Number(
             row.total_cents
@@ -2264,6 +2648,7 @@ export async function listV2Production(
 
 async function centralAttention(
   db,
+  templates,
 ) {
   const today =
     dateKeyInSaoPaulo();
@@ -2285,6 +2670,27 @@ async function centralAttention(
             c.name AS customer_name,
             c.whatsapp,
 
+            pr.total_cents,
+
+            COALESCE(
+              (
+                SELECT SUM(
+                  CASE
+                    WHEN pay.status = 'approved'
+                      AND pay.payment_type != 'refund'
+                      THEN pay.amount_cents
+                    WHEN pay.status = 'approved'
+                      AND pay.payment_type = 'refund'
+                      THEN -pay.amount_cents
+                    ELSE 0
+                  END
+                )
+                FROM v2_payments pay
+                WHERE pay.order_id = o.id
+              ),
+              0
+            ) AS paid_cents,
+
             EXISTS(
               SELECT 1
               FROM v2_previews p
@@ -2295,6 +2701,8 @@ async function centralAttention(
           FROM v2_orders o
           INNER JOIN v2_customers c
             ON c.id = o.customer_id
+          INNER JOIN v2_order_pricing pr
+            ON pr.order_id = o.id
           WHERE
             o.archived_at IS NULL
             AND (
@@ -2412,6 +2820,70 @@ async function centralAttention(
             'Pedido pronto para entrega';
         }
 
+        const remainingBalanceCents =
+          Math.max(
+            0,
+            Number(
+              row.total_cents
+              || 0,
+            )
+            - Number(
+              row.paid_cents
+              || 0,
+            ),
+          );
+
+        const values = {
+          customerName:
+            row.customer_name,
+          honoreeName:
+            row.honoree_display_name,
+          orderCode:
+            row.order_code,
+          customerAreaUrl:
+            `https://pedidos.libriconvites.com.br/meu-pedido/${row.public_token}`,
+          balanceLabel:
+            moneyLabel(
+              remainingBalanceCents,
+            ),
+        };
+
+        let quickTemplate =
+          '';
+
+        if (
+          row.status
+          === 'briefing_pending'
+        ) {
+          quickTemplate =
+            templates.briefing;
+        } else if (
+          (
+            row.status
+            === 'waiting_customer'
+            || row.status
+              === 'adjustments'
+          )
+          && row.has_active_preview
+        ) {
+          quickTemplate =
+            templates.preview;
+        } else if (
+          row.status
+          === 'balance_pending'
+        ) {
+          quickTemplate =
+            templates.balance;
+        }
+
+        const quickWhatsappMessage =
+          quickTemplate
+            ? renderV2WhatsappTemplate(
+              quickTemplate,
+              values,
+            )
+            : '';
+
         return {
           code:
             row.order_code,
@@ -2441,6 +2913,15 @@ async function centralAttention(
             Boolean(
               row.has_active_preview,
             ),
+          remainingBalanceCents,
+          quickWhatsappMessage,
+          quickWhatsappUrl:
+            quickWhatsappMessage
+              ? whatsappUrl(
+                row.whatsapp,
+                quickWhatsappMessage,
+              )
+              : '',
           deliveryWindow: {
             start:
               row.delivery_start,
@@ -3165,6 +3646,11 @@ export async function getV2Central(
   const today =
     dateKeyInSaoPaulo();
 
+  const whatsappTemplates =
+    await loadV2WhatsappTemplates(
+      db,
+    );
+
   const tomorrow =
     addDays(
       today,
@@ -3185,6 +3671,7 @@ export async function getV2Central(
     await Promise.all([
       centralAttention(
         db,
+        whatsappTemplates,
       ),
       partiesForDay(
         db,
@@ -3375,6 +3862,7 @@ export async function applyV2AdminAction(
   db,
   orderCode,
   action,
+  options = {},
 ) {
   const order =
     await orderByCode(
@@ -3754,6 +4242,61 @@ export async function applyV2AdminAction(
     action
     === 'finalize'
   ) {
+    const [
+      briefing,
+      previews,
+    ] =
+      await Promise.all([
+        orderBriefing(
+          db,
+          order.id,
+        ),
+        orderPreviews(
+          db,
+          order.id,
+        ),
+      ]);
+
+    const checklist =
+      finalizeChecklistFrom(
+        order,
+        payments,
+        briefing,
+        previews,
+      );
+
+    const missing =
+      checklist.items
+        .filter(
+          (item) =>
+            !item.ok,
+        );
+
+    if (
+      missing.length
+    ) {
+      throw new Error(
+        `Antes de finalizar, resolva: ${
+          missing
+            .map(
+              (item) =>
+                item.label,
+            )
+            .join(', ')
+        }.`,
+      );
+    }
+
+    if (
+      options
+        ?.finalDeliveryConfirmed
+      !== true
+    ) {
+      throw new Error(
+        'Confirme que o arquivo ou link final foi conferido e está pronto para entrega.',
+      );
+    }
+
     return finalizeV2OrderToCascadePool(
       db,
       order,

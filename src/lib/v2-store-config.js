@@ -4,6 +4,10 @@ import {
   randomToken,
 } from './http.js';
 
+import {
+  DEFAULT_V2_WHATSAPP_TEMPLATES,
+} from './v2-whatsapp-templates.js';
+
 const SETTINGS_ALLOWLIST =
   new Set([
     'company_name',
@@ -18,6 +22,11 @@ const SETTINGS_ALLOWLIST =
     'libri_whatsapp',
     'balance_pix_key',
     'balance_pix_recipient_name',
+
+    'whatsapp_template_briefing',
+    'whatsapp_template_preview',
+    'whatsapp_template_balance',
+    'whatsapp_template_finalized',
 
     'default_sellable_points_per_day_units',
     'default_internal_buffer_points_per_day_units',
@@ -1159,6 +1168,24 @@ export async function getV2StoreConfig(
       checkout: {
         pixDepositPercent:
           50,
+      },
+
+      whatsappTemplates: {
+        briefing:
+          settings.whatsapp_template_briefing
+          || DEFAULT_V2_WHATSAPP_TEMPLATES.briefing,
+
+        preview:
+          settings.whatsapp_template_preview
+          || DEFAULT_V2_WHATSAPP_TEMPLATES.preview,
+
+        balance:
+          settings.whatsapp_template_balance
+          || DEFAULT_V2_WHATSAPP_TEMPLATES.balance,
+
+        finalized:
+          settings.whatsapp_template_finalized
+          || DEFAULT_V2_WHATSAPP_TEMPLATES.finalized,
       },
     },
   };

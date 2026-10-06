@@ -83,6 +83,21 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   assert.equal(typeof units, 'number'); assert.equal(units, 100);
 });
 
+test('customer area reconciles an approved urgency payment without waiting for the scheduler', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const result = await urgency(DB); const token = result.order.publicToken;
+  await decideV2Urgency(DB, result.order.code, {
+    decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1),
+  });
+  const payment = await resumeV2Payment(request, e, token, await terms(DB));
+  mp.approve(payment.payment.providerOrderId);
+
+  const area = await getV2CustomerArea(e, token);
+
+  assert.equal(area.briefing.locked, false);
+  assert.equal(area.order.status, 'briefing_pending');
+});
+
 test('rejection prevents payment; invalid and past windows are rejected', async () => {
   const DB = database(); const result = await urgency(DB);
   assert.throws(() => validateUrgencyWindow(day(-1), day(1), day(2)));

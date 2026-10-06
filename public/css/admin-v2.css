@@ -1116,3 +1116,76 @@ button { -webkit-tap-highlight-color: transparent; }
 .attention-main small {
   display: block;
 }
+
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.risk-low {
+  background: #edf8f3;
+  color: #2d624f;
+}
+
+.risk-attention {
+  background: #fff6e8;
+  color: #725326;
+}
+
+.risk-priority {
+  background: #fff0f0;
+  color: #8d3e3e;
+}
+
+.risk-closed {
+  background: #f2efef;
+  color: #71666a;
+}
+
+.risk-reason {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.finalize-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.finalize-check {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.finalize-check > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+}
+
+.finalize-check.ok > span {
+  background: #edf8f3;
+  color: #2d624f;
+}
+
+.finalize-check.missing > span {
+  background: #fff0f0;
+  color: #8d3e3e;
+}

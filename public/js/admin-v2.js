@@ -152,7 +152,7 @@ async function renderCurrent() {
   } else if (
     state.view === 'agenda'
   ) {
-    await renderAgenda();
+    await renderAgenda(open);
   } else if (
     state.view === 'finance'
   ) {

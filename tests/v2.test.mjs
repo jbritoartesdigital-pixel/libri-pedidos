@@ -7,6 +7,7 @@ import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-ad
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
+import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
 import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
@@ -29,8 +30,11 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 12);
+  const DB = database(); assert.equal(DB.migrationCount, 13);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
+  assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
+  assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_instagram'").get().value, '@libriconvites');
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
 });
@@ -77,6 +81,21 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations').get().n, 1);
   const units = DB.sqlite.prepare('SELECT points_units FROM v2_agenda_allocations').get().points_units;
   assert.equal(typeof units, 'number'); assert.equal(units, 100);
+});
+
+test('customer area reconciles an approved urgency payment without waiting for the scheduler', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const result = await urgency(DB); const token = result.order.publicToken;
+  await decideV2Urgency(DB, result.order.code, {
+    decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1),
+  });
+  const payment = await resumeV2Payment(request, e, token, await terms(DB));
+  mp.approve(payment.payment.providerOrderId);
+
+  const area = await getV2CustomerArea(e, token);
+
+  assert.equal(area.briefing.locked, false);
+  assert.equal(area.order.status, 'briefing_pending');
 });
 
 test('rejection prevents payment; invalid and past windows are rejected', async () => {
@@ -308,6 +327,38 @@ test('scheduler repairs missing notifications, expires reservations and previews
   assert.equal((await getV2CustomerArea(env(DB), result.order.publicToken)).urgency.status, 'pending');
 });
 
+test('public catalog exposes official combo composition', async () => {
+  const DB = database();
+  const catalog = await loadV2Catalog(DB);
+  assert.equal(catalog.combos.length, 5);
+  const complete = catalog.combos.find(item => item.code === 'libri_completo');
+  assert.deepEqual(
+    complete.items.map(item => item.itemCode).sort(),
+    ['confirmation', 'moments', 'reminder', 'save_the_date'],
+  );
+});
+
+test('official combos are seeded with the approved compositions and configurable zero discount', () => {
+  const DB = database();
+  const rows = DB.sqlite.prepare(`
+    SELECT c.code, c.name, c.discount_value, i.item_type, i.item_code
+    FROM v2_combos c
+    LEFT JOIN v2_combo_items i ON i.combo_id = c.id
+    ORDER BY c.code, i.item_code
+  `).all();
+
+  const byCode = rows.reduce((acc, row) => {
+    (acc[row.code] ||= []).push(row);
+    return acc;
+  }, {});
+  assert.deepEqual(byCode.convite_save.map(row => row.item_code), ['save_the_date']);
+  assert.deepEqual(byCode.antes_festa.map(row => row.item_code), ['reminder', 'save_the_date']);
+  assert.deepEqual(byCode.organizacao.map(row => row.item_code), ['confirmation', 'reminder']);
+  assert.deepEqual(byCode.festa_completa.map(row => row.item_code), ['confirmation', 'moments']);
+  assert.deepEqual(byCode.libri_completo.map(row => row.item_code), ['confirmation', 'moments', 'reminder', 'save_the_date']);
+  assert.ok(rows.every(row => row.discount_value === 0));
+});
+
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
@@ -318,6 +369,24 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.urgency.percent, 99);
   assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.99));
   assert.equal(quote.payment.depositPercent, 50);
+});
+
+test('agenda range exposes contracted events on their party date', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const eventDate = day(40);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
+    deliveryWindow: { start: day(5), end: day(7) },
+    ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const agenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
+  assert.equal(agenda.days.length, 1);
+  assert.equal(agenda.days[0].events.length, 1);
+  assert.equal(agenda.days[0].events[0].code, checkout.order.code);
+  assert.equal(agenda.days[0].events[0].honoreeName, 'Festa Calendário');
 });
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {
@@ -377,6 +446,46 @@ test('uncertain provider response is recovered with same idempotency key and no 
   DB.sqlite.prepare('DELETE FROM v2_payments').run();
   const recovered = await resumeV2Payment(request, e, a.order.publicToken, await terms(DB));
   assert.equal(recovered.payment.providerOrderId, first.payment.providerOrderId); assert.equal(mp.posts, 1);
+});
+
+test('approved payment rebuilds a missing temporary hold and unlocks briefing when capacity still fits', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Reserva perdida', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  DB.sqlite.prepare('DELETE FROM v2_checkout_holds WHERE order_id = ?').run(orderId);
+
+  mp.approve(checkout.payment.providerOrderId);
+  const result = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  assert.equal(result.approved, true);
+  assert.equal(result.capacityReview, undefined);
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id = ?').get(orderId).briefing_status, 'available');
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id = ?').get(orderId).n > 0);
+});
+
+test('scheduler repairs a paid order left locked after the temporary hold disappeared', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Reparo automático', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  DB.sqlite.prepare('DELETE FROM v2_checkout_holds WHERE order_id = ?').run(orderId);
+  mp.approve(checkout.payment.providerOrderId);
+  DB.sqlite.prepare("UPDATE v2_payments SET status='approved' WHERE provider_order_id = ?")
+    .run(checkout.payment.providerOrderId);
+
+  await runV2Scheduler(e);
+
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id = ?').get(orderId).briefing_status, 'available');
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id = ?').get(orderId).n > 0);
 });
 
 test('late accredited payment does not oversell capacity; repeated review is deduplicated', async t => {

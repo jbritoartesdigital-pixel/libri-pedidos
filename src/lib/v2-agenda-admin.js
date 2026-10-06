@@ -982,6 +982,7 @@ export async function getV2AgendaRange(
     allocations,
     holds,
     allocationOrders,
+    eventOrders,
   ] =
     await Promise.all([
       defaultCapacities(
@@ -1085,6 +1086,52 @@ export async function getV2AgendaRange(
               o.status = 'finalized' DESC,
               o.delivery_start,
               o.order_code
+          `,
+        )
+        .bind(
+          rangeStart,
+          rangeEnd,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              o.event_date,
+              o.order_code,
+              o.honoree_display_name,
+              o.status,
+              c.name AS customer_name,
+              (
+                SELECT item.name_snapshot
+                FROM v2_order_items item
+                WHERE
+                  item.order_id = o.id
+                  AND item.item_type = 'product'
+                ORDER BY item.id
+                LIMIT 1
+              ) AS product_name
+            FROM v2_orders o
+            INNER JOIN v2_customers c
+              ON c.id = o.customer_id
+            WHERE
+              o.event_date BETWEEN ? AND ?
+              AND o.status IN (
+                'briefing_pending',
+                'ready_for_production',
+                'in_production',
+                'waiting_customer',
+                'adjustments',
+                'approved',
+                'balance_pending',
+                'ready_for_delivery',
+                'finalized'
+              )
+            ORDER BY
+              o.event_date,
+              o.created_at,
+              o.id
           `,
         )
         .bind(
@@ -1201,6 +1248,45 @@ export async function getV2AgendaRange(
       });
   }
 
+  const eventsByDay = {};
+
+  for (
+    const row
+    of eventOrders.results
+    || []
+  ) {
+    if (
+      !eventsByDay[
+        row.event_date
+      ]
+    ) {
+      eventsByDay[
+        row.event_date
+      ] = [];
+    }
+
+    eventsByDay[
+      row.event_date
+    ]
+      .push({
+        code:
+          row.order_code,
+
+        honoreeName:
+          row.honoree_display_name,
+
+        customerName:
+          row.customer_name,
+
+        productName:
+          row.product_name
+          || '',
+
+        status:
+          row.status,
+      });
+  }
+
   const days =
     listDays(
       rangeStart,
@@ -1295,6 +1381,12 @@ export async function getV2AgendaRange(
 
             orders:
               ordersByDay[
+                day
+              ]
+              || [],
+
+            events:
+              eventsByDay[
                 day
               ]
               || [],

@@ -56,6 +56,7 @@ export async function loadV2Catalog(db) {
     variantsResult,
     addonsResult,
     combosResult,
+    comboItemsResult,
     settings,
   ] =
     await Promise.all([
@@ -133,6 +134,25 @@ export async function loadV2Catalog(db) {
             FROM v2_combos
             WHERE active = 1
             ORDER BY id
+          `,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              c.code AS combo_code,
+              i.item_type,
+              i.item_code,
+              i.required
+            FROM v2_combo_items i
+            INNER JOIN v2_combos c
+              ON c.id = i.combo_id
+            WHERE c.active = 1
+            ORDER BY
+              c.id,
+              i.id
           `,
         )
         .all(),
@@ -241,6 +261,35 @@ export async function loadV2Catalog(db) {
         }),
       );
 
+  const comboItemsByCode = {};
+
+  for (
+    const row
+    of comboItemsResult.results || []
+  ) {
+    const code =
+      row.combo_code;
+
+    if (!comboItemsByCode[code]) {
+      comboItemsByCode[code] = [];
+    }
+
+    comboItemsByCode[code]
+      .push({
+        itemType:
+          row.item_type,
+
+        itemCode:
+          row.item_code,
+
+        required:
+          Number(
+            row.required,
+          )
+          === 1,
+      });
+  }
+
   const combos =
     (combosResult.results || [])
       .map(
@@ -260,6 +309,12 @@ export async function loadV2Catalog(db) {
               row.config_json,
               {},
             ),
+
+          items:
+            comboItemsByCode[
+              row.code
+            ]
+            || [],
         }),
       );
 

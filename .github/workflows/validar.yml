@@ -1,7 +1,5 @@
 name: Validar Libri Pedidos V2
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:

@@ -30,6 +30,16 @@ export function renderStoreSettings(
         </div>
 
         <div class="field">
+          <label for="companyEmail">E-mail público</label>
+          <input id="companyEmail" class="input" type="email" value="${esc(s.company.email)}">
+        </div>
+
+        <div class="field">
+          <label for="companyInstagram">Instagram</label>
+          <input id="companyInstagram" class="input" value="${esc(s.company.instagram)}">
+        </div>
+
+        <div class="field">
           <label for="companyLegalName">Nome legal</label>
           <input id="companyLegalName" class="input" value="${esc(s.company.legalName)}">
         </div>
@@ -37,6 +47,21 @@ export function renderStoreSettings(
         <div class="field">
           <label for="companyDocument">Documento</label>
           <input id="companyDocument" class="input" value="${esc(s.company.document)}">
+        </div>
+
+        <div class="field full">
+          <label for="companyAddress">Endereço comercial</label>
+          <input id="companyAddress" class="input" value="${esc(s.company.address)}">
+        </div>
+
+        <div class="field">
+          <label for="companyCity">Cidade</label>
+          <input id="companyCity" class="input" value="${esc(s.company.city)}">
+        </div>
+
+        <div class="field">
+          <label for="companyState">Estado</label>
+          <input id="companyState" class="input" maxlength="2" value="${esc(s.company.state)}">
         </div>
 
         <div class="field">
@@ -122,6 +147,16 @@ export function renderStoreSettings(
                       .getElementById('companyWhatsapp')
                       .value
                       .trim(),
+                  company_email:
+                    document
+                      .getElementById('companyEmail')
+                      .value
+                      .trim(),
+                  company_instagram:
+                    document
+                      .getElementById('companyInstagram')
+                      .value
+                      .trim(),
                   company_legal_name:
                     document
                       .getElementById('companyLegalName')
@@ -132,6 +167,22 @@ export function renderStoreSettings(
                       .getElementById('companyDocument')
                       .value
                       .trim(),
+                  company_address:
+                    document
+                      .getElementById('companyAddress')
+                      .value
+                      .trim(),
+                  company_city:
+                    document
+                      .getElementById('companyCity')
+                      .value
+                      .trim(),
+                  company_state:
+                    document
+                      .getElementById('companyState')
+                      .value
+                      .trim()
+                      .toUpperCase(),
                   balance_pix_key:
                     document
                       .getElementById('balancePixKey')

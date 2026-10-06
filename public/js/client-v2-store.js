@@ -341,7 +341,7 @@ function actionRow(
 function progress(
   state,
 ) {
-  const total = 8;
+  const total = 10;
   const current =
     Math.min(
       total,
@@ -364,10 +364,7 @@ function progress(
   `;
 }
 
-function bindBack(
-  state,
-  render,
-) {
+function bindBack(state, render) {
   document
     .getElementById(
       'backBtn',
@@ -375,9 +372,14 @@ function bindBack(
     ?.addEventListener(
       'click',
       () => {
+        const minimumStep =
+          state.deepProductSlug
+            ? 2
+            : 0;
+
         state.step =
           Math.max(
-            0,
+            minimumStep,
             state.step - 1,
           );
 
@@ -702,9 +704,7 @@ function comboMissingGroups(
   return missing;
 }
 
-function finalRecommendation(
-  state,
-) {
+function finalRecommendation(state) {
   if (
     state.quote
       ?.suggestedCombo
@@ -825,65 +825,33 @@ function finalRecommendation(
       state,
     );
 
-  const eventTime =
-    Date.parse(
-      `${state.event.date}T12:00:00Z`,
-    );
-
-  const today =
-    new Date();
-
-  const todayUtc =
-    Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate(),
-      12,
-    );
-
-  const daysUntilEvent =
-    Number.isFinite(
-      eventTime,
-    )
-      ? Math.round(
-        (
-          eventTime
-          - todayUtc
-        )
-        / 86400000,
-      )
-      : null;
-
-  const referenceDays =
-    Number(
-      state.catalog.rules
-        ?.recommendedDeliveryDaysBeforeEvent
-      || 40,
-    );
+  const hasRegularDelivery =
+    (
+      state.delivery
+        ?.options
+      || []
+    ).length
+    > 0;
 
   let preferredGroup = '';
 
+  /*
+   * A conversa original só aprovou a regra qualitativa:
+   * data distante pode sugerir Save; perto demais, não.
+   * Não existe corte de 30/40/60 dias aprovado.
+   * Por isso usamos o próprio resultado da agenda:
+   * com janela regular, Save pode fazer sentido;
+   * quando já caiu em análise de encaixe, priorizamos Lembrete.
+   */
   if (
-    Number.isFinite(
-      daysUntilEvent,
-    )
-    && daysUntilEvent
-      > referenceDays
-    && !groups.has(
-      'save_the_date',
-    )
+    !groups.size
+    && hasRegularDelivery
   ) {
     preferredGroup =
       'save_the_date';
   } else if (
-    Number.isFinite(
-      daysUntilEvent,
-    )
-    && daysUntilEvent
-      <= referenceDays
-    && !groups.has(
-      'reminder',
-    )
+    !groups.size
+    && !hasRegularDelivery
   ) {
     preferredGroup =
       'reminder';
@@ -1036,47 +1004,9 @@ async function refreshDeliveryForSelection(
   return false;
 }
 
-async function continueAfterRecommendation(
-  state,
-  render,
-) {
-  if (
-    !(state.delivery?.options || [])
-      .length
-  ) {
-    const result =
-      await api(
-        '/api/v2/urgency/request',
-        {
-          method:
-            'POST',
-          body:
-            JSON.stringify({
-              clientRequestId:
-                state.clientRequestId,
-              customer:
-                state.customer,
-              event:
-                state.event,
-              selection:
-                state.selection,
-            }),
-        },
-      );
-
-    localStorage.removeItem(
-      STORE_KEY,
-    );
-
-    window.location.href =
-      result.order
-        .customerAreaPath;
-
-    return;
-  }
-
+async function continueAfterRecommendation(state, render) {
   state.step =
-    6;
+    7;
 
   persist(state);
   render();
@@ -1150,69 +1080,7 @@ async function refreshConfigurationQuote(
   }
 }
 
-function comboOfferHtml(
-  state,
-) {
-  const applied =
-    state.quote?.combo;
 
-  if (applied) {
-    return `
-      <div class="section-block">
-        <div class="notice success">
-          <strong>Combo aplicado: ${esc(applied.name)}</strong>
-          <div style="margin-top:6px">
-            Desconto: ${money(state.quote.comboDiscountCents || 0)}
-          </div>
-
-          <button
-            id="removeCombo"
-            class="btn btn-ghost"
-            type="button"
-            style="margin-top:10px"
-          >
-            Remover desconto do combo
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  const suggestion =
-    state.quote?.suggestedCombo;
-
-  if (!suggestion) {
-    return '';
-  }
-
-  return `
-    <div class="section-block">
-      <div class="notice info">
-        <strong>
-          Suas escolhas formam o combo ${esc(suggestion.name)}
-        </strong>
-
-        ${suggestion.description
-          ? `<p class="muted" style="margin:6px 0 0">${esc(suggestion.description)}</p>`
-          : ''}
-
-        <div style="margin-top:6px">
-          Vantagem do combo:
-          <strong>-${money(suggestion.discountCents)}</strong>
-        </div>
-
-        <button
-          id="applySuggestedCombo"
-          class="btn btn-secondary"
-          type="button"
-          style="margin-top:10px"
-        >
-          Aplicar vantagem do combo
-        </button>
-      </div>
-    </div>
-  `;
-}
 
 function quoteHtml(
   quote,
@@ -1631,38 +1499,24 @@ function renderProducts(
     );
 }
 
-function renderConfiguration(
-  state,
-  render,
-) {
+function renderConfiguration(state, render) {
   const product =
     productFor(state);
 
   const currentVariant =
     variantFor(state);
 
-  const selectedAddons =
-    new Set(
-      state.selection.addonCodes
-      || [],
-    );
-
-  const groups =
-    addonGroups(
-      state.catalog.addons,
-    );
-
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
 
       <div class="page-head">
-        <span class="eyebrow">Monte seu pedido</span>
+        <span class="eyebrow">Configuração</span>
         <h1 class="page-title">
           ${esc(product.name)}
         </h1>
         <p class="page-subtitle">
-          Escolha apenas o que faz sentido para a sua festa.
+          Primeiro definimos o formato do convite. Os adicionais entram depois da escolha da entrega.
         </p>
       </div>
 
@@ -1681,7 +1535,7 @@ function renderConfiguration(
 
               ${product.pricingMode === 'scene_count' ? `
                 <p class="muted" style="margin-top:-4px">
-                  Cada cena é um momento diferente da história. A abertura está incluída e fica fora da contagem de cenas.
+                  Cada cena é um momento diferente da história. A abertura está incluída e fica fora da contagem.
                 </p>
               ` : ''}
 
@@ -1697,88 +1551,15 @@ function renderConfiguration(
       }
 
       <div class="section-block">
-        <h2 class="section-title">
-          Quer adicionar algo?
-        </h2>
-
-        ${
-          groups.length
-            ? groups.map(
-              ([groupName, addons]) => `
-                <div class="section-block">
-                  <span class="muted">
-                    ${esc(addonGroupLabel(groupName))}
-                  </span>
-
-                  <div class="grid two" style="margin-top:8px">
-                    ${addons.map(
-                      (addon) => `
-                        <label class="choice-card ${
-                          selectedAddons.has(addon.code)
-                            ? 'selected'
-                            : ''
-                        }">
-                          <input
-                            type="checkbox"
-                            name="addon"
-                            value="${esc(addon.code)}"
-                            ${
-                              selectedAddons.has(addon.code)
-                                ? 'checked'
-                                : ''
-                            }
-                          >
-
-                          <span class="choice-main">
-                            <strong>${esc(addon.name)}</strong>
-                            <small>+ ${money(addon.priceCents)}</small>
-                          </span>
-                        </label>
-                      `,
-                    ).join('')}
-                  </div>
-                </div>
-              `,
-            ).join('')
-            : `
-              <div class="muted">
-                Nenhum adicional disponível no momento.
-              </div>
-            `
-        }
+        ${quoteHtml(state.quote)}
       </div>
 
-      ${comboOfferHtml(state)}
-
-      <div class="section-block">
-        <button
-          id="toggleCoupon"
-          class="btn btn-link"
-          type="button"
-        >
-          Adicionar cupom
-        </button>
-
-        <div
-          id="couponBox"
-          class="field ${
-            state.selection.couponCode
-              ? ''
-              : 'hidden'
-          }"
-          style="max-width:360px"
-        >
-          <label for="couponCode">Cupom</label>
-          <input
-            id="couponCode"
-            class="input"
-            value="${esc(state.selection.couponCode || '')}"
-            autocomplete="off"
-          >
-        </div>
-      </div>
-
-      ${actionRow()}
+      ${actionRow({
+        back:
+          !state.deepProductSlug,
+        nextLabel:
+          'Informar data da festa',
+      })}
     </section>
   `;
 
@@ -1808,6 +1589,400 @@ function renderConfiguration(
       },
     );
 
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        try {
+          await updateQuote(
+            state,
+          );
+
+          state.step =
+            3;
+
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+        }
+      },
+    );
+}
+
+function renderPartyDate(state, render) {
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Data da festa</span>
+        <h1 class="page-title">
+          Quando é a comemoração?
+        </h1>
+        <p class="page-subtitle">
+          A data é usada para encontrar a melhor janela de entrega disponível.
+        </p>
+      </div>
+
+      <div class="field" style="max-width:360px">
+        <label for="eventDate">Data da festa</label>
+        <input
+          id="eventDate"
+          class="input"
+          type="date"
+          value="${esc(state.event.date)}"
+        >
+      </div>
+
+      <div class="section-block">
+        ${quoteHtml(state.quote)}
+      </div>
+
+      ${actionRow({
+        nextLabel:
+          'Ver datas de entrega',
+      })}
+    </section>
+  `;
+
+  const input =
+    document
+      .getElementById(
+        'eventDate',
+      );
+
+  input
+    .addEventListener(
+      'change',
+      () => {
+        state.event.date =
+          input.value;
+
+        persist(state);
+      },
+    );
+
+  bindBack(
+    state,
+    render,
+  );
+
+  document
+    .getElementById(
+      'nextBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        state.event.date =
+          input.value;
+
+        if (
+          !state.event.date
+        ) {
+          input.classList.add(
+            'input-error',
+          );
+
+          input.setAttribute(
+            'aria-invalid',
+            'true',
+          );
+
+          showToast(
+            'Informe a data da festa.',
+          );
+
+          return;
+        }
+
+        loading(
+          'Procurando a melhor janela...',
+          'A agenda está sendo calculada.',
+        );
+
+        try {
+          const data =
+            await api(
+              '/api/v2/delivery-options',
+              {
+                method:
+                  'POST',
+                body:
+                  JSON.stringify({
+                    selection:
+                      state.selection,
+
+                    eventType:
+                      state.event.type
+                      || null,
+
+                    eventDate:
+                      state.event.date,
+
+                    limit:
+                      6,
+                  }),
+              },
+            );
+
+          state.delivery =
+            data.delivery;
+
+          state.deliveryWindow =
+            data.delivery.options
+              ?.find(
+                (option) =>
+                  option.recommended,
+              )
+            || data.delivery.options
+              ?.[0]
+            || null;
+
+          state.step =
+            4;
+
+          persist(state);
+          render();
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+
+          renderPartyDate(
+            state,
+            render,
+          );
+        }
+      },
+    );
+}
+
+function addonInfoHtml(addon) {
+  const config =
+    addon?.config
+    || {};
+
+  if (
+    addon?.group
+    === 'confirmation'
+  ) {
+    return `
+      <p>
+        Confirmação de Presença Libri. No briefing, a modalidade pode ser Livre, Lista de convidados ou Ainda não sei.
+      </p>
+    `;
+  }
+
+  if (
+    addon?.group
+    === 'filter'
+  ) {
+    return `
+      <p>
+        Filtro Personalizado para Instagram ou App Libri.
+      </p>
+      <p>
+        Se houver Libri Moments no pedido, o filtro do App Libri já está incluído e não é cobrado novamente.
+      </p>
+    `;
+  }
+
+  if (
+    addon?.group
+    === 'save_the_date'
+  ) {
+    return `
+      <p>
+        Save the Date é uma peça independente do convite principal. A versão pode ser estática ou animada conforme a opção escolhida.
+      </p>
+    `;
+  }
+
+  if (
+    addon?.group
+    === 'reminder'
+  ) {
+    return `
+      <p>
+        Lembrete é uma peça independente do convite principal. A versão pode ser estática ou animada conforme a opção escolhida.
+      </p>
+    `;
+  }
+
+  if (
+    addon?.group
+    === 'moments'
+  ) {
+    return `
+      <p>
+        Libri Moments inclui até ${esc(config.photoLimit || '')} fotos por ${esc(config.availabilityDays || '')} dias.
+      </p>
+      <p>
+        O filtro do App Libri já está incluído.
+      </p>
+    `;
+  }
+
+  if (
+    addon?.code
+    === 'moments_extra_100'
+  ) {
+    return `
+      <p>
+        Acrescenta 100 fotos ao Libri Moments.
+      </p>
+    `;
+  }
+
+  return `
+    <p>
+      ${esc(addon?.name || 'Adicional')}
+    </p>
+  `;
+}
+
+function openAddonInfo(state, code) {
+  const addon =
+    addonByCode(
+      state,
+      code,
+    );
+
+  if (!addon) {
+    return;
+  }
+
+  modal(
+    addon.name,
+    addonInfoHtml(
+      addon,
+    ),
+  );
+}
+
+function renderAddons(state, render) {
+  const selectedAddons =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const groups =
+    addonGroups(
+      state.catalog.addons,
+    );
+
+  app.innerHTML = `
+    <section class="page-card">
+      ${progress(state)}
+
+      <div class="page-head">
+        <span class="eyebrow">Adicionais</span>
+        <h1 class="page-title">
+          Quer adicionar algo?
+        </h1>
+        <p class="page-subtitle">
+          Escolha só o que fizer sentido. Depois o sistema verifica se suas escolhas formam algum combo vantajoso.
+        </p>
+      </div>
+
+      ${
+        groups.length
+          ? groups.map(
+            ([groupName, addons]) => `
+              <div class="section-block">
+                <span class="muted">
+                  ${esc(addonGroupLabel(groupName))}
+                </span>
+
+                <div class="grid two" style="margin-top:8px">
+                  ${addons.map(
+                    (addon) => `
+                      <div>
+                        <label class="choice-card ${
+                          selectedAddons.has(addon.code)
+                            ? 'selected'
+                            : ''
+                        }">
+                          <input
+                            type="checkbox"
+                            name="addon"
+                            value="${esc(addon.code)}"
+                            ${
+                              selectedAddons.has(addon.code)
+                                ? 'checked'
+                                : ''
+                            }
+                          >
+
+                          <span class="choice-main">
+                            <strong>${esc(addon.name)}</strong>
+                            <small>+ ${money(addon.priceCents)}</small>
+                          </span>
+                        </label>
+
+                        <button
+                          class="btn btn-link"
+                          type="button"
+                          data-addon-info="${esc(addon.code)}"
+                        >
+                          ${addon.group === 'moments' ? 'Conhecer' : 'Ver como funciona'}
+                        </button>
+                      </div>
+                    `,
+                  ).join('')}
+                </div>
+              </div>
+            `,
+          ).join('')
+          : `
+            <div class="muted">
+              Nenhum adicional disponível no momento.
+            </div>
+          `
+      }
+
+      <div class="section-block">
+        ${quoteHtml(state.quote)}
+      </div>
+
+      ${actionRow({
+        nextLabel:
+          'Continuar',
+      })}
+    </section>
+  `;
+
+  app
+    .querySelectorAll(
+      '[data-addon-info]',
+    )
+    .forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            openAddonInfo(
+              state,
+              button.dataset.addonInfo,
+            );
+          },
+        );
+      },
+    );
+
   app
     .querySelectorAll(
       '[name="addon"]',
@@ -1827,6 +2002,36 @@ function renderConfiguration(
                 state,
                 input.value,
               );
+
+            const alreadyHasMoments =
+              [
+                ...set,
+              ]
+                .some(
+                  (code) =>
+                    addonByCode(
+                      state,
+                      code,
+                    )
+                      ?.group
+                    === 'moments',
+                );
+
+            if (
+              input.checked
+              && changedAddon?.code
+                === 'custom_filter'
+              && alreadyHasMoments
+            ) {
+              input.checked =
+                false;
+
+              showToast(
+                'O filtro do App Libri já está incluído no Libri Moments.',
+              );
+
+              return;
+            }
 
             if (
               input.checked
@@ -1855,6 +2060,15 @@ function renderConfiguration(
                     );
                   }
                 }
+              }
+
+              if (
+                changedAddon?.group
+                === 'moments'
+              ) {
+                set.delete(
+                  'custom_filter',
+                );
               }
 
               set.add(
@@ -1893,106 +2107,12 @@ function renderConfiguration(
             );
 
             persist(state);
-            renderConfiguration(
+            renderAddons(
               state,
               render,
             );
           },
         );
-      },
-    );
-
-  document
-    .getElementById(
-      'applySuggestedCombo',
-    )
-    ?.addEventListener(
-      'click',
-      async () => {
-        const code =
-          state.quote
-            ?.suggestedCombo
-            ?.code
-          || '';
-
-        if (!code) {
-          return;
-        }
-
-        state.selection.comboCode =
-          code;
-
-        await refreshConfigurationQuote(
-          state,
-        );
-
-        persist(state);
-        renderConfiguration(
-          state,
-          render,
-        );
-      },
-    );
-
-  document
-    .getElementById(
-      'removeCombo',
-    )
-    ?.addEventListener(
-      'click',
-      async () => {
-        state.selection.comboCode =
-          '';
-
-        await refreshConfigurationQuote(
-          state,
-        );
-
-        persist(state);
-        renderConfiguration(
-          state,
-          render,
-        );
-      },
-    );
-
-  document
-    .getElementById(
-      'toggleCoupon',
-    )
-    .addEventListener(
-      'click',
-      () => {
-        document
-          .getElementById(
-            'couponBox',
-          )
-          .classList
-          .remove(
-            'hidden',
-          );
-
-        document
-          .getElementById(
-            'couponCode',
-          )
-          .focus();
-      },
-    );
-
-  document
-    .getElementById(
-      'couponCode',
-    )
-    ?.addEventListener(
-      'input',
-      (event) => {
-        state.selection.couponCode =
-          event.target.value
-            .trim()
-            .toUpperCase();
-
-        persist(state);
       },
     );
 
@@ -2009,12 +2129,38 @@ function renderConfiguration(
       'click',
       async () => {
         loading(
-          'Calculando seu pedido...',
+          'Conferindo disponibilidade...',
         );
 
         try {
-          await updateQuote(state);
-          state.step = 3;
+          await updateQuote(
+            state,
+          );
+
+          const sameWindow =
+            await refreshDeliveryForSelection(
+              state,
+            );
+
+          if (
+            !sameWindow
+          ) {
+            state.step =
+              4;
+
+            persist(state);
+            render();
+
+            showToast(
+              'Os adicionais alteraram a carga do pedido. Confira a janela de entrega novamente.',
+            );
+
+            return;
+          }
+
+          state.step =
+            6;
+
           persist(state);
           render();
         } catch (error) {
@@ -2022,7 +2168,7 @@ function renderConfiguration(
             error.message,
           );
 
-          renderConfiguration(
+          renderAddons(
             state,
             render,
           );
@@ -2031,10 +2177,7 @@ function renderConfiguration(
     );
 }
 
-function renderDetails(
-  state,
-  render,
-) {
+function renderDetails(state, render) {
   const eventKnown =
     Boolean(
       state.event.type,
@@ -2126,16 +2269,6 @@ function renderDetails(
           >
         </div>
 
-        <div class="field">
-          <label for="eventDate">Data da festa</label>
-          <input
-            id="eventDate"
-            class="input"
-            type="date"
-            value="${esc(state.event.date)}"
-          >
-        </div>
-
         <div class="field full">
           <label for="eventSubtype">
             Algum subtipo ou observação do evento?
@@ -2150,11 +2283,52 @@ function renderDetails(
         </div>
       </div>
 
+      <div class="section-block">
+        <button
+          id="toggleCoupon"
+          class="btn btn-link"
+          type="button"
+        >
+          Adicionar cupom
+        </button>
+
+        <div
+          id="couponBox"
+          class="field ${
+            state.selection.couponCode
+              ? ''
+              : 'hidden'
+          }"
+          style="max-width:360px"
+        >
+          <label for="couponCode">Cupom</label>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <input
+              id="couponCode"
+              class="input"
+              value="${esc(state.selection.couponCode || '')}"
+              autocomplete="off"
+            >
+
+            <button
+              id="applyCoupon"
+              class="btn btn-secondary"
+              type="button"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </div>
+
       ${quoteHtml(state.quote)}
 
       ${actionRow({
         nextLabel:
-          'Ver datas de entrega',
+          (state.delivery?.options || []).length
+            ? 'Escolher pagamento'
+            : 'Enviar análise de encaixe',
       })}
     </section>
   `;
@@ -2203,13 +2377,6 @@ function renderDetails(
         .value
         .trim();
 
-    state.event.date =
-      document
-        .getElementById(
-          'eventDate',
-        )
-        .value;
-
     state.event.subtype =
       document
         .getElementById(
@@ -2218,6 +2385,16 @@ function renderDetails(
         .value
         .trim();
 
+    state.selection.couponCode =
+      document
+        .getElementById(
+          'couponCode',
+        )
+        ?.value
+        .trim()
+        .toUpperCase()
+      || '';
+
     persist(state);
   };
 
@@ -2225,15 +2402,87 @@ function renderDetails(
     .querySelectorAll(
       'input,select',
     )
-    .forEach((element) => {
-      const update = () => {
-        element.classList.remove('input-error');
-        element.removeAttribute('aria-invalid');
+    .forEach(
+      (element) => {
+        const update = () => {
+          element.classList.remove(
+            'input-error',
+          );
+
+          element.removeAttribute(
+            'aria-invalid',
+          );
+
+          capture();
+        };
+
+        element.addEventListener(
+          'input',
+          update,
+        );
+
+        element.addEventListener(
+          'change',
+          update,
+        );
+      },
+    );
+
+  document
+    .getElementById(
+      'toggleCoupon',
+    )
+    .addEventListener(
+      'click',
+      () => {
+        document
+          .getElementById(
+            'couponBox',
+          )
+          .classList
+          .remove(
+            'hidden',
+          );
+
+        document
+          .getElementById(
+            'couponCode',
+          )
+          .focus();
+      },
+    );
+
+  document
+    .getElementById(
+      'applyCoupon',
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
         capture();
-      };
-      element.addEventListener('input', update);
-      element.addEventListener('change', update);
-    });
+
+        try {
+          await updateQuote(
+            state,
+          );
+
+          showToast(
+            state.selection.couponCode
+              ? 'Cupom aplicado ✓'
+              : 'Cupom removido.',
+          );
+
+          renderDetails(
+            state,
+            render,
+          );
+        } catch (error) {
+          showToast(
+            error.message,
+          );
+        }
+      },
+    );
 
   bindBack(
     state,
@@ -2250,70 +2499,161 @@ function renderDetails(
         capture();
 
         const requiredFields = [
-          { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
-          { value: state.customer.whatsapp, label: 'WhatsApp', id: 'whatsapp' },
-          { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
-          { value: state.event.honoreeName, label: 'Nome da criança, casal ou evento', id: 'honoreeName' },
-          { value: state.event.date, label: 'Data da festa', id: 'eventDate' },
+          {
+            value:
+              state.customer.name,
+            label:
+              'Seu nome',
+            id:
+              'customerName',
+          },
+          {
+            value:
+              state.customer.whatsapp,
+            label:
+              'WhatsApp',
+            id:
+              'whatsapp',
+          },
+          {
+            value:
+              state.event.type,
+            label:
+              'Tipo de evento',
+            id:
+              'eventType',
+          },
+          {
+            value:
+              state.event.honoreeName,
+            label:
+              'Nome da criança, casal ou evento',
+            id:
+              'honoreeName',
+          },
         ];
-        const missing = requiredFields.filter(field => !String(field.value || '').trim());
-        if (missing.length) {
-          for (const field of missing) {
-            const element = document.getElementById(field.id);
-            element?.classList.add('input-error');
-            element?.setAttribute('aria-invalid', 'true');
+
+        const missing =
+          requiredFields
+            .filter(
+              field =>
+                !String(
+                  field.value
+                  || '',
+                )
+                  .trim(),
+            );
+
+        if (
+          missing.length
+        ) {
+          for (
+            const field
+            of missing
+          ) {
+            const element =
+              document
+                .getElementById(
+                  field.id,
+                );
+
+            element
+              ?.classList
+              .add(
+                'input-error',
+              );
+
+            element
+              ?.setAttribute(
+                'aria-invalid',
+                'true',
+              );
           }
-          const first = document.getElementById(missing[0].id);
-          first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          first?.focus();
-          showToast(`Preencha: ${missing.map(field => field.label).join(', ')}.`);
+
+          const first =
+            document
+              .getElementById(
+                missing[0]
+                  .id,
+              );
+
+          first
+            ?.scrollIntoView({
+              behavior:
+                'smooth',
+              block:
+                'center',
+            });
+
+          first
+            ?.focus();
+
+          showToast(
+            `Preencha: ${
+              missing
+                .map(
+                  field =>
+                    field.label,
+                )
+                .join(', ')
+            }.`,
+          );
+
           return;
         }
 
         loading(
-          'Procurando a melhor janela...',
-          'A agenda está sendo calculada.',
+          (state.delivery?.options || []).length
+            ? 'Atualizando seu pedido...'
+            : 'Enviando sua solicitação...',
         );
 
         try {
-          const data =
-            await api(
-              '/api/v2/delivery-options',
-              {
-                method:
-                  'POST',
-                body:
-                  JSON.stringify({
-                    selection:
-                      state.selection,
+          await updateQuote(
+            state,
+          );
 
-                    eventType:
-                      state.event.type
-                      || null,
+          if (
+            !(state.delivery?.options || [])
+              .length
+          ) {
+            const result =
+              await api(
+                '/api/v2/urgency/request',
+                {
+                  method:
+                    'POST',
+                  body:
+                    JSON.stringify({
+                      clientRequestId:
+                        state.clientRequestId,
 
-                    eventDate:
-                      state.event.date,
+                      customer:
+                        state.customer,
 
-                    limit:
-                      6,
-                  }),
-              },
+                      event:
+                        state.event,
+
+                      selection:
+                        state.selection,
+                    }),
+                },
+              );
+
+            localStorage.removeItem(
+              STORE_KEY,
             );
 
-          state.delivery =
-            data.delivery;
+            window.location.href =
+              result.order
+                .customerAreaPath;
 
-          state.deliveryWindow =
-            data.delivery.options
-              ?.find(
-                (option) =>
-                  option.recommended,
-              )
-            || data.delivery.options
-              ?.[0]
-            || null;
+            return;
+          }
 
-          state.step = 4;
+          state.step =
+            8;
+
           persist(state);
           render();
         } catch (error) {
@@ -2425,7 +2765,7 @@ function renderDelivery(
         nextLabel:
           options.length
             ? 'Continuar'
-            : 'Solicitar análise de encaixe',
+            : 'Continuar pedido',
       })}
     </section>
   `;
@@ -2913,7 +3253,7 @@ async function renderPayment(
     .addEventListener(
       'click',
       () => {
-        state.step = 7;
+        state.step = 9;
         persist(state);
         render();
       },
@@ -2993,6 +3333,33 @@ function renderReview(
             }
           </dd>
         </div>
+
+
+        ${state.quote?.combo
+          ? `
+            <div class="review-line">
+              <dt>Combo</dt>
+              <dd>
+                ${esc(state.quote.combo.name)}
+                • -${money(state.quote.comboDiscountCents || 0)}
+              </dd>
+            </div>
+          `
+          : ''
+        }
+
+        ${state.quote?.coupon
+          ? `
+            <div class="review-line">
+              <dt>Cupom</dt>
+              <dd>
+                ${esc(state.quote.coupon.code)}
+                • -${money(state.quote.couponDiscountCents || 0)}
+              </dd>
+            </div>
+          `
+          : ''
+        }
 
         <div class="review-line">
           <dt>Entrega</dt>
@@ -3345,7 +3712,7 @@ export async function startStore(
     if (
       state.step === 3
     ) {
-      renderDetails(
+      renderPartyDate(
         state,
         render,
       );
@@ -3367,7 +3734,7 @@ export async function startStore(
     if (
       state.step === 5
     ) {
-      renderRecommendation(
+      renderAddons(
         state,
         render,
       );
@@ -3377,6 +3744,28 @@ export async function startStore(
 
     if (
       state.step === 6
+    ) {
+      renderRecommendation(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 7
+    ) {
+      renderDetails(
+        state,
+        render,
+      );
+
+      return;
+    }
+
+    if (
+      state.step === 8
     ) {
       renderPayment(
         state,

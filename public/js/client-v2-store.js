@@ -2899,6 +2899,28 @@ function renderRecommendation(
             state.selection.variantCode =
               offer.variant.code;
 
+            if (
+              state.deepProductSlug
+            ) {
+              state.deepProductSlug =
+                offer.product.slug;
+
+              const nextUrl =
+                new URL(
+                  window.location.href,
+                );
+
+              nextUrl.pathname =
+                `/pedido/${offer.product.slug}`;
+
+              window.history
+                .replaceState(
+                  {},
+                  '',
+                  nextUrl,
+                );
+            }
+
             state.selection.comboCode =
               '';
 

@@ -30,13 +30,6 @@ function whatsappBr(value) {
   return String(value || '');
 }
 
-function whatsappHref(number, message) {
-  const digits = String(number || '').replace(/\D/g, '');
-  return digits
-    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
-    : '#';
-}
-
 function deliveryLabel(detail) {
   const start =
     detail.order
@@ -81,82 +74,68 @@ const ACTION_LABELS = {
     'Restaurar pedido',
 };
 
-function quickWhatsappMessages(
+function finalizeChecklistHtml(
   detail,
 ) {
-  const area =
-    new URL(
-      detail.order.customerAreaPath,
-      window.location.origin,
-    ).href;
+  const checklist =
+    detail.finalizeChecklist
+    || {
+      ready:
+        false,
+      items: [],
+      manualConfirmationLabel:
+        'Arquivo ou link final conferido e pronto para entrega',
+    };
 
-  const customer =
-    detail.order.customerName;
+  return `
+    <div class="finalize-checklist">
+      ${checklist.items.map(
+        (item) => `
+          <div class="finalize-check ${item.ok ? 'ok' : 'missing'}">
+            <span>${item.ok ? '✓' : '!'}</span>
+            <strong>${esc(item.label)}</strong>
+          </div>
+        `,
+      ).join('')}
+    </div>
 
-  const honoree =
-    detail.order.honoreeName;
+    ${
+      checklist.ready
+        ? `
+          <label class="checkline" style="margin-top:14px">
+            <input
+              id="finalDeliveryConfirmed"
+              type="checkbox"
+            >
+            <span>
+              ${esc(checklist.manualConfirmationLabel)}
+            </span>
+          </label>
 
-  const messages = [];
+          <div class="notice info" style="margin-top:12px">
+            O sistema confirma automaticamente briefing, aprovação, saldo e prazo.
+            Como o arquivo/link final não é armazenado como um item separado, esta última conferência é manual.
+          </div>
+        `
+        : `
+          <div class="notice error" style="margin-top:12px">
+            Resolva os itens acima antes de finalizar o pedido.
+          </div>
+        `
+    }
 
-  if (
-    Number(
-      detail.briefing
-        ?.completionPercent
-      || 0,
-    ) < 100
-  ) {
-    messages.push({
-      label:
-        'Cobrar briefing',
-      text:
-        `Oi, ${customer}! 💛 O briefing do convite de ${honoree} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. Continue por aqui: ${area}?tab=briefing`,
-    });
-  }
-
-  if (
-    (detail.previews || [])
-      .some(
-        (preview) =>
-          preview.status
-          === 'active',
-      )
-  ) {
-    messages.push({
-      label:
-        'Prévia disponível',
-      text:
-        `Oi, ${customer}! 💛 A prévia do convite de ${honoree} já está disponível para conferência: ${area}?tab=preview`,
-    });
-  }
-
-  if (
-    Number(
-      detail.payment
-        ?.remainingBalanceCents
-      || 0,
-    ) > 0
-  ) {
-    messages.push({
-      label:
-        'Saldo pendente',
-      text:
-        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, está com saldo de ${money(detail.payment.remainingBalanceCents)} pendente. Os dados estão na sua área: ${area}`,
-    });
-  }
-
-  if (
-    detail.order.status
-    === 'finalized'
-  ) {
-    messages.push({
-      label:
-        'Pedido finalizado',
-      text:
-        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, foi finalizado. Obrigada por confiar na Libri Convites! ${area}`,
-    });
-  }
-
-  return messages;
+    <div class="action-row">
+      <span></span>
+      <button
+        id="confirmFinalizeOrder"
+        class="btn btn-success"
+        type="button"
+        ${checklist.ready ? '' : 'disabled'}
+      >
+        Finalizar pedido
+      </button>
+    </div>
+  `;
 }
 
 function paymentBlock(detail) {
@@ -336,9 +315,8 @@ export async function openOrder(code, onChanged = null) {
     );
 
   const quickMessages =
-    quickWhatsappMessages(
-      detail,
-    );
+    detail.whatsappActions
+    || [];
 
   const close =
     modal(
@@ -346,9 +324,27 @@ export async function openOrder(code, onChanged = null) {
       `
         <div class="section-grid">
           <section class="card">
-            <span class="status ${statusClass(detail.order.status)}">
-              ${esc(detail.order.statusLabel)}
-            </span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <span class="status ${statusClass(detail.order.status)}">
+                ${esc(detail.order.statusLabel)}
+              </span>
+
+              ${
+                detail.order.risk
+                  ? `
+                    <span class="risk-badge risk-${esc(detail.order.risk.level)}">
+                      Prazo: ${esc(detail.order.risk.label)}
+                    </span>
+                  `
+                  : ''
+              }
+            </div>
+
+            ${
+              detail.order.risk?.reason
+                ? `<small class="risk-reason">${esc(detail.order.risk.reason)}</small>`
+                : ''
+            }
 
             <h2 style="margin:10px 0 5px">
               ${esc(detail.order.honoreeName)}
@@ -402,7 +398,7 @@ export async function openOrder(code, onChanged = null) {
                         (item) => `
                           <a
                             class="btn btn-ghost btn-small"
-                            href="${esc(whatsappHref(detail.order.whatsapp, item.text))}"
+                            href="${esc(item.url || '#')}"
                             target="_blank"
                             rel="noopener"
                           >
@@ -1011,11 +1007,78 @@ export async function openOrder(code, onChanged = null) {
               button.dataset.orderAction;
 
             if (
-              action === 'finalize'
-              && !confirm(
-                'Finalizar este pedido? A capacidade liberada entra no fluxo de antecipação em cascata.',
-              )
+              action
+              === 'finalize'
             ) {
+              const closeFinalize =
+                modal(
+                  'Checklist antes de finalizar',
+                  finalizeChecklistHtml(
+                    detail,
+                  ),
+                );
+
+              document
+                .getElementById(
+                  'confirmFinalizeOrder',
+                )
+                ?.addEventListener(
+                  'click',
+                  async (event) => {
+                    if (
+                      !document
+                        .getElementById(
+                          'finalDeliveryConfirmed',
+                        )
+                        ?.checked
+                    ) {
+                      showToast(
+                        'Confirme o arquivo ou link final antes de concluir.',
+                      );
+                      return;
+                    }
+
+                    const confirmButton =
+                      event.currentTarget;
+
+                    confirmButton.disabled =
+                      true;
+
+                    try {
+                      await api(
+                        `/api/admin/v2/orders/${detail.order.code}/action`,
+                        {
+                          method:
+                            'POST',
+                          body:
+                            JSON.stringify({
+                              action:
+                                'finalize',
+                              finalDeliveryConfirmed:
+                                true,
+                            }),
+                        },
+                      );
+
+                      closeFinalize();
+                      close();
+                      showToast(
+                        'Pedido finalizado ✓',
+                      );
+
+                      if (onChanged) {
+                        await onChanged();
+                      }
+                    } catch (error) {
+                      confirmButton.disabled =
+                        false;
+                      showToast(
+                        error.message,
+                      );
+                    }
+                  },
+                );
+
               return;
             }
 

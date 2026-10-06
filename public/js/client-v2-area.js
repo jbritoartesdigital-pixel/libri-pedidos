@@ -833,8 +833,11 @@ async function previewHtml(
                 <video
                   class="preview-media"
                   controls
+                  controlslist="nodownload noremoteplayback"
+                  disablepictureinpicture
                   playsinline
                   preload="metadata"
+                  draggable="false"
                   src="${esc(preview.contentPath)}"
                 ></video>
               `
@@ -843,6 +846,7 @@ async function previewHtml(
                   class="preview-media"
                   src="${esc(preview.contentPath)}"
                   alt="Prévia do convite"
+                  draggable="false"
                 >
               `
             : `
@@ -1346,6 +1350,26 @@ export async function startCustomerArea(
         if (error.data?.code === 'terms_changed') { paymentTerms = null; if (termsControl) termsControl.checked = false; }
       }
     });
+
+    app
+      .querySelectorAll(
+        '.preview-media',
+      )
+      .forEach(
+        (media) => {
+          media.addEventListener(
+            'contextmenu',
+            (event) =>
+              event.preventDefault(),
+          );
+
+          media.addEventListener(
+            'dragstart',
+            (event) =>
+              event.preventDefault(),
+          );
+        },
+      );
 
     bindBriefing();
     bindPreview();

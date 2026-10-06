@@ -801,11 +801,11 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
 test('delivery windows are capacity-driven instead of fixed to 3 or 4 days', async () => {
   const DB = database();
 
-  for (let offset = 1; offset <= 8; offset += 1) {
+  for (let offset = 1; offset <= 35; offset += 1) {
     await setV2AgendaDay(DB, day(offset), {
       sellableCapacityUnits: 100,
       internalBufferUnits: 100,
-      blocked: offset === 3,
+      blocked: offset === 22,
     });
   }
 
@@ -1035,6 +1035,21 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
   assert.match(
     area,
     /Observação desta referência/,
+  );
+
+  assert.match(
+    area,
+    /controlslist="nodownload noremoteplayback"/,
+  );
+
+  assert.match(
+    area,
+    /Quero falar de um ajuste/,
+  );
+
+  assert.match(
+    area,
+    /Está aprovado ✓/,
   );
 
   assert.match(

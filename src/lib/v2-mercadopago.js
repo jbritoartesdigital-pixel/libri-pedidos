@@ -866,6 +866,7 @@ function firstTransaction(
 async function convertHoldToAgenda(
   db,
   orderId,
+  paidAt = null,
 ) {
   const hold =
     await db
@@ -874,11 +875,12 @@ async function convertHoldToAgenda(
           SELECT
             id,
             status,
-            expires_at
+            expires_at,
+            created_at
           FROM v2_checkout_holds
           WHERE
             order_id = ?
-            AND status IN ('active', 'expired')
+            AND status IN ('active', 'expired', 'converted')
           ORDER BY id DESC
           LIMIT 1
         `,
@@ -892,7 +894,6 @@ async function convertHoldToAgenda(
     return {
       converted:
         false,
-
       reason:
         'hold_not_found',
     };
@@ -915,27 +916,42 @@ async function convertHoldToAgenda(
       )
       .all();
 
-  const rows =
-    allocationRows
-      .results
+  const originalRows =
+    allocationRows.results
     || [];
 
-  if (!rows.length) return { converted: false, reason: 'empty_hold' };
-  if (hold.expires_at <= nowIso()) {
-    const order = await db.prepare('SELECT delivery_start, delivery_end FROM v2_orders WHERE id = ?').bind(orderId).first();
-    const plan = await planV2AllocationForWindow(db, {
-      start: order.delivery_start, end: order.delivery_end,
-      pointsUnits: rows.reduce((sum, row) => sum + Number(row.points_units), 0),
-    });
-    if (!plan.fits) return { converted: false, reason: 'late_payment_capacity_changed' };
-    rows.splice(0, rows.length, ...plan.allocation.map(x => ({ day: x.day, points_units: x.pointsUnits })));
+  if (!originalRows.length) {
+    return {
+      converted:
+        false,
+      reason:
+        'empty_hold',
+    };
   }
+
+  const requiredUnits =
+    originalRows.reduce(
+      (
+        sum,
+        row,
+      ) =>
+        sum
+        + Number(
+          row.points_units
+          || 0,
+        ),
+      0,
+    );
 
   const existing =
     await db
       .prepare(
         `
-          SELECT COUNT(*) AS total
+          SELECT
+            COALESCE(
+              SUM(points_units),
+              0
+            ) AS units
           FROM v2_agenda_allocations
           WHERE order_id = ?
         `,
@@ -945,13 +961,15 @@ async function convertHoldToAgenda(
       )
       .first();
 
-  if (
+  const existingUnits =
     Number(
-      existing
-        ?.total
+      existing?.units
       || 0,
-    )
-    > 0
+    );
+
+  if (
+    existingUnits
+    >= requiredUnits
   ) {
     await db
       .prepare(
@@ -972,86 +990,315 @@ async function convertHoldToAgenda(
     return {
       converted:
         true,
-
       alreadyConverted:
         true,
     };
   }
 
-  const settings = await loadV2Settings(db);
-  const defaultCapacity = v2IntSetting(settings, 'default_sellable_points_per_day_units', 400);
-  const allocationJson = JSON.stringify(rows);
-  const conversion = await db.batch([
-    ...rows.map(
-      (row) =>
-        db
-          .prepare(
-            `
-              INSERT INTO v2_agenda_allocations(
-                order_id,
-                day,
-                points_units,
-                allocation_type,
-                created_at
-              )
-              SELECT
-                ?,
-                ?,
-                ?,
-                'confirmed',
-                ?
-              WHERE NOT EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ? AND day = ?)
-                AND NOT EXISTS (
-                  SELECT 1 FROM json_each(?) proposed
-                  WHERE CAST(json_extract(proposed.value, '$.points_units') AS INTEGER) >
-                    CASE WHEN COALESCE((SELECT blocked FROM v2_agenda_days WHERE day = json_extract(proposed.value, '$.day')), 0) = 1 THEN 0
-                    ELSE COALESCE((SELECT sellable_capacity_units FROM v2_agenda_days WHERE day = json_extract(proposed.value, '$.day')), ?) END
-                    - COALESCE((SELECT SUM(points_units) FROM v2_agenda_allocations WHERE day = json_extract(proposed.value, '$.day') AND order_id != ?), 0)
-                    - COALESCE((SELECT SUM(a.points_units) FROM v2_checkout_hold_allocations a JOIN v2_checkout_holds h ON h.id = a.hold_id
-                      WHERE a.day = json_extract(proposed.value, '$.day') AND h.status = 'active' AND h.expires_at > ? AND h.order_id != ?), 0)
-                )
-            `,
-          )
-          .bind(
-            orderId,
-            row.day,
-            row.points_units,
-            nowIso(),
-            orderId,
-            row.day,
-            allocationJson,
-            defaultCapacity,
-            orderId,
-            nowIso(),
-            orderId,
-          ),
-    ),
-
-    db
+  /*
+   * Se uma tentativa anterior gravou apenas parte das alocações,
+   * removemos a parte incompleta antes de tentar novamente.
+   * O briefing ainda está bloqueado nesse ponto, então não existe
+   * produção válida dependente dessa alocação parcial.
+   */
+  if (
+    existingUnits > 0
+  ) {
+    await db
       .prepare(
-        `
-          UPDATE v2_checkout_holds
-          SET
-            status = 'converted',
-            updated_at = ?
-          WHERE id = ?
-            AND EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ?)
-        `,
+        'DELETE FROM v2_agenda_allocations WHERE order_id = ?',
       )
       .bind(
-        nowIso(),
-        hold.id,
         orderId,
-      ),
-  ]);
-
-  if (conversion.slice(0, rows.length).some(x => Number(x.meta?.changes) !== 1)) {
-    return { converted: false, reason: 'capacity_changed' };
+      )
+      .run();
   }
+
+  const expiryMs =
+    Date.parse(
+      String(
+        hold.expires_at
+        || '',
+      ),
+    );
+
+  const paidAtMs =
+    Date.parse(
+      String(
+        paidAt
+        || '',
+      ),
+    );
+
+  const paidWithinReservation =
+    Number.isFinite(
+      paidAtMs,
+    )
+    && Number.isFinite(
+      expiryMs,
+    )
+    && paidAtMs <= expiryMs;
+
+  let rows =
+    originalRows.map(
+      (row) => ({
+        day:
+          row.day,
+        points_units:
+          Number(
+            row.points_units,
+          ),
+      }),
+    );
+
+  /*
+   * A data de aprovação do Mercado Pago é soberana.
+   * Se a cliente pagou antes do fim real da reserva, usamos a
+   * alocação originalmente garantida mesmo que o cron tenha
+   * marcado o hold como expirado entre a aprovação e o webhook.
+   */
+  const expiredBeforePayment =
+    Number.isFinite(
+      expiryMs,
+    )
+    && (
+      !paidWithinReservation
+      && expiryMs <= Date.now()
+    );
+
+  if (
+    expiredBeforePayment
+  ) {
+    const order =
+      await db
+        .prepare(
+          `
+            SELECT
+              delivery_start,
+              delivery_end
+            FROM v2_orders
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          orderId,
+        )
+        .first();
+
+    const plan =
+      await planV2AllocationForWindow(
+        db,
+        {
+          start:
+            order.delivery_start,
+          end:
+            order.delivery_end,
+          pointsUnits:
+            requiredUnits,
+        },
+      );
+
+    if (!plan.fits) {
+      return {
+        converted:
+          false,
+        reason:
+          'late_payment_capacity_changed',
+      };
+    }
+
+    rows =
+      plan.allocation.map(
+        (item) => ({
+          day:
+            item.day,
+          points_units:
+            item.pointsUnits,
+        }),
+      );
+  }
+
+  const settings =
+    await loadV2Settings(
+      db,
+    );
+
+  const defaultCapacity =
+    v2IntSetting(
+      settings,
+      'default_sellable_points_per_day_units',
+      400,
+    );
+
+  const allocationJson =
+    JSON.stringify(
+      rows,
+    );
+
+  const conversion =
+    await db.batch(
+      rows.map(
+        (row) =>
+          db
+            .prepare(
+              `
+                INSERT INTO v2_agenda_allocations(
+                  order_id,
+                  day,
+                  points_units,
+                  allocation_type,
+                  created_at
+                )
+                SELECT
+                  ?,
+                  ?,
+                  ?,
+                  'confirmed',
+                  ?
+                WHERE
+                  NOT EXISTS (
+                    SELECT 1
+                    FROM v2_agenda_allocations
+                    WHERE
+                      order_id = ?
+                      AND day = ?
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM json_each(?) proposed
+                    WHERE
+                      CAST(
+                        json_extract(
+                          proposed.value,
+                          '$.points_units'
+                        )
+                        AS INTEGER
+                      )
+                      >
+                      CASE
+                        WHEN COALESCE(
+                          (
+                            SELECT blocked
+                            FROM v2_agenda_days
+                            WHERE day = json_extract(
+                              proposed.value,
+                              '$.day'
+                            )
+                          ),
+                          0
+                        ) = 1
+                          THEN 0
+                        ELSE COALESCE(
+                          (
+                            SELECT sellable_capacity_units
+                            FROM v2_agenda_days
+                            WHERE day = json_extract(
+                              proposed.value,
+                              '$.day'
+                            )
+                          ),
+                          ?
+                        )
+                      END
+                      - COALESCE(
+                        (
+                          SELECT SUM(points_units)
+                          FROM v2_agenda_allocations
+                          WHERE
+                            day = json_extract(
+                              proposed.value,
+                              '$.day'
+                            )
+                            AND order_id != ?
+                        ),
+                        0
+                      )
+                      - COALESCE(
+                        (
+                          SELECT SUM(a.points_units)
+                          FROM v2_checkout_hold_allocations a
+                          INNER JOIN v2_checkout_holds h
+                            ON h.id = a.hold_id
+                          WHERE
+                            a.day = json_extract(
+                              proposed.value,
+                              '$.day'
+                            )
+                            AND h.status = 'active'
+                            AND h.expires_at > ?
+                            AND h.order_id != ?
+                        ),
+                        0
+                      )
+                  )
+              `,
+            )
+            .bind(
+              orderId,
+              row.day,
+              row.points_units,
+              nowIso(),
+              orderId,
+              row.day,
+              allocationJson,
+              defaultCapacity,
+              orderId,
+              nowIso(),
+              orderId,
+            ),
+      ),
+    );
+
+  const complete =
+    conversion.every(
+      (result) =>
+        Number(
+          result?.meta?.changes
+          || 0,
+        )
+        === 1,
+    );
+
+  if (!complete) {
+    await db
+      .prepare(
+        'DELETE FROM v2_agenda_allocations WHERE order_id = ?',
+      )
+      .bind(
+        orderId,
+      )
+      .run();
+
+    return {
+      converted:
+        false,
+      reason:
+        'capacity_changed',
+    };
+  }
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_checkout_holds
+        SET
+          status = 'converted',
+          updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      nowIso(),
+      hold.id,
+    )
+    .run();
 
   return {
     converted:
       true,
+    recovered:
+      hold.status !== 'active',
+    paidWithinReservation,
   };
 }
 
@@ -1282,6 +1529,7 @@ async function syncMercadoPagoOrderUnlocked(
       env.DB,
       localPayment
         .order_id,
+      paidAt,
     );
 
     if (!capacity.converted && localPayment.briefing_status === 'locked') {

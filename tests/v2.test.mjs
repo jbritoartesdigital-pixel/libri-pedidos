@@ -1427,6 +1427,12 @@ test('store client keeps the approved commercial journey and a single final reco
 
   assert.match(addons, /data-addon-family/);
   assert.match(addons, /activeAddonGroup/);
+  assert.match(
+    addons,
+    /addons\.length\s*===\s*1/,
+    'groups with a single visible addon must render directly instead of opening a tab',
+  );
+  assert.match(addons, /addon-single/);
 
   const addonGrouping = source.slice(
     source.indexOf('function addonGroups('),

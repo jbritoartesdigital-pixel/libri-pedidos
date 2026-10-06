@@ -1464,12 +1464,64 @@ test('store client keeps the approved commercial journey and a single final reco
   assert.match(addonGrouping, /moments_extra/);
   assert.match(addonGrouping, /!hasMoments/);
 
+  const recommendationLogic = source.slice(
+    source.indexOf('function finalRecommendation('),
+    source.indexOf('function recommendationTitle('),
+  );
+
+  const upgradeLogic = source.slice(
+    source.indexOf('function interactiveUpgradeOffer('),
+    source.indexOf('function progressiveAddonOffer('),
+  );
+
+  assert.match(upgradeLogic, /product_upgrade/);
+  assert.match(upgradeLogic, /cinematic_video/);
+  assert.match(upgradeLogic, /cinematic_interactive/);
+  assert.match(upgradeLogic, /sceneCount/);
+
+  assert.match(recommendationLogic, /cinematic_video/);
+  assert.match(recommendationLogic, /groups\.size\s*===\s*0/);
+  assert.match(recommendationLogic, /progressiveAddonOffer\(\s*state,\s*'confirmation'/);
+  assert.match(recommendationLogic, /progressiveAddonOffer\(\s*state,\s*'moments'/);
+
+  const upgradeIndex = recommendationLogic.indexOf("'cinematic_video'");
+  const confirmationIndex = recommendationLogic.indexOf("'confirmation'");
+  const momentsIndex = recommendationLogic.indexOf("'moments'");
+  const comboCompletionIndex = recommendationLogic.lastIndexOf('configuredCombos.length');
+
+  assert.ok(upgradeIndex >= 0);
+  assert.ok(confirmationIndex > upgradeIndex);
+  assert.ok(momentsIndex > confirmationIndex);
+  assert.ok(
+    comboCompletionIndex > momentsIndex,
+    'generic combo completion must come after the progressive functional ladder',
+  );
+
+  assert.equal(
+    /else if\s*\([\s\S]*!groups\.has\([\s\S]*'moments'/.test(
+      recommendationLogic,
+    ),
+    false,
+    'Álbum da Festa must not be a generic fallback for every order',
+  );
+
   const recommendation = source.slice(
     source.indexOf('function renderRecommendation('),
     source.indexOf('function renderCustomer('),
   );
   assert.match(recommendation, /promo-sheet/);
   assert.match(recommendation, /Oferta para adicionar agora/);
+  assert.match(recommendation, /Deixar interativo por/);
+  assert.match(recommendation, /replaceState/);
+
+  const recommendationTitle = source.slice(
+    source.indexOf('function recommendationTitle('),
+    source.indexOf('async function refreshDeliveryForSelection('),
+  );
+  assert.match(
+    recommendationTitle,
+    /Quer deixar seu convite interativo/,
+  );
   assert.match(recommendation, /Agora não/);
   assert.equal(
     recommendation.includes('name="finalOfferAddon"'),

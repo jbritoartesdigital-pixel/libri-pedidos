@@ -705,9 +705,150 @@ function comboMissingGroups(
   return missing;
 }
 
+function interactiveUpgradeOffer(
+  state,
+) {
+  const currentProduct =
+    productFor(
+      state,
+    );
+
+  if (
+    currentProduct?.code
+    !== 'cinematic_video'
+  ) {
+    return null;
+  }
+
+  const currentVariant =
+    variantFor(
+      state,
+    );
+
+  const interactiveProduct =
+    (
+      state.catalog.products
+      || []
+    )
+      .find(
+        (product) =>
+          product.code
+          === 'cinematic_interactive',
+      );
+
+  if (
+    !currentVariant
+    || !interactiveProduct
+  ) {
+    return null;
+  }
+
+  const interactiveVariant =
+    (
+      interactiveProduct.variants
+      || []
+    )
+      .find(
+        (variant) =>
+          Number(
+            variant.sceneCount,
+          )
+          === Number(
+            currentVariant.sceneCount,
+          ),
+      );
+
+  if (!interactiveVariant) {
+    return null;
+  }
+
+  return {
+    kind:
+      'product_upgrade',
+    product:
+      interactiveProduct,
+    variant:
+      interactiveVariant,
+    priceDeltaCents:
+      Math.max(
+        0,
+        Number(
+          interactiveVariant.priceCents
+          || 0,
+        )
+        - Number(
+          currentVariant.priceCents
+          || 0,
+        ),
+      ),
+  };
+}
+
+function progressiveAddonOffer(
+  state,
+  group,
+  configuredCombos = [],
+) {
+  const choices =
+    (
+      state.catalog.addons
+      || []
+    )
+      .filter(
+        (addon) =>
+          addon.group
+          === group,
+      );
+
+  if (!choices.length) {
+    return null;
+  }
+
+  const comboEntry =
+    configuredCombos
+      .find(
+        (entry) =>
+          entry.missing
+            .some(
+              (missing) =>
+                (
+                  missing.type
+                  === 'group'
+                  && missing.code
+                    === group
+                )
+                || (
+                  missing.type
+                  === 'addon'
+                  && choices
+                    .some(
+                      (choice) =>
+                        choice.code
+                        === missing.code,
+                    )
+                ),
+            ),
+      );
+
+  return {
+    kind:
+      'addon',
+    group,
+    choices,
+    combo:
+      comboEntry
+        ?.combo
+      || null,
+  };
+}
+
 function finalRecommendation(
   state,
 ) {
+  /*
+   * Se as escolhas já formaram um combo com desconto,
+   * oferecemos primeiro o benefício já conquistado.
+   */
   if (
     state.quote
       ?.suggestedCombo
@@ -720,6 +861,11 @@ function finalRecommendation(
           .suggestedCombo,
     };
   }
+
+  const groups =
+    selectedAddonGroups(
+      state,
+    );
 
   const configuredCombos =
     (
@@ -776,6 +922,81 @@ function finalRecommendation(
           ),
       );
 
+  /*
+   * FUNIL PROGRESSIVO
+   *
+   * 1. Vídeo básico sem adicionais -> tornar interativo.
+   * 2. Produto interativo sem confirmação -> Confirmação.
+   * 3. Interativo + Confirmação sem Álbum -> Álbum da Festa.
+   * 4. Só depois, completar outro combo que esteja a uma peça.
+   *
+   * Uma única oferta é mostrada no fim da configuração.
+   */
+  if (
+    productFor(state)
+      ?.code
+    === 'cinematic_video'
+    && groups.size
+      === 0
+  ) {
+    const upgrade =
+      interactiveUpgradeOffer(
+        state,
+      );
+
+    if (upgrade) {
+      return upgrade;
+    }
+  }
+
+  const interactive =
+    [
+      'cinematic_interactive',
+      'interactive_essential',
+      'interactive_animated',
+      'interactive_gif',
+      'book',
+      'infinite',
+    ].includes(
+      productFor(state)
+        ?.code,
+    );
+
+  if (
+    interactive
+    && !groups.has(
+      'confirmation',
+    )
+  ) {
+    return progressiveAddonOffer(
+      state,
+      'confirmation',
+      configuredCombos,
+    );
+  }
+
+  if (
+    interactive
+    && groups.has(
+      'confirmation',
+    )
+    && !groups.has(
+      'moments',
+    )
+  ) {
+    return progressiveAddonOffer(
+      state,
+      'moments',
+      configuredCombos,
+    );
+  }
+
+  if (
+    state.quote?.combo
+  ) {
+    return null;
+  }
+
   if (
     configuredCombos.length
   ) {
@@ -823,77 +1044,19 @@ function finalRecommendation(
     }
   }
 
-  if (
-    state.quote?.combo
-  ) {
-    return null;
-  }
-
-  const groups =
-    selectedAddonGroups(
-      state,
-    );
-
-  let preferredGroup = '';
-
-  if (
-    [
-      'cinematic_interactive',
-      'interactive_essential',
-      'interactive_animated',
-      'interactive_gif',
-      'book',
-      'infinite',
-    ].includes(
-      productFor(state)
-        ?.code,
-    )
-    && !groups.has(
-      'confirmation',
-    )
-  ) {
-    preferredGroup =
-      'confirmation';
-  } else if (
-    !groups.has(
-      'moments',
-    )
-  ) {
-    preferredGroup =
-      'moments';
-  }
-
-  if (!preferredGroup) {
-    return null;
-  }
-
-  const choices =
-    (
-      state.catalog.addons
-      || []
-    )
-      .filter(
-        addon =>
-          addon.group
-          === preferredGroup,
-      );
-
-  return choices.length
-    ? {
-      kind:
-        'addon',
-      group:
-        preferredGroup,
-      choices,
-      combo:
-        null,
-    }
-    : null;
+  return null;
 }
 
 function recommendationTitle(
   offer,
 ) {
+  if (
+    offer?.kind
+    === 'product_upgrade'
+  ) {
+    return 'Quer deixar seu convite interativo?';
+  }
+
   if (
     offer?.kind
     === 'combo'
@@ -2603,17 +2766,28 @@ function renderRecommendation(
 
         ${
           offer.kind
-          === 'combo'
+          === 'product_upgrade'
             ? `
               <p class="promo-copy">
-                Suas escolhas já liberaram
-                <strong>${esc(offer.combo.name)}</strong>.
-                Aplique agora e economize
-                <strong>${money(offer.combo.discountCents || 0)}</strong>.
+                Transforme seu convite em
+                <strong>${esc(offer.product.name)}</strong>
+                mantendo a mesma quantidade de cenas
+                por mais
+                <strong>${money(offer.priceDeltaCents)}</strong>.
               </p>
             `
-            : promoAddon
-              ? `
+            : offer.kind
+              === 'combo'
+                ? `
+                  <p class="promo-copy">
+                    Suas escolhas já liberaram
+                    <strong>${esc(offer.combo.name)}</strong>.
+                    Aplique agora e economize
+                    <strong>${money(offer.combo.discountCents || 0)}</strong>.
+                  </p>
+                `
+                : promoAddon
+                  ? `
                 <p class="promo-copy">
                   Leve
                   <strong>${esc(promoAddon.name)}</strong>
@@ -2646,11 +2820,14 @@ function renderRecommendation(
           >
             ${
               offer.kind
-              === 'combo'
-                ? `Aplicar e economizar ${money(offer.combo.discountCents || 0)}`
-                : promoAddon
-                  ? `Adicionar por ${money(promoAddon.priceCents)}`
-                  : 'Adicionar'
+              === 'product_upgrade'
+                ? `Deixar interativo por + ${money(offer.priceDeltaCents)}`
+                : offer.kind
+                  === 'combo'
+                    ? `Aplicar e economizar ${money(offer.combo.discountCents || 0)}`
+                    : promoAddon
+                      ? `Adicionar por ${money(promoAddon.priceCents)}`
+                      : 'Adicionar'
             }
           </button>
         </div>
@@ -2709,6 +2886,79 @@ function renderRecommendation(
           true;
 
         try {
+          if (
+            offer.kind
+            === 'product_upgrade'
+          ) {
+            state.selection.productCode =
+              offer.product.code;
+
+            state.selection.productSlug =
+              offer.product.slug;
+
+            state.selection.variantCode =
+              offer.variant.code;
+
+            if (
+              state.deepProductSlug
+            ) {
+              state.deepProductSlug =
+                offer.product.slug;
+
+              const nextUrl =
+                new URL(
+                  window.location.href,
+                );
+
+              nextUrl.pathname =
+                `/pedido/${offer.product.slug}`;
+
+              window.history
+                .replaceState(
+                  {},
+                  '',
+                  nextUrl,
+                );
+            }
+
+            state.selection.comboCode =
+              '';
+
+            await updateQuote(
+              state,
+            );
+
+            const sameWindow =
+              await refreshDeliveryForSelection(
+                state,
+              );
+
+            if (
+              (state.delivery?.options || [])
+                .length
+              && !sameWindow
+            ) {
+              state.step =
+                4;
+
+              persist(state);
+              render();
+
+              showToast(
+                'O upgrade para Interativo mudou a carga do pedido. Escolha a nova janela de entrega.',
+              );
+
+              return;
+            }
+
+            await continueAfterRecommendation(
+              state,
+              render,
+            );
+
+            return;
+          }
+
           if (
             offer.kind
             === 'combo'

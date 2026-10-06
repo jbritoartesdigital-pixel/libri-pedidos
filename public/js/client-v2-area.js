@@ -2016,6 +2016,8 @@ export async function startCustomerArea(
       ?.addEventListener(
         'click',
         async () => {
+          briefingChoiceRevision += 1;
+
           if (
             index <= 0
           ) {
@@ -2047,6 +2049,8 @@ export async function startCustomerArea(
       ?.addEventListener(
         'click',
         async () => {
+          briefingChoiceRevision += 1;
+
           const next =
             sections[index + 1];
 
@@ -2107,6 +2111,8 @@ export async function startCustomerArea(
       ?.addEventListener(
         'click',
         async () => {
+          briefingChoiceRevision += 1;
+
           const button =
             document
               .getElementById(

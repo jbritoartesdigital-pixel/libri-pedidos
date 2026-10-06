@@ -247,6 +247,7 @@ export async function handleAdminV2CoreApi(
             || '',
           )
             .trim(),
+          body,
         );
 
       if (!result) {

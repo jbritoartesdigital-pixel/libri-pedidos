@@ -257,6 +257,10 @@ function calendarDayHtml(
     day.events
     || [];
 
+  const deliveries =
+    day.deliveries
+    || [];
+
   return `
     <article
       class="calendar-day
@@ -281,14 +285,33 @@ function calendarDayHtml(
         ${events.map(
           (event) => `
             <button
-              class="calendar-event"
+              class="calendar-event party"
               type="button"
               data-open-order="${esc(event.code)}"
-              title="${esc(event.productName || '')}"
+              title="${esc(`Festa • ${event.customerName} • ${event.productName || ''} • Entrega ${event.deliveryWindow?.start || ''} a ${event.deliveryWindow?.end || ''}`)}"
             >
+              <span class="calendar-event-kind">Festa</span>
               <strong>${esc(event.honoreeName)}</strong>
+              <small>${esc(event.customerName)}</small>
+            </button>
+          `,
+        ).join('')}
+
+        ${deliveries.map(
+          (event) => `
+            <button
+              class="calendar-event delivery"
+              type="button"
+              data-open-order="${esc(event.code)}"
+              title="${esc(`Entrega • ${event.customerName} • ${event.productName || ''}`)}"
+            >
+              <span class="calendar-event-kind">Entrega</span>
+              <strong>${esc(event.customerName)}</strong>
               <small>
-                ${esc(statusLabel(event.status))}
+                ${esc(event.honoreeName)}
+                ${event.deliveryWindow?.start && event.deliveryWindow?.end
+                  ? ` • ${dateBr(event.deliveryWindow.start)} a ${dateBr(event.deliveryWindow.end)}`
+                  : ''}
               </small>
             </button>
           `,
@@ -340,14 +363,18 @@ function capacityDetail(
 
 function dayEventsHtml(
   day,
+  type = 'party',
 ) {
   const events =
-    day.events
-    || [];
+    type === 'delivery'
+      ? day.deliveries || []
+      : day.events || [];
 
   if (!events.length) {
     return empty(
-      'Nenhuma festa neste dia.',
+      type === 'delivery'
+        ? 'Nenhuma entrega prevista neste dia.'
+        : 'Nenhuma festa neste dia.',
     );
   }
 
@@ -362,12 +389,25 @@ function dayEventsHtml(
             style="text-align:left;cursor:pointer"
           >
             <strong>
-              ${esc(event.honoreeName)}
+              ${type === 'delivery'
+                ? `Entrega • ${esc(event.customerName)}`
+                : `Festa • ${esc(event.honoreeName)}`}
             </strong>
             <small>
-              ${esc(event.customerName)}
-              ${event.productName ? ` • ${esc(event.productName)}` : ''}
-              • ${esc(statusLabel(event.status))}
+              ${type === 'delivery'
+                ? `${esc(event.honoreeName)}
+                   ${event.productName ? ` • ${esc(event.productName)}` : ''}
+                   ${event.deliveryWindow?.start && event.deliveryWindow?.end
+                     ? ` • janela ${dateBr(event.deliveryWindow.start)} a ${dateBr(event.deliveryWindow.end)}`
+                     : ''}
+                   • ${esc(statusLabel(event.status))}`
+                : `Cliente: ${esc(event.customerName)}
+                   ${event.productName ? ` • ${esc(event.productName)}` : ''}
+                   ${event.deliveryWindow?.start && event.deliveryWindow?.end
+                     ? ` • entrega ${dateBr(event.deliveryWindow.start)} a ${dateBr(event.deliveryWindow.end)}`
+                     : ''}
+                   • ${esc(statusLabel(event.status))}`
+              }
             </small>
           </button>
         `,
@@ -411,6 +451,13 @@ function bindDayEditor(
                   </div>
 
                   ${dayEventsHtml(day)}
+
+                  <div class="section-title" style="margin-top:18px">
+                    <h3>Entregas</h3>
+                    <span class="status">${(day.deliveries || []).length}</span>
+                  </div>
+
+                  ${dayEventsHtml(day, 'delivery')}
 
                   <div class="section-title" style="margin-top:18px">
                     <h3>Capacidade</h3>
@@ -739,7 +786,7 @@ export async function renderAgenda(
 
     <section class="card agenda-calendar-card">
       <div class="section-title">
-        <h2>Festas e eventos</h2>
+        <h2>Festas e entregas</h2>
         <span class="status blue">
           padrão ${(agenda.defaults?.sellableCapacityUnits || 400) / 100} pts/dia
         </span>
@@ -769,10 +816,11 @@ export async function renderAgenda(
 
       <div class="agenda-legend">
         <span><i class="legend-dot event"></i> festa</span>
+        <span><i class="legend-dot delivery"></i> entrega</span>
         <span><i class="legend-dot today"></i> hoje</span>
         <span><i class="legend-dot blocked"></i> bloqueado</span>
         <small>
-          Toque nos ••• de um dia para ver capacidade, festas e editar.
+          Toque nos ••• de um dia para ver festas, entregas, capacidade e editar.
         </small>
       </div>
     </section>

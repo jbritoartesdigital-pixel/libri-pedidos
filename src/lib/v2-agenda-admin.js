@@ -1099,6 +1099,8 @@ export async function getV2AgendaRange(
           `
             SELECT
               o.event_date,
+              o.delivery_start,
+              o.delivery_end,
               o.order_code,
               o.honoree_display_name,
               o.status,
@@ -1116,7 +1118,10 @@ export async function getV2AgendaRange(
             INNER JOIN v2_customers c
               ON c.id = o.customer_id
             WHERE
-              o.event_date BETWEEN ? AND ?
+              (
+                o.event_date BETWEEN ? AND ?
+                OR o.delivery_end BETWEEN ? AND ?
+              )
               AND o.status IN (
                 'briefing_pending',
                 'ready_for_production',
@@ -1135,6 +1140,8 @@ export async function getV2AgendaRange(
           `,
         )
         .bind(
+          rangeStart,
+          rangeEnd,
           rangeStart,
           rangeEnd,
         )
@@ -1249,6 +1256,36 @@ export async function getV2AgendaRange(
   }
 
   const eventsByDay = {};
+  const deliveriesByDay = {};
+
+  const calendarOrder = (row) => ({
+    code:
+      row.order_code,
+
+    honoreeName:
+      row.honoree_display_name,
+
+    customerName:
+      row.customer_name,
+
+    productName:
+      row.product_name
+      || '',
+
+    status:
+      row.status,
+
+    eventDate:
+      row.event_date,
+
+    deliveryWindow: {
+      start:
+        row.delivery_start,
+
+      end:
+        row.delivery_end,
+    },
+  });
 
   for (
     const row
@@ -1256,35 +1293,53 @@ export async function getV2AgendaRange(
     || []
   ) {
     if (
-      !eventsByDay[
-        row.event_date
-      ]
+      row.event_date >= rangeStart
+      && row.event_date <= rangeEnd
     ) {
+      if (
+        !eventsByDay[
+          row.event_date
+        ]
+      ) {
+        eventsByDay[
+          row.event_date
+        ] = [];
+      }
+
       eventsByDay[
         row.event_date
-      ] = [];
+      ]
+        .push(
+          calendarOrder(
+            row,
+          ),
+        );
     }
 
-    eventsByDay[
-      row.event_date
-    ]
-      .push({
-        code:
-          row.order_code,
+    if (
+      row.delivery_end
+      && row.delivery_end >= rangeStart
+      && row.delivery_end <= rangeEnd
+    ) {
+      if (
+        !deliveriesByDay[
+          row.delivery_end
+        ]
+      ) {
+        deliveriesByDay[
+          row.delivery_end
+        ] = [];
+      }
 
-        honoreeName:
-          row.honoree_display_name,
-
-        customerName:
-          row.customer_name,
-
-        productName:
-          row.product_name
-          || '',
-
-        status:
-          row.status,
-      });
+      deliveriesByDay[
+        row.delivery_end
+      ]
+        .push(
+          calendarOrder(
+            row,
+          ),
+        );
+    }
   }
 
   const days =
@@ -1387,6 +1442,12 @@ export async function getV2AgendaRange(
 
             events:
               eventsByDay[
+                day
+              ]
+              || [],
+
+            deliveries:
+              deliveriesByDay[
                 day
               ]
               || [],

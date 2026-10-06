@@ -371,22 +371,37 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
-test('agenda range exposes contracted events on their party date', async t => {
+test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);
+  const deliveryStart = day(5);
+  const deliveryEnd = day(7);
   const checkout = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Festa Calendário', type: 'birthday', date: eventDate },
-    deliveryWindow: { start: day(5), end: day(7) },
+    deliveryWindow: { start: deliveryStart, end: deliveryEnd },
     ...await terms(DB),
   }));
   mp.approve(checkout.payment.providerOrderId);
   await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
 
-  const agenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
-  assert.equal(agenda.days.length, 1);
-  assert.equal(agenda.days[0].events.length, 1);
-  assert.equal(agenda.days[0].events[0].code, checkout.order.code);
-  assert.equal(agenda.days[0].events[0].honoreeName, 'Festa Calendário');
+  const partyAgenda = await getV2AgendaRange(DB, { start: eventDate, end: eventDate });
+  assert.equal(partyAgenda.days.length, 1);
+  assert.equal(partyAgenda.days[0].events.length, 1);
+  assert.equal(partyAgenda.days[0].events[0].code, checkout.order.code);
+  assert.equal(partyAgenda.days[0].events[0].honoreeName, 'Festa Calendário');
+  assert.equal(partyAgenda.days[0].events[0].customerName, 'Cliente Teste');
+  assert.deepEqual(partyAgenda.days[0].events[0].deliveryWindow, {
+    start: deliveryStart,
+    end: deliveryEnd,
+  });
+
+  const deliveryAgenda = await getV2AgendaRange(DB, { start: deliveryEnd, end: deliveryEnd });
+  assert.equal(deliveryAgenda.days.length, 1);
+  assert.equal(deliveryAgenda.days[0].events.length, 0);
+  assert.equal(deliveryAgenda.days[0].deliveries.length, 1);
+  assert.equal(deliveryAgenda.days[0].deliveries[0].code, checkout.order.code);
+  assert.equal(deliveryAgenda.days[0].deliveries[0].customerName, 'Cliente Teste');
+  assert.equal(deliveryAgenda.days[0].deliveries[0].deliveryWindow.end, deliveryEnd);
 });
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {

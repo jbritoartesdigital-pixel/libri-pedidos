@@ -10,13 +10,13 @@ import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
+import { applyV2AdminAction, cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2ArchivedOrders, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
-import { getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
+import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -33,7 +33,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 18);
+  const DB = database(); assert.equal(DB.migrationCount, 19);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -41,6 +41,9 @@ test('all migrations run in SQLite with V1 and V2 tables intact', () => {
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notification_preferences WHERE event_code IN ('EVENT_TOMORROW','DELIVERY_TOMORROW','ACTION_REQUIRED')").get().n, 3);
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
+  assert.ok(
+    DB.sqlite.prepare("SELECT name FROM pragma_table_info('v2_orders') WHERE name='archived_at'").get(),
+  );
 });
 
 test('legacy V1 orders migrate idempotently into the V2 model without deleting source data', () => {
@@ -943,6 +946,239 @@ test('most complete eligible configured combo is the single public suggestion', 
     quote.suggestedCombo.discountCents,
     400,
   );
+});
+
+test('archived orders leave operational views without losing financial history', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Arquivo Teste', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const order = DB.sqlite.prepare(
+    'SELECT id, order_code FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+
+  DB.sqlite.prepare(
+    "UPDATE v2_orders SET status='finalized', event_date=?, finalized_at=datetime('now') WHERE id=?"
+  ).run(day(-1), order.id);
+
+  const paymentsBefore = DB.sqlite.prepare(
+    'SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=?'
+  ).get(order.id).n;
+
+  const archived = await applyV2AdminAction(DB, order.order_code, 'archive');
+  assert.equal(archived.archived, true);
+
+  const row = DB.sqlite.prepare(
+    'SELECT archived_at FROM v2_orders WHERE id=?'
+  ).get(order.id);
+  assert.ok(row.archived_at);
+
+  const archivedList = await listV2ArchivedOrders(DB, { q: 'Arquivo Teste' });
+  assert.equal(archivedList.some(item => item.code === order.order_code), true);
+
+  const central = await getV2Central(DB);
+  assert.equal(
+    central.attention.some(item => item.code === order.order_code),
+    false,
+  );
+  assert.equal(
+    central.partiesToday.some(item => item.code === order.order_code),
+    false,
+  );
+
+  assert.equal(
+    DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=?').get(order.id).n,
+    paymentsBefore,
+    'archiving must not delete financial history',
+  );
+
+  const restored = await applyV2AdminAction(DB, order.order_code, 'unarchive');
+  assert.equal(restored.archived, false);
+  assert.equal(
+    DB.sqlite.prepare('SELECT archived_at FROM v2_orders WHERE id=?').get(order.id).archived_at,
+    null,
+  );
+});
+
+test('manual finance entries are audited and bounded by real order values', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Finance Manual', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const order = DB.sqlite.prepare(`
+    SELECT o.id, o.order_code, pr.total_cents
+    FROM v2_orders o
+    JOIN v2_order_pricing pr ON pr.order_id=o.id
+    WHERE o.order_code=?
+  `).get(checkout.order.code);
+
+  const paidBefore = DB.sqlite.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN status='approved' AND payment_type!='refund' THEN amount_cents ELSE 0 END),0)
+      - COALESCE(SUM(CASE WHEN status='approved' AND payment_type='refund' THEN amount_cents ELSE 0 END),0) AS n
+    FROM v2_payments WHERE order_id=?
+  `).get(order.id).n;
+
+  const remaining = order.total_cents - paidBefore;
+  assert.ok(remaining > 0);
+
+  const added = await createV2FinancePayment(DB, {
+    orderCode: order.order_code,
+    amountCents: Math.min(500, remaining),
+    paidDate: day(-1),
+    paymentType: 'balance',
+    note: 'Pix recebido fora do sistema',
+  });
+
+  assert.ok(added.id > 0);
+
+  const saved = DB.sqlite.prepare(
+    'SELECT provider, provider_payload_json FROM v2_payments WHERE id=?'
+  ).get(added.id);
+
+  assert.equal(saved.provider, 'direct_pix');
+  assert.equal(JSON.parse(saved.provider_payload_json).note, 'Pix recebido fora do sistema');
+
+  assert.equal(
+    DB.sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='finance_payment_added'"
+    ).get(order.id).n,
+    1,
+  );
+
+  await assert.rejects(
+    createV2FinancePayment(DB, {
+      orderCode: order.order_code,
+      amountCents: order.total_cents + 1,
+      paidDate: day(-1),
+      paymentType: 'balance',
+    }),
+    /saldo ainda aberto/,
+  );
+
+  await assert.rejects(
+    createV2FinancePayment(DB, {
+      orderCode: order.order_code,
+      amountCents: order.total_cents + 1,
+      paidDate: day(-1),
+      paymentType: 'refund',
+    }),
+    /valor líquido já recebido/,
+  );
+
+  const dashboard = await getV2FinanceDashboard(DB, {
+    preset: 'custom',
+    start: day(-2),
+    end: day(0),
+  });
+
+  assert.equal(
+    dashboard.movements.some(
+      item => item.id === added.id && item.note === 'Pix recebido fora do sistema'
+    ),
+    true,
+  );
+});
+
+test('final polish surfaces progressive reasons, safer delivery changes, next steps, quick WhatsApp and isolated simulation', () => {
+  const store = readFileSync(
+    new URL('../public/js/client-v2-store.js', import.meta.url),
+    'utf8',
+  );
+  const area = readFileSync(
+    new URL('../public/js/client-v2-area.js', import.meta.url),
+    'utf8',
+  );
+  const central = readFileSync(
+    new URL('../public/js/admin-v2-central.js', import.meta.url),
+    'utf8',
+  );
+  const order = readFileSync(
+    new URL('../public/js/admin-v2-order.js', import.meta.url),
+    'utf8',
+  );
+  const finance = readFileSync(
+    new URL('../public/js/admin-v2-finance.js', import.meta.url),
+    'utf8',
+  );
+  const admin = readFileSync(
+    new URL('../public/js/admin-v2.js', import.meta.url),
+    'utf8',
+  );
+  const adminHtml = readFileSync(
+    new URL('../public/admin-v2.html', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(store, /Por que estou te sugerindo isso/);
+  assert.match(store, /comboSavingsForOffer/);
+  assert.match(store, /Seu prazo precisa ser ajustado/);
+  assert.match(store, /STORE_KEY_SIMULATION/);
+  assert.match(store, /Nenhum pedido, cobrança, agenda ou lançamento financeiro será criado/);
+  assert.match(store, /Simulação concluída/);
+  assert.match(store, /state\.simulationMode/);
+
+  const simulatedCustomer = store.slice(
+    store.indexOf('function renderCustomer('),
+    store.indexOf('function renderReview('),
+  );
+  assert.match(simulatedCustomer, /if \(\s*state\.simulationMode/);
+  assert.ok(
+    simulatedCustomer.indexOf('state.simulationMode')
+      < simulatedCustomer.indexOf("'/api/v2/urgency/request'"),
+    'simulation must short-circuit before urgency creates an order',
+  );
+
+  const termsBlock = store.slice(
+    store.indexOf('function renderTerms('),
+    store.indexOf('export async function startStore('),
+  );
+  assert.ok(
+    termsBlock.indexOf('state.simulationMode')
+      < termsBlock.indexOf("'/api/v2/checkout/start'"),
+    'simulation must stop before checkout creates an order or payment',
+  );
+
+  assert.match(area, /Seu próximo passo/);
+  assert.match(area, /Continuar briefing/);
+  assert.match(area, /Abrir prévia/);
+  assert.match(area, /Ver saldo/);
+
+  assert.match(central, /Hoje precisa da sua atenção/);
+  assert.match(central, /Simular compra/);
+  assert.match(central, /attentionReason/);
+  assert.match(central, /WhatsApp/);
+
+  assert.match(order, /Cobrar briefing/);
+  assert.match(order, /Prévia disponível/);
+  assert.match(order, /Saldo pendente/);
+  assert.match(order, /Pedido finalizado/);
+  assert.match(order, /Arquivar pedido/);
+  assert.match(order, /Restaurar pedido/);
+
+  assert.match(finance, /Adicionar lançamento/);
+  assert.match(finance, /Reembolso \/ ajuste negativo/);
+  assert.match(finance, /finance_payment/);
+
+  assert.match(admin, /renderArchived/);
+  assert.match(adminHtml, /data-view="archived"/);
 });
 
 test('public store does not expose a fixed combo chooser or auto-add combo items', () => {

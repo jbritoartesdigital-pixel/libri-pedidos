@@ -11,6 +11,7 @@ import {
   deleteUnpaidV2Order,
   getV2AdminOrderDetail,
   getV2Central,
+  listV2ArchivedOrders,
   listV2Production,
   markV2CongratulationsSent,
 } from '../lib/v2-admin-core.js';
@@ -38,6 +39,35 @@ export async function handleAdminV2CoreApi(
       central:
         await getV2Central(
           env.DB,
+        ),
+    });
+  }
+
+  if (
+    method
+    === 'GET'
+    && path
+    === '/api/admin/v2/archived'
+  ) {
+    return json({
+      ok: true,
+      orders:
+        await listV2ArchivedOrders(
+          env.DB,
+          {
+            q:
+              url.searchParams
+                .get(
+                  'q',
+                )
+              || '',
+            limit:
+              url.searchParams
+                .get(
+                  'limit',
+                )
+              || 80,
+          },
         ),
     });
   }

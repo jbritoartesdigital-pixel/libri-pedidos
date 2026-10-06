@@ -335,6 +335,11 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const quickMessages =
+    quickWhatsappMessages(
+      detail,
+    );
+
   const close =
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
@@ -383,6 +388,33 @@ export async function openOrder(code, onChanged = null) {
                 Área da cliente
               </a>
             </div>
+
+            ${
+              quickMessages.length
+                ? `
+                  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+                    <strong style="display:block;margin-bottom:8px">
+                      Mensagens rápidas
+                    </strong>
+
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      ${quickMessages.map(
+                        (item) => `
+                          <a
+                            class="btn btn-ghost btn-small"
+                            href="${esc(whatsappHref(detail.order.whatsapp, item.text))}"
+                            target="_blank"
+                            rel="noopener"
+                          >
+                            ${esc(item.label)}
+                          </a>
+                        `,
+                      ).join('')}
+                    </div>
+                  </div>
+                `
+                : ''
+            }
           </section>
 
           ${paymentBlock(detail)}

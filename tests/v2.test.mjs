@@ -591,6 +591,182 @@ test('official combos are seeded with the approved compositions and configurable
   assert.ok(rows.every(row => row.discount_value === 0));
 });
 
+test('combo is suggested only after its real addons are selected and never injects items', async () => {
+  const DB = database();
+
+  DB.sqlite.prepare(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = 700
+    WHERE code = 'antes_festa'
+  `).run();
+
+  const selection = {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: [
+      'save_animated',
+      'reminder_static',
+    ],
+  };
+
+  const suggested =
+    await calculateCommercialV2Quote(
+      DB,
+      selection,
+    );
+
+  assert.equal(suggested.combo, null);
+  assert.equal(
+    suggested.suggestedCombo.code,
+    'antes_festa',
+  );
+  assert.equal(
+    suggested.suggestedCombo.discountCents,
+    700,
+  );
+  assert.deepEqual(
+    suggested.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const applied =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        ...selection,
+        comboCode:
+          'antes_festa',
+      },
+    );
+
+  assert.equal(
+    applied.combo.code,
+    'antes_festa',
+  );
+  assert.equal(
+    applied.suggestedCombo,
+    null,
+  );
+  assert.deepEqual(
+    applied.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const removed =
+    await calculateCommercialV2Quote(
+      DB,
+      selection,
+    );
+
+  assert.deepEqual(
+    removed.addons.map(
+      (item) => item.code,
+    ).sort(),
+    [
+      'reminder_static',
+      'save_animated',
+    ],
+  );
+
+  const missingRequirement =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        ...selection,
+        addonCodes: [
+          'save_animated',
+        ],
+      },
+    );
+
+  assert.equal(
+    missingRequirement.suggestedCombo,
+    null,
+  );
+});
+
+test('most complete eligible configured combo is the single public suggestion', async () => {
+  const DB = database();
+
+  DB.sqlite.exec(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = CASE code
+          WHEN 'convite_save' THEN 100
+          WHEN 'antes_festa' THEN 200
+          WHEN 'organizacao' THEN 200
+          WHEN 'festa_completa' THEN 300
+          WHEN 'libri_completo' THEN 400
+          ELSE 0
+        END;
+  `);
+
+  const quote =
+    await calculateCommercialV2Quote(
+      DB,
+      {
+        productCode:
+          'interactive_essential',
+        paymentMethod:
+          'pix',
+        addonCodes: [
+          'save_static',
+          'reminder_animated',
+          'confirmation_libri',
+          'moments_premium',
+        ],
+      },
+    );
+
+  assert.equal(
+    quote.suggestedCombo.code,
+    'libri_completo',
+  );
+
+  assert.equal(
+    quote.suggestedCombo.discountCents,
+    400,
+  );
+});
+
+test('public store does not expose a fixed combo chooser or auto-add combo items', () => {
+  const source =
+    readFileSync(
+      'public/js/client-v2-store.js',
+      'utf8',
+    );
+
+  assert.equal(
+    source.includes(
+      '<strong>Sem combo</strong>',
+    ),
+    false,
+  );
+
+  assert.equal(
+    source.includes(
+      'ensureComboSelections',
+    ),
+    false,
+  );
+
+  assert.match(
+    source,
+    /Suas escolhas formam o combo/,
+  );
+});
+
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);

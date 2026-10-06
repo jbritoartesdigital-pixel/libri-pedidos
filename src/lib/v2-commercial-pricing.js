@@ -150,6 +150,174 @@ async function activeCombo(
   };
 }
 
+async function activeCombosForSuggestion(
+  db,
+) {
+  const [
+    combosResult,
+    itemsResult,
+  ] =
+    await Promise.all([
+      db
+        .prepare(
+          `
+            SELECT
+              id,
+              code,
+              name,
+              description,
+              discount_type,
+              discount_value,
+              config_json
+            FROM v2_combos
+            WHERE
+              active = 1
+              AND discount_value > 0
+            ORDER BY id
+          `,
+        )
+        .all(),
+
+      db
+        .prepare(
+          `
+            SELECT
+              i.combo_id,
+              i.item_type,
+              i.item_code,
+              i.required
+            FROM v2_combo_items i
+            INNER JOIN v2_combos c
+              ON c.id = i.combo_id
+            WHERE
+              c.active = 1
+              AND c.discount_value > 0
+            ORDER BY
+              i.combo_id,
+              i.id
+          `,
+        )
+        .all(),
+    ]);
+
+  const itemsByCombo =
+    new Map();
+
+  for (
+    const item
+    of itemsResult.results
+    || []
+  ) {
+    if (
+      !itemsByCombo.has(
+        item.combo_id,
+      )
+    ) {
+      itemsByCombo.set(
+        item.combo_id,
+        [],
+      );
+    }
+
+    itemsByCombo
+      .get(
+        item.combo_id,
+      )
+      .push(
+        item,
+      );
+  }
+
+  return (
+    combosResult.results
+    || []
+  )
+    .map(
+      (combo) => ({
+        ...combo,
+
+        items:
+          itemsByCombo
+            .get(
+              combo.id,
+            )
+          || [],
+      }),
+    );
+}
+
+async function bestComboSuggestion(
+  db,
+  quote,
+  baseCents,
+) {
+  const combos =
+    await activeCombosForSuggestion(
+      db,
+    );
+
+  const eligible =
+    combos
+      .filter(
+        (combo) =>
+          comboMatches(
+            combo,
+            quote,
+          ),
+      )
+      .map(
+        (combo) => {
+          const requiredItems =
+            combo.items
+              .filter(
+                (item) =>
+                  Number(
+                    item.required,
+                  )
+                  === 1,
+              )
+              .length;
+
+          return {
+            ...combo,
+
+            requiredItems,
+
+            discountCents:
+              discountValue(
+                baseCents,
+                combo.discount_type,
+                combo.discount_value,
+              ),
+          };
+        },
+      )
+      .filter(
+        (combo) =>
+          combo.discountCents
+          > 0,
+      )
+      .sort(
+        (
+          left,
+          right,
+        ) =>
+          right.requiredItems
+          - left.requiredItems
+          || right.discountCents
+            - left.discountCents
+          || Number(
+            left.id,
+          )
+            - Number(
+              right.id,
+            ),
+      );
+
+  return eligible[0]
+    || null;
+}
+
 function comboMatches(
   combo,
   quote,
@@ -584,6 +752,16 @@ export async function calculateCommercialV2Quote(
       - comboDiscountCents,
     );
 
+  const suggestedCombo =
+    combo
+      ? null
+      : await bestComboSuggestion(
+        db,
+        base,
+        baseBeforeDiscounts,
+      );
+
+
   const coupon =
     await activeCoupon(
       db,
@@ -701,6 +879,24 @@ export async function calculateCommercialV2Quote(
           combo.name,
       }
       : null,
+
+    suggestedCombo:
+      suggestedCombo
+        ? {
+          code:
+            suggestedCombo.code,
+
+          name:
+            suggestedCombo.name,
+
+          description:
+            suggestedCombo.description
+            || '',
+
+          discountCents:
+            suggestedCombo.discountCents,
+        }
+        : null,
 
     coupon: coupon
       ? {

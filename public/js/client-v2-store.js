@@ -414,100 +414,79 @@ function comboByCode(
   || null;
 }
 
-function comboRequiredGroups(
+function comboMatchesSelection(
+  state,
   combo,
 ) {
+  const selectedCodes =
+    new Set(
+      state.selection.addonCodes
+      || [],
+    );
+
+  const selectedGroups =
+    new Set(
+      [
+        ...selectedCodes,
+      ]
+        .map(
+          (code) =>
+            addonByCode(
+              state,
+              code,
+            )
+              ?.group,
+        )
+        .filter(
+          Boolean,
+        ),
+    );
+
+  const product =
+    productFor(
+      state,
+    );
+
   return (
     combo?.items
     || []
   )
     .filter(
       (item) =>
-        item.required !== false
-        && item.itemType === 'addon_group',
+        item.required
+        !== false,
     )
-    .map(
-      (item) =>
-        item.itemCode,
+    .every(
+      (item) => {
+        if (
+          item.itemType
+          === 'main_product'
+        ) {
+          return item.itemCode
+            === product?.code;
+        }
+
+        if (
+          item.itemType
+          === 'addon'
+        ) {
+          return selectedCodes.has(
+            item.itemCode,
+          );
+        }
+
+        if (
+          item.itemType
+          === 'addon_group'
+        ) {
+          return selectedGroups.has(
+            item.itemCode,
+          );
+        }
+
+        return false;
+      },
     );
-}
-
-function ensureComboSelections(
-  state,
-  combo,
-) {
-  const selected =
-    new Set(
-      state.selection.addonCodes,
-    );
-
-  for (
-    const group
-    of comboRequiredGroups(
-      combo,
-    )
-  ) {
-    const hasGroup =
-      [
-        ...selected,
-      ]
-        .some(
-          (code) =>
-            addonByCode(
-              state,
-              code,
-            )
-              ?.group
-            === group,
-        );
-
-    if (hasGroup) {
-      continue;
-    }
-
-    const fallback =
-      (
-        state.catalog?.addons
-        || []
-      )
-        .find(
-          (addon) =>
-            addon.group
-            === group,
-        );
-
-    if (fallback) {
-      selected.add(
-        fallback.code,
-      );
-    }
-  }
-
-  state.selection.addonCodes =
-    [
-      ...selected,
-    ];
-}
-
-function comboRequirements(
-  combo,
-) {
-  const labels =
-    (combo?.items || [])
-      .filter(
-        (item) =>
-          item.required !== false,
-      )
-      .map(
-        (item) =>
-          item.itemType === 'addon_group'
-            ? addonGroupLabel(
-                item.itemCode,
-              )
-            : item.itemCode,
-      );
-
-  return labels.join(' + ');
 }
 
 function addonGroups(
@@ -563,6 +542,83 @@ async function updateQuote(
 
   state.quote =
     data.quote;
+}
+
+async function refreshConfigurationQuote(
+  state,
+) {
+  try {
+    await updateQuote(
+      state,
+    );
+  } catch {
+    state.quote =
+      null;
+  }
+}
+
+function comboOfferHtml(
+  state,
+) {
+  const applied =
+    state.quote?.combo;
+
+  if (applied) {
+    return `
+      <div class="section-block">
+        <div class="notice success">
+          <strong>Combo aplicado: ${esc(applied.name)}</strong>
+          <div style="margin-top:6px">
+            Desconto: ${money(state.quote.comboDiscountCents || 0)}
+          </div>
+
+          <button
+            id="removeCombo"
+            class="btn btn-ghost"
+            type="button"
+            style="margin-top:10px"
+          >
+            Remover desconto do combo
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const suggestion =
+    state.quote?.suggestedCombo;
+
+  if (!suggestion) {
+    return '';
+  }
+
+  return `
+    <div class="section-block">
+      <div class="notice info">
+        <strong>
+          Suas escolhas formam o combo ${esc(suggestion.name)}
+        </strong>
+
+        ${suggestion.description
+          ? `<p class="muted" style="margin:6px 0 0">${esc(suggestion.description)}</p>`
+          : ''}
+
+        <div style="margin-top:6px">
+          Vantagem do combo:
+          <strong>-${money(suggestion.discountCents)}</strong>
+        </div>
+
+        <button
+          id="applySuggestedCombo"
+          class="btn btn-secondary"
+          type="button"
+          style="margin-top:10px"
+        >
+          Aplicar vantagem do combo
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function quoteHtml(
@@ -749,7 +805,7 @@ function renderEventGate(
       (input) =>
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             state.event.type =
               input.value;
 
@@ -960,7 +1016,7 @@ function renderProducts(
     )
     .addEventListener(
       'click',
-      () => {
+      async () => {
         if (
           !productFor(state)
         ) {
@@ -970,6 +1026,10 @@ function renderProducts(
 
           return;
         }
+
+        await refreshConfigurationQuote(
+          state,
+        );
 
         state.step = 2;
         persist(state);
@@ -1128,73 +1188,7 @@ function renderConfiguration(
         }
       </div>
 
-      ${
-        Array.isArray(
-          state.catalog.combos,
-        )
-        && state.catalog.combos.length
-          ? `
-            <div class="section-block">
-              <h2 class="section-title">
-                Combos
-              </h2>
-
-              <div class="grid two">
-                <label class="choice-card ${
-                  state.selection.comboCode
-                    ? ''
-                    : 'selected'
-                }">
-                  <input
-                    type="radio"
-                    name="combo"
-                    value=""
-                    ${state.selection.comboCode ? '' : 'checked'}
-                  >
-
-                  <span class="choice-main">
-                    <strong>Sem combo</strong>
-                    <small>Escolher os adicionais separadamente.</small>
-                  </span>
-                </label>
-
-                ${state.catalog.combos.map(
-                  (combo) => `
-                    <label class="choice-card ${
-                      state.selection.comboCode
-                      === combo.code
-                        ? 'selected'
-                        : ''
-                    }">
-                      <input
-                        type="radio"
-                        name="combo"
-                        value="${esc(combo.code)}"
-                        ${
-                          state.selection.comboCode
-                          === combo.code
-                            ? 'checked'
-                            : ''
-                        }
-                      >
-
-                      <span class="choice-main">
-                        <strong>${esc(combo.name)}</strong>
-                        <small>
-                          ${esc(combo.description || '')}
-                          ${comboRequirements(combo)
-                            ? ` • Escolha acima: ${esc(comboRequirements(combo))}`
-                            : ''}
-                        </small>
-                      </span>
-                    </label>
-                  `,
-                ).join('')}
-              </div>
-            </div>
-          `
-          : ''
-      }
+      ${comboOfferHtml(state)}
 
       <div class="section-block">
         <button
@@ -1236,9 +1230,13 @@ function renderConfiguration(
       (input) => {
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             state.selection.variantCode =
               input.value;
+
+            await refreshConfigurationQuote(
+              state,
+            );
 
             persist(state);
             renderConfiguration(
@@ -1319,39 +1317,20 @@ function renderConfiguration(
                 state.selection.comboCode,
               );
 
-            if (combo) {
-              const selectedGroups =
-                new Set(
-                  state.selection.addonCodes
-                    .map(
-                      (code) =>
-                        addonByCode(
-                          state,
-                          code,
-                        )
-                          ?.group,
-                    )
-                    .filter(
-                      Boolean,
-                    ),
-                );
-
-              const stillMatches =
-                comboRequiredGroups(
-                  combo,
-                )
-                  .every(
-                    (group) =>
-                      selectedGroups.has(
-                        group,
-                      ),
-                  );
-
-              if (!stillMatches) {
-                state.selection.comboCode =
-                  '';
-              }
+            if (
+              combo
+              && !comboMatchesSelection(
+                state,
+                combo,
+              )
+            ) {
+              state.selection.comboCode =
+                '';
             }
+
+            await refreshConfigurationQuote(
+              state,
+            );
 
             persist(state);
             renderConfiguration(
@@ -1363,38 +1342,56 @@ function renderConfiguration(
       },
     );
 
-  app
-    .querySelectorAll(
-      '[name="combo"]',
+  document
+    .getElementById(
+      'applySuggestedCombo',
     )
-    .forEach(
-      (input) => {
-        input.addEventListener(
-          'change',
-          () => {
-            state.selection.comboCode =
-              input.value;
+    ?.addEventListener(
+      'click',
+      async () => {
+        const code =
+          state.quote
+            ?.suggestedCombo
+            ?.code
+          || '';
 
-            const combo =
-              comboByCode(
-                state,
-                input.value,
-              );
+        if (!code) {
+          return;
+        }
 
-            if (combo) {
-              ensureComboSelections(
-                state,
-                combo,
-              );
-            }
+        state.selection.comboCode =
+          code;
 
-            persist(state);
+        await refreshConfigurationQuote(
+          state,
+        );
 
-            renderConfiguration(
-              state,
-              render,
-            );
-          },
+        persist(state);
+        renderConfiguration(
+          state,
+          render,
+        );
+      },
+    );
+
+  document
+    .getElementById(
+      'removeCombo',
+    )
+    ?.addEventListener(
+      'click',
+      async () => {
+        state.selection.comboCode =
+          '';
+
+        await refreshConfigurationQuote(
+          state,
+        );
+
+        persist(state);
+        renderConfiguration(
+          state,
+          render,
         );
       },
     );
@@ -2464,6 +2461,10 @@ export async function startStore(
     selectProduct(
       state,
       product,
+    );
+
+    await refreshConfigurationQuote(
+      state,
     );
 
     state.step =

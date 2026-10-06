@@ -150,31 +150,7 @@ async function libriWhatsapp(
         '',
       );
 
-  if (v2Digits) {
-    return v2Digits;
-  }
-
-  const legacy =
-    await db
-      .prepare(
-        `
-          SELECT value
-          FROM settings
-          WHERE key = 'libri_whatsapp'
-          LIMIT 1
-        `,
-      )
-      .first();
-
-  return String(
-    legacy
-      ?.value
-    || '',
-  )
-    .replace(
-      /\D/g,
-      '',
-    );
+  return v2Digits;
 }
 
 function whatsappUrl(

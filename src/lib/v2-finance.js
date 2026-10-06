@@ -1190,6 +1190,11 @@ async function movementsForRange(
             isRefund
               ? 'out'
               : 'in',
+
+          editable:
+            row.provider
+            === 'direct_pix'
+            && !isRefund,
         };
       },
     );
@@ -1377,6 +1382,317 @@ async function openReceivables(
         row.remainingCents
         > 0,
     );
+}
+
+export async function updateV2FinancePayment(
+  db,
+  paymentId,
+  {
+    amountCents,
+    paidDate,
+    paymentType,
+  } = {},
+) {
+  const id =
+    Number.parseInt(
+      paymentId,
+      10,
+    );
+
+  if (
+    !Number.isInteger(id)
+    || id <= 0
+  ) {
+    throw new Error(
+      'Lançamento financeiro inválido.',
+    );
+  }
+
+  const row =
+    await db
+      .prepare(
+        `
+          SELECT
+            p.id,
+            p.order_id,
+            p.provider,
+            p.payment_type,
+            p.status,
+            p.amount_cents,
+            p.paid_at,
+            o.order_code,
+            o.status AS order_status,
+            pr.total_cents,
+            pr.payment_method
+          FROM v2_payments p
+          INNER JOIN v2_orders o
+            ON o.id = p.order_id
+          INNER JOIN v2_order_pricing pr
+            ON pr.order_id = o.id
+          WHERE p.id = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        id,
+      )
+      .first();
+
+  if (!row) {
+    throw new Error(
+      'Lançamento não encontrado.',
+    );
+  }
+
+  if (
+    row.provider
+    !== 'direct_pix'
+    || row.status
+      !== 'approved'
+    || row.payment_type
+      === 'refund'
+  ) {
+    throw new Error(
+      'Somente lançamentos Pix manuais podem ser corrigidos. Pagamentos do Mercado Pago são conciliados pelo provedor.',
+    );
+  }
+
+  const cents =
+    Number.parseInt(
+      amountCents,
+      10,
+    );
+
+  if (
+    !Number.isInteger(cents)
+    || cents <= 0
+    || cents > 100000000
+  ) {
+    throw new Error(
+      'Informe um valor válido.',
+    );
+  }
+
+  const day =
+    cleanText(
+      paidDate,
+      10,
+    );
+
+  if (
+    !isIsoDay(day)
+    || day > dateKeyInSaoPaulo()
+  ) {
+    throw new Error(
+      'Informe uma data de recebimento válida.',
+    );
+  }
+
+  const type =
+    cleanText(
+      paymentType,
+      30,
+    );
+
+  if (
+    ![
+      'deposit',
+      'balance',
+      'full_payment',
+    ].includes(type)
+  ) {
+    throw new Error(
+      'Tipo de lançamento inválido.',
+    );
+  }
+
+  const stamp =
+    new Date()
+      .toISOString();
+
+  const paidAt =
+    `${day}T12:00:00.000Z`;
+
+  await db
+    .prepare(
+      `
+        UPDATE v2_payments
+        SET
+          payment_type = ?,
+          amount_cents = ?,
+          fee_cents = 0,
+          net_cents = ?,
+          paid_at = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+    )
+    .bind(
+      type,
+      cents,
+      cents,
+      paidAt,
+      stamp,
+      id,
+    )
+    .run();
+
+  const totals =
+    await db
+      .prepare(
+        `
+          SELECT
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN payment_type != 'refund'
+                    THEN amount_cents
+                  ELSE -amount_cents
+                END
+              ),
+              0
+            ) AS paid_cents
+          FROM v2_payments
+          WHERE
+            order_id = ?
+            AND status = 'approved'
+        `,
+      )
+      .bind(
+        row.order_id,
+      )
+      .first();
+
+  const remaining =
+    Math.max(
+      0,
+      Number(
+        row.total_cents
+        || 0,
+      )
+      - Number(
+        totals
+          ?.paid_cents
+        || 0,
+      ),
+    );
+
+  if (
+    row.payment_method
+    === 'pix'
+    && ![
+      'cancelled',
+      'finalized',
+    ].includes(
+      row.order_status,
+    )
+  ) {
+    if (
+      remaining === 0
+      && row.order_status
+        === 'balance_pending'
+    ) {
+      await db
+        .prepare(
+          `
+            UPDATE v2_orders
+            SET
+              status = 'ready_for_delivery',
+              next_action = 'Liberar entrega',
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          stamp,
+          row.order_id,
+        )
+        .run();
+    }
+
+    if (
+      remaining > 0
+      && row.order_status
+        === 'ready_for_delivery'
+    ) {
+      await db
+        .prepare(
+          `
+            UPDATE v2_orders
+            SET
+              status = 'balance_pending',
+              next_action = 'Aguardar saldo final',
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          stamp,
+          row.order_id,
+        )
+        .run();
+    }
+  }
+
+  await db
+    .prepare(
+      `
+        INSERT INTO v2_order_history(
+          order_id,
+          action_code,
+          description,
+          metadata_json,
+          created_at
+        )
+        VALUES (
+          ?,
+          'finance_payment_corrected',
+          'Lançamento financeiro corrigido manualmente no admin.',
+          ?,
+          ?
+        )
+      `,
+    )
+    .bind(
+      row.order_id,
+      JSON.stringify({
+        paymentId:
+          id,
+        before: {
+          amountCents:
+            Number(
+              row.amount_cents
+              || 0,
+            ),
+          paidAt:
+            row.paid_at,
+          paymentType:
+            row.payment_type,
+        },
+        after: {
+          amountCents:
+            cents,
+          paidAt,
+          paymentType:
+            type,
+        },
+      }),
+      stamp,
+    )
+    .run();
+
+  return {
+    id,
+    orderCode:
+      row.order_code,
+    amountCents:
+      cents,
+    paidAt,
+    paymentType:
+      type,
+    remainingCents:
+      remaining,
+  };
 }
 
 export async function getV2FinanceDashboard(

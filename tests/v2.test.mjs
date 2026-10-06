@@ -16,7 +16,7 @@ import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWin
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
-import { getV2FinanceDashboard } from '../src/lib/v2-finance.js';
+import { getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -33,7 +33,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 17);
+  const DB = database(); assert.equal(DB.migrationCount, 18);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -565,6 +565,73 @@ test('production search finds theme and exposes the planned card data', async t 
   assert.ok(rows[0].paidCents > 0);
 });
 
+test('finance admin can correct direct Pix but not Mercado Pago reconciliation', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Finance editável', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const orderId = DB.sqlite.prepare(
+    'SELECT id FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code).id;
+
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(
+      order_id, provider, payment_type, method, status,
+      amount_cents, fee_cents, net_cents, paid_at
+    )
+    VALUES (?, 'direct_pix', 'balance', 'pix', 'approved', 1000, 0, 1000, ?)
+  `).run(orderId, day(5) + 'T12:00:00.000Z');
+
+  const directPix = DB.sqlite.prepare(
+    "SELECT id FROM v2_payments WHERE order_id=? AND provider='direct_pix'"
+  ).get(orderId);
+
+  const edited = await updateV2FinancePayment(DB, directPix.id, {
+    amountCents: 2500,
+    paidDate: day(-1),
+    paymentType: 'balance',
+  });
+
+  assert.equal(edited.amountCents, 2500);
+  assert.equal(
+    DB.sqlite.prepare('SELECT amount_cents FROM v2_payments WHERE id=?').get(directPix.id).amount_cents,
+    2500,
+  );
+  assert.equal(
+    DB.sqlite.prepare('SELECT net_cents FROM v2_payments WHERE id=?').get(directPix.id).net_cents,
+    2500,
+  );
+
+  const mercadoPago = DB.sqlite.prepare(
+    "SELECT id FROM v2_payments WHERE order_id=? AND provider='mercado_pago'"
+  ).get(orderId);
+
+  await assert.rejects(
+    updateV2FinancePayment(DB, mercadoPago.id, {
+      amountCents: 1,
+      paidDate: day(-1),
+      paymentType: 'deposit',
+    }),
+    /Mercado Pago/,
+  );
+
+  assert.equal(
+    DB.sqlite.prepare(
+      "SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='finance_payment_corrected'"
+    ).get(orderId).n,
+    1,
+  );
+});
+
 test('finance does not pretend Mercado Pago fees are zero before reconciliation', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const checkout = await startV2Checkout(request, e, input({
@@ -678,6 +745,21 @@ test('scheduler repairs missing notifications, expires reservations and previews
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_previews').get().status, 'expired');
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE event_code = 'URGENCY_REQUESTED'").get().n, 1);
   assert.equal((await getV2CustomerArea(env(DB), result.order.publicToken)).urgency.status, 'pending');
+});
+
+test('public catalog uses Álbum da Festa as the Moments commercial label', async () => {
+  const DB = database();
+  const catalog = await loadV2Catalog(DB);
+  const album = catalog.addons.find(item => item.code === 'moments_festa');
+
+  assert.ok(album);
+  assert.match(album.name, /^Álbum da Festa/);
+  assert.equal(
+    DB.sqlite.prepare(
+      "SELECT value FROM v2_settings WHERE key='moments_public_label'"
+    ).get().value,
+    'Álbum da Festa',
+  );
 });
 
 test('public catalog exposes official combo composition', async () => {
@@ -1024,6 +1106,28 @@ test('agenda separates party date from delivery deadline and exposes customer id
   assert.equal(deliveryAgenda.days[0].deliveries[0].code, checkout.order.code);
   assert.equal(deliveryAgenda.days[0].deliveries[0].customerName, 'Cliente Teste');
   assert.equal(deliveryAgenda.days[0].deliveries[0].deliveryWindow.end, deliveryEnd);
+
+  const orderId = DB.sqlite.prepare(
+    'SELECT id FROM v2_orders WHERE order_code = ?'
+  ).get(checkout.order.code).id;
+
+  DB.sqlite.prepare(
+    "UPDATE v2_orders SET status='finalized', finalized_at=datetime('now') WHERE id=?"
+  ).run(orderId);
+
+  const afterFinalized = await getV2AgendaRange(DB, {
+    start: deliveryStart,
+    end: eventDate,
+  });
+
+  assert.equal(
+    afterFinalized.days.some(day =>
+      day.events.some(item => item.code === checkout.order.code)
+      || day.deliveries.some(item => item.code === checkout.order.code)
+    ),
+    false,
+    'finalized orders must not remain as visible party/delivery cards in the agenda',
+  );
 });
 
 test('restored agenda day/period and cascade suggestions run against actual schema', async () => {

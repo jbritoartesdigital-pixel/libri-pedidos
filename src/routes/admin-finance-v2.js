@@ -1,11 +1,13 @@
 import {
   fail,
   json,
+  readJson,
 } from '../lib/http.js';
 
 import {
   getV2FinanceDashboard,
   getV2FinanceSummary,
+  updateV2FinancePayment,
 } from '../lib/v2-finance.js';
 
 function filtersFromUrl(
@@ -108,6 +110,42 @@ export async function handleAdminFinanceV2Api(
         error
           ?.message
         || 'Não foi possível carregar o financeiro.',
+        422,
+      );
+    }
+  }
+
+  const paymentMatch =
+    path.match(
+      /^\/api\/admin\/v2\/finance\/payments\/(\d+)$/,
+    );
+
+  if (
+    paymentMatch
+    && method
+    === 'PATCH'
+  ) {
+    try {
+      return json({
+        ok:
+          true,
+
+        result:
+          await updateV2FinancePayment(
+            env.DB,
+            paymentMatch[1],
+            await readJson(
+              request,
+            ),
+          ),
+      });
+    } catch (
+      error
+    ) {
+      return fail(
+        error
+          ?.message
+        || 'Não foi possível corrigir este lançamento.',
         422,
       );
     }

@@ -49,7 +49,7 @@ const ADDON_GROUP_LABELS = {
   filter: 'Filtro personalizado',
   save_the_date: 'Save the Date',
   reminder: 'Lembrete',
-  moments: 'Libri Moments',
+  moments: 'Álbum da Festa',
   extras: 'Outros adicionais',
 };
 

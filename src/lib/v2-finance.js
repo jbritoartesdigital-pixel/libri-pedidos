@@ -362,7 +362,10 @@ async function summaryForRange(
               SUM(
                 CASE
                   WHEN pr.payment_method = 'pix'
-                    AND o.status != 'cancelled'
+                    AND o.status NOT IN (
+                      'cancelled',
+                      'finalized'
+                    )
                   THEN MAX(
                     0,
                     pr.total_cents
@@ -536,7 +539,8 @@ async function summaryForRange(
           WHERE
             pr.payment_method = 'pix'
             AND o.status NOT IN (
-              'cancelled'
+              'cancelled',
+              'finalized'
             )
             AND EXISTS (
               SELECT 1
@@ -1266,7 +1270,10 @@ async function openReceivables(
             ON pr.order_id = o.id
           WHERE
             pr.payment_method = 'pix'
-            AND o.status != 'cancelled'
+            AND o.status NOT IN (
+              'cancelled',
+              'finalized'
+            )
             AND EXISTS (
               SELECT 1
               FROM v2_payments initial

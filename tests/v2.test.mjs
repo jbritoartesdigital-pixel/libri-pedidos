@@ -32,7 +32,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 14);
+  const DB = database(); assert.equal(DB.migrationCount, 15);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -135,6 +135,89 @@ test('legacy V1 orders migrate idempotently into the V2 model without deleting s
   assert.equal(DB.sqlite.prepare(
     "SELECT COUNT(*) AS n FROM orders WHERE order_code='LIBRI-0999'"
   ).get().n, 1);
+});
+
+test('legacy repair finalizes delivered historical orders and moves imported payments off migration month', async () => {
+  const DB = database();
+
+  const legacyToken = 'ord_' + 'c'.repeat(36);
+  DB.sqlite.prepare(`
+    INSERT INTO orders(
+      order_code, public_token, customer_name, whatsapp,
+      honoree_name, display_name, age,
+      event_date, event_time, venue_name, venue_address, location_url, theme,
+      experience, format, addons_json, briefing_json, pricing_json,
+      subtotal_cents, urgency_enabled, urgency_percent, urgency_amount_cents,
+      total_cents, deposit_percent, deposit_cents, balance_cents,
+      terms_version, terms_accepted_at, portfolio_consent,
+      status, photos_status, entry_status, mascot_status, speech_mode,
+      speech_status, invitation_status, balance_status,
+      production_started_at, production_deadline_at,
+      created_at, updated_at, finalized_at
+    )
+    VALUES (
+      'LIBRI-0998', ?, 'Cliente Histórica', '5561888888888',
+      'Evento Histórico', 'Evento Histórico', 7,
+      '2026-09-20', '18:00', 'Salão', 'Rua Antiga', '', 'Tema antigo',
+      'full', 'interactive', '{}', '{"mustHave":"Histórico"}', '{}',
+      10000, 0, 0, 0,
+      10000, 50, 5000, 5000,
+      '1.0', '2026-08-01T12:00:00.000Z', 1,
+      'producing', 'approved', 'confirmed', 'approved', 'libri',
+      'not_required', 'approved', 'waiting',
+      '2026-08-03T12:00:00.000Z', '2026-08-10T12:00:00.000Z',
+      '2026-08-01T12:00:00.000Z', '2026-10-06T01:00:00.000Z', '2026-08-01T12:00:00.000Z'
+    )
+  `).run(legacyToken);
+
+  const migration14 = readFileSync('migrations/0014_v1_to_v2_retirement.sql', 'utf8');
+  const migration15 = readFileSync('migrations/0015_fix_legacy_finalized_finance.sql', 'utf8');
+  DB.sqlite.exec(migration14);
+
+  const before = DB.sqlite.prepare(
+    "SELECT status FROM v2_orders WHERE order_code='LIBRI-0998'"
+  ).get();
+  assert.equal(before.status, 'balance_pending');
+
+  const beforePayment = DB.sqlite.prepare(`
+    SELECT paid_at
+    FROM v2_payments
+    WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0998')
+      AND payment_type='deposit'
+  `).get();
+  assert.equal(beforePayment.paid_at, '2026-10-06T01:00:00.000Z');
+
+  DB.sqlite.exec(migration15);
+  DB.sqlite.exec(migration15);
+
+  const repaired = DB.sqlite.prepare(`
+    SELECT status, next_action, finalized_at
+    FROM v2_orders
+    WHERE order_code='LIBRI-0998'
+  `).get();
+  assert.equal(repaired.status, 'finalized');
+  assert.match(repaired.next_action, /Finalizado/);
+  assert.ok(repaired.finalized_at);
+
+  const repairedPayment = DB.sqlite.prepare(`
+    SELECT paid_at
+    FROM v2_payments
+    WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0998')
+      AND payment_type='deposit'
+  `).get();
+  assert.equal(repairedPayment.paid_at, '2026-08-01T12:00:00.000Z');
+
+  assert.equal(DB.sqlite.prepare(`
+    SELECT COUNT(*) AS n
+    FROM v2_agenda_allocations
+    WHERE order_id=(SELECT id FROM v2_orders WHERE order_code='LIBRI-0998')
+  `).get().n, 0);
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.receivableCents, 0);
+  assert.equal(finance.summary.openReceivableAllCents, 0);
+  assert.equal(finance.receivables.some(item => item.orderCode === 'LIBRI-0998'), false);
+  assert.equal(finance.movements.some(item => item.orderCode === 'LIBRI-0998'), false);
 });
 
 test('urgency: request, approval, exact discounted price, Pix, repeated webhook and production preservation', async t => {

@@ -204,10 +204,8 @@ async function upsertCustomer(
   );
 }
 
-function orderItemRows(
-  quote,
-) {
-  return [
+function orderItemRows(quote) {
+  const rows = [
     {
       type:
         'product',
@@ -280,6 +278,39 @@ function orderItemRows(
       }),
     ),
   ];
+
+  if (
+    quote.combo
+  ) {
+    rows.push({
+      type:
+        'combo',
+
+      code:
+        quote.combo
+          .code,
+
+      name:
+        quote.combo
+          .name,
+
+      priceCents:
+        0,
+
+      pointsUnits:
+        0,
+
+      configuration: {
+        discountCents:
+          Number(
+            quote.comboDiscountCents
+            || 0,
+          ),
+      },
+    });
+  }
+
+  return rows;
 }
 
 async function createManualOrderRecords(

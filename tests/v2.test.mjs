@@ -784,6 +784,121 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
     source,
     /recommendedCompleteScenes/,
   );
+
+  assert.equal(
+    source.includes(
+      'comboOfferHtml(state)',
+    ),
+    false,
+  );
+
+  assert.equal(
+    source.includes(
+      'referenceDays',
+    ),
+    false,
+  );
+
+  assert.match(
+    source,
+    /Ver como funciona/,
+  );
+
+  assert.match(
+    source,
+    /Conhecer/,
+  );
+
+  assert.match(
+    source,
+    /back:\s*!state\.deepProductSlug/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 3[\s\S]*renderPartyDate/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 5[\s\S]*renderAddons/,
+  );
+
+  assert.match(
+    source,
+    /state\.step === 7[\s\S]*renderDetails/,
+  );
+});
+
+test('checkout snapshots the applied combo as an order item', async () => {
+  const DB = database();
+
+  DB.sqlite.prepare(`
+    UPDATE v2_combos
+    SET discount_type = 'fixed',
+        discount_value = 500
+    WHERE code = 'convite_save'
+  `).run();
+
+  const selection = {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: ['save_static'],
+    comboCode: 'convite_save',
+  };
+
+  const quote = await calculateCommercialV2Quote(
+    DB,
+    selection,
+    {
+      eventType: 'birthday',
+    },
+  );
+
+  const delivery = await findV2DeliveryOptions(
+    DB,
+    {
+      eventDate: day(60),
+      pointsUnits: quote.pointsUnits,
+      limit: 3,
+    },
+  );
+
+  assert.ok(delivery.options.length > 0);
+
+  const checkout = await startV2Checkout(
+    request,
+    env(DB),
+    input({
+      event: {
+        honoreeName: 'Combo Snapshot',
+        type: 'birthday',
+        date: day(60),
+      },
+      selection,
+      deliveryWindow: {
+        start: delivery.options[0].start,
+        end: delivery.options[0].end,
+      },
+      ...await terms(DB),
+    }),
+  );
+
+  const orderId = DB.sqlite.prepare(
+    'SELECT id FROM v2_orders WHERE order_code = ?',
+  ).get(checkout.order.code).id;
+
+  const comboItem = DB.sqlite.prepare(`
+    SELECT item_code, name_snapshot, unit_price_cents, points_units, configuration_json
+    FROM v2_order_items
+    WHERE order_id = ? AND item_type = 'combo'
+  `).get(orderId);
+
+  assert.equal(comboItem.item_code, 'convite_save');
+  assert.equal(comboItem.name_snapshot, 'Convite + Save');
+  assert.equal(comboItem.unit_price_cents, 0);
+  assert.equal(comboItem.points_units, 0);
+  assert.equal(JSON.parse(comboItem.configuration_json).discountCents, 500);
 });
 
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
@@ -1017,6 +1132,12 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
       'utf8',
     );
 
+  const settings =
+    readFileSync(
+      'public/js/admin-v2-store-settings.js',
+      'utf8',
+    );
+
   assert.match(
     central,
     /Festas de amanhã/,
@@ -1065,6 +1186,11 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
   assert.match(
     commercial,
     /Adicionais permitidos/,
+  );
+
+  assert.match(
+    settings,
+    /Prazo mínimo antes da festa/,
   );
 });
 

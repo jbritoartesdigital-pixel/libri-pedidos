@@ -8,7 +8,7 @@ import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
+import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production, recoverPaidV2Order } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
@@ -394,6 +394,33 @@ test('late accredited payment does not oversell capacity; repeated review is ded
   assert.equal(reviewArea.payment.capacityReview, true);
   assert.ok(reviewArea.payment.paidCents > 0);
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE dedupe_key LIKE 'payment-capacity:%'").get().n, 1);
+});
+
+test('approved payment stuck in capacity review can be revalidated and briefing is released', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB); const a = await urgency(DB);
+  await decideV2Urgency(DB, a.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });
+  const payment = await resumeV2Payment(request, e, a.order.publicToken, await terms(DB));
+
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET status='expired',expires_at='2000-01-01'").run();
+  await setV2AgendaPeriod(DB, { start: day(0), end: day(1), blocked: true });
+
+  mp.approve(payment.payment.providerOrderId);
+  const firstSync = await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
+  assert.equal(firstSync.capacityReview, true);
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders').get().briefing_status, 'locked');
+
+  await setV2AgendaPeriod(DB, { start: day(0), end: day(1), blocked: false });
+  const recovered = await recoverPaidV2Order(e, a.order.code);
+
+  assert.equal(recovered.recovered, true);
+  assert.equal(recovered.briefingStatus, 'available');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders').get().status, 'briefing_pending');
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders').get().briefing_status, 'available');
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations').get().n > 0);
+
+  const area = await getV2CustomerArea(e, a.order.publicToken);
+  assert.equal(area.briefing.locked, false);
+  assert.equal(area.order.statusLabel, 'Briefing pendente');
 });
 
 test('stale cancellation cannot release replacement hold; provider canceled spelling supported', async t => {

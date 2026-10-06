@@ -878,7 +878,16 @@ async function convertHoldToAgenda(
           FROM v2_checkout_holds
           WHERE
             order_id = ?
-            AND status IN ('active', 'expired')
+            AND status IN (
+              'active',
+              'expired',
+              'cancelled'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM v2_checkout_hold_allocations a
+              WHERE a.hold_id = v2_checkout_holds.id
+            )
           ORDER BY id DESC
           LIMIT 1
         `,
@@ -920,15 +929,80 @@ async function convertHoldToAgenda(
       .results
     || [];
 
-  if (!rows.length) return { converted: false, reason: 'empty_hold' };
-  if (hold.expires_at <= nowIso()) {
-    const order = await db.prepare('SELECT delivery_start, delivery_end FROM v2_orders WHERE id = ?').bind(orderId).first();
-    const plan = await planV2AllocationForWindow(db, {
-      start: order.delivery_start, end: order.delivery_end,
-      pointsUnits: rows.reduce((sum, row) => sum + Number(row.points_units), 0),
-    });
-    if (!plan.fits) return { converted: false, reason: 'late_payment_capacity_changed' };
-    rows.splice(0, rows.length, ...plan.allocation.map(x => ({ day: x.day, points_units: x.pointsUnits })));
+  if (!rows.length) {
+    return {
+      converted: false,
+      reason: 'empty_hold',
+    };
+  }
+
+  const reservationStillValid =
+    hold.status === 'active'
+    && hold.expires_at > nowIso();
+
+  if (!reservationStillValid) {
+    const order =
+      await db
+        .prepare(
+          'SELECT delivery_start, delivery_end FROM v2_orders WHERE id = ?',
+        )
+        .bind(
+          orderId,
+        )
+        .first();
+
+    if (
+      !order?.delivery_start
+      || !order?.delivery_end
+    ) {
+      return {
+        converted: false,
+        reason: 'delivery_window_missing',
+      };
+    }
+
+    const plan =
+      await planV2AllocationForWindow(
+        db,
+        {
+          start:
+            order.delivery_start,
+
+          end:
+            order.delivery_end,
+
+          pointsUnits:
+            rows.reduce(
+              (sum, row) =>
+                sum
+                + Number(
+                  row.points_units,
+                ),
+              0,
+            ),
+        },
+      );
+
+    if (!plan.fits) {
+      return {
+        converted: false,
+        reason: 'late_payment_capacity_changed',
+      };
+    }
+
+    rows.splice(
+      0,
+      rows.length,
+      ...plan.allocation.map(
+        (item) => ({
+          day:
+            item.day,
+
+          points_units:
+            item.pointsUnits,
+        }),
+      ),
+    );
   }
 
   const existing =

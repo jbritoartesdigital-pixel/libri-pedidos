@@ -1,9 +1,12 @@
 import {
   api,
+  dateBr,
   empty,
   esc,
+  modal,
   money,
   setViewMeta,
+  showToast,
   viewRoot,
 } from './admin-v2-core.js';
 
@@ -281,11 +284,13 @@ export async function renderFinance() {
                         <tr>
                           <th>Pedido</th>
                           <th>Cliente</th>
+                          <th>Data</th>
                           <th>Tipo</th>
                           <th>Método</th>
                           <th>Bruto</th>
                           <th>Taxa</th>
                           <th>Líquido</th>
+                          <th></th>
                         </tr>
                       </thead>
 
@@ -295,11 +300,30 @@ export async function renderFinance() {
                             <tr>
                               <td>${esc(row.orderCode || '')}</td>
                               <td>${esc(row.customerName || '')}</td>
+                              <td>${esc(dateBr(row.paidAt || ''))}</td>
                               <td>${esc(movementLabel(row))}</td>
                               <td>${esc(row.method || row.provider || '')}</td>
                               <td>${money(row.amountCents)}</td>
                               <td>${row.feeKnown ? money(row.feeCents) : 'A conciliar'}</td>
                               <td>${row.netKnown ? money(row.netCents) : 'A conciliar'}</td>
+                              <td>
+                                ${
+                                  row.editable
+                                    ? `
+                                      <button
+                                        class="btn btn-ghost btn-small"
+                                        type="button"
+                                        data-edit-payment="${Number(row.id)}"
+                                        data-amount-cents="${Number(row.amountCents || 0)}"
+                                        data-paid-date="${esc(String(row.paidAt || '').slice(0, 10))}"
+                                        data-payment-type="${esc(row.paymentType || 'deposit')}"
+                                      >
+                                        Editar
+                                      </button>
+                                    `
+                                    : '<span class="muted">Conciliado</span>'
+                                }
+                              </td>
                             </tr>
                           `,
                         ).join('')}
@@ -335,6 +359,16 @@ export async function renderFinance() {
                           • restante
                           ${money(item.remainingCents)}
                         </small>
+
+                        <div style="margin-top:10px">
+                          <button
+                            class="btn btn-secondary btn-small"
+                            type="button"
+                            data-receive-balance="${esc(item.orderCode)}"
+                          >
+                            Marcar saldo recebido
+                          </button>
+                        </div>
                       </div>
                     `,
                   ).join('')
@@ -346,6 +380,223 @@ export async function renderFinance() {
           </section>
         </div>
       `;
+
+      content
+        .querySelectorAll(
+          '[data-edit-payment]',
+        )
+        .forEach(
+          (button) => {
+            button.addEventListener(
+              'click',
+              () => {
+                const paymentId =
+                  button.dataset.editPayment;
+
+                const close =
+                  modal(
+                    'Editar lançamento',
+                    `
+                      <div class="form-grid">
+                        <div class="field">
+                          <label for="financeEditAmount">Valor recebido</label>
+                          <input
+                            id="financeEditAmount"
+                            class="input"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value="${(
+                              Number(
+                                button.dataset.amountCents
+                                || 0,
+                              )
+                              / 100
+                            ).toFixed(2)}"
+                          >
+                        </div>
+
+                        <div class="field">
+                          <label for="financeEditDate">Data do recebimento</label>
+                          <input
+                            id="financeEditDate"
+                            class="input"
+                            type="date"
+                            value="${esc(button.dataset.paidDate || '')}"
+                          >
+                        </div>
+
+                        <div class="field">
+                          <label for="financeEditType">Tipo</label>
+                          <select
+                            id="financeEditType"
+                            class="select"
+                          >
+                            <option value="deposit">Entrada</option>
+                            <option value="balance">Saldo</option>
+                            <option value="full_payment">Pagamento integral</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="notice info" style="margin-top:14px">
+                        Apenas Pix manual pode ser corrigido aqui. Mercado Pago continua vindo da conciliação do provedor.
+                      </div>
+
+                      <div class="action-row">
+                        <span></span>
+                        <button
+                          id="saveFinancePayment"
+                          class="btn btn-primary"
+                          type="button"
+                        >
+                          Salvar correção
+                        </button>
+                      </div>
+                    `,
+                    {
+                      width:
+                        '620px',
+                    },
+                  );
+
+                const type =
+                  document
+                    .getElementById(
+                      'financeEditType',
+                    );
+
+                type.value =
+                  button.dataset.paymentType
+                  || 'deposit';
+
+                document
+                  .getElementById(
+                    'saveFinancePayment',
+                  )
+                  .addEventListener(
+                    'click',
+                    async () => {
+                      const amount =
+                        Number(
+                          document
+                            .getElementById(
+                              'financeEditAmount',
+                            )
+                            .value,
+                        );
+
+                      const paidDate =
+                        document
+                          .getElementById(
+                            'financeEditDate',
+                          )
+                          .value;
+
+                      if (
+                        !Number.isFinite(amount)
+                        || amount <= 0
+                        || !paidDate
+                      ) {
+                        showToast(
+                          'Confira o valor e a data.',
+                        );
+
+                        return;
+                      }
+
+                      try {
+                        await api(
+                          `/api/admin/v2/finance/payments/${paymentId}`,
+                          {
+                            method:
+                              'PATCH',
+                            body:
+                              JSON.stringify({
+                                amountCents:
+                                  Math.round(
+                                    amount
+                                    * 100,
+                                  ),
+                                paidDate,
+                                paymentType:
+                                  type.value,
+                              }),
+                          },
+                        );
+
+                        close();
+                        showToast(
+                          'Lançamento corrigido.',
+                        );
+
+                        await load();
+                      } catch (error) {
+                        showToast(
+                          error.message,
+                        );
+                      }
+                    },
+                  );
+              },
+            );
+          },
+        );
+
+      content
+        .querySelectorAll(
+          '[data-receive-balance]',
+        )
+        .forEach(
+          (button) => {
+            button.addEventListener(
+              'click',
+              async () => {
+                const orderCode =
+                  button.dataset.receiveBalance;
+
+                if (
+                  !confirm(
+                    `Confirmar o saldo de ${orderCode} como recebido agora?`,
+                  )
+                ) {
+                  return;
+                }
+
+                button.disabled =
+                  true;
+
+                try {
+                  await api(
+                    `/api/admin/v2/orders/${orderCode}/action`,
+                    {
+                      method:
+                        'POST',
+                      body:
+                        JSON.stringify({
+                          action:
+                            'balance_received',
+                        }),
+                    },
+                  );
+
+                  showToast(
+                    'Saldo registrado.',
+                  );
+
+                  await load();
+                } catch (error) {
+                  button.disabled =
+                    false;
+
+                  showToast(
+                    error.message,
+                  );
+                }
+              },
+            );
+          },
+        );
     };
 
   preset

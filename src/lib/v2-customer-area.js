@@ -2232,7 +2232,15 @@ export async function getV2CustomerArea(
     return null;
   }
 
-  if (env.MERCADO_PAGO_ACCESS_TOKEN && context.order.status === 'awaiting_payment') {
+  if (
+    env.MERCADO_PAGO_ACCESS_TOKEN
+    && [
+      'awaiting_payment',
+      'urgency_approved',
+    ].includes(
+      context.order.status,
+    )
+  ) {
     const payment = await env.DB.prepare(`SELECT provider_order_id FROM v2_payments
       WHERE order_id = ? AND provider = 'mercado_pago' AND status IN ('pending', 'approved')
       ORDER BY id DESC LIMIT 1`).bind(context.order.id).first();

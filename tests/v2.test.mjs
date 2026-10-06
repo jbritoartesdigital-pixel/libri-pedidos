@@ -12,7 +12,7 @@ import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
 import { cancelV2Order, deleteUnpaidV2Order, getV2Central, listV2Production } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
-import { findV2DeliveryOptions, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
+import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
@@ -917,12 +917,12 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
-test('delivery windows are capacity-driven instead of fixed to 3 or 4 days', async () => {
+test('normal delivery offers 3-day commercial windows while agenda uses only needed production days', async () => {
   const DB = database();
 
   for (let offset = 1; offset <= 35; offset += 1) {
     await setV2AgendaDay(DB, day(offset), {
-      sellableCapacityUnits: 100,
+      sellableCapacityUnits: 400,
       internalBufferUnits: 100,
       blocked: offset === 22,
     });
@@ -930,23 +930,45 @@ test('delivery windows are capacity-driven instead of fixed to 3 or 4 days', asy
 
   const delivery = await findV2DeliveryOptions(DB, {
     eventDate: day(60),
-    pointsUnits: 500,
+    pointsUnits: 100,
     limit: 6,
   });
 
   assert.ok(delivery.options.length > 0);
-  assert.ok(delivery.options.some(option => {
+
+  for (const option of delivery.options) {
     const start = new Date(option.start + 'T12:00:00Z');
     const end = new Date(option.end + 'T12:00:00Z');
-    return Math.round((end - start) / 86400000) + 1 > 4;
-  }));
+    assert.equal(Math.round((end - start) / 86400000) + 1, 3);
+  }
+
+  const first = delivery.options[0];
 
   await assert.doesNotReject(validateV2DeliveryWindow(DB, {
     eventDate: day(60),
-    start: delivery.options[0].start,
-    end: delivery.options[0].end,
+    start: first.start,
+    end: first.end,
   }));
+
+  const plan = await planV2AllocationForWindow(DB, {
+    start: first.start,
+    end: first.end,
+    pointsUnits: 100,
+  });
+
+  assert.equal(plan.fits, true);
+  assert.equal(plan.allocation.length, 1);
+
+  await assert.rejects(
+    validateV2DeliveryWindow(DB, {
+      eventDate: day(60),
+      start: day(10),
+      end: day(11),
+    }),
+    /3 dias/,
+  );
 });
+
 test('agenda separates party date from delivery deadline and exposes customer identity', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const eventDate = day(40);

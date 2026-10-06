@@ -1656,3 +1656,24 @@ a {
   color: #2d624f;
   line-height: 1.45;
 }
+
+
+.next-step-card {
+  margin-bottom: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff, #fff8fa);
+  border: 1px solid rgba(201, 111, 131, 0.22);
+  box-shadow: 0 12px 30px rgba(89, 62, 68, 0.08);
+}
+
+.next-step-card h2 {
+  margin: 7px 0 5px;
+  font-size: 22px;
+}
+
+.next-step-card p {
+  margin: 0 0 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}

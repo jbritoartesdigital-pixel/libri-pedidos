@@ -30,6 +30,13 @@ function whatsappBr(value) {
   return String(value || '');
 }
 
+function whatsappHref(number, message) {
+  const digits = String(number || '').replace(/\D/g, '');
+  return digits
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : '#';
+}
+
 function deliveryLabel(detail) {
   const start =
     detail.order
@@ -68,7 +75,89 @@ const ACTION_LABELS = {
     'Saldo recebido',
   finalize:
     'Finalizar pedido',
+  archive:
+    'Arquivar pedido',
+  unarchive:
+    'Restaurar pedido',
 };
+
+function quickWhatsappMessages(
+  detail,
+) {
+  const area =
+    new URL(
+      detail.order.customerAreaPath,
+      window.location.origin,
+    ).href;
+
+  const customer =
+    detail.order.customerName;
+
+  const honoree =
+    detail.order.honoreeName;
+
+  const messages = [];
+
+  if (
+    Number(
+      detail.briefing
+        ?.completionPercent
+      || 0,
+    ) < 100
+  ) {
+    messages.push({
+      label:
+        'Cobrar briefing',
+      text:
+        `Oi, ${customer}! 💛 O briefing do convite de ${honoree} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. Continue por aqui: ${area}?tab=briefing`,
+    });
+  }
+
+  if (
+    (detail.previews || [])
+      .some(
+        (preview) =>
+          preview.status
+          === 'active',
+      )
+  ) {
+    messages.push({
+      label:
+        'Prévia disponível',
+      text:
+        `Oi, ${customer}! 💛 A prévia do convite de ${honoree} já está disponível para conferência: ${area}?tab=preview`,
+    });
+  }
+
+  if (
+    Number(
+      detail.payment
+        ?.remainingBalanceCents
+      || 0,
+    ) > 0
+  ) {
+    messages.push({
+      label:
+        'Saldo pendente',
+      text:
+        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, está com saldo de ${money(detail.payment.remainingBalanceCents)} pendente. Os dados estão na sua área: ${area}`,
+    });
+  }
+
+  if (
+    detail.order.status
+    === 'finalized'
+  ) {
+    messages.push({
+      label:
+        'Pedido finalizado',
+      text:
+        `Oi, ${customer}! 💛 O pedido ${detail.order.code}, de ${honoree}, foi finalizado. Obrigada por confiar na Libri Convites! ${area}`,
+    });
+  }
+
+  return messages;
+}
 
 function paymentBlock(detail) {
   const p =
@@ -246,6 +335,11 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const quickMessages =
+    quickWhatsappMessages(
+      detail,
+    );
+
   const close =
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
@@ -294,6 +388,33 @@ export async function openOrder(code, onChanged = null) {
                 Área da cliente
               </a>
             </div>
+
+            ${
+              quickMessages.length
+                ? `
+                  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+                    <strong style="display:block;margin-bottom:8px">
+                      Mensagens rápidas
+                    </strong>
+
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      ${quickMessages.map(
+                        (item) => `
+                          <a
+                            class="btn btn-ghost btn-small"
+                            href="${esc(whatsappHref(detail.order.whatsapp, item.text))}"
+                            target="_blank"
+                            rel="noopener"
+                          >
+                            ${esc(item.label)}
+                          </a>
+                        `,
+                      ).join('')}
+                    </div>
+                  </div>
+                `
+                : ''
+            }
           </section>
 
           ${paymentBlock(detail)}
@@ -327,7 +448,10 @@ export async function openOrder(code, onChanged = null) {
                         ? 'btn-success'
                         : action === 'balance_received'
                           ? 'btn-warning'
-                          : 'btn-primary'
+                          : action === 'archive'
+                            || action === 'unarchive'
+                            ? 'btn-ghost'
+                            : 'btn-primary'
                     }"
                     type="button"
                     data-order-action="${esc(action)}"
@@ -890,6 +1014,24 @@ export async function openOrder(code, onChanged = null) {
               action === 'finalize'
               && !confirm(
                 'Finalizar este pedido? A capacidade liberada entra no fluxo de antecipação em cascata.',
+              )
+            ) {
+              return;
+            }
+
+            if (
+              action === 'archive'
+              && !confirm(
+                'Arquivar este pedido? Ele sairá das telas operacionais e continuará disponível em Arquivados.',
+              )
+            ) {
+              return;
+            }
+
+            if (
+              action === 'unarchive'
+              && !confirm(
+                'Restaurar este pedido para fora dos Arquivados?',
               )
             ) {
               return;

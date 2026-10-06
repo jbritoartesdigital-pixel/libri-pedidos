@@ -35,6 +35,10 @@ import {
 } from './admin-v2-finance.js';
 
 import {
+  renderArchived,
+} from './admin-v2-archived.js';
+
+import {
   renderStore,
 } from './admin-v2-config.js';
 
@@ -54,6 +58,7 @@ const ADMIN_VIEWS =
     'production',
     'agenda',
     'finance',
+    'archived',
     'store',
     'notifications',
     'security',
@@ -157,6 +162,10 @@ async function renderCurrent() {
     state.view === 'finance'
   ) {
     await renderFinance();
+  } else if (
+    state.view === 'archived'
+  ) {
+    await renderArchived(open);
   } else if (
     state.view === 'store'
   ) {

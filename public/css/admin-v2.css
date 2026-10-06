@@ -1095,3 +1095,24 @@ button { -webkit-tap-highlight-color: transparent; }
     grid-template-columns: 1fr;
   }
 }
+
+
+.attention-center {
+  border-color: rgba(201, 111, 131, 0.28);
+  background: linear-gradient(180deg, #fff, #fff9fb);
+}
+
+.attention-main {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attention-main strong,
+.attention-main small {
+  display: block;
+}

@@ -56,6 +56,23 @@ const ADDON_GROUP_LABELS = {
 const STORE_KEY =
   'libriV2StoreState';
 
+const STORE_KEY_SIMULATION =
+  'libriV2StoreStateSimulation';
+
+function simulationModeFromUrl() {
+  return new URLSearchParams(
+    window.location.search,
+  ).get('simular') === '1';
+}
+
+function storeKeyFor(
+  simulationMode = false,
+) {
+  return simulationMode
+    ? STORE_KEY_SIMULATION
+    : STORE_KEY;
+}
+
 function emptyState(
   productSlug,
 ) {
@@ -64,7 +81,16 @@ function emptyState(
       window.location.search,
     );
 
+  const simulationMode =
+    params.get('simular')
+    === '1';
+
   return {
+    simulationMode,
+
+    simulationUrgency:
+      false,
+
     step:
       productSlug
         ? 1
@@ -142,9 +168,14 @@ function readSaved(
   productSlug,
 ) {
   try {
+    const simulationMode =
+      simulationModeFromUrl();
+
     const raw =
       localStorage.getItem(
-        STORE_KEY,
+        storeKeyFor(
+          simulationMode,
+        ),
       );
 
     if (!raw) {
@@ -171,6 +202,8 @@ function readSaved(
         productSlug,
       ),
       ...saved,
+
+      simulationMode,
       deepProductSlug:
         productSlug
         || saved.deepProductSlug
@@ -207,7 +240,9 @@ function persist(
     state;
 
   localStorage.setItem(
-    STORE_KEY,
+    storeKeyFor(
+      state.simulationMode,
+    ),
     JSON.stringify(
       save,
     ),
@@ -352,6 +387,17 @@ function progress(
     );
 
   return `
+    ${
+      state.simulationMode
+        ? `
+          <div class="simulation-banner">
+            <strong>Modo de teste</strong>
+            <span>Nenhum pedido, cobrança, agenda ou lançamento financeiro será criado.</span>
+          </div>
+        `
+        : ''
+    }
+
     <div class="progress-shell">
       <div class="progress-top">
         <strong>Seu pedido</strong>
@@ -1083,6 +1129,176 @@ function recommendationTitle(
     offer?.group
   ]
   || 'Uma última sugestão';
+}
+
+function recommendationReason(
+  state,
+  offer,
+) {
+  if (
+    offer?.kind
+    === 'product_upgrade'
+  ) {
+    return 'Você escolheu a versão em vídeo. O próximo degrau é transformar a experiência em interativa sem mudar a quantidade de cenas.';
+  }
+
+  if (
+    offer?.kind
+    === 'combo'
+  ) {
+    return 'As escolhas que você já fez formam um combo com desconto. Vale aplicar o benefício antes de seguir.';
+  }
+
+  if (
+    offer?.group
+    === 'confirmation'
+  ) {
+    return 'Seu convite já é interativo. A confirmação ajuda você a organizar quem realmente vai à festa sem depender de respostas espalhadas no WhatsApp.';
+  }
+
+  if (
+    offer?.group
+    === 'moments'
+  ) {
+    return 'Você já adicionou organização ao convite. O Álbum da Festa é o próximo passo para reunir as fotos enviadas pelos convidados.';
+  }
+
+  if (
+    offer?.group
+    === 'save_the_date'
+  ) {
+    return 'Seu pedido já está bem encaminhado e este item completa uma combinação com benefício, ajudando a avisar a data com antecedência.';
+  }
+
+  if (
+    offer?.group
+    === 'reminder'
+  ) {
+    return 'Este item completa uma combinação útil para reforçar o evento perto da data da festa.';
+  }
+
+  if (
+    offer?.combo
+  ) {
+    return `Falta só este item para o combo ${offer.combo.name}. Por isso ele aparece como a última sugestão.`;
+  }
+
+  return 'Esta é a próxima melhoria mais útil para a configuração que você montou.';
+}
+
+function comboSavingsForOffer(
+  state,
+  offer,
+  promoAddon,
+) {
+  if (!offer?.combo) {
+    return 0;
+  }
+
+  if (
+    offer.kind
+    === 'combo'
+  ) {
+    return Number(
+      offer.combo
+        .discountCents
+      || 0,
+    );
+  }
+
+  const baseCents =
+    Number(
+      state.quote
+        ?.productCents
+      || 0,
+    )
+    + Number(
+      state.quote
+        ?.addonsCents
+      || 0,
+    )
+    + Number(
+      promoAddon
+        ?.priceCents
+      || 0,
+    );
+
+  if (
+    offer.combo
+      .discountType
+    === 'percent'
+  ) {
+    return Math.max(
+      0,
+      Math.round(
+        baseCents
+        * Number(
+          offer.combo
+            .discountValue
+          || 0,
+        )
+        / 100,
+      ),
+    );
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      baseCents,
+      Number(
+        offer.combo
+          .discountValue
+        || 0,
+      ),
+    ),
+  );
+}
+
+function showDeliveryChangeNotice(
+  state,
+  render,
+  message =
+    'Esse adicional aumentou a produção necessária para o seu pedido.',
+) {
+  const close =
+    modal(
+      'Seu prazo precisa ser ajustado',
+      `
+        <div class="notice info">
+          <strong>${esc(message)}</strong>
+          <p style="margin:8px 0 0">
+            A faixa que você escolheu antes não comporta mais essa configuração.
+            Seu pedido continua salvo. Escolha uma nova faixa disponível para seguir.
+          </p>
+        </div>
+
+        <div class="action-row">
+          <span></span>
+          <button
+            id="chooseNewDeliveryWindow"
+            class="btn btn-primary"
+            type="button"
+          >
+            Escolher nova faixa
+          </button>
+        </div>
+      `,
+    );
+
+  document
+    .getElementById(
+      'chooseNewDeliveryWindow',
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        close();
+        state.step = 4;
+        persist(state);
+        render();
+      },
+    );
 }
 
 async function refreshDeliveryForSelection(
@@ -2835,14 +3051,12 @@ function renderAddons(
               );
 
             if (!sameWindow) {
-              state.step =
-                4;
-
               persist(state);
-              render();
 
-              showToast(
-                'Seus adicionais mudaram a carga do pedido. Escolha a janela de entrega disponível para essa nova configuração.',
+              showDeliveryChangeNotice(
+                state,
+                render,
+                'Os adicionais escolhidos aumentaram a carga de produção do pedido.',
               );
 
               return;
@@ -2912,6 +3126,19 @@ function renderRecommendation(
         [0]
       : null;
 
+  const comboSavingsCents =
+    comboSavingsForOffer(
+      state,
+      offer,
+      promoAddon,
+    );
+
+  const reason =
+    recommendationReason(
+      state,
+      offer,
+    );
+
   app.innerHTML = `
     <section class="page-card promo-stage">
       ${progress(state)}
@@ -2973,6 +3200,25 @@ function renderRecommendation(
                 </p>
               `
               : ''
+        }
+
+        <div class="promo-why">
+          <strong>Por que estou te sugerindo isso?</strong>
+          <p>${esc(reason)}</p>
+        </div>
+
+        ${
+          offer.combo
+          && comboSavingsCents > 0
+            ? `
+              <div class="promo-saving">
+                Com esta escolha, seu pedido entra no
+                <strong>${esc(offer.combo.name)}</strong>
+                e você economiza
+                <strong>${money(comboSavingsCents)}</strong>.
+              </div>
+            `
+            : ''
         }
 
         ${
@@ -3132,14 +3378,12 @@ function renderRecommendation(
                 .length
               && !sameWindow
             ) {
-              state.step =
-                4;
-
               persist(state);
-              render();
 
-              showToast(
-                'O upgrade para Interativo mudou a carga do pedido. Escolha a nova janela de entrega.',
+              showDeliveryChangeNotice(
+                state,
+                render,
+                'O upgrade para Interativo aumentou a carga de produção do pedido.',
               );
 
               return;
@@ -3258,14 +3502,14 @@ function renderRecommendation(
               .length
             && !sameWindow
           ) {
-            state.step =
-              4;
-
             persist(state);
-            render();
 
-            showToast(
-              'Esse adicional mudou a disponibilidade. Escolha a nova janela de entrega.',
+            showDeliveryChangeNotice(
+              state,
+              render,
+              offer.kind === 'product_upgrade'
+                ? 'O upgrade para Interativo aumentou a carga de produção do pedido.'
+                : 'Essa oferta aumentou a carga de produção do pedido.',
             );
 
             return;
@@ -3513,6 +3757,17 @@ function renderCustomer(
             !(state.delivery?.options || [])
               .length
           ) {
+            if (
+              state.simulationMode
+            ) {
+              state.simulationUrgency =
+                true;
+              state.step = 8;
+              persist(state);
+              render();
+              return;
+            }
+
             const result =
               await api(
                 '/api/v2/urgency/request',
@@ -3534,7 +3789,9 @@ function renderCustomer(
               );
 
             localStorage.removeItem(
-              STORE_KEY,
+              storeKeyFor(
+                state.simulationMode,
+              ),
             );
 
             window.location.href =
@@ -3647,9 +3904,11 @@ function renderReview(
         <div class="review-line">
           <dt>Entrega</dt>
           <dd>
-            ${esc(dateBr(state.deliveryWindow?.start))}
-            a
-            ${esc(dateBr(state.deliveryWindow?.end))}
+            ${
+              state.simulationUrgency
+                ? 'Em uma compra real: análise de encaixe'
+                : `${esc(dateBr(state.deliveryWindow?.start))} a ${esc(dateBr(state.deliveryWindow?.end))}`
+            }
           </dd>
         </div>
 
@@ -3715,7 +3974,11 @@ async function renderPayment(
           Como você prefere pagar?
         </h1>
         <p class="page-subtitle">
-          Na próxima etapa você lê e aceita as condições antes de abrir o Mercado Pago.
+          ${
+            state.simulationMode
+              ? 'Escolha uma forma de pagamento apenas para conferir como o pedido ficaria. Nenhuma cobrança será aberta.'
+              : 'Na próxima etapa você lê e aceita as condições antes de abrir o Mercado Pago.'
+          }
         </p>
       </div>
 
@@ -3847,7 +4110,11 @@ function renderTerms(
           Só falta confirmar
         </h1>
         <p class="page-subtitle">
-          Leia as condições do pedido e, depois do aceite, siga para o pagamento.
+          ${
+            state.simulationMode
+              ? 'Esta é a última tela da simulação. Você pode conferir as condições, mas nada será contratado.'
+              : 'Leia as condições do pedido e, depois do aceite, siga para o pagamento.'
+          }
         </p>
       </div>
 
@@ -3870,28 +4137,36 @@ function renderTerms(
           Ler todas as condições
         </button>
 
-        <label class="checkline">
-          <input
-            id="termsAccepted"
-            type="checkbox"
-            ${
-              state.termsAccepted
-                ? 'checked'
-                : ''
-            }
-          >
+        ${
+          state.simulationMode
+            ? `
+              <div class="notice info" style="margin-top:14px">
+                No modo de teste, o aceite não é registrado e nenhuma cobrança é criada.
+              </div>
+            `
+            : `
+              <label class="checkline">
+                <input
+                  id="termsAccepted"
+                  type="checkbox"
+                  ${state.termsAccepted ? 'checked' : ''}
+                >
 
-          <span>
-            Li e concordo com as Condições do Pedido.
-          </span>
-        </label>
+                <span>
+                  Li e concordo com as Condições do Pedido.
+                </span>
+              </label>
+            `
+        }
       </div>
 
       ${actionRow({
         nextId:
           'payBtn',
         nextLabel:
-          'Ir para o pagamento',
+          state.simulationMode
+            ? 'Concluir simulação'
+            : 'Ir para o pagamento',
       })}
     </section>
   `;
@@ -3914,7 +4189,7 @@ function renderTerms(
     .getElementById(
       'termsAccepted',
     )
-    .addEventListener(
+    ?.addEventListener(
       'change',
       (event) => {
         state.termsAccepted =
@@ -3936,6 +4211,52 @@ function renderTerms(
     .addEventListener(
       'click',
       async () => {
+        if (
+          state.simulationMode
+        ) {
+          localStorage.removeItem(
+            storeKeyFor(
+              true,
+            ),
+          );
+
+          modal(
+            'Simulação concluída',
+            `
+              <div class="notice success">
+                <strong>Nenhum pedido foi criado.</strong>
+                <p style="margin:8px 0 0">
+                  Nenhuma cobrança foi aberta, nenhum espaço da agenda foi reservado e nada entrou no Financeiro.
+                </p>
+              </div>
+
+              <div class="action-row">
+                <button
+                  id="restartSimulation"
+                  class="btn btn-primary"
+                  type="button"
+                >
+                  Simular outro pedido
+                </button>
+              </div>
+            `,
+          );
+
+          document
+            .getElementById(
+              'restartSimulation',
+            )
+            ?.addEventListener(
+              'click',
+              () => {
+                window.location.href =
+                  '/pedido?simular=1';
+              },
+            );
+
+          return;
+        }
+
         state.termsAccepted =
           document
             .getElementById(
@@ -3997,7 +4318,11 @@ function renderTerms(
               ?.checkoutUrl
           ) {
             if (result.order?.customerAreaPath) {
-              localStorage.removeItem(STORE_KEY);
+              localStorage.removeItem(
+                storeKeyFor(
+                  state.simulationMode,
+                ),
+              );
               window.location.href = result.order.customerAreaPath;
               return;
             }
@@ -4007,7 +4332,9 @@ function renderTerms(
           }
 
           localStorage.removeItem(
-            STORE_KEY,
+            storeKeyFor(
+              state.simulationMode,
+            ),
           );
 
           window.location.href =

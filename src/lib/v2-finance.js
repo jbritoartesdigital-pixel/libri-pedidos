@@ -1050,6 +1050,7 @@ async function movementsForRange(
             p.net_cents,
             p.installments,
             p.paid_at,
+            p.provider_payload_json,
 
             o.order_code,
             o.honoree_display_name,
@@ -1190,6 +1191,21 @@ async function movementsForRange(
             isRefund
               ? 'out'
               : 'in',
+
+          note:
+            (() => {
+              try {
+                return String(
+                  JSON.parse(
+                    row.provider_payload_json
+                    || '{}',
+                  )?.note
+                  || '',
+                );
+              } catch {
+                return '';
+              }
+            })(),
 
           editable:
             row.provider
@@ -1382,6 +1398,391 @@ async function openReceivables(
         row.remainingCents
         > 0,
     );
+}
+
+export async function createV2FinancePayment(
+  db,
+  {
+    orderCode,
+    amountCents,
+    paidDate,
+    paymentType,
+    note = '',
+  } = {},
+) {
+  const code =
+    cleanText(
+      orderCode,
+      40,
+    )
+      .toUpperCase();
+
+  if (
+    !/^LIBRI-\d+$/
+      .test(
+        code,
+      )
+  ) {
+    throw new Error(
+      'Informe um pedido válido.',
+    );
+  }
+
+  const cents =
+    Number.parseInt(
+      amountCents,
+      10,
+    );
+
+  if (
+    !Number.isInteger(cents)
+    || cents <= 0
+    || cents > 100000000
+  ) {
+    throw new Error(
+      'Informe um valor válido.',
+    );
+  }
+
+  const day =
+    cleanText(
+      paidDate,
+      10,
+    );
+
+  if (
+    !isIsoDay(day)
+    || day > dateKeyInSaoPaulo()
+  ) {
+    throw new Error(
+      'Informe uma data válida, sem usar uma data futura.',
+    );
+  }
+
+  const type =
+    cleanText(
+      paymentType,
+      30,
+    );
+
+  if (
+    ![
+      'deposit',
+      'balance',
+      'full_payment',
+      'refund',
+    ].includes(
+      type,
+    )
+  ) {
+    throw new Error(
+      'Tipo de lançamento inválido.',
+    );
+  }
+
+  const observation =
+    cleanText(
+      note,
+      800,
+    );
+
+  const order =
+    await db
+      .prepare(
+        `
+          SELECT
+            o.id,
+            o.order_code,
+            o.status,
+            pr.total_cents,
+            pr.payment_method
+          FROM v2_orders o
+          INNER JOIN v2_order_pricing pr
+            ON pr.order_id = o.id
+          WHERE o.order_code = ?
+          LIMIT 1
+        `,
+      )
+      .bind(
+        code,
+      )
+      .first();
+
+  if (!order) {
+    throw new Error(
+      'Pedido não encontrado.',
+    );
+  }
+
+  const totals =
+    await db
+      .prepare(
+        `
+          SELECT
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN status = 'approved'
+                    AND payment_type != 'refund'
+                    THEN amount_cents
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS received_cents,
+
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN status = 'approved'
+                    AND payment_type = 'refund'
+                    THEN amount_cents
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS refunded_cents
+          FROM v2_payments
+          WHERE order_id = ?
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  const netPaidBefore =
+    Math.max(
+      0,
+      Number(
+        totals?.received_cents
+        || 0,
+      )
+      - Number(
+        totals?.refunded_cents
+        || 0,
+      ),
+    );
+
+  const totalCents =
+    Number(
+      order.total_cents
+      || 0,
+    );
+
+  const remainingBefore =
+    Math.max(
+      0,
+      totalCents
+      - netPaidBefore,
+    );
+
+  if (
+    type
+    === 'refund'
+    && cents > netPaidBefore
+  ) {
+    throw new Error(
+      'O reembolso não pode ser maior que o valor líquido já recebido.',
+    );
+  }
+
+  if (
+    type
+    !== 'refund'
+    && cents > remainingBefore
+  ) {
+    throw new Error(
+      'O lançamento não pode ser maior que o saldo ainda aberto do pedido.',
+    );
+  }
+
+  const stamp =
+    new Date()
+      .toISOString();
+
+  const paidAt =
+    `${day}T12:00:00.000Z`;
+
+  const result =
+    await db
+      .prepare(
+        `
+          INSERT INTO v2_payments(
+            order_id,
+            provider,
+            payment_type,
+            method,
+            status,
+            amount_cents,
+            fee_cents,
+            net_cents,
+            provider_payload_json,
+            paid_at,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            ?,
+            'direct_pix',
+            ?,
+            'pix',
+            'approved',
+            ?,
+            0,
+            ?,
+            ?,
+            ?,
+            ?,
+            ?
+          )
+        `,
+      )
+      .bind(
+        order.id,
+        type,
+        cents,
+        cents,
+        JSON.stringify({
+          source:
+            'admin_manual',
+          note:
+            observation,
+        }),
+        paidAt,
+        stamp,
+        stamp,
+      )
+      .run();
+
+  const netPaidAfter =
+    type
+    === 'refund'
+      ? Math.max(
+        0,
+        netPaidBefore
+        - cents,
+      )
+      : netPaidBefore
+        + cents;
+
+  const remainingAfter =
+    Math.max(
+      0,
+      totalCents
+      - netPaidAfter,
+    );
+
+  if (
+    order.payment_method
+    === 'pix'
+    && ![
+      'cancelled',
+      'finalized',
+    ].includes(
+      order.status,
+    )
+  ) {
+    if (
+      remainingAfter === 0
+      && order.status
+        === 'balance_pending'
+    ) {
+      await db
+        .prepare(
+          `
+            UPDATE v2_orders
+            SET
+              status = 'ready_for_delivery',
+              next_action = 'Liberar entrega',
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          stamp,
+          order.id,
+        )
+        .run();
+    }
+
+    if (
+      remainingAfter > 0
+      && order.status
+        === 'ready_for_delivery'
+    ) {
+      await db
+        .prepare(
+          `
+            UPDATE v2_orders
+            SET
+              status = 'balance_pending',
+              next_action = 'Aguardar saldo final',
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          stamp,
+          order.id,
+        )
+        .run();
+    }
+  }
+
+  const paymentId =
+    Number(
+      result
+        ?.meta
+        ?.last_row_id,
+    );
+
+  await db
+    .prepare(
+      `
+        INSERT INTO v2_order_history(
+          order_id,
+          action_code,
+          description,
+          metadata_json,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `,
+    )
+    .bind(
+      order.id,
+      'finance_payment_added',
+      type === 'refund'
+        ? 'Reembolso/ajuste financeiro registrado manualmente no admin.'
+        : 'Recebimento registrado manualmente no admin.',
+      JSON.stringify({
+        paymentId,
+        paymentType:
+          type,
+        amountCents:
+          cents,
+        paidAt,
+        note:
+          observation,
+      }),
+      stamp,
+    )
+    .run();
+
+  return {
+    id:
+      paymentId,
+    orderCode:
+      order.order_code,
+    paymentType:
+      type,
+    amountCents:
+      cents,
+    paidAt,
+    remainingCents:
+      remainingAfter,
+  };
 }
 
 export async function updateV2FinancePayment(

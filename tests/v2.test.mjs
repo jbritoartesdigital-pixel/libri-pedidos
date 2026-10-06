@@ -33,11 +33,12 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 15);
+  const DB = database(); assert.equal(DB.migrationCount, 16);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_instagram'").get().value, '@libriconvites');
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notification_preferences WHERE event_code IN ('EVENT_TOMORROW','DELIVERY_TOMORROW','ACTION_REQUIRED')").get().n, 3);
   assert.equal(DB.sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
   assert.ok(DB.sqlite.prepare("SELECT name FROM sqlite_master WHERE name = 'orders'").get());
 });
@@ -301,7 +302,7 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
   assert.equal(mp.bodies[0].config.payment_method.default_type, undefined);
   assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
-  assert.equal(mp.bodies[0].config.payment_method.installments_cost, undefined);
+  assert.equal(mp.bodies[0].config.payment_method.installments_cost, 'buyer');
   assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
   assert.deepEqual(mp.bodies[0].config.payment_method.not_allowed_types,
     ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
@@ -989,6 +990,67 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.notEqual(first.payment.providerOrderId, next.payment.providerOrderId);
   await syncMercadoPagoOrder(e, first.payment.providerOrderId);
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
+});
+
+test('admin and briefing surfaces expose the remaining Project Bible controls', () => {
+  const central =
+    readFileSync(
+      'public/js/admin-v2-central.js',
+      'utf8',
+    );
+
+  const production =
+    readFileSync(
+      'public/js/admin-v2-production.js',
+      'utf8',
+    );
+
+  const area =
+    readFileSync(
+      'public/js/client-v2-area.js',
+      'utf8',
+    );
+
+  const commercial =
+    readFileSync(
+      'public/js/admin-v2-store-commercial.js',
+      'utf8',
+    );
+
+  assert.match(
+    central,
+    /Festas de amanhã/,
+  );
+
+  assert.match(
+    production,
+    /Aprovados/,
+  );
+
+  assert.match(
+    production,
+    /Finalizados/,
+  );
+
+  assert.match(
+    area,
+    /Observação desta referência/,
+  );
+
+  assert.match(
+    commercial,
+    /Produtos permitidos/,
+  );
+
+  assert.match(
+    commercial,
+    /Eventos permitidos/,
+  );
+
+  assert.match(
+    commercial,
+    /Adicionais permitidos/,
+  );
 });
 
 test('Worker serves only V2 runtime, redirects legacy pages and retires V1 APIs', async () => {

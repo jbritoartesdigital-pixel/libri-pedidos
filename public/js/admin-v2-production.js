@@ -14,8 +14,10 @@ const STATUS_OPTIONS = [
   ['in_production', 'Em produção'],
   ['waiting_customer', 'Aguardando cliente'],
   ['adjustments', 'Ajustes'],
+  ['approved', 'Aprovados'],
   ['balance_pending', 'Saldo pendente'],
   ['ready_for_delivery', 'Prontos para entrega'],
+  ['finalized', 'Finalizados'],
 ];
 
 export async function renderProduction(openOrder) {

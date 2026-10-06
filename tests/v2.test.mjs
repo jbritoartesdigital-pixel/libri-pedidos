@@ -1107,6 +1107,52 @@ test('stale cancellation cannot release replacement hold; provider canceled spel
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_checkout_holds ORDER BY id DESC LIMIT 1').get().status, 'active');
 });
 
+test('briefing autosave is lossless, photos are optional and missing fields are localized', () => {
+  const customerArea =
+    readFileSync(
+      'src/lib/v2-customer-area.js',
+      'utf8',
+    );
+
+  const clientArea =
+    readFileSync(
+      'public/js/client-v2-area.js',
+      'utf8',
+    );
+
+  assert.match(
+    customerArea,
+    /'person_photos',[\s\S]*?'person',[\s\S]*?0,[\s\S]*?5,/,
+  );
+
+  assert.equal(
+    clientArea.includes(
+      'debounce,',
+    ),
+    false,
+  );
+
+  assert.match(
+    clientArea,
+    /pendingAutosavePatch/,
+  );
+
+  assert.match(
+    clientArea,
+    /await flushAutosave\(\);[\s\S]*briefing\/submit/,
+  );
+
+  assert.match(
+    clientArea,
+    /sectionTitles/,
+  );
+
+  assert.match(
+    customerArea,
+    /section:[\s\S]*uploadSection/,
+  );
+});
+
 test('admin and briefing surfaces expose the remaining Project Bible controls', () => {
   const central =
     readFileSync(

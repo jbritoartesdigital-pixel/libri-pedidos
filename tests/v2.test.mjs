@@ -432,6 +432,44 @@ test('uncertain provider response is recovered with same idempotency key and no 
   assert.equal(recovered.payment.providerOrderId, first.payment.providerOrderId); assert.equal(mp.posts, 1);
 });
 
+test('approved payment rebuilds a missing temporary hold and unlocks briefing when capacity still fits', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Reserva perdida', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+  }));
+
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  DB.sqlite.prepare('DELETE FROM v2_checkout_holds WHERE order_id = ?').run(orderId);
+
+  mp.approve(checkout.payment.providerOrderId);
+  const result = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  assert.equal(result.approved, true);
+  assert.equal(result.capacityReview, undefined);
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id = ?').get(orderId).briefing_status, 'available');
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id = ?').get(orderId).n > 0);
+});
+
+test('scheduler repairs a paid order left locked after the temporary hold disappeared', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Reparo automático', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+  }));
+
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  DB.sqlite.prepare('DELETE FROM v2_checkout_holds WHERE order_id = ?').run(orderId);
+  mp.approve(checkout.payment.providerOrderId);
+  DB.sqlite.prepare("UPDATE v2_payments SET status='approved' WHERE provider_order_id = ?")
+    .run(checkout.payment.providerOrderId);
+
+  await runV2Scheduler(e);
+
+  assert.equal(DB.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id = ?').get(orderId).briefing_status, 'available');
+  assert.ok(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id = ?').get(orderId).n > 0);
+});
+
 test('late accredited payment does not oversell capacity; repeated review is deduplicated', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB); const a = await urgency(DB);
   await decideV2Urgency(DB, a.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });

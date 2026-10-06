@@ -38,7 +38,7 @@ function comboItemLabel(
     reminder:
       'Lembrete',
     moments:
-      'Libri Moments',
+      'Álbum da Festa',
     filter:
       'Filtro',
   };

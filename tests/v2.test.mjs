@@ -283,6 +283,38 @@ test('finance does not pretend Mercado Pago fees are zero before reconciliation'
   assert.equal(finance.movements[0].netCents, null);
 });
 
+test('approved Mercado Pago payment reconciles real fee and net amount from Payments API', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Taxa real', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+
+  mp.setFinanceDetails(checkout.payment.providerOrderId, {
+    feeCents: 237,
+  });
+  mp.approve(checkout.payment.providerOrderId);
+
+  const synced = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  assert.equal(synced.financeReconciled, true);
+
+  const payment = DB.sqlite.prepare(
+    'SELECT amount_cents, fee_cents, net_cents FROM v2_payments WHERE provider_order_id = ?'
+  ).get(checkout.payment.providerOrderId);
+
+  assert.equal(payment.fee_cents, 237);
+  assert.equal(payment.net_cents, payment.amount_cents - 237);
+
+  const finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeesComplete, true);
+  assert.equal(finance.summary.mercadoPagoFeeCents, 237);
+  assert.equal(finance.summary.netCashMovementComplete, true);
+  assert.equal(finance.movements[0].feeKnown, true);
+  assert.equal(finance.movements[0].feeCents, 237);
+  assert.equal(finance.movements[0].netKnown, true);
+});
+
 test('normal checkout resumes expired payment in same order; stale payment cannot mutate paid order', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({ event: { honoreeName: 'Teste', type: 'birthday', date: day(50) }, deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });

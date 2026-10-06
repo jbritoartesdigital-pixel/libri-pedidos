@@ -35,9 +35,64 @@ export function day(offset) {
 
 export function providerMock(t) {
   const orders = new Map(); const keys = new Map(); const bodies = [];
+  const financeDetails = new Map();
   const rejectedKeys = new Set(); const keysUsed = []; let posts = 0; let rejectNextPost = false;
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
-    if (!String(url).startsWith('https://api.mercadopago.com/v1/orders')) throw new Error(`Unexpected network call ${url}`);
+    const href = String(url);
+
+    if (href.startsWith('https://api.mercadopago.com/v1/payments/search')) {
+      const parsed = new URL(href);
+      const externalReference = parsed.searchParams.get('external_reference') || '';
+      const results = [];
+
+      for (const [providerOrderId, order] of orders) {
+        const detail = financeDetails.get(providerOrderId);
+
+        if (
+          !detail
+          || order.external_reference !== externalReference
+          || order.status !== 'processed'
+        ) {
+          continue;
+        }
+
+        results.push({
+          id: `PAYMENT-${providerOrderId}`,
+          status: 'approved',
+          status_detail: 'accredited',
+          external_reference: order.external_reference,
+          transaction_amount: Number(order.total_amount),
+          date_approved: '2026-10-05T12:00:00.000Z',
+        });
+      }
+
+      return Response.json({ results });
+    }
+
+    if (href.startsWith('https://api.mercadopago.com/v1/payments/')) {
+      const paymentId = href.split('/').at(-1);
+      const providerOrderId = paymentId.replace(/^PAYMENT-/, '');
+      const order = orders.get(providerOrderId);
+      const detail = financeDetails.get(providerOrderId);
+
+      if (!order || !detail) {
+        return Response.json({}, { status: 404 });
+      }
+
+      return Response.json({
+        id: paymentId,
+        status: 'approved',
+        status_detail: 'accredited',
+        external_reference: order.external_reference,
+        transaction_amount: Number(order.total_amount),
+        fee_details: detail.feeDetails,
+        transaction_details: {
+          net_received_amount: detail.netReceivedAmount,
+        },
+      });
+    }
+
+    if (!href.startsWith('https://api.mercadopago.com/v1/orders')) throw new Error(`Unexpected network call ${url}`);
     if (options.method === 'POST' && String(url).endsWith('/cancel')) {
       const id = String(url).split('/').at(-2); orders.get(id).status = 'cancelled'; orders.get(id).status_detail = 'cancelled';
       return Response.json(orders.get(id));
@@ -67,5 +122,19 @@ export function providerMock(t) {
   });
   return { orders, keys, bodies, keysUsed, get posts() { return posts; },
     rejectNext() { rejectNextPost = true; },
+    setFinanceDetails(id, { feeCents = 0, netCents }) {
+      const order = orders.get(id);
+      if (!order) throw new Error('Order do mock não encontrada.');
+      const grossCents = Math.round(Number(order.total_amount) * 100);
+      const safeNetCents = Number.isInteger(netCents) ? netCents : grossCents - feeCents;
+      financeDetails.set(id, {
+        feeDetails: [{
+          type: 'mercadopago_fee',
+          fee_payer: 'collector',
+          amount: (feeCents / 100).toFixed(2),
+        }],
+        netReceivedAmount: (safeNetCents / 100).toFixed(2),
+      });
+    },
     approve(id) { Object.assign(orders.get(id), { status: 'processed', status_detail: 'accredited' }); } };
 }

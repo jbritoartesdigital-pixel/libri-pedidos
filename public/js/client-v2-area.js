@@ -2,7 +2,6 @@ import {
   api,
   app,
   dateBr,
-  debounce,
   esc,
   loading,
   modal,
@@ -597,6 +596,115 @@ function summaryHtml(
       }
     </section>
   `;
+}
+
+function briefingValueFilled(
+  value,
+) {
+  if (
+    Array.isArray(value)
+  ) {
+    return value.length > 0;
+  }
+
+  return value !== null
+    && value !== undefined
+    && String(value).trim() !== '';
+}
+
+function missingBriefingItems(
+  area,
+  section,
+) {
+  const missing =
+    (section.fields || [])
+      .filter(
+        (definition) =>
+          definition.required
+          && !briefingValueFilled(
+            area.briefing.data[
+              definition.key
+            ],
+          ),
+      )
+      .map(
+        (definition) => ({
+          type:
+            'field',
+          key:
+            definition.key,
+          message:
+            definition.label,
+        }),
+      );
+
+  const uploadKeys = {
+    appearance:
+      new Set([
+        'person_photos',
+        'outfit_photos',
+      ]),
+    references:
+      new Set([
+        'reference_files',
+      ]),
+  }[
+    section.id
+  ]
+  || new Set();
+
+  for (
+    const rule
+    of area.briefing.schema
+      .uploadRules
+      .filter(
+        (item) =>
+          item.min > 0
+          && uploadKeys.has(
+            item.fieldKey,
+          ),
+      )
+  ) {
+    const count =
+      area.briefing.uploads
+        .filter(
+          (upload) =>
+            upload.fieldKey
+            === rule.fieldKey,
+        )
+        .length;
+
+    if (
+      count < rule.min
+    ) {
+      missing.push({
+        type:
+          'upload',
+        key:
+          rule.fieldKey,
+        message:
+          `${rule.label}: envie pelo menos ${rule.min}.`,
+      });
+    }
+  }
+
+  return missing;
+}
+
+function showBriefingMissing(
+  missing,
+) {
+  modal(
+    'Falta preencher nesta etapa',
+    `
+      <div class="notice error">
+        ${missing.map(
+          (item) =>
+            `<div>• ${esc(item.message)}</div>`,
+        ).join('')}
+      </div>
+    `,
+  );
 }
 
 function briefingHtml(
@@ -1394,47 +1502,210 @@ export async function startCustomerArea(
       );
   }
 
-  const autosave =
-    debounce(
-      async (
-        currentSection,
-        patch,
-      ) => {
-        try {
-          const data =
-            await api(
-              `/api/v2/customer-area/${token}/briefing`,
-              {
-                method:
-                  'PATCH',
-                body:
-                  JSON.stringify({
-                    currentSection,
-                    data:
-                      patch,
-                  }),
-              },
+  let briefingSaveQueue =
+    Promise.resolve();
+
+  let pendingBriefingSection =
+    '';
+
+  let pendingBriefingPatch =
+    {};
+
+  let pendingBriefingTimer =
+    null;
+
+  let briefingChoiceRevision =
+    0;
+
+  function applyBriefingSaveResult(
+    result,
+  ) {
+    area.briefing.data =
+      result.data;
+
+    area.briefing.progress =
+      result.progress;
+
+    area.briefing.schema =
+      result.schema;
+
+    area.briefing.currentSection =
+      result.currentSection;
+  }
+
+  function enqueueBriefingSave(
+    currentSection,
+    patch,
+  ) {
+    const job =
+      briefingSaveQueue
+        .then(
+          async () => {
+            const data =
+              await api(
+                `/api/v2/customer-area/${token}/briefing`,
+                {
+                  method:
+                    'PATCH',
+                  body:
+                    JSON.stringify({
+                      currentSection,
+                      data:
+                        patch,
+                    }),
+                },
+              );
+
+            applyBriefingSaveResult(
+              data.result,
             );
 
-          area.briefing.data =
-            data.result.data;
+            return data.result;
+          },
+        );
 
-          area.briefing.progress =
-            data.result.progress;
+    briefingSaveQueue =
+      job.catch(
+        () => undefined,
+      );
 
-          area.briefing.schema =
-            data.result.schema;
+    return job;
+  }
 
-          area.briefing.currentSection =
-            data.result.currentSection;
-        } catch (error) {
-          showToast(
-            `Não foi possível salvar: ${error.message}`,
-          );
-        }
+  function takePendingBriefing() {
+    if (
+      pendingBriefingTimer
+    ) {
+      window.clearTimeout(
+        pendingBriefingTimer,
+      );
+
+      pendingBriefingTimer =
+        null;
+    }
+
+    const keys =
+      Object.keys(
+        pendingBriefingPatch,
+      );
+
+    if (!keys.length) {
+      return null;
+    }
+
+    const pending = {
+      currentSection:
+        pendingBriefingSection,
+      patch: {
+        ...pendingBriefingPatch,
       },
-      450,
+    };
+
+    pendingBriefingSection =
+      '';
+
+    pendingBriefingPatch =
+      {};
+
+    return pending;
+  }
+
+  function flushPendingBriefing() {
+    const pending =
+      takePendingBriefing();
+
+    if (!pending) {
+      return briefingSaveQueue;
+    }
+
+    return enqueueBriefingSave(
+      pending.currentSection,
+      pending.patch,
     );
+  }
+
+  function scheduleBriefingSave(
+    currentSection,
+    patch,
+  ) {
+    if (
+      pendingBriefingSection
+      && pendingBriefingSection
+      !== currentSection
+    ) {
+      flushPendingBriefing()
+        .catch(
+          (error) =>
+            showToast(
+              `Não foi possível salvar: ${error.message}`,
+            ),
+        );
+    }
+
+    pendingBriefingSection =
+      currentSection;
+
+    Object.assign(
+      pendingBriefingPatch,
+      patch,
+    );
+
+    if (
+      pendingBriefingTimer
+    ) {
+      window.clearTimeout(
+        pendingBriefingTimer,
+      );
+    }
+
+    pendingBriefingTimer =
+      window.setTimeout(
+        () => {
+          flushPendingBriefing()
+            .catch(
+              (error) =>
+                showToast(
+                  `Não foi possível salvar: ${error.message}`,
+                ),
+            );
+        },
+        450,
+      );
+  }
+
+  async function saveBriefingNow(
+    currentSection,
+    patch,
+  ) {
+    const pending =
+      takePendingBriefing();
+
+    if (
+      pending
+      && pending.currentSection
+      === currentSection
+    ) {
+      return enqueueBriefingSave(
+        currentSection,
+        {
+          ...pending.patch,
+          ...patch,
+        },
+      );
+    }
+
+    if (pending) {
+      await enqueueBriefingSave(
+        pending.currentSection,
+        pending.patch,
+      );
+    }
+
+    return enqueueBriefingSave(
+      currentSection,
+      patch,
+    );
+  }
 
   function bindBriefing() {
     if (
@@ -1495,25 +1766,51 @@ export async function startCustomerArea(
               area.briefing.data[key] =
                 value;
 
-              await autosave(
-                sectionId,
-                {
-                  [key]:
-                    value,
-                },
-              );
-
               if (
                 control.type
                 === 'radio'
                 || control.dataset.multi
                 === '1'
               ) {
-                area =
-                  await loadArea();
+                const revision =
+                  ++briefingChoiceRevision;
 
-                await render();
+                try {
+                  await saveBriefingNow(
+                    sectionId,
+                    {
+                      [key]:
+                        value,
+                    },
+                  );
+
+                  if (
+                    revision
+                    === briefingChoiceRevision
+                  ) {
+                    await render();
+                  }
+                } catch (error) {
+                  showToast(
+                    `Não foi possível salvar: ${error.message}`,
+                  );
+
+                  area =
+                    await loadArea();
+
+                  await render();
+                }
+
+                return;
               }
+
+              scheduleBriefingSave(
+                sectionId,
+                {
+                  [key]:
+                    value,
+                },
+              );
             },
           );
         },
@@ -1533,7 +1830,7 @@ export async function startCustomerArea(
               ] =
                 control.value;
 
-              autosave(
+              scheduleBriefingSave(
                 sectionId,
                 {
                   [control.dataset.field]:
@@ -1728,25 +2025,18 @@ export async function startCustomerArea(
           const next =
             sections[index - 1];
 
-          await api(
-            `/api/v2/customer-area/${token}/briefing`,
-            {
-              method:
-                'PATCH',
-              body:
-                JSON.stringify({
-                  currentSection:
-                    next.id,
-                  data:
-                    {},
-                }),
-            },
-          );
+          try {
+            await saveBriefingNow(
+              next.id,
+              {},
+            );
 
-          area =
-            await loadArea();
-
-          await render();
+            await render();
+          } catch (error) {
+            showToast(
+              `Não foi possível salvar: ${error.message}`,
+            );
+          }
         },
       );
 
@@ -1764,25 +2054,49 @@ export async function startCustomerArea(
             return;
           }
 
-          await api(
-            `/api/v2/customer-area/${token}/briefing`,
-            {
-              method:
-                'PATCH',
-              body:
-                JSON.stringify({
-                  currentSection:
-                    next.id,
-                  data:
-                    {},
-                }),
-            },
-          );
+          try {
+            await saveBriefingNow(
+              sectionId,
+              {},
+            );
 
-          area =
-            await loadArea();
+            const current =
+              area.briefing.schema.sections
+                .find(
+                  (section) =>
+                    section.id
+                    === sectionId,
+                );
 
-          await render();
+            const missing =
+              current
+                ? missingBriefingItems(
+                  area,
+                  current,
+                )
+                : [];
+
+            if (
+              missing.length
+            ) {
+              showBriefingMissing(
+                missing,
+              );
+
+              return;
+            }
+
+            await saveBriefingNow(
+              next.id,
+              {},
+            );
+
+            await render();
+          } catch (error) {
+            showToast(
+              `Não foi possível salvar: ${error.message}`,
+            );
+          }
         },
       );
 
@@ -1806,6 +2120,11 @@ export async function startCustomerArea(
             'Enviando...';
 
           try {
+            await saveBriefingNow(
+              sectionId,
+              {},
+            );
+
             const data =
               await api(
                 `/api/v2/customer-area/${token}/briefing/submit`,

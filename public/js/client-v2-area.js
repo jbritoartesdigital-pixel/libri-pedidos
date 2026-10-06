@@ -277,6 +277,149 @@ function uploadRuleHtml(
   `;
 }
 
+function nextStepCard(
+  area,
+) {
+  const status =
+    area.order.status;
+
+  let title =
+    area.order.nextAction
+    || 'Acompanhe seu pedido';
+
+  let body =
+    'Seu pedido está seguindo normalmente.';
+
+  let tab = '';
+  let buttonLabel = '';
+
+  if (
+    [
+      'awaiting_payment',
+      'urgency_approved',
+    ].includes(
+      status,
+    )
+  ) {
+    title =
+      'Concluir o pagamento';
+    body =
+      'O próximo passo é confirmar o pagamento para liberar o andamento do pedido.';
+    tab =
+      'summary';
+    buttonLabel =
+      'Ver pagamento';
+  } else if (
+    status
+    === 'briefing_pending'
+    && !area.briefing.completed
+  ) {
+    title =
+      'Preencher o briefing';
+    body =
+      'Envie os dados e referências do convite. A produção começa depois que o briefing estiver completo.';
+    tab =
+      'briefing';
+    buttonLabel =
+      'Continuar briefing';
+  } else if (
+    status
+    === 'waiting_customer'
+    || status
+      === 'adjustments'
+  ) {
+    if (
+      area.modules.previews
+        .available
+    ) {
+      title =
+        status
+        === 'adjustments'
+          ? 'Revisar os ajustes'
+          : 'Revisar sua prévia';
+      body =
+        'Sua prévia está disponível. Confira com atenção antes de aprovar ou pedir um ajuste pontual.';
+      tab =
+        'preview';
+      buttonLabel =
+        'Abrir prévia';
+    }
+  } else if (
+    status
+    === 'balance_pending'
+  ) {
+    title =
+      'Quitar o saldo';
+    body =
+      'O convite já avançou para a etapa final. Confira abaixo os dados do saldo pendente.';
+    tab =
+      'summary';
+    buttonLabel =
+      'Ver saldo';
+  } else if (
+    status
+    === 'ready_for_delivery'
+  ) {
+    title =
+      'Entrega pronta';
+    body =
+      'Seu pedido está pronto para a etapa de entrega. A Libri fará a liberação final.';
+  } else if (
+    status
+    === 'finalized'
+  ) {
+    title =
+      'Pedido finalizado';
+    body =
+      'Tudo concluído por aqui. Você ainda pode consultar os detalhes do pedido nesta área.';
+  } else if (
+    status
+    === 'in_production'
+    || status
+      === 'ready_for_production'
+  ) {
+    title =
+      'Produção em andamento';
+    body =
+      'Neste momento, você não precisa enviar nada. A Libri está cuidando da produção do seu convite.';
+  } else if (
+    area.modules.contracts
+      .available
+  ) {
+    title =
+      'Conferir contrato';
+    body =
+      'Há um contrato disponível nesta etapa do pedido.';
+    tab =
+      'contract';
+    buttonLabel =
+      'Abrir contrato';
+  }
+
+  return `
+    <section class="next-step-card">
+      <span class="eyebrow">Seu próximo passo</span>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+
+      ${
+        tab
+        && buttonLabel
+          ? `
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-next-tab="${esc(tab)}"
+            >
+              ${esc(buttonLabel)}
+            </button>
+          `
+          : ''
+      }
+    </section>
+  `;
+}
+
 function statusSidebar(
   area,
 ) {
@@ -1265,6 +1408,7 @@ export async function startCustomerArea(
         ${statusSidebar(area)}
 
         <div>
+          ${nextStepCard(area)}
           ${tabButtons(area, activeTab)}
           <div id="customerMain">
             ${body}
@@ -1276,6 +1420,40 @@ export async function startCustomerArea(
     setHelp(
       area.support.whatsappUrl,
     );
+
+    app
+      .querySelectorAll(
+        '[data-next-tab]',
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            'click',
+            async () => {
+              activeTab =
+                button.dataset.nextTab;
+
+              const url =
+                new URL(
+                  window.location.href,
+                );
+
+              url.searchParams.set(
+                'tab',
+                activeTab,
+              );
+
+              history.replaceState(
+                null,
+                '',
+                url,
+              );
+
+              await render();
+            },
+          );
+        },
+      );
 
     app
       .querySelectorAll(

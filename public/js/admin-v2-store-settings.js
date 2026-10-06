@@ -111,6 +111,37 @@ export function renderStoreSettings(
         </div>
       </div>
 
+      <div class="section-title" style="margin-top:20px">
+        <h2>Mensagens rápidas do WhatsApp</h2>
+      </div>
+
+      <div class="notice info" style="margin-bottom:14px">
+        Você pode usar: <strong>{cliente}</strong>, <strong>{homenageado}</strong>,
+        <strong>{pedido}</strong>, <strong>{link}</strong> e <strong>{saldo}</strong>.
+      </div>
+
+      <div class="form-grid">
+        <div class="field full">
+          <label for="whatsappBriefingTemplate">Cobrar briefing</label>
+          <textarea id="whatsappBriefingTemplate" class="textarea">${esc(s.whatsappTemplates.briefing)}</textarea>
+        </div>
+
+        <div class="field full">
+          <label for="whatsappPreviewTemplate">Prévia disponível</label>
+          <textarea id="whatsappPreviewTemplate" class="textarea">${esc(s.whatsappTemplates.preview)}</textarea>
+        </div>
+
+        <div class="field full">
+          <label for="whatsappBalanceTemplate">Saldo pendente</label>
+          <textarea id="whatsappBalanceTemplate" class="textarea">${esc(s.whatsappTemplates.balance)}</textarea>
+        </div>
+
+        <div class="field full">
+          <label for="whatsappFinalizedTemplate">Pedido finalizado</label>
+          <textarea id="whatsappFinalizedTemplate" class="textarea">${esc(s.whatsappTemplates.finalized)}</textarea>
+        </div>
+      </div>
+
       <button
         id="saveSettings"
         class="btn btn-primary"
@@ -217,6 +248,26 @@ export function renderStoreSettings(
                     document
                       .getElementById('holdMinutes')
                       .value,
+                  whatsapp_template_briefing:
+                    document
+                      .getElementById('whatsappBriefingTemplate')
+                      .value
+                      .trim(),
+                  whatsapp_template_preview:
+                    document
+                      .getElementById('whatsappPreviewTemplate')
+                      .value
+                      .trim(),
+                  whatsapp_template_balance:
+                    document
+                      .getElementById('whatsappBalanceTemplate')
+                      .value
+                      .trim(),
+                  whatsapp_template_finalized:
+                    document
+                      .getElementById('whatsappFinalizedTemplate')
+                      .value
+                      .trim(),
                 },
               }),
           },

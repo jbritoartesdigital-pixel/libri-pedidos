@@ -917,6 +917,30 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.payment.depositPercent, 50);
 });
 
+test('Moments +100 fotos is ignored unless a base Moments plan is selected', async () => {
+  const DB = database();
+
+  const extraOnly = await calculateCommercialV2Quote(DB, {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: ['moments_extra_100'],
+  });
+
+  assert.equal(
+    extraOnly.addons.some(addon => addon.code === 'moments_extra_100'),
+    false,
+  );
+
+  const withBase = await calculateCommercialV2Quote(DB, {
+    productCode: 'interactive_essential',
+    paymentMethod: 'pix',
+    addonCodes: ['moments_festa', 'moments_extra_100'],
+  });
+
+  assert.equal(withBase.addons.some(addon => addon.code === 'moments_festa'), true);
+  assert.equal(withBase.addons.some(addon => addon.code === 'moments_extra_100'), true);
+});
+
 test('normal delivery offers 3-day commercial windows while agenda uses only needed production days', async () => {
   const DB = database();
 

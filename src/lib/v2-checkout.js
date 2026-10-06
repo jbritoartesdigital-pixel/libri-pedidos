@@ -480,7 +480,7 @@ function orderItemRows(quote) {
   ) {
     rows.push({
       itemType:
-        'combo',
+        'combo_adjustment',
 
       itemCode:
         quote.combo

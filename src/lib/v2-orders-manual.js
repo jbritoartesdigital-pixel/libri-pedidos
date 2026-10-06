@@ -284,7 +284,7 @@ function orderItemRows(quote) {
   ) {
     rows.push({
       type:
-        'combo',
+        'combo_adjustment',
 
       code:
         quote.combo

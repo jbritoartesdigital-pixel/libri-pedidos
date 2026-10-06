@@ -33,7 +33,7 @@ async function urgency(DB) {
 }
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 16);
+  const DB = database(); assert.equal(DB.migrationCount, 17);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');
@@ -137,6 +137,93 @@ test('legacy V1 orders migrate idempotently into the V2 model without deleting s
   assert.equal(DB.sqlite.prepare(
     "SELECT COUNT(*) AS n FROM orders WHERE order_code='LIBRI-0999'"
   ).get().n, 1);
+});
+
+test('legacy finalized orders never keep fabricated future delivery windows', () => {
+  const DB = database();
+
+  const finishedToken = 'ord_' + 'd'.repeat(36);
+  const inferredToken = 'ord_' + 'e'.repeat(36);
+
+  DB.sqlite.prepare(`
+    INSERT INTO orders(
+      order_code, public_token, customer_name, whatsapp,
+      honoree_name, display_name, age,
+      event_date, event_time, venue_name, venue_address, location_url, theme,
+      experience, format, addons_json, briefing_json, pricing_json,
+      subtotal_cents, urgency_enabled, urgency_percent, urgency_amount_cents,
+      total_cents, deposit_percent, deposit_cents, balance_cents,
+      terms_version, terms_accepted_at, portfolio_consent,
+      status, photos_status, entry_status, mascot_status, speech_mode,
+      speech_status, invitation_status, balance_status,
+      production_started_at, production_deadline_at,
+      created_at, updated_at, finalized_at
+    )
+    VALUES
+      (
+        'LIBRI-0997', ?, 'Cliente Finalizada', '5561777777777',
+        'Finalizado Real', 'Finalizado Real', 5,
+        '2026-08-30', '18:00', 'Salão', 'Rua', '', 'Tema',
+        'full', 'interactive', '{}', '{}', '{}',
+        10000, 0, 0, 0, 10000, 50, 5000, 5000,
+        '1.0', '2026-07-01T12:00:00.000Z', 1,
+        'finished', 'approved', 'confirmed', 'approved', 'libri',
+        'not_required', 'approved', 'confirmed',
+        '2026-07-02T12:00:00.000Z', '2026-08-27T12:00:00.000Z',
+        '2026-07-01T12:00:00.000Z', '2026-07-20T12:00:00.000Z', '2026-07-20T12:00:00.000Z'
+      ),
+      (
+        'LIBRI-0996', ?, 'Cliente Inferida', '5561666666666',
+        'Finalizado Inferido', 'Finalizado Inferido', 5,
+        '2026-08-25', '18:00', 'Salão', 'Rua', '', 'Tema',
+        'full', 'interactive', '{}', '{}', '{}',
+        10000, 0, 0, 0, 10000, 50, 5000, 5000,
+        '1.0', '2026-07-01T12:00:00.000Z', 1,
+        'producing', 'approved', 'confirmed', 'approved', 'libri',
+        'not_required', 'approved', 'waiting',
+        '2026-07-02T12:00:00.000Z', '2026-08-22T12:00:00.000Z',
+        '2026-07-01T12:00:00.000Z', '2026-10-06T12:00:00.000Z', NULL
+      )
+  `).run(finishedToken, inferredToken);
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0014_v1_to_v2_retirement.sql',
+      'utf8',
+    ),
+  );
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0015_fix_legacy_finalized_finance.sql',
+      'utf8',
+    ),
+  );
+
+  DB.sqlite.exec(
+    readFileSync(
+      'migrations/0017_fix_legacy_delivery_dates.sql',
+      'utf8',
+    ),
+  );
+
+  const finished = DB.sqlite.prepare(
+    "SELECT status, delivery_start, delivery_end, recommended_target_date FROM v2_orders WHERE order_code='LIBRI-0997'"
+  ).get();
+
+  assert.equal(finished.status, 'finalized');
+  assert.equal(finished.delivery_start, '2026-07-20');
+  assert.equal(finished.delivery_end, '2026-07-20');
+  assert.equal(finished.recommended_target_date, null);
+
+  const inferred = DB.sqlite.prepare(
+    "SELECT status, delivery_start, delivery_end, recommended_target_date FROM v2_orders WHERE order_code='LIBRI-0996'"
+  ).get();
+
+  assert.equal(inferred.status, 'finalized');
+  assert.equal(inferred.delivery_start, null);
+  assert.equal(inferred.delivery_end, null);
+  assert.equal(inferred.recommended_target_date, null);
 });
 
 test('legacy repair finalizes delivered historical orders and moves imported payments off migration month', async () => {
@@ -891,7 +978,7 @@ test('checkout snapshots the applied combo as an order item', async () => {
   const comboItem = DB.sqlite.prepare(`
     SELECT item_code, name_snapshot, unit_price_cents, points_units, configuration_json
     FROM v2_order_items
-    WHERE order_id = ? AND item_type = 'combo'
+    WHERE order_id = ? AND item_type = 'combo_adjustment'
   `).get(orderId);
 
   assert.equal(comboItem.item_code, 'convite_save');

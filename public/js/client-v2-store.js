@@ -1256,7 +1256,7 @@ function renderConfiguration(
       (input) => {
         input.addEventListener(
           'change',
-          () => {
+          async () => {
             const set =
               new Set(
                 state.selection.addonCodes,

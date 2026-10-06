@@ -1130,8 +1130,7 @@ export async function getV2AgendaRange(
                 'adjustments',
                 'approved',
                 'balance_pending',
-                'ready_for_delivery',
-                'finalized'
+                'ready_for_delivery'
               )
             ORDER BY
               o.event_date,

@@ -551,92 +551,56 @@ export async function cancelV2Order(
   };
 }
 
-export async function cleanupAbandonedUnpaidV2Orders(
-  env,
-) {
-  const rows =
-    await env.DB
-      .prepare(
-        `
-          SELECT
-            o.order_code
-          FROM v2_orders o
-          WHERE
-            o.status = 'awaiting_payment'
-            AND o.briefing_status = 'locked'
-            AND datetime(o.updated_at)
-              <= datetime('now', '-30 minutes')
-            AND EXISTS (
-              SELECT 1
-              FROM v2_checkout_holds h
-              WHERE h.order_id = o.id
-            )
-            AND NOT EXISTS (
-              SELECT 1
-              FROM v2_checkout_holds active_hold
-              WHERE
-                active_hold.order_id = o.id
-                AND active_hold.status = 'active'
-                AND active_hold.expires_at > ?
-            )
-            AND NOT EXISTS (
-              SELECT 1
-              FROM v2_payments paid
-              WHERE
-                paid.order_id = o.id
-                AND paid.status IN (
-                  'approved',
-                  'refunded'
-                )
-            )
-          ORDER BY
-            o.updated_at
-          LIMIT 20
-        `,
+// Unpaid orders remain recoverable. Only archive after 24h; never delete
+// customers, items, terms or financial history from the scheduler.
+export async function cleanupAbandonedUnpaidV2Orders(env) {
+  const stamp = nowIso();
+  const rows = await env.DB.prepare(`
+    SELECT o.id, o.order_code
+    FROM v2_orders o
+    WHERE o.status = 'awaiting_payment'
+      AND o.briefing_status = 'locked'
+      AND o.archived_at IS NULL
+      AND datetime(COALESCE((
+        SELECT u.decided_at FROM v2_urgency_requests u
+        WHERE u.order_id = o.id AND u.status = 'approved'
+      ), o.created_at)) <= datetime('now', '-24 hours')
+      AND EXISTS (SELECT 1 FROM v2_checkout_holds h WHERE h.order_id = o.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM v2_checkout_holds h
+        WHERE h.order_id = o.id AND h.status = 'active' AND h.expires_at > ?
       )
-      .bind(
-        nowIso(),
+      AND NOT EXISTS (
+        SELECT 1 FROM v2_payments p
+        WHERE p.order_id = o.id AND p.status IN ('pending', 'approved', 'refunded')
       )
-      .all();
+    ORDER BY o.created_at
+    LIMIT 20
+  `).bind(stamp).all();
 
-  let deleted = 0;
-  let skipped = 0;
-
-  for (
-    const row
-    of rows.results
-    || []
-  ) {
-    try {
-      const result =
-        await deleteUnpaidV2Order(
-          env,
-          row.order_code,
-        );
-
-      if (
-        result?.deleted
-      ) {
-        deleted += 1;
-      }
-    } catch (
-      error
-    ) {
-      skipped += 1;
-
-      console.error(
-        'V2 abandoned order cleanup skipped',
-        row.order_code,
-        error?.message
-        || error,
-      );
-    }
+  let archived = 0;
+  for (const order of rows.results || []) {
+    const result = await env.DB.prepare(`
+      UPDATE v2_orders SET
+        archived_at = ?,
+        next_action = 'Prazo de pagamento encerrado; pedido preservado',
+        updated_at = ?
+      WHERE id = ? AND archived_at IS NULL
+        AND status = 'awaiting_payment' AND briefing_status = 'locked'
+        AND NOT EXISTS (
+          SELECT 1 FROM v2_payments
+          WHERE order_id = ? AND status IN ('pending', 'approved', 'refunded')
+        )
+    `).bind(stamp, stamp, order.id, order.id).run();
+    if (!Number(result?.meta?.changes || 0)) continue;
+    archived += 1;
+    await env.DB.prepare(`
+      INSERT INTO v2_order_history(order_id, action_code, description, metadata_json, created_at)
+      VALUES (?, 'unpaid_window_archived', 'Prazo de 24 horas encerrado; pedido preservado nos arquivados.', '{}', ?)
+    `).bind(order.id, stamp).run();
   }
 
-  return {
-    deleted,
-    skipped,
-  };
+  return { archived, deleted: 0, skipped: 0 };
 }
 
 function cleanText(

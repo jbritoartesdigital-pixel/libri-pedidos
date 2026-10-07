@@ -106,6 +106,14 @@ function mpErrorMessage(data) {
       const item
       of items
     ) {
+      if (
+        typeof item
+        === 'string'
+        && item.trim()
+      ) {
+        return item.trim();
+      }
+
       const detail =
         item?.description
         || item?.message
@@ -340,19 +348,6 @@ export async function createMercadoPagoCheckout(
 
         unit_price:
           amount,
-
-        ...(
-          paymentMethod
-          === 'card'
-            ? {
-                unit_measure:
-                  'unit',
-
-                total_amount:
-                  amount,
-              }
-            : {}
-        ),
       },
     ],
 

@@ -1,0 +1,1 @@
+DEMO | INTERATIVO GIF / LOOP\n\nEnvie:\n- imagens/capa.jpg\n- imagens/final.jpg\n- imagens/preview-otimizada.jpg\n- loop.mp4\n\nO loop.mp4 deve ser a animação de 6 s do card, câmera travada, repetição contínua e sem áudio. Os hotspots ficam sobre o vídeo.\n

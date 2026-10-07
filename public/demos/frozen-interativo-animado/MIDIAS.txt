@@ -1,0 +1,1 @@
+DEMO | INTERATIVO ANIMADO\n\nEnvie:\n- imagens/capa.jpg\n- imagens/final.jpg\n- imagens/preview-otimizada.jpg\n- abertura.mp4\n\nA abertura deve terminar no card final. O código também faz o handoff para a imagem final e mantém os hotspots ativos após a abertura.\n

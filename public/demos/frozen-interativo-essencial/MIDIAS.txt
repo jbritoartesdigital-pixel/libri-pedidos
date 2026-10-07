@@ -1,0 +1,1 @@
+DEMO | INTERATIVO ESSENCIAL\n\nEnvie:\n- imagens/final.jpg\n- imagens/preview-otimizada.jpg\n\nO card final deve ser exatamente a arte 9:16 medida para os hotspots.\n

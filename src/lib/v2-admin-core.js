@@ -863,6 +863,7 @@ function finalizeChecklistFrom(
   payments,
   briefing,
   previews,
+  history = [],
 ) {
   const items = [
     {
@@ -886,17 +887,28 @@ function finalizeChecklistFrom(
         'Prévia aprovada pela cliente',
       ok:
         (
-          previews
-          || []
-        )
-          .some(
-            (preview) =>
-              Boolean(
-                preview.approvedAt,
-              )
-              || preview.status
-                === 'approved',
-          ),
+          (
+            previews
+            || []
+          )
+            .some(
+              (preview) =>
+                Boolean(
+                  preview.approvedAt,
+                )
+                || preview.status
+                  === 'approved',
+            )
+          || (
+            history
+            || []
+          )
+            .some(
+              (item) =>
+                item.actionCode
+                === 'preview_approved_external',
+            )
+        ),
     },
     {
       code:
@@ -2118,6 +2130,105 @@ function buildBriefingTexts(
   };
 }
 
+function contractedSummaryFrom(
+  order,
+  items,
+) {
+  const product =
+    (
+      items
+      || []
+    )
+      .find(
+        (item) =>
+          item.itemType
+          === 'product',
+      )
+    || null;
+
+  const addons =
+    (
+      items
+      || []
+    )
+      .filter(
+        (item) =>
+          item.itemType
+          === 'addon',
+      );
+
+  const snapshot =
+    parseJson(
+      order.pricing_snapshot_json,
+      {},
+    );
+
+  return {
+    product:
+      product
+        ? {
+            name:
+              product.name,
+            code:
+              product.itemCode,
+            sceneCount:
+              Number(
+                product.configuration
+                  ?.sceneCount
+                || 0,
+              )
+              || null,
+            variantCode:
+              product.configuration
+                ?.variantCode
+              || product.itemCode,
+            priceCents:
+              Number(
+                product.unitPriceCents
+                || 0,
+              ),
+          }
+        : null,
+
+    addons:
+      addons.map(
+        (item) => ({
+          name:
+            item.name,
+          code:
+            item.itemCode,
+          priceCents:
+            Number(
+              item.unitPriceCents
+              || 0,
+            ),
+        }),
+      ),
+
+    combo:
+      snapshot.combo
+        ? {
+            name:
+              snapshot.combo.name
+              || snapshot.combo.code
+              || 'Combo',
+            code:
+              snapshot.combo.code
+              || '',
+          }
+        : null,
+
+    couponCode:
+      snapshot.coupon
+        ?.code
+      || snapshot.couponCode
+      || '',
+
+    paymentMethod:
+      order.payment_method,
+  };
+}
+
 export async function getV2AdminOrderDetail(
   db,
   orderCode,
@@ -2201,6 +2312,13 @@ export async function getV2AdminOrderDetail(
       payments,
       briefing,
       previews,
+      history,
+    );
+
+  const contractedSummary =
+    contractedSummaryFrom(
+      order,
+      items,
     );
 
   return {
@@ -2267,6 +2385,8 @@ export async function getV2AdminOrderDetail(
     },
 
     items,
+
+    contractedSummary,
 
     pricing: {
       subtotalCents:
@@ -3809,6 +3929,254 @@ export async function addV2InternalNote(
   };
 }
 
+export async function markV2ExternalPreviewApproval(
+  db,
+  orderCode,
+  {
+    channel = 'whatsapp',
+    note = '',
+  } = {},
+) {
+  const order =
+    await orderByCode(
+      db,
+      orderCode,
+    );
+
+  if (!order) {
+    return null;
+  }
+
+  if (
+    [
+      'cancelled',
+      'finalized',
+    ].includes(
+      order.status,
+    )
+  ) {
+    throw new Error(
+      'Este pedido já está encerrado.',
+    );
+  }
+
+  const cleanChannel =
+    cleanText(
+      channel,
+      40,
+    )
+      .toLowerCase()
+    || 'whatsapp';
+
+  const cleanNote =
+    cleanText(
+      note,
+      600,
+    );
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT id
+          FROM v2_order_history
+          WHERE
+            order_id = ?
+            AND action_code = 'preview_approved_external'
+          ORDER BY id DESC
+          LIMIT 1
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (existing) {
+    return {
+      ok:
+        true,
+      alreadyMarked:
+        true,
+    };
+  }
+
+  const payments =
+    await paymentSummary(
+      db,
+      order,
+    );
+
+  const latestPreview =
+    await db
+      .prepare(
+        `
+          SELECT
+            id,
+            version_number,
+            status
+          FROM v2_previews
+          WHERE order_id = ?
+          ORDER BY
+            version_number DESC,
+            id DESC
+          LIMIT 1
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  const stamp =
+    nowIso();
+
+  const nextStatus =
+    payments
+      .remainingBalanceCents
+      > 0
+        ? 'balance_pending'
+        : 'ready_for_delivery';
+
+  const nextAction =
+    payments
+      .remainingBalanceCents
+      > 0
+        ? 'Cobrar saldo'
+        : 'Liberar entrega';
+
+  const statements = [];
+
+  if (
+    latestPreview
+    && ![
+      'replaced',
+      'revoked',
+    ].includes(
+      latestPreview.status,
+    )
+  ) {
+    statements.push(
+      db
+        .prepare(
+          `
+            INSERT OR IGNORE INTO v2_preview_approvals(
+              preview_id,
+              order_id,
+              approved_at,
+              evidence_json
+            )
+            VALUES (?, ?, ?, ?)
+          `,
+        )
+        .bind(
+          latestPreview.id,
+          order.id,
+          stamp,
+          JSON.stringify({
+            source:
+              'admin_external',
+            channel:
+              cleanChannel,
+            note:
+              cleanNote,
+          }),
+        ),
+    );
+
+    statements.push(
+      db
+        .prepare(
+          `
+            UPDATE v2_previews
+            SET status = 'approved'
+            WHERE id = ?
+          `,
+        )
+        .bind(
+          latestPreview.id,
+        ),
+    );
+  }
+
+  statements.push(
+    db
+      .prepare(
+        `
+          UPDATE v2_orders
+          SET
+            status = ?,
+            next_action = ?,
+            updated_at = ?
+          WHERE id = ?
+        `,
+      )
+      .bind(
+        nextStatus,
+        nextAction,
+        stamp,
+        order.id,
+      ),
+  );
+
+  statements.push(
+    db
+      .prepare(
+        `
+          INSERT INTO v2_order_history(
+            order_id,
+            action_code,
+            description,
+            metadata_json,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?)
+        `,
+      )
+      .bind(
+        order.id,
+        'preview_approved_external',
+        cleanChannel
+          === 'whatsapp'
+            ? 'Aprovação da prévia registrada pelo Admin após confirmação no WhatsApp.'
+            : 'Aprovação externa da prévia registrada pelo Admin.',
+        JSON.stringify({
+          channel:
+            cleanChannel,
+          note:
+            cleanNote,
+          previewId:
+            latestPreview
+              ?.id
+            || null,
+          version:
+            latestPreview
+              ?.version_number
+            || null,
+        }),
+        stamp,
+      ),
+  );
+
+  await db.batch(
+    statements,
+  );
+
+  return {
+    ok:
+      true,
+    approvedAt:
+      stamp,
+    channel:
+      cleanChannel,
+    order: {
+      status:
+        nextStatus,
+      nextAction,
+    },
+  };
+}
+
 export async function markV2CongratulationsSent(
   db,
   orderCode,
@@ -4245,6 +4613,7 @@ export async function applyV2AdminAction(
     const [
       briefing,
       previews,
+      history,
     ] =
       await Promise.all([
         orderBriefing(
@@ -4252,6 +4621,10 @@ export async function applyV2AdminAction(
           order.id,
         ),
         orderPreviews(
+          db,
+          order.id,
+        ),
+        orderHistory(
           db,
           order.id,
         ),
@@ -4263,6 +4636,7 @@ export async function applyV2AdminAction(
         payments,
         briefing,
         previews,
+        history,
       );
 
     const missing =

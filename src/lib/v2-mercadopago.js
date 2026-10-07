@@ -170,6 +170,47 @@ function mpErrorMessage(data) {
 
   return 'Mercado Pago recusou a solicitação.';
 }
+function safeCardDiagnosticText(value) {
+  return String(value ?? '')
+    .replace(/\b(?:APP_USR|TEST)-[A-Za-z0-9_-]+/gi, '[credential-redacted]')
+    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [credential-redacted]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
+    .slice(0, 500);
+}
+
+function cardOrderDiagnostic(response, data, body) {
+  const causes = [data?.cause, data?.errors, data?.details]
+    .flatMap((part) => Array.isArray(part) ? part : part ? [part] : [])
+    .slice(0, 10)
+    .map((item) => typeof item === 'string'
+      ? { message: safeCardDiagnosticText(item) }
+      : {
+          code: safeCardDiagnosticText(item?.code || item?.error),
+          property: safeCardDiagnosticText(item?.property || item?.field || item?.path),
+          message: safeCardDiagnosticText(item?.description || item?.message || item?.detail),
+        });
+  const rawCode = data?.code || data?.error || causes.find((item) => item.code)?.code;
+  const providerCode = String(rawCode || 'unknown')
+    .replace(/[^a-z0-9_-]/gi, '').slice(0, 80) || 'unknown';
+
+  return {
+    status: response.status,
+    providerCode,
+    providerMessage: safeCardDiagnosticText(data?.message),
+    causes,
+    requestId: safeCardDiagnosticText(
+      response.headers.get('x-request-id') || response.headers.get('x-correlation-id'),
+    ),
+    requestShape: {
+      fields: Object.keys(body || {}),
+      itemFields: (body?.items || []).map((item) => Object.keys(item)),
+      onlineFields: Object.keys(body?.config?.online || {}),
+      paymentMethodFields: Object.keys(body?.config?.payment_method || {}),
+      excludedTypes: body?.config?.payment_method?.not_allowed_types || [],
+    },
+  };
+}
+
 async function mpFetch(
   env,
   path,
@@ -177,6 +218,7 @@ async function mpFetch(
     method = 'GET',
     body = undefined,
     idempotencyKey = undefined,
+    cardCheckout = false,
   } = {},
 ) {
   const token =
@@ -243,6 +285,19 @@ async function mpFetch(
   }
 
   if (!response.ok) {
+    if (cardCheckout && path === '/v1/orders') {
+      const diagnostic = cardOrderDiagnostic(response, data, body);
+      // Never log credentials, buyer data, payment values or raw provider response.
+      console.error('[Libri Pedidos V2] Card Orders API rejection', JSON.stringify(diagnostic));
+      const error = new Error(
+        `Mercado Pago recusou a criação do pagamento. Código: ${diagnostic.providerCode}.`,
+      );
+      error.status = response.status;
+      error.code = 'mercado_pago_card_rejected';
+      // Public routes serialize details, so expose only a sanitized provider code.
+      error.details = { providerCode: diagnostic.providerCode };
+      throw error;
+    }
     const message = mpErrorMessage(data);
 
     const error =
@@ -429,6 +484,7 @@ export async function createMercadoPagoCheckout(
         body,
 
         idempotencyKey,
+        cardCheckout: paymentMethod === 'card',
       },
     );
 

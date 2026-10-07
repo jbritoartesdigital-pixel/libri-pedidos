@@ -516,7 +516,7 @@ export function renderStoreGallery(
         </div>
 
         <div class="field">
-          <label for="galleryMedia">Mídia</label>
+          <label for="galleryMedia">Mídia <span class="muted">(vídeo ou imagem, opcional se usar link)</span></label>
           <input
             id="galleryMedia"
             class="input"
@@ -536,12 +536,12 @@ export function renderStoreGallery(
         </div>
 
         <div class="field full">
-          <label for="galleryExternal">URL externa <span class="muted">(opcional, em vez de arquivo)</span></label>
+          <label for="galleryExternal">Link do convite / demonstração <span class="muted">(opcional, abre em nova aba)</span></label>
           <input
             id="galleryExternal"
             class="input"
             type="url"
-            placeholder="https://..."
+            placeholder="https://libriconvites.com.br/seu-convite"
           >
         </div>
 
@@ -603,7 +603,7 @@ export function renderStoreGallery(
                   target="_blank"
                   rel="noopener"
                 >
-                  Abrir
+                  Abrir convite
                 </a>
               ` : ''}
 
@@ -653,7 +653,7 @@ export function renderStoreGallery(
           !media
           && !externalUrl
         ) {
-          showToast('Envie uma mídia ou informe uma URL.');
+          showToast('Envie uma mídia ou informe o link do convite.');
           return;
         }
 

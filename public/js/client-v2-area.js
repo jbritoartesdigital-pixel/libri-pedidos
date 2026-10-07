@@ -541,9 +541,18 @@ function summaryHtml(
   const remainingCents = Number(area.payment.remainingCents ?? Math.max(0, totalCents - paidCents));
   const hasPaid = paidCents > 0;
   const capacityReview = area.payment?.capacityReview === true;
+  const unpaidArchived = area.order.archived === true && !hasPaid;
+  const deadlineTime = Date.parse(area.payment?.deadlineAt || '');
+  const deadlineLabel = Number.isFinite(deadlineTime)
+    ? new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      }).format(new Date(deadlineTime))
+    : '';
   const awaitingInitialPayment =
     ['urgency_approved', 'awaiting_payment'].includes(area.order.status)
-    && !capacityReview;
+    && !capacityReview
+    && !unpaidArchived;
   const awaitingBalance = area.order.status === 'balance_pending';
   const deliveryStart = area.order.deliveryWindow.start || '';
   const deliveryEnd = area.order.deliveryWindow.end || '';
@@ -561,7 +570,9 @@ function summaryHtml(
       <div class="page-head ${awaitingInitialPayment || awaitingBalance || capacityReview ? 'payment-head' : ''}">
         <span class="eyebrow">Seu pedido</span>
         <h1 class="page-title">
-          ${capacityReview
+          ${unpaidArchived
+            ? 'Prazo de pagamento encerrado'
+            : capacityReview
             ? 'Pagamento confirmado'
             : awaitingInitialPayment
               ? 'Pagamento pendente'
@@ -570,7 +581,9 @@ function summaryHtml(
                 : `Oi, ${esc(area.customer.name)} 💛`}
         </h1>
         <p class="page-subtitle">
-          ${capacityReview
+          ${unpaidArchived
+            ? 'Seu pedido está salvo, mas as 24 horas para pagamento terminaram. Entre em contato com a Libri para reativá-lo.'
+            : capacityReview
             ? 'A Libri está revisando sua janela de entrega. Nenhum novo pagamento é necessário.'
             : awaitingInitialPayment
               ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
@@ -587,6 +600,10 @@ function summaryHtml(
       ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
       ${area.urgency?.status === 'pending' ? '<div class="notice info">Seu encaixe está em análise. Nenhum pagamento é solicitado antes da aprovação.</div>' : ''}
       ${area.urgency?.status === 'rejected' ? `<div class="notice info">Encaixe não aprovado. ${esc(area.urgency.note || '')}</div>` : ''}
+      ${unpaidArchived ? `<div class="notice info">
+        <strong>Seu pedido não foi excluído.</strong> O prazo de 24 horas terminou, mas guardamos as informações.
+        ${area.support?.whatsappUrl ? `<a class="btn btn-primary" href="${esc(area.support.whatsappUrl)}" target="_blank" rel="noopener">Solicitar reativação do pedido</a>` : ''}
+      </div>` : ''}
       ${awaitingInitialPayment ? `
         <section class="card payment-priority">
           <div class="payment-priority-top">
@@ -611,27 +628,22 @@ function summaryHtml(
             ? `Total do pedido: ${money(totalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
             : `Total do pedido: ${money(totalCents)}`}</p>
 
-          <button
-            class="btn btn-ghost"
-            id="togglePaymentMethod"
-            type="button"
-          >
-            Trocar forma de pagamento
-          </button>
-
+          <p class="muted"><strong>Escolha como deseja pagar.</strong> Se não conseguiu com um meio, pode trocar sem refazer o pedido.</p>
           <div
             id="paymentMethodChooser"
-            class="payment-methods hidden"
+            class="payment-methods"
           >
             <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
             <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
           </div>
 
+          <div class="notice info compact-notice hidden" id="paymentRetryNotice">Não foi possível concluir essa tentativa. Escolha outra forma acima ou tente novamente. Seu pedido permanece salvo.</div>
+          ${deadlineLabel ? `<p class="muted">Prazo para pagar: até ${esc(deadlineLabel)}. A reserva da agenda é temporária e será conferida novamente antes de um novo pagamento.</p>` : ''}
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
 
           ${termsAlreadyAccepted ? '<div class="notice success compact-notice">Condições já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
 
-          <button class="btn btn-primary payment-main-cta" id="resumePayment">Pagar agora</button>
+          <button class="btn btn-primary payment-main-cta" id="resumePayment">Continuar para pagamento</button>
         </section>` : ''}
 
       ${area.order.status === 'balance_pending' && isPix && remainingCents > 0 ? `
@@ -1489,24 +1501,6 @@ export async function startCustomerArea(
         },
       );
 
-    document
-      .getElementById(
-        'togglePaymentMethod',
-      )
-      ?.addEventListener(
-        'click',
-        () => {
-          document
-            .getElementById(
-              'paymentMethodChooser',
-            )
-            ?.classList
-            .toggle(
-              'hidden',
-            );
-        },
-      );
-
     document.getElementById('copyBalancePix')?.addEventListener('click', async (event) => {
       const key = event.currentTarget.dataset.pixKey || '';
       if (!key) return;
@@ -1633,6 +1627,7 @@ export async function startCustomerArea(
         else throw new Error('Pagamento indisponível. Atualize o pedido.');
       } catch (error) {
         button.disabled = false; showToast(error.message);
+        document.getElementById('paymentRetryNotice')?.classList.remove('hidden');
         if (error.data?.code === 'terms_changed') { paymentTerms = null; if (termsControl) termsControl.checked = false; }
       }
     });

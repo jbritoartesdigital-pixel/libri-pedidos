@@ -423,14 +423,40 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   const body = await terms(DB, 'card');
   const results = await Promise.allSettled([resumeV2Payment(request, env(DB), result.order.publicToken, body), resumeV2Payment(request, env(DB), result.order.publicToken, body)]);
   assert.equal(results.filter(x => x.status === 'fulfilled').length, 1); assert.equal(mp.posts, 1);
-  assert.equal(mp.bodies[0].config.payment_method.default_type, 'credit_card');
-  assert.equal(mp.bodies[0].config.payment_method.max_installments, 12);
-  assert.equal(mp.bodies[0].config.payment_method.installments_cost, 'buyer');
-  assert.equal(mp.bodies[0].config.payment_method.installments, undefined);
-  assert.deepEqual(mp.bodies[0].config.payment_method.not_allowed_types,
-    ['bank_transfer', 'debit_card', 'prepaid_card', 'ticket', 'account_money', 'digital_currency']);
+  assert.deepEqual(
+    mp.bodies[0].config.payment_method,
+    {
+      default_type: 'credit_card',
+      installments_cost: 'buyer',
+    },
+    'card Orders payload must stay minimal to avoid unsupported_properties in production',
+  );
   const pricing = DB.sqlite.prepare('SELECT total_cents, deposit_cents, balance_cents FROM v2_order_pricing').get();
   assert.equal(pricing.total_cents, pricing.deposit_cents); assert.equal(pricing.balance_cents, 0);
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].config.payment_method,
+      'max_installments',
+    ),
+    false,
+  );
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].config.payment_method,
+      'not_allowed_types',
+    ),
+    false,
+  );
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].config.payment_method,
+      'installments',
+    ),
+    false,
+  );
 });
 
 test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {

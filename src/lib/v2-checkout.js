@@ -1187,6 +1187,12 @@ export async function resumeV2Payment(request, env, token, body = {}) {
     JOIN v2_customers c ON c.id = o.customer_id JOIN v2_order_pricing p ON p.order_id = o.id
     LEFT JOIN v2_urgency_requests u ON u.order_id = o.id WHERE o.public_token = ?`).bind(token).first();
   if (!order) throw new V2CheckoutError('Pedido não encontrado.', { status: 404 });
+  if (order.archived_at) {
+    throw new V2CheckoutError(
+      'O prazo de pagamento terminou, mas seu pedido está salvo. Entre em contato com a Libri para reativá-lo.',
+      { status: 409, code: 'payment_window_expired' },
+    );
+  }
 
   const requestedMethod =
     urgencyPaymentMethod(

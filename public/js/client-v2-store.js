@@ -4685,10 +4685,7 @@ export async function startStore(
       ) {
         state.step = 3;
         persist(state);
-        renderDetails(
-          state,
-          render,
-        );
+        render();
         return;
       }
 

@@ -17,7 +17,7 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
-import { updateV2Settings } from '../src/lib/v2-store-config.js';
+import { updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -1362,6 +1362,76 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(storeSettings, /whatsappFinalizedTemplate/);
   assert.match(storeSettings, /\{cliente\}/);
   assert.match(storeSettings, /\{saldo\}/);
+});
+
+test('gallery supports real interactive invitation links instead of forcing video', async () => {
+  const DB = database();
+
+  const inserted = DB.sqlite.prepare(`
+    INSERT INTO v2_gallery_items(
+      product_code,
+      event_type,
+      theme_label,
+      external_url,
+      active,
+      sort_order,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      'interactive_essential',
+      'birthday',
+      'Demo Interativo',
+      'https://libriconvites.com.br/demo-antigo',
+      1,
+      0,
+      datetime('now'),
+      datetime('now')
+    )
+  `).run();
+
+  const id = Number(inserted.lastInsertRowid);
+
+  await assert.rejects(
+    updateV2GalleryItem(DB, id, {
+      externalUrl: 'javascript:alert(1)',
+    }),
+    /https:\/\//,
+  );
+
+  await assert.rejects(
+    updateV2GalleryItem(DB, id, {
+      externalUrl: 'http://example.com',
+    }),
+    /https:\/\//,
+  );
+
+  const updated = await updateV2GalleryItem(DB, id, {
+    externalUrl: 'https://libriconvites.com.br/demo-real',
+  });
+
+  assert.equal(
+    updated.externalUrl,
+    'https://libriconvites.com.br/demo-real',
+  );
+
+  const store = readFileSync(
+    'public/js/client-v2-store.js',
+    'utf8',
+  );
+
+  const admin = readFileSync(
+    'public/js/admin-v2-store-settings.js',
+    'utf8',
+  );
+
+  assert.match(store, /Abrir convite interativo/);
+  assert.match(store, /gallery-interactive-placeholder/);
+  assert.match(store, /item\.externalUrl/);
+  assert.match(store, /rel="noopener noreferrer"/);
+
+  assert.match(admin, /Link do convite \/ demonstração/);
+  assert.match(admin, /abre em nova aba/);
 });
 
 test('public store does not expose a fixed combo chooser or auto-add combo items', () => {

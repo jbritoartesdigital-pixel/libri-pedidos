@@ -14,6 +14,7 @@ import {
   listV2ArchivedOrders,
   listV2Production,
   markV2CongratulationsSent,
+  markV2ExternalPreviewApproval,
 } from '../lib/v2-admin-core.js';
 
 export async function handleAdminV2CoreApi(
@@ -216,6 +217,61 @@ export async function handleAdminV2CoreApi(
       return fail(
         error?.message
         || 'Não foi possível cancelar este pedido.',
+        409,
+      );
+    }
+  }
+
+  const approvalMatch =
+    path
+      .match(
+        /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/preview-approval$/,
+      );
+
+  if (
+    approvalMatch
+    && method
+    === 'POST'
+  ) {
+    const body =
+      await readJson(
+        request,
+      );
+
+    try {
+      const result =
+        await markV2ExternalPreviewApproval(
+          env.DB,
+          approvalMatch[1],
+          {
+            channel:
+              body.channel
+              || 'whatsapp',
+            note:
+              body.note
+              || '',
+          },
+        );
+
+      if (!result) {
+        return fail(
+          'Pedido não encontrado.',
+          404,
+        );
+      }
+
+      return json({
+        ok:
+          true,
+        result,
+      });
+    } catch (
+      error
+    ) {
+      return fail(
+        error
+          ?.message
+        || 'Não foi possível registrar a aprovação.',
         409,
       );
     }

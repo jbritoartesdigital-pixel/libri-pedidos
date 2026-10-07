@@ -87,13 +87,64 @@ function finalizeChecklistHtml(
         'Arquivo ou link final conferido e pronto para entrega',
     };
 
+  const canReceiveBalance =
+    (
+      detail.allowedActions
+      || []
+    )
+      .includes(
+        'balance_received',
+      );
+
   return `
     <div class="finalize-checklist">
       ${checklist.items.map(
         (item) => `
           <div class="finalize-check ${item.ok ? 'ok' : 'missing'}">
             <span>${item.ok ? '✓' : '!'}</span>
-            <strong>${esc(item.label)}</strong>
+
+            <div class="finalize-check-copy">
+              <strong>${esc(item.label)}</strong>
+
+              ${
+                !item.ok
+                && item.code
+                  === 'preview'
+                  ? `
+                    <small>
+                      Se ela aprovou fora da área da cliente, registre a aprovação aqui.
+                    </small>
+                    <button
+                      class="btn btn-secondary btn-small"
+                      type="button"
+                      data-checklist-preview-whatsapp
+                    >
+                      Marcar aprovada no WhatsApp
+                    </button>
+                  `
+                  : ''
+              }
+
+              ${
+                !item.ok
+                && item.code
+                  === 'payment'
+                && canReceiveBalance
+                  ? `
+                    <small>
+                      Se você já recebeu o restante por Pix, dê baixa sem sair desta tela.
+                    </small>
+                    <button
+                      class="btn btn-secondary btn-small"
+                      type="button"
+                      data-checklist-balance-received
+                    >
+                      Marcar saldo recebido
+                    </button>
+                  `
+                  : ''
+              }
+            </div>
           </div>
         `,
       ).join('')}
@@ -118,8 +169,8 @@ function finalizeChecklistHtml(
           </div>
         `
         : `
-          <div class="notice error" style="margin-top:12px">
-            Resolva os itens acima antes de finalizar o pedido.
+          <div class="notice info" style="margin-top:12px">
+            Resolva as pendências acima. As que podem ser confirmadas pelo Admin já têm ação aqui mesmo.
           </div>
         `
     }
@@ -135,6 +186,101 @@ function finalizeChecklistHtml(
         Finalizar pedido
       </button>
     </div>
+  `;
+}
+
+function contractedBlock(
+  detail,
+) {
+  const summary =
+    detail.contractedSummary
+    || {};
+
+  const product =
+    summary.product;
+
+  const addons =
+    summary.addons
+    || [];
+
+  return `
+    <section class="card contracted-card">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">Contratado</span>
+          <h3 style="margin:4px 0 0">O que a cliente comprou</h3>
+        </div>
+      </div>
+
+      ${
+        product
+          ? `
+            <div class="contracted-main">
+              <strong>${esc(product.name)}</strong>
+              ${
+                product.sceneCount
+                  ? `<span>${Number(product.sceneCount)} cena(s)</span>`
+                  : ''
+              }
+              <span>${money(product.priceCents)}</span>
+            </div>
+          `
+          : '<div class="empty">Produto principal não identificado.</div>'
+      }
+
+      <div class="contracted-detail">
+        <strong>Adicionais</strong>
+
+        ${
+          addons.length
+            ? `
+              <div class="contracted-tags">
+                ${addons.map(
+                  (addon) => `
+                    <span>
+                      ${esc(addon.name)}
+                      <small>+${money(addon.priceCents)}</small>
+                    </span>
+                  `,
+                ).join('')}
+              </div>
+            `
+            : '<small>Nenhum adicional contratado.</small>'
+        }
+      </div>
+
+      <div class="contracted-summary-grid">
+        <div>
+          <small>Combo</small>
+          <strong>${esc(summary.combo?.name || 'Nenhum')}</strong>
+        </div>
+
+        <div>
+          <small>Pagamento</small>
+          <strong>${esc(summary.paymentMethod === 'card' ? 'Cartão' : 'Pix')}</strong>
+        </div>
+
+        <div>
+          <small>Total</small>
+          <strong>${money(detail.pricing.totalCents)}</strong>
+        </div>
+      </div>
+
+      ${
+        Number(detail.pricing.comboDiscountCents || 0) > 0
+        || Number(detail.pricing.couponDiscountCents || 0) > 0
+          ? `
+            <small class="contracted-discount">
+              Descontos:
+              combo ${money(detail.pricing.comboDiscountCents || 0)}
+              ${Number(detail.pricing.couponDiscountCents || 0) > 0
+                ? ` • cupom ${money(detail.pricing.couponDiscountCents)}`
+                : ''}
+            </small>
+          `
+          : ''
+      }
+    </section>
   `;
 }
 
@@ -413,6 +559,8 @@ export async function openOrder(code, onChanged = null) {
             }
           </section>
 
+          ${contractedBlock(detail)}
+
           ${paymentBlock(detail)}
         </div>
 
@@ -585,6 +733,31 @@ export async function openOrder(code, onChanged = null) {
                 A publicação de prévia é liberada quando o pedido estiver em produção ou ajustes.
               </div>
             `}
+
+            ${
+              !detail.finalizeChecklist
+                ?.items
+                ?.find(
+                  item =>
+                    item.code
+                    === 'preview',
+                )
+                ?.ok
+                ? `
+                  <div class="notice info" style="margin-top:12px">
+                    A cliente aprovou pelo WhatsApp?
+                    <button
+                      class="btn btn-secondary btn-small"
+                      type="button"
+                      data-preview-approve-whatsapp
+                      style="margin-top:8px"
+                    >
+                      Registrar aprovação no WhatsApp
+                    </button>
+                  </div>
+                `
+                : ''
+            }
 
             <div class="list" style="margin-top:14px">
               ${(detail.previews || []).map(
@@ -859,6 +1032,82 @@ export async function openOrder(code, onChanged = null) {
         ),
     );
 
+  const registerWhatsappApproval =
+    async (
+      button,
+    ) => {
+      if (
+        !confirm(
+          'Confirmar que a cliente aprovou a prévia pelo WhatsApp?',
+        )
+      ) {
+        return false;
+      }
+
+      button.disabled =
+        true;
+
+      try {
+        await api(
+          `/api/admin/v2/orders/${detail.order.code}/preview-approval`,
+          {
+            method:
+              'POST',
+            body:
+              JSON.stringify({
+                channel:
+                  'whatsapp',
+              }),
+          },
+        );
+
+        showToast(
+          'Aprovação pelo WhatsApp registrada ✓',
+        );
+
+        return true;
+      } catch (error) {
+        button.disabled =
+          false;
+        showToast(
+          error.message,
+        );
+
+        return false;
+      }
+    };
+
+  document
+    .querySelectorAll(
+      '[data-preview-approve-whatsapp]',
+    )
+    .forEach(
+      (button) =>
+        button.addEventListener(
+          'click',
+          async () => {
+            if (
+              !await registerWhatsappApproval(
+                button,
+              )
+            ) {
+              return;
+            }
+
+            close();
+
+            if (onChanged) {
+              await onChanged();
+            }
+
+            await openOrder(
+              detail.order.code,
+              onChanged,
+            );
+          },
+        ),
+    );
+
   const refreshContracts =
     async () => {
       const area =
@@ -1016,6 +1265,94 @@ export async function openOrder(code, onChanged = null) {
                   finalizeChecklistHtml(
                     detail,
                   ),
+                );
+
+              const reopenFinalize =
+                async () => {
+                  closeFinalize();
+                  close();
+
+                  if (onChanged) {
+                    await onChanged();
+                  }
+
+                  await openOrder(
+                    detail.order.code,
+                    onChanged,
+                  );
+
+                  document
+                    .querySelector(
+                      '[data-order-action="finalize"]',
+                    )
+                    ?.click();
+                };
+
+              document
+                .querySelector(
+                  '[data-checklist-preview-whatsapp]',
+                )
+                ?.addEventListener(
+                  'click',
+                  async (event) => {
+                    if (
+                      await registerWhatsappApproval(
+                        event.currentTarget,
+                      )
+                    ) {
+                      await reopenFinalize();
+                    }
+                  },
+                );
+
+              document
+                .querySelector(
+                  '[data-checklist-balance-received]',
+                )
+                ?.addEventListener(
+                  'click',
+                  async (event) => {
+                    if (
+                      !confirm(
+                        'Confirmar que o saldo restante foi recebido?',
+                      )
+                    ) {
+                      return;
+                    }
+
+                    const actionButton =
+                      event.currentTarget;
+
+                    actionButton.disabled =
+                      true;
+
+                    try {
+                      await api(
+                        `/api/admin/v2/orders/${detail.order.code}/action`,
+                        {
+                          method:
+                            'POST',
+                          body:
+                            JSON.stringify({
+                              action:
+                                'balance_received',
+                            }),
+                        },
+                      );
+
+                      showToast(
+                        'Saldo registrado ✓',
+                      );
+
+                      await reopenFinalize();
+                    } catch (error) {
+                      actionButton.disabled =
+                        false;
+                      showToast(
+                        error.message,
+                      );
+                    }
+                  },
                 );
 
               document

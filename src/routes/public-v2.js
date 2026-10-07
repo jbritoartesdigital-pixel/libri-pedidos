@@ -150,12 +150,22 @@ async function listPublicV2Gallery(
             : '',
 
         externalUrl:
-          row.external_url
-          || '',
+          /^https:\/\//i
+            .test(
+              row.external_url
+              || '',
+            )
+            ? row.external_url
+            : '',
 
         url:
-          row.external_url
-          || '',
+          /^https:\/\//i
+            .test(
+              row.external_url
+              || '',
+            )
+            ? row.external_url
+            : '',
       }),
     );
 }

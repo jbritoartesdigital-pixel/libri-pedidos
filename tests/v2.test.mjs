@@ -473,13 +473,31 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   );
 
   assert.equal(
-    mp.bodies[0].items[0].unit_measure,
-    'unit',
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].items[0],
+      'unit_measure',
+    ),
+    false,
   );
 
   assert.equal(
-    mp.bodies[0].items[0].total_amount,
-    mp.bodies[0].total_amount,
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].items[0],
+      'total_amount',
+    ),
+    false,
+  );
+
+  assert.deepEqual(
+    Object.keys(
+      mp.bodies[0].items[0],
+    ).sort(),
+    [
+      'quantity',
+      'title',
+      'unit_price',
+    ],
+    'Checkout Pro item payload must stay minimal',
   );
 });
 

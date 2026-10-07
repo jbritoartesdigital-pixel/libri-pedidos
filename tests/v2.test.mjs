@@ -1429,6 +1429,10 @@ test('gallery supports real interactive invitation links instead of forcing vide
   assert.match(store, /gallery-interactive-placeholder/);
   assert.match(store, /item\.externalUrl/);
   assert.match(store, /rel="noopener noreferrer"/);
+  assert.match(
+    store,
+    /items\.length\s*===\s*1[\s\S]*items\[0\]\.externalUrl[\s\S]*window\.open/,
+  );
 
   assert.match(admin, /Link do convite \/ demonstração/);
   assert.match(admin, /abre em nova aba/);

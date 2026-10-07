@@ -61,44 +61,104 @@ function paymentMethodConfig(
     };
   }
 
-  // Mantém o cartão deliberadamente enxuto.
-  // Em produção, a Orders API pode rejeitar propriedades opcionais
-  // mesmo quando elas aparecem na referência geral da integração.
-  // default_type restringe o checkout ao cartão de crédito e
-  // installments_cost preserva o parcelamento com custo do comprador.
+  // Para Checkout Pro via Orders, usamos apenas a configuração
+  // documentada para EXCLUIR tipos de pagamento no request.
+  // Não enviamos default_type/installments_cost: esses campos aparecem
+  // na representação da Order, mas vinham sendo rejeitados em produção
+  // com unsupported_properties ao criar o checkout.
   return {
-    default_type:
-      'credit_card',
-
-    installments_cost:
-      'buyer',
+    not_allowed_types: [
+      'bank_transfer',
+      'debit_card',
+      'prepaid_card',
+      'ticket',
+      'account_money',
+      'digital_currency',
+    ],
   };
 }
 
 function mpErrorMessage(data) {
-  for (const collection of [data?.cause, data?.errors, data?.details]) {
-    if (!Array.isArray(collection)) continue;
-    for (const item of collection) {
-      const detail = item?.description || item?.message || item?.detail;
-      const code = item?.code || item?.error;
-      const property = item?.property || item?.field || item?.path;
+  const collections = [
+    data?.cause,
+    data?.errors,
+    data?.details,
+  ];
 
-      if (detail && property) {
-        return String(detail) + ' [' + String(property) + ']';
+  for (
+    const collection
+    of collections
+  ) {
+    const items =
+      Array.isArray(
+        collection,
+      )
+        ? collection
+        : (
+          collection
+          && typeof collection
+            === 'object'
+            ? [collection]
+            : []
+        );
+
+    for (
+      const item
+      of items
+    ) {
+      const detail =
+        item?.description
+        || item?.message
+        || item?.detail
+        || item?.details;
+
+      const code =
+        item?.code
+        || item?.error;
+
+      const property =
+        item?.property
+        || item?.field
+        || item?.path;
+
+      if (
+        detail
+        && property
+      ) {
+        return `${String(detail)} [${String(property)}]`;
       }
 
-      if (detail && code) {
-        return String(detail) + ' (' + String(code) + ')';
+      if (
+        detail
+        && code
+      ) {
+        return `${String(detail)} (${String(code)})`;
       }
 
-      if (detail || property || code) {
-        return String(detail || property || code);
+      if (
+        detail
+        || property
+        || code
+      ) {
+        return String(
+          detail
+          || property
+          || code,
+        );
       }
     }
   }
 
-  const direct = data?.message || data?.error || data?.status_detail;
-  if (direct) return String(direct);
+  const direct =
+    data?.message
+    || data?.error
+    || data?.status_detail;
+
+  if (direct) {
+    return String(
+      direct,
+    );
+  }
 
   return 'Mercado Pago recusou a solicitação.';
 }
@@ -279,6 +339,12 @@ export async function createMercadoPagoCheckout(
           1,
 
         unit_price:
+          amount,
+
+        unit_measure:
+          'unit',
+
+        total_amount:
           amount,
       },
     ],

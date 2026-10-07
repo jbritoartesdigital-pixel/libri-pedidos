@@ -341,11 +341,18 @@ export async function createMercadoPagoCheckout(
         unit_price:
           amount,
 
-        unit_measure:
-          'unit',
+        ...(
+          paymentMethod
+          === 'card'
+            ? {
+                unit_measure:
+                  'unit',
 
-        total_amount:
-          amount,
+                total_amount:
+                  amount,
+              }
+            : {}
+        ),
       },
     ],
 

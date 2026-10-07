@@ -1805,34 +1805,78 @@ async function openExamples(
       `
         <div class="gallery-grid">
           ${items.map(
-            (item) => `
-              <article class="gallery-item">
-                ${
-                  item.mediaType
-                  === 'video'
+            (item) => {
+              const interactiveLink =
+                item.externalUrl
+                || '';
+
+              const visual =
+                item.mediaType
+                === 'video'
+                && item.mediaPath
+                  ? `
+                    <video
+                      controls
+                      playsinline
+                      preload="metadata"
+                      src="${esc(item.mediaPath)}"
+                    ></video>
+                  `
+                  : (
+                    item.previewPath
+                    || item.mediaPath
+                  )
                     ? `
-                      <video
-                        controls
-                        playsinline
-                        preload="metadata"
-                        src="${esc(item.mediaPath || item.url || '')}"
-                      ></video>
-                    `
-                    : `
                       <img
                         loading="lazy"
                         alt="${esc(item.themeLabel || product.name)}"
-                        src="${esc(item.previewPath || item.mediaPath || item.url || '')}"
+                        src="${esc(item.previewPath || item.mediaPath)}"
                       >
                     `
-                }
+                    : `
+                      <div class="gallery-interactive-placeholder">
+                        <span>Experiência interativa</span>
+                        <strong>Abra o convite para testar como ele funciona.</strong>
+                      </div>
+                    `;
 
-                <div class="gallery-copy">
-                  <strong>${esc(item.themeLabel || 'Inspiração Libri')}</strong>
-                  <small>${esc(item.eventType || '')}</small>
-                </div>
-              </article>
-            `,
+              return `
+                <article class="gallery-item">
+                  ${visual}
+
+                  <div class="gallery-copy">
+                    <strong>${esc(item.themeLabel || 'Inspiração Libri')}</strong>
+
+                    ${
+                      item.eventType
+                        ? `<small>${esc(item.eventType)}</small>`
+                        : ''
+                    }
+
+                    ${
+                      item.caption
+                        ? `<p>${esc(item.caption)}</p>`
+                        : ''
+                    }
+
+                    ${
+                      interactiveLink
+                        ? `
+                          <a
+                            class="btn btn-secondary gallery-open-demo"
+                            href="${esc(interactiveLink)}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Abrir convite interativo
+                          </a>
+                        `
+                        : ''
+                    }
+                  </div>
+                </article>
+              `;
+            },
           ).join('')}
         </div>
       `,

@@ -2,7 +2,7 @@
   "mode": "gif",
   "assets": {
     "cover": "imagens/capa.jpg",
-    "loop": "loop.mp4",
+    "loop": "https://midia.libriconvites.com.br/demo-helena-frozen/loop.mp4",
     "final": "imagens/final.jpg"
   },
   "hotspots": {

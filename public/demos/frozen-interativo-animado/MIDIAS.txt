@@ -1,1 +1,18 @@
-DEMO | INTERATIVO ANIMADO\n\nEnvie:\n- imagens/capa.jpg\n- imagens/final.jpg\n- imagens/preview-otimizada.jpg\n- abertura.mp4\n\nA abertura deve terminar no card final. O código também faz o handoff para a imagem final e mantém os hotspots ativos após a abertura.\n
+DEMO | INTERATIVO ANIMADO
+
+GIT / pasta da demo:
+- imagens/capa.jpg
+- imagens/final.jpg
+- imagens/preview-otimizada.jpg
+
+R2 / midia.libriconvites.com.br:
+- demo-helena-frozen/abertura.mp4
+
+URL esperada:
+https://midia.libriconvites.com.br/demo-helena-frozen/abertura.mp4
+
+FLUXO:
+capa -> toque -> abertura.mp4 -> card final interativo
+
+A abertura deve terminar visualmente no card final.
+O código faz o handoff para a imagem final e mantém os hotspots ativos após a abertura.

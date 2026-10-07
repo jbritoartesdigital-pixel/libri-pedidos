@@ -3,7 +3,7 @@
   "skipMs": 7000,
   "assets": {
     "cover": "imagens/capa.jpg",
-    "opening": "abertura.mp4",
+    "opening": "https://midia.libriconvites.com.br/demo-helena-frozen/abertura.mp4",
     "final": "imagens/final.jpg"
   },
   "hotspots": {

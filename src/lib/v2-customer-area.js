@@ -249,6 +249,8 @@ async function contextByToken(
             o.delivery_end,
             o.briefing_status,
             o.source,
+            o.created_at,
+            o.archived_at,
 
             c.name AS customer_name,
 
@@ -2258,7 +2260,7 @@ export async function getV2CustomerArea(
       context.briefing.data,
     );
 
-  const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent
+  const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent, decided_at
     FROM v2_urgency_requests WHERE order_id = ?`).bind(context.order.id).first();
 
   const termsAcceptance = await env.DB.prepare(
@@ -2396,6 +2398,8 @@ export async function getV2CustomerArea(
       },
       status:
         context.order.status,
+      archived:
+        Boolean(context.order.archived_at),
       statusLabel:
         statusLabel(
           context.order.status,
@@ -2423,6 +2427,12 @@ export async function getV2CustomerArea(
     payment: {
       method:
         context.order.payment_method,
+      deadlineAt: (() => {
+        const reference = urgency?.status === 'approved' && urgency.decided_at
+          ? urgency.decided_at : context.order.created_at;
+        const time = Date.parse(reference || '');
+        return Number.isFinite(time) ? new Date(time + 24 * 60 * 60 * 1000).toISOString() : null;
+      })(),
       totalCents:
         Number(
           context.order.total_cents || 0,

@@ -10,7 +10,7 @@ import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
-import { applyV2AdminAction, cancelV2Order, deleteUnpaidV2Order, getV2AdminOrderDetail, getV2Central, listV2ArchivedOrders, listV2Production } from '../src/lib/v2-admin-core.js';
+import { applyV2AdminAction, cancelV2Order, deleteUnpaidV2Order, getV2AdminOrderDetail, getV2Central, listV2ArchivedOrders, listV2Production, markV2ExternalPreviewApproval } from '../src/lib/v2-admin-core.js';
 import { getV2AgendaRange, setV2AgendaDay, setV2AgendaPeriod, getV2CascadeSuggestions, anticipateV2Production, releaseV2CascadeSurplus } from '../src/lib/v2-agenda-admin.js';
 import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWindow } from '../src/lib/v2-agenda.js';
 import worker from '../src/index.js';
@@ -1182,6 +1182,124 @@ test('admin final checklist blocks incomplete delivery and requires manual final
   assert.equal(finalized.status, 'finalized');
 });
 
+test('admin can register WhatsApp preview approval and finalize without customer-area click', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Aprovação WhatsApp', type: 'birthday', date: day(40) },
+    deliveryWindow: { start: day(8), end: day(10) },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const order = DB.sqlite.prepare(
+    'SELECT id, order_code FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+
+  const initial = await getV2AdminOrderDetail(DB, order.order_code);
+
+  const remaining = initial.payment.remainingBalanceCents;
+  if (remaining > 0) {
+    await createV2FinancePayment(DB, {
+      orderCode: order.order_code,
+      amountCents: remaining,
+      paidDate: day(-1),
+      paymentType: 'balance',
+      note: 'Saldo recebido para teste',
+    });
+  }
+
+  DB.sqlite.prepare(`
+    UPDATE v2_briefings
+    SET completion_percent=100, completed_at=datetime('now'), updated_at=datetime('now')
+    WHERE order_id=?
+  `).run(order.id);
+
+  DB.sqlite.prepare(`
+    UPDATE v2_orders
+    SET briefing_status='completed', status='waiting_customer', updated_at=datetime('now')
+    WHERE id=?
+  `).run(order.id);
+
+  const approval = await markV2ExternalPreviewApproval(
+    DB,
+    order.order_code,
+    {
+      channel: 'whatsapp',
+      note: 'Cliente aprovou por mensagem.',
+    },
+  );
+
+  assert.equal(approval.ok, true);
+  assert.equal(approval.channel, 'whatsapp');
+
+  const detail = await getV2AdminOrderDetail(DB, order.order_code);
+
+  assert.equal(
+    detail.finalizeChecklist.items.find(item => item.code === 'preview').ok,
+    true,
+  );
+  assert.equal(detail.finalizeChecklist.ready, true);
+  assert.equal(detail.order.status, 'ready_for_delivery');
+
+  assert.equal(
+    detail.history.some(
+      item =>
+        item.actionCode === 'preview_approved_external'
+        && item.metadata.channel === 'whatsapp',
+    ),
+    true,
+  );
+
+  const finalized = await applyV2AdminAction(
+    DB,
+    order.order_code,
+    'finalize',
+    { finalDeliveryConfirmed: true },
+  );
+
+  assert.equal(finalized.status, 'finalized');
+});
+
+test('admin detail exposes contracted product addons and commercial summary without customer-area lookup', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Resumo Contratado', type: 'birthday', date: day(45) },
+    deliveryWindow: { start: day(9), end: day(11) },
+    selection: {
+      productCode: 'interactive_essential',
+      addonCodes: ['confirmation_libri'],
+    },
+    ...await terms(DB),
+  }));
+
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+
+  const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+
+  assert.ok(detail.contractedSummary.product);
+  assert.match(detail.contractedSummary.product.name, /Interativo|Convite/i);
+  assert.equal(
+    detail.contractedSummary.addons.some(
+      item => item.code === 'confirmation_libri',
+    ),
+    true,
+  );
+  assert.equal(
+    detail.contractedSummary.paymentMethod,
+    detail.pricing.paymentMethod,
+  );
+  assert.ok(detail.pricing.totalCents > 0);
+});
+
 test('admin deadline risk reflects proximity and ready-for-delivery state', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -1349,6 +1467,11 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
 
   assert.match(order, /Checklist antes de finalizar/);
   assert.match(order, /finalDeliveryConfirmed/);
+  assert.match(order, /Marcar aprovada no WhatsApp/);
+  assert.match(order, /Marcar saldo recebido/);
+  assert.match(order, /O que a cliente comprou/);
+  assert.match(order, /contractedSummary/);
+  assert.match(order, /preview-approval/);
   assert.match(order, /detail\.whatsappActions/);
   assert.match(order, /risk-badge/);
 

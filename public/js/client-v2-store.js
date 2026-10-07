@@ -1800,6 +1800,19 @@ async function openExamples(
       return;
     }
 
+    if (
+      items.length === 1
+      && items[0].externalUrl
+    ) {
+      window.open(
+        items[0].externalUrl,
+        '_blank',
+        'noopener,noreferrer',
+      );
+
+      return;
+    }
+
     modal(
       `Exemplos • ${product.name}`,
       `

@@ -1717,3 +1717,11 @@ a {
   margin-top: 12px;
   justify-content: center;
 }
+
+
+.scene-duration {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.4;
+}

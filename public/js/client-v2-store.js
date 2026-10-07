@@ -379,11 +379,36 @@ function actionRow(
 function progress(
   state,
 ) {
-  const total = 11;
+  const skipConfiguration =
+    Boolean(
+      productFor(
+        state,
+      ),
+    )
+    && !needsConfigurationChoice(
+      productFor(
+        state,
+      ),
+    );
+
+  const total =
+    skipConfiguration
+      ? 10
+      : 11;
+
+  const adjustedStep =
+    state.step
+    - (
+      skipConfiguration
+      && state.step >= 3
+        ? 1
+        : 0
+    );
+
   const current =
     Math.min(
       total,
-      state.step + 1,
+      adjustedStep + 1,
     );
 
   return `
@@ -416,6 +441,9 @@ function progress(
 function bindBack(
   state,
   render,
+  {
+    targetStep = null,
+  } = {},
 ) {
   document
     .getElementById(
@@ -425,10 +453,16 @@ function bindBack(
       'click',
       () => {
         state.step =
-          Math.max(
-            0,
-            state.step - 1,
-          );
+          targetStep
+          === null
+            ? Math.max(
+              0,
+              state.step - 1,
+            )
+            : Math.max(
+              0,
+              targetStep,
+            );
 
         persist(state);
         render();
@@ -558,6 +592,58 @@ function comboMatchesSelection(
     );
 }
 
+function needsConfigurationChoice(
+  product,
+) {
+  if (!product) {
+    return false;
+  }
+
+  if (
+    product.pricingMode
+    === 'scene_count'
+  ) {
+    return true;
+  }
+
+  return Number(
+    product.variants
+      ?.length
+    || 0,
+  ) > 1;
+}
+
+function approximateVideoDuration(
+  sceneCount,
+) {
+  const scenes =
+    Number(
+      sceneCount,
+    );
+
+  const ranges = {
+    1:
+      '10 a 20 segundos',
+    2:
+      '20 a 30 segundos',
+    3:
+      '25 a 35 segundos',
+    4:
+      '30 a 40 segundos',
+    5:
+      '40 a 50 segundos',
+    6:
+      '45 a 60 segundos',
+    7:
+      '55 segundos a 1min10',
+    8:
+      '1min a 1min20',
+  };
+
+  return ranges[scenes]
+    || '';
+}
+
 function sceneVariantsHtml(
   product,
   currentVariant,
@@ -655,8 +741,20 @@ function sceneVariantsHtml(
                       <strong>${esc(variant.label)}</strong>
                       <small>
                         ${money(variant.priceCents)}
-                        ${Number(variant.sceneCount) === group.defaultScene ? ' • padrão desta faixa' : ''}
                       </small>
+
+                      ${
+                        approximateVideoDuration(
+                          variant.sceneCount,
+                        )
+                          ? `
+                            <small class="scene-duration">
+                              Vídeo de aproximadamente
+                              ${esc(approximateVideoDuration(variant.sceneCount))}
+                            </small>
+                          `
+                          : ''
+                      }
                     </span>
                   </label>
                 `,
@@ -2197,7 +2295,15 @@ function renderProducts(
           state,
         );
 
-        state.step = 2;
+        state.step =
+          needsConfigurationChoice(
+            productFor(
+              state,
+            ),
+          )
+            ? 2
+            : 3;
+
         persist(state);
         render();
       },
@@ -2230,7 +2336,9 @@ function renderConfiguration(
       </div>
 
       ${
-        product.variants?.length
+        needsConfigurationChoice(
+          product,
+        )
           ? `
             <div class="section-block">
               <h2 class="section-title">
@@ -2245,6 +2353,7 @@ function renderConfiguration(
               ${product.pricingMode === 'scene_count' ? `
                 <p class="muted" style="margin-top:-4px">
                   Cada cena é um momento diferente da história. A abertura está incluída e fica fora da contagem de cenas.
+                  O tempo mostrado é aproximado e pode variar conforme falas, transições e ritmo da animação.
                 </p>
               ` : ''}
 
@@ -2476,6 +2585,16 @@ function renderDetails(
   bindBack(
     state,
     render,
+    {
+      targetStep:
+        needsConfigurationChoice(
+          productFor(
+            state,
+          ),
+        )
+          ? 2
+          : 1,
+    },
   );
 
   document
@@ -4520,7 +4639,11 @@ export async function startStore(
 
     state.step =
       Math.max(
-        2,
+        needsConfigurationChoice(
+          product,
+        )
+          ? 2
+          : 3,
         state.step,
       );
   }
@@ -4553,6 +4676,19 @@ export async function startStore(
     if (
       state.step === 2
     ) {
+      if (
+        !needsConfigurationChoice(
+          productFor(
+            state,
+          ),
+        )
+      ) {
+        state.step = 3;
+        persist(state);
+        render();
+        return;
+      }
+
       renderConfiguration(
         state,
         render,

@@ -61,37 +61,17 @@ function paymentMethodConfig(
     };
   }
 
-  const maxInstallments =
-    Math.max(
-      1,
-      Math.min(
-        36,
-        v2IntSetting(
-          settings,
-          'mercado_pago_max_installments',
-          12,
-        ),
-      ),
-    );
-
+  // Mantém o cartão deliberadamente enxuto.
+  // Em produção, a Orders API pode rejeitar propriedades opcionais
+  // mesmo quando elas aparecem na referência geral da integração.
+  // default_type restringe o checkout ao cartão de crédito e
+  // installments_cost preserva o parcelamento com custo do comprador.
   return {
     default_type:
       'credit_card',
 
-    max_installments:
-      maxInstallments,
-
     installments_cost:
       'buyer',
-
-    not_allowed_types: [
-      'bank_transfer',
-      'debit_card',
-      'prepaid_card',
-      'ticket',
-      'account_money',
-      'digital_currency',
-    ],
   };
 }
 

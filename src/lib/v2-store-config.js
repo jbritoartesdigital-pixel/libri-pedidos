@@ -146,6 +146,44 @@ function cleanText(
     );
 }
 
+function safeExternalUrl(
+  value,
+) {
+  const text =
+    cleanText(
+      value,
+      1000,
+    );
+
+  if (!text) {
+    return null;
+  }
+
+  let parsed;
+
+  try {
+    parsed =
+      new URL(
+        text,
+      );
+  } catch {
+    throw new Error(
+      'Informe um link https:// válido.',
+    );
+  }
+
+  if (
+    parsed.protocol
+    !== 'https:'
+  ) {
+    throw new Error(
+      'O link do convite deve começar com https://.',
+    );
+  }
+
+  return parsed.href;
+}
+
 function integer(
   value,
   {
@@ -2828,13 +2866,11 @@ export async function createV2GalleryItem(
     );
 
   const externalUrl =
-    cleanText(
+    safeExternalUrl(
       form.get(
         'externalUrl',
       ),
-      1000,
-    )
-    || null;
+    );
 
   if (
     (
@@ -3158,11 +3194,9 @@ export async function updateV2GalleryItem(
     body.externalUrl
     === undefined
       ? existing.external_url
-      : cleanText(
+      : safeExternalUrl(
         body.externalUrl,
-        1000,
-      )
-      || null;
+      );
 
   const active =
     body.active

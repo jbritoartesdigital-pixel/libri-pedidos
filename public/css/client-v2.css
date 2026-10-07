@@ -1677,3 +1677,43 @@ a {
   color: var(--muted);
   line-height: 1.5;
 }
+
+
+.gallery-interactive-placeholder {
+  aspect-ratio: 4 / 5;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(circle at top, rgba(201, 111, 131, 0.14), transparent 58%),
+    #fff8fa;
+}
+
+.gallery-interactive-placeholder span {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rose-dark);
+}
+
+.gallery-interactive-placeholder strong {
+  max-width: 260px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.gallery-copy p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.gallery-open-demo {
+  width: 100%;
+  margin-top: 12px;
+  justify-content: center;
+}

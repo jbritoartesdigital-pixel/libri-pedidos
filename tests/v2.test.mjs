@@ -501,6 +501,70 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   );
 });
 
+test('card Orders API logs sanitized rejection causes and never exposes provider secrets', async t => {
+  const DB = database();
+  const e = env(DB);
+  const mp = providerMock(t);
+  const initial = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Diagnostico cartao', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  assert.equal(mp.posts, 1);
+  const orderId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?')
+    .get(initial.order.code).id;
+
+  t.mock.restoreAll();
+  const logs = [];
+  let sent;
+  t.mock.method(console, 'error', (...parts) => logs.push(parts.join(' ')));
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://api.mercadopago.com/v1/orders');
+    sent = { body: JSON.parse(options.body), headers: options.headers };
+    return Response.json({
+      message: 'Unsupported card property for client@example.com Bearer APP_USR-private-token',
+      cause: [{
+        code: 'unsupported_properties',
+        property: 'config.payment_method.default_type',
+        description: 'invalid for client@example.com APP_USR-private-token',
+      }],
+    }, { status: 400, headers: { 'x-request-id': 'mp-trace-123' } });
+  });
+
+  let rejection;
+  await assert.rejects(
+    createMercadoPagoCheckout(request, e, {
+      orderId, orderCode: initial.order.code, publicToken: initial.order.publicToken,
+      paymentMethod: 'card', amountDueNowCents: initial.payment.amountDueNowCents,
+      customerEmail: 'client@example.com',
+    }),
+    error => { rejection = error; return error.status === 400; },
+  );
+
+  assert.equal(sent.headers['authorization'], 'Bearer TEST-token');
+  assert.match(sent.headers['x-idempotency-key'], /^[0-9a-f-]{36}$/);
+  assert.deepEqual(Object.keys(sent.body).sort(), [
+    'config', 'external_reference', 'items', 'payer', 'processing_mode', 'total_amount', 'type',
+  ]);
+  assert.deepEqual(Object.keys(sent.body.items[0]).sort(), ['quantity', 'title', 'unit_price']);
+  assert.equal(sent.body.items[0].unit_price, sent.body.total_amount);
+  assert.deepEqual(Object.keys(sent.body.config.payment_method), ['not_allowed_types']);
+  assert.equal(sent.body.config.payment_method.not_allowed_types.includes('credit_card'), false);
+  assert.equal(sent.body.external_reference, initial.order.code);
+  assert.equal(initial.payment.balanceCents, 0);
+
+  assert.equal(rejection.details.providerCode, 'unsupported_properties');
+  assert.match(rejection.message, /Código: unsupported_properties/);
+  assert.ok(logs.some(line => line.includes('config.payment_method.default_type')));
+  assert.ok(logs.some(line => line.includes('mp-trace-123')));
+  for (const output of [rejection.message, JSON.stringify(rejection.details), ...logs]) {
+    assert.equal(output.includes('client@example.com'), false);
+    assert.equal(output.includes('APP_USR-private-token'), false);
+    assert.equal(output.includes('TEST-token'), false);
+  }
+});
+
 test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({

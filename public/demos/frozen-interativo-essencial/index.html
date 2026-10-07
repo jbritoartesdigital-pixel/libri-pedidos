@@ -136,11 +136,16 @@
     };
 
     if (cfg.mode === 'essential') {
-      cover.style.display='none';
-      tap.style.display='none';
       video.style.display='none';
+      cover.src=cfg.assets.cover;
       finalImg.src=cfg.assets.final;
-      activateHotspots(true);
+
+      tap.addEventListener('click', () => {
+        tap.style.display='none';
+        hideCover();
+        activateHotspots(true);
+      });
+
       return;
     }
 

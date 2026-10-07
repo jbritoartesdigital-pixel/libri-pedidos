@@ -1,7 +1,8 @@
 {
   "mode": "essential",
   "assets": {
-    "final": "imagens/final.jpg"
+    "final": "imagens/final.jpg",
+    "cover": "imagens/capa.jpg"
   },
   "hotspots": {
     "confirmacao": {

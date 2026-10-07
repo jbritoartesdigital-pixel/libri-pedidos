@@ -1,1 +1,18 @@
-DEMO | INTERATIVO GIF / LOOP\n\nEnvie:\n- imagens/capa.jpg\n- imagens/final.jpg\n- imagens/preview-otimizada.jpg\n- loop.mp4\n\nO loop.mp4 deve ser a animação de 6 s do card, câmera travada, repetição contínua e sem áudio. Os hotspots ficam sobre o vídeo.\n
+DEMO | INTERATIVO GIF / LOOP
+
+GIT / pasta da demo:
+- imagens/capa.jpg
+- imagens/final.jpg
+- imagens/preview-otimizada.jpg
+
+R2 / midia.libriconvites.com.br:
+- demo-helena-frozen/loop.mp4
+
+URL esperada:
+https://midia.libriconvites.com.br/demo-helena-frozen/loop.mp4
+
+FLUXO:
+capa -> toque -> loop.mp4 como card interativo contínuo
+
+O loop deve ter 6 s, câmera travada, repetição contínua e sem áudio.
+Os hotspots ficam ativos sobre o vídeo.

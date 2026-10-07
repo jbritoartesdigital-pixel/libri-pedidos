@@ -623,21 +623,21 @@ function approximateVideoDuration(
 
   const ranges = {
     1:
-      '10–20 segundos',
+      '10 a 20 segundos',
     2:
-      '20–30 segundos',
+      '20 a 30 segundos',
     3:
-      '25–35 segundos',
+      '25 a 35 segundos',
     4:
-      '30–40 segundos',
+      '30 a 40 segundos',
     5:
-      '40–50 segundos',
+      '40 a 50 segundos',
     6:
-      '45–60 segundos',
+      '45 a 60 segundos',
     7:
-      '55 segundos–1min10',
+      '55 segundos a 1min10',
     8:
-      '1min–1min20',
+      '1min a 1min20',
   };
 
   return ranges[scenes]

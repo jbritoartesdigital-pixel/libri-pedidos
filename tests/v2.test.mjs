@@ -1478,6 +1478,39 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
     source,
     /recommendedCompleteScenes/,
   );
+
+  assert.match(
+    source,
+    /function approximateVideoDuration\(/,
+  );
+  assert.match(
+    source,
+    /4:\s*'30 a 40 segundos'/,
+  );
+  assert.match(
+    source,
+    /6:\s*'45 a 60 segundos'/,
+  );
+  assert.match(
+    source,
+    /8:\s*'1min a 1min20'/,
+  );
+  assert.match(
+    source,
+    /Vídeo de aproximadamente/,
+  );
+  assert.equal(
+    source.includes('padrão desta faixa'),
+    false,
+  );
+  assert.match(
+    source,
+    /function needsConfigurationChoice\(/,
+  );
+  assert.match(
+    source,
+    /needsConfigurationChoice\(\s*productFor\(\s*state/,
+  );
 });
 
 test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {

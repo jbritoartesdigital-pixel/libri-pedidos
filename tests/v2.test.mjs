@@ -426,10 +426,16 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   assert.deepEqual(
     mp.bodies[0].config.payment_method,
     {
-      default_type: 'credit_card',
-      installments_cost: 'buyer',
+      not_allowed_types: [
+        'bank_transfer',
+        'debit_card',
+        'prepaid_card',
+        'ticket',
+        'account_money',
+        'digital_currency',
+      ],
     },
-    'card Orders payload must stay minimal to avoid unsupported_properties in production',
+    'card Orders payload must use only documented request restrictions',
   );
   const pricing = DB.sqlite.prepare('SELECT total_cents, deposit_cents, balance_cents FROM v2_order_pricing').get();
   assert.equal(pricing.total_cents, pricing.deposit_cents); assert.equal(pricing.balance_cents, 0);
@@ -445,7 +451,15 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
   assert.equal(
     Object.prototype.hasOwnProperty.call(
       mp.bodies[0].config.payment_method,
-      'not_allowed_types',
+      'default_type',
+    ),
+    false,
+  );
+
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(
+      mp.bodies[0].config.payment_method,
+      'installments_cost',
     ),
     false,
   );
@@ -456,6 +470,16 @@ test('card charges 100%; payment-time capacity is revalidated and concurrent req
       'installments',
     ),
     false,
+  );
+
+  assert.equal(
+    mp.bodies[0].items[0].unit_measure,
+    'unit',
+  );
+
+  assert.equal(
+    mp.bodies[0].items[0].total_amount,
+    mp.bodies[0].total_amount,
   );
 });
 

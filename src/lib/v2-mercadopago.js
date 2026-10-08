@@ -1214,6 +1214,28 @@ async function reconcileMercadoPagoFinance(
   // gross - deductions = the actual credited amount.
   const feeCents = expectedAmount - netCents;
 
+  // Store only the verified fee breakdown from the matching Payment API
+  // response, alongside the existing order payload. Historical transactions
+  // without this snapshot will be presented as not itemized.
+  const financeDetails = {
+    verifiedAt: nowIso(),
+    collectorFees: (payment.fee_details || [])
+      .filter(fee => String(fee?.fee_payer || '').toLowerCase() === 'collector')
+      .map(fee => ({
+        type: String(fee.type || 'taxa').slice(0, 90),
+        amountCents: moneyToCents(fee.amount),
+      })),
+  };
+  const previousPayload = await env.DB.prepare(
+    'SELECT provider_payload_json FROM v2_payments WHERE id = ?',
+  ).bind(localPayment.payment_id).first();
+  let storedOrderPayload = {};
+  try { storedOrderPayload = JSON.parse(previousPayload?.provider_payload_json || '{}'); } catch {}
+  const nextProviderPayload = JSON.stringify({
+    ...safeJson(storedOrderPayload),
+    libriFinance: financeDetails,
+  });
+
   await env.DB
     .prepare(
       `
@@ -1221,6 +1243,7 @@ async function reconcileMercadoPagoFinance(
         SET
           fee_cents = ?,
           net_cents = ?,
+          provider_payload_json = ?,
           updated_at = ?
         WHERE
           id = ?
@@ -1230,9 +1253,9 @@ async function reconcileMercadoPagoFinance(
     .bind(
       feeCents,
       netCents,
+      nextProviderPayload,
       nowIso(),
-      localPayment
-        .payment_id,
+      localPayment.payment_id,
     )
     .run();
 
@@ -1829,6 +1852,19 @@ async function syncMercadoPagoOrderUnlocked(
       .trim()
     || null;
 
+  // Payment status polling must not erase verified finance itemization.
+  let existingFinance = null;
+  try {
+    const oldPayload = await env.DB.prepare(
+      'SELECT provider_payload_json FROM v2_payments WHERE id = ?',
+    ).bind(localPayment.payment_id).first();
+    existingFinance = JSON.parse(oldPayload?.provider_payload_json || '{}')?.libriFinance || null;
+  } catch {}
+  const preservedProviderPayload = {
+    ...safeJson(mpOrder),
+    ...(existingFinance ? { libriFinance: existingFinance } : {}),
+  };
+
   await env.DB
     .prepare(
       `
@@ -1859,11 +1895,7 @@ async function syncMercadoPagoOrderUnlocked(
       )
         ? installments
         : null,
-      JSON.stringify(
-        safeJson(
-          mpOrder,
-        ),
-      ),
+      JSON.stringify(preservedProviderPayload),
       paidAt,
       nowIso(),
       localPayment

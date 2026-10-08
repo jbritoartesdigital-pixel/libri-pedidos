@@ -147,6 +147,7 @@ export function renderV2WhatsappTemplate(
     template
     || '',
   )
+    .replace(/briefing/gi, 'dados do convite')
     .replace(
       /\{(cliente|homenageado|pedido|link|saldo)\}/g,
       (

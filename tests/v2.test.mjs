@@ -1103,7 +1103,7 @@ test('customer can specify a music name or link in interactive and cinematic inv
   const video = await startV2Checkout(request, e, input({
     event: { honoreeName: 'Música no vídeo', type: 'birthday', date: day(51) },
     deliveryWindow: { start: day(13), end: day(15) },
-    selection: { productCode: 'cinematic_video', paymentMethod: 'pix' },
+    selection: { productCode: 'cinematic_video', scenes: 4, paymentMethod: 'pix' },
     ...await terms(DB),
   }));
   const videoId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(video.order.code).id;

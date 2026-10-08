@@ -2430,9 +2430,12 @@ export async function getV2CustomerArea(
       method:
         context.order.payment_method,
       deadlineAt: (() => {
-        const reference = urgency?.status === 'approved' && urgency.decided_at
-          ? urgency.decided_at : context.order.created_at;
-        const time = Date.parse(reference || '');
+        const candidates = [
+          context.order.created_at,
+          urgency?.status === 'approved' ? urgency.decided_at : null,
+          context.order.payment_reactivated_at,
+        ].map(value => Date.parse(value || '')).filter(Number.isFinite);
+        const time = Math.max(...candidates);
         return Number.isFinite(time) ? new Date(time + 24 * 60 * 60 * 1000).toISOString() : null;
       })(),
       totalCents:

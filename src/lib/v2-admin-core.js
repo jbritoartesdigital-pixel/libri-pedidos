@@ -1419,9 +1419,11 @@ async function paymentSummary(
         payment,
       ) =>
         sum
-        + Number(
-          payment.fee_cents
-          || 0,
+        + (
+          payment.provider === 'mercado_pago'
+          && payment.net_cents !== null && payment.net_cents !== undefined
+            ? Math.max(0, Number(payment.amount_cents || 0) - Number(payment.net_cents))
+            : Number(payment.fee_cents || 0)
         ),
       0,
     );

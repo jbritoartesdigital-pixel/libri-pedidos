@@ -341,6 +341,27 @@ function readableAnswer(value, definition) {
   return typeof value === 'object' && value !== null ? JSON.stringify(value) : translate(value);
 }
 
+function musicPreferenceBlock(detail) {
+  const requested = String(detail.briefing?.data?.music_request || '').trim();
+  if (detail.briefing?.data?.music_choice !== 'yes' || !requested) return '';
+  const match = requested.match(/https?:\/\/[^\s<>"']+/i);
+  let link = '';
+  if (match) {
+    try {
+      const url = new URL(match[0]);
+      if (url.protocol === 'https:' || url.protocol === 'http:') link = url.href;
+    } catch {}
+  }
+  return `
+    <div class="order-music-request">
+      <strong>Música escolhida pela cliente</strong>
+      <p>${esc(requested)}</p>
+      ${link ? `<a class="btn btn-secondary btn-small" target="_blank" rel="noopener noreferrer"
+        referrerpolicy="no-referrer" href="${esc(link)}">Abrir música ↗</a>` : ''}
+    </div>
+  `;
+}
+
 function briefingBlock(detail) {
   const definitions = new Map((detail.briefing.fields || []).map(item => [item.key, item]));
   const fallbackLabels = {
@@ -380,6 +401,7 @@ function briefingBlock(detail) {
           </div>
         </div>
       `).join('') : '<div class="empty">A cliente ainda não preencheu os dados do convite.</div>'}
+      ${musicPreferenceBlock(detail)}
       <div class="order-quick-actions">
         <button id="copyProduction" class="btn btn-secondary" type="button">
           Copiar dados do pedido
@@ -442,9 +464,18 @@ function orderUploadsBlock(detail) {
           <strong id="orderPhotoViewerTitle">Foto enviada</strong>
           <button class="btn btn-ghost" type="button" id="orderPhotoViewerClose">Fechar</button>
         </div>
-        <img id="orderPhotoViewerImg" alt="Foto anexada pela cliente">
+        <div class="order-photo-viewer-scroll" id="orderPhotoViewerScroll">
+          <img id="orderPhotoViewerImg" alt="Foto anexada pela cliente">
+        </div>
         <p id="orderPhotoViewerNote"></p>
-        <a class="btn btn-secondary" id="orderPhotoViewerDownload" href="#">Baixar original</a>
+        <div class="order-photo-viewer-controls">
+          <button class="btn btn-ghost" id="orderPhotoPrev" type="button">← Anterior</button>
+          <span id="orderPhotoViewerCount" aria-live="polite"></span>
+          <button class="btn btn-ghost" id="orderPhotoNext" type="button">Próxima →</button>
+          <button class="btn btn-ghost" id="orderPhotoZoom" type="button"
+            aria-pressed="false">Ampliar</button>
+          <a class="btn btn-secondary" id="orderPhotoViewerDownload" href="#">Baixar original</a>
+        </div>
       </dialog>
     </section>
   `;
@@ -899,30 +930,80 @@ export async function openOrder(code, onChanged = null) {
 
   const photos = detail.uploads?.uploads || [];
   const photoViewer = document.getElementById('orderPhotoViewer');
+  const displayable = file => ['image/jpeg', 'image/png', 'image/webp'].includes(file?.mimeType);
+  const galleryIndices = photos.map((file, i) => displayable(file) ? i : -1).filter(i => i >= 0);
+  const mediaUrl = file => '/api/admin/v2/orders/' + encodeURIComponent(detail.order.code)
+    + '/uploads/' + Number(file.id) + '/content';
+  let activeGalleryPosition = 0;
+  const image = document.getElementById('orderPhotoViewerImg');
+  const zoom = document.getElementById('orderPhotoZoom');
+  const scroll = document.getElementById('orderPhotoViewerScroll');
+
+  const setZoom = enabled => {
+    scroll?.classList.toggle('is-zoomed', enabled);
+    zoom?.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    if (zoom) zoom.textContent = enabled ? 'Ajustar à tela' : 'Ampliar';
+    if (scroll) scroll.scrollTop = scroll.scrollLeft = 0;
+  };
+  const displayPhoto = position => {
+    if (!galleryIndices.length) return;
+    activeGalleryPosition = (position + galleryIndices.length) % galleryIndices.length;
+    const file = photos[galleryIndices[activeGalleryPosition]];
+    const path = mediaUrl(file);
+    setZoom(false);
+    image.src = path;
+    image.alt = file.fieldLabel || file.originalFilename || 'Foto enviada';
+    document.getElementById('orderPhotoViewerTitle').textContent = file.originalFilename;
+    document.getElementById('orderPhotoViewerNote').textContent = file.note || '';
+    document.getElementById('orderPhotoViewerDownload').href = path + '?download=1';
+    document.getElementById('orderPhotoViewerCount').textContent =
+      (activeGalleryPosition + 1) + ' de ' + galleryIndices.length;
+    document.getElementById('orderPhotoPrev').disabled = galleryIndices.length < 2;
+    document.getElementById('orderPhotoNext').disabled = galleryIndices.length < 2;
+  };
+  const movePhoto = step => displayPhoto(activeGalleryPosition + step);
+
   document.querySelectorAll('[data-order-photo]').forEach(button => {
     button.addEventListener('click', () => {
       const file = photos[Number(button.dataset.orderPhoto)];
       if (!file) return;
-      const path = '/api/admin/v2/orders/' + encodeURIComponent(detail.order.code)
-        + '/uploads/' + Number(file.id) + '/content';
-      const displayable = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType);
-      if (!displayable || !photoViewer?.showModal) {
-        window.open(path, '_blank', 'noopener');
+      if (!displayable(file) || !photoViewer?.showModal) {
+        window.open(mediaUrl(file), '_blank', 'noopener');
         return;
       }
-      const img = document.getElementById('orderPhotoViewerImg');
-      document.getElementById('orderPhotoViewerTitle').textContent = file.originalFilename;
-      document.getElementById('orderPhotoViewerNote').textContent = file.note || '';
-      document.getElementById('orderPhotoViewerDownload').href = path + '?download=1';
-      img.src = path;
+      displayPhoto(galleryIndices.indexOf(Number(button.dataset.orderPhoto)));
       photoViewer.showModal();
     });
   });
-  document.getElementById('orderPhotoViewerClose')?.addEventListener('click', () => {
-    photoViewer?.close();
-  });
+  document.getElementById('orderPhotoPrev')?.addEventListener('click', () => movePhoto(-1));
+  document.getElementById('orderPhotoNext')?.addEventListener('click', () => movePhoto(1));
+  zoom?.addEventListener('click', () => setZoom(!scroll.classList.contains('is-zoomed')));
+  document.getElementById('orderPhotoViewerClose')?.addEventListener('click', () => photoViewer?.close());
   photoViewer?.addEventListener('click', event => {
     if (event.target === photoViewer) photoViewer.close();
+  });
+  photoViewer?.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      movePhoto(event.key === 'ArrowLeft' ? -1 : 1);
+    }
+  });
+  let touchStart = null;
+  scroll?.addEventListener('touchstart', event => {
+    if (event.touches.length === 1) {
+      touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    }
+  }, { passive: true });
+  scroll?.addEventListener('touchend', event => {
+    if (!touchStart || scroll.classList.contains('is-zoomed')) return;
+    const dx = event.changedTouches[0].clientX - touchStart.x;
+    const dy = event.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5) movePhoto(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  photoViewer?.addEventListener('close', () => {
+    setZoom(false);
+    if (image) image.removeAttribute('src');
   });
 
   document.querySelectorAll('[data-urgency-decision]').forEach(button => {

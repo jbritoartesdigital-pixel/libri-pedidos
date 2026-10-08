@@ -24,7 +24,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261008-formphotos-1';
+} from './admin-v2-order.js?v=20261008-admin-approved-1';
 
 import {
   renderAgenda,
@@ -32,7 +32,7 @@ import {
 
 import {
   renderFinance,
-} from './admin-v2-finance.js';
+} from './admin-v2-finance.js?v=20261008-admin-approved-1';
 
 import {
   renderArchived,
@@ -161,7 +161,7 @@ async function renderCurrent() {
   } else if (
     state.view === 'finance'
   ) {
-    await renderFinance();
+    await renderFinance(open);
   } else if (
     state.view === 'archived'
   ) {

@@ -39,6 +39,29 @@ function movementLabel(
   return 'Entrada';
 }
 
+function feeBreakdownHtml(row) {
+  if (row.provider !== 'mercado_pago' || !row.feeKnown || !row.feeBreakdown) return '';
+  const detail = row.feeBreakdown;
+  const items = (detail.parts || []).map(part => `
+    <div class="finance-fee-line">
+      <span>${esc(part.label)}</span><strong>${money(part.amountCents)}</strong>
+    </div>
+  `).join('');
+  return `
+    <details class="finance-fee-details">
+      <summary>Ver descontos</summary>
+      <div class="finance-fee-breakdown">
+        ${items}
+        ${Number(detail.otherCents || 0) > 0 ? `
+          <div class="finance-fee-line"><span>Diferença não discriminada pelo provedor</span>
+            <strong>${money(detail.otherCents)}</strong></div>` : ''}
+        <div class="finance-fee-line total"><span>Desconto efetivo</span>
+          <strong>${money(row.feeCents)}</strong></div>
+        ${detail.note ? `<small>${esc(detail.note)}</small>` : ''}
+      </div>
+    </details>`;
+}
+
 function todaySaoPaulo() {
   const parts =
     new Intl.DateTimeFormat(
@@ -71,7 +94,7 @@ function todaySaoPaulo() {
   return `${map.year}-${map.month}-${map.day}`;
 }
 
-export async function renderFinance() {
+export async function renderFinance(openOrderDetail = null) {
   setViewMeta(
     'Financeiro',
     'Caixa e recebimentos',
@@ -355,25 +378,24 @@ export async function renderFinance() {
                               </td>
                               <td>${esc(row.method || row.provider || '')}</td>
                               <td>${money(row.amountCents)}</td>
-                              <td>${row.feeKnown ? money(row.feeCents) : 'A conciliar'}</td>
+                              <td>${row.feeKnown ? money(row.feeCents) : 'A conciliar'}
+                                ${feeBreakdownHtml(row)}
+                              </td>
                               <td>${row.netKnown ? money(row.netCents) : 'A conciliar'}</td>
                               <td>
-                                ${
-                                  row.editable
-                                    ? `
-                                      <button
-                                        class="btn btn-ghost btn-small"
-                                        type="button"
-                                        data-edit-payment="${Number(row.id)}"
-                                        data-amount-cents="${Number(row.amountCents || 0)}"
-                                        data-paid-date="${esc(String(row.paidAt || '').slice(0, 10))}"
-                                        data-payment-type="${esc(row.paymentType || 'deposit')}"
-                                      >
-                                        Editar
-                                      </button>
-                                    `
-                                    : '<span class="muted">Conciliado</span>'
-                                }
+                                <div class="finance-movement-actions">
+                                  <button type="button" class="btn btn-secondary btn-small"
+                                    data-finance-open-order="${esc(row.orderCode || '')}">Abrir pedido</button>
+                                  ${
+                                    row.editable
+                                      ? `<button class="btn btn-ghost btn-small" type="button"
+                                          data-edit-payment="${Number(row.id)}"
+                                          data-amount-cents="${Number(row.amountCents || 0)}"
+                                          data-paid-date="${esc(String(row.paidAt || '').slice(0, 10))}"
+                                          data-payment-type="${esc(row.paymentType || 'deposit')}">Editar</button>`
+                                      : ''
+                                  }
+                                </div>
                               </td>
                             </tr>
                           `,
@@ -431,6 +453,21 @@ export async function renderFinance() {
           </section>
         </div>
       `;
+
+      content.querySelectorAll('[data-finance-open-order]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const orderCode = button.dataset.financeOpenOrder;
+          if (!/^LIBRI-\\d+$/.test(orderCode || '') || !openOrderDetail) return;
+          button.disabled = true;
+          try {
+            await openOrderDetail(orderCode);
+          } catch (error) {
+            showToast(error.message || 'Não foi possível abrir o pedido.');
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
 
       content
         .querySelectorAll(

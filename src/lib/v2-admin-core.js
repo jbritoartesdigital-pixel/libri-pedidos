@@ -337,6 +337,7 @@ export async function cancelV2Order(
     };
   }
 
+
   if (
     order.status
     === 'finalized'
@@ -922,6 +923,8 @@ function orderWhatsappActions(
   previews,
   payments,
   templates,
+  uploads = [],
+  requiredUploadRules = [],
 ) {
   const area =
     `/meu-pedido/${order.public_token}`;
@@ -945,8 +948,24 @@ function orderWhatsappActions(
 
   const actions = [];
 
+  const isUnpaid = ['awaiting_payment', 'urgency_approved'].includes(order.status)
+    && Number(payments?.paidCents || 0) <= 0;
+  const isLive = !['cancelled', 'finalized'].includes(order.status);
+
+  if (isUnpaid) {
+    const message = `Oi, ${order.customer_name}! 💛 Seu pedido de ${order.honoree_display_name} está salvo. Você pode concluir o pagamento por aqui: ${values.customerAreaUrl}`;
+    actions.push({
+      code: 'payment',
+      label: 'Lembrar pagamento',
+      message,
+      url: whatsappUrl(order.whatsapp, message),
+    });
+  }
+
   if (
-    Number(
+    isLive
+    && !isUnpaid
+    && Number(
       briefing
         ?.completionPercent
       || 0,
@@ -973,7 +992,7 @@ function orderWhatsappActions(
   }
 
   if (
-    (
+    isLive && (
       previews
       || []
     )
@@ -1004,11 +1023,13 @@ function orderWhatsappActions(
   }
 
   if (
-    Number(
+    isLive && !isUnpaid
+    && Number(
       payments
         ?.remainingBalanceCents
       || 0,
     ) > 0
+    && ['balance_pending','ready_for_delivery','approved'].includes(order.status)
   ) {
     const message =
       renderV2WhatsappTemplate(
@@ -1028,6 +1049,25 @@ function orderWhatsappActions(
           message,
         ),
     });
+  }
+
+  // Only ask for files that the customer's current questionnaire requires.
+  // An optional set of references must never trigger a missing-photo message.
+  if (isLive && !isUnpaid && Number(payments?.paidCents || 0) > 0) {
+    const missing = requiredUploadRules.filter(rule =>
+      Number(rule.min || 0) > 0
+      && uploads.filter(file => file.fieldKey === rule.fieldKey).length < Number(rule.min),
+    );
+    if (missing.length) {
+      const categories = missing.map(rule => rule.label.toLowerCase()).join(' e ');
+      const message = `Oi, ${order.customer_name}! 💛 Para continuar o convite de ${order.honoree_display_name}, ainda precisamos de ${categories}. Você pode enviar pelo seu pedido: ${values.customerAreaUrl}?tab=briefing`;
+      actions.push({
+        code: 'photos',
+        label: 'Pedir fotos pendentes',
+        message,
+        url: whatsappUrl(order.whatsapp, message),
+      });
+    }
   }
 
   if (
@@ -2404,6 +2444,8 @@ export async function getV2AdminOrderDetail(
         previews,
         payments,
         whatsappTemplates,
+        uploads.uploads,
+        fieldMeta.uploads,
       ),
 
     allowedActions:

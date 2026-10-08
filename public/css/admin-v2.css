@@ -1323,3 +1323,28 @@ button { -webkit-tap-highlight-color: transparent; }
  .order-answer-grid { grid-template-columns:minmax(0,1fr); }
  .order-photo-details { padding:8px; }
 }
+
+/* Approved Admin UX bundle: media navigation, music and payment details. */
+.order-music-request { margin:14px 0; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.order-music-request strong { display:block; color:var(--rose-dark); font-size:12px; }
+.order-music-request p { margin:6px 0 9px; font-size:13px; overflow-wrap:anywhere; }
+.order-photo-viewer-scroll { max-height:62vh; overflow:auto; border-radius:10px; background:#f8f6f5; touch-action:pan-y; }
+.order-photo-viewer-scroll img { width:100%; max-height:62vh; object-fit:contain; display:block; user-select:none; }
+.order-photo-viewer-scroll.is-zoomed { touch-action:auto; }
+.order-photo-viewer-scroll.is-zoomed img { width:auto; max-width:none; max-height:none; min-width:100%; }
+.order-photo-viewer-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px; }
+.order-photo-viewer-controls span { font-size:12px; color:var(--muted); font-weight:700; padding:0 3px; }
+.order-photo-viewer-controls .btn:disabled { opacity:.45; cursor:not-allowed; }
+.finance-fee-details { margin-top:6px; min-width:150px; max-width:310px; }
+.finance-fee-details summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--rose-dark); }
+.finance-fee-breakdown { margin-top:7px; padding:10px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); min-width:200px; }
+.finance-fee-line { display:flex; justify-content:space-between; gap:12px; margin:4px 0; font-size:12px; white-space:normal; }
+.finance-fee-line strong { flex-shrink:0; }
+.finance-fee-line.total { padding-top:7px; border-top:1px solid var(--line); font-weight:800; }
+.finance-fee-breakdown small { display:block; font-size:11px; line-height:1.4; margin-top:8px; color:var(--muted); }
+.finance-movement-actions { display:flex; gap:6px; flex-wrap:wrap; }
+@media(max-width:650px) {
+  .order-photo-viewer-controls { justify-content:space-between; }
+  .order-photo-viewer-controls .btn { font-size:12px; padding:8px 10px; }
+  .finance-fee-details { min-width:0; max-width:220px; }
+}

@@ -52,8 +52,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-formphotos-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-formphotos-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-admin-approved-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-admin-approved-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1737,9 +1737,97 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261008-formphotos-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261008-formphotos-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261008-admin-approved-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261008-admin-approved-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261008-formphotos-1'));
+});
+
+test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
+  const order = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const finance = readFileSync('public/js/admin-v2-finance.js', 'utf8');
+  const admin = readFileSync('public/js/admin-v2.js', 'utf8');
+  const shell = readFileSync('public/admin-v2.html', 'utf8');
+  const css = readFileSync('public/css/admin-v2.css', 'utf8');
+  assert.match(order, /musicPreferenceBlock/);
+  assert.match(order, /Abrir música/);
+  assert.match(order, /rel="noopener noreferrer"/);
+  assert.match(order, /orderPhotoPrev/);
+  assert.match(order, /orderPhotoNext/);
+  assert.match(order, /orderPhotoZoom/);
+  assert.match(order, /touchstart/);
+  assert.match(order, /ArrowRight/);
+  assert.match(finance, /feeBreakdownHtml/);
+  assert.match(finance, /finance-fee-details/);
+  assert.match(finance, /data-finance-open-order/);
+  assert.match(finance, /await openOrderDetail\(orderCode\)/);
+  assert.match(admin, /renderFinance\(open\)/);
+  assert.match(css, /\.finance-fee-breakdown/);
+  assert.match(css, /\.order-photo-viewer-controls/);
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261008-admin-approved-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261008-admin-approved-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261008-admin-approved-1"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-admin-approved-1"));
+});
+
+test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Taxas detalhadas', type: 'birthday', date: day(51) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const gross = checkout.payment.amountDueNowCents;
+  const orderId = checkout.payment.providerOrderId;
+  mp.setFinanceDetails(orderId, { feeCents: 174, netCents: gross - 348 });
+  mp.approve(orderId);
+  await syncMercadoPagoOrder(e, orderId);
+  let finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  let movement = finance.movements.find(item => item.orderCode === checkout.order.code);
+  assert.equal(movement.feeCents, 348);
+  assert.equal(movement.feeBreakdown.parts.length, 1);
+  assert.equal(movement.feeBreakdown.parts[0].amountCents, 174);
+  assert.equal(movement.feeBreakdown.otherCents, 174);
+  await syncMercadoPagoOrder(e, orderId);
+  finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  movement = finance.movements.find(item => item.orderCode === checkout.order.code);
+  assert.equal(movement.feeBreakdown.parts[0].amountCents, 174);
+  assert.equal(movement.feeBreakdown.otherCents, 174);
+
+  DB.sqlite.prepare('UPDATE v2_payments SET fee_cents=?, provider_payload_json=? WHERE provider_order_id=?')
+    .run(174, '{}', orderId);
+  const old = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  const historical = old.movements.find(item => item.orderCode === checkout.order.code);
+  assert.equal(historical.feeBreakdown.parts[0].amountCents, 174);
+  assert.equal(historical.feeBreakdown.otherCents, 174);
+  assert.match(historical.feeBreakdown.note, /histórico/);
+});
+
+test('WhatsApp shortcuts match unpaid order and photo requirements, without spamming irrelevant actions', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Fotos necessárias', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  let detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.ok(detail.whatsappActions.some(item => item.code === 'payment'));
+  assert.ok(!detail.whatsappActions.some(item => item.code === 'briefing'));
+  assert.ok(!detail.whatsappActions.some(item => item.code === 'photos'));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(checkout.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ appearance_choice: 'yes' }), id);
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.ok(!detail.whatsappActions.some(item => item.code === 'payment'));
+  assert.ok(detail.whatsappActions.some(item => item.code === 'photos'));
+  const requestPhotos = detail.whatsappActions.find(item => item.code === 'photos');
+  assert.match(requestPhotos.message, /fotos da pessoa/i);
+  assert.match(requestPhotos.url, /^https:\/\/wa\.me\//);
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ appearance_choice: 'no' }), id);
+  detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.ok(!detail.whatsappActions.some(item => item.code === 'photos'));
 });
 
 test('admin final checklist blocks incomplete delivery and requires manual final-file confirmation', async t => {

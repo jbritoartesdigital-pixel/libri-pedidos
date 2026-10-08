@@ -94,7 +94,7 @@ trial.exec('PRAGMA foreign_keys = ON;');
 trial.prepare('DELETE FROM v2_checkout_requests WHERE order_id = ?').run(order.id);
 trial.prepare('DELETE FROM v2_checkout_holds WHERE order_id = ?').run(order.id);
 trial.prepare('DELETE FROM v2_orders WHERE id = ?').run(order.id);
-trial.prepare('DELETE FROM v2_customers WHERE id = ?').run(customer.id);
+trial.prepare('DELETE FROM v2_customers WHERE id = ? AND NOT EXISTS (SELECT 1 FROM v2_orders WHERE customer_id = ?)').run(customer.id, customer.id);
 trial.exec(sql);
 assertSameOrderContents(trial, order.id, items.length);
 const recovered = trial.prepare('SELECT archived_at FROM v2_orders WHERE id = ?').get(order.id);

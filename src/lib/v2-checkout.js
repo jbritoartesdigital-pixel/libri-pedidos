@@ -1250,6 +1250,7 @@ export async function resumeV2Payment(request, env, token, body = {}) {
           eventDate: order.event_date,
           previousStart: order.delivery_start,
           pointsUnits: snapshot.pointsUnits,
+          excludeOrderId: order.id,
         });
         if (!nextWindow) {
           throw new V2CheckoutError(

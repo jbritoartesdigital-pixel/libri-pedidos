@@ -251,6 +251,8 @@ async function contextByToken(
             o.source,
             o.created_at,
             o.archived_at,
+            (SELECT MAX(h.created_at) FROM v2_order_history h
+              WHERE h.order_id = o.id AND h.action_code = 'order_unarchived') AS payment_reactivated_at,
 
             c.name AS customer_name,
 

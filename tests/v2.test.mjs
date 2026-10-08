@@ -33,6 +33,20 @@ async function urgency(DB) {
   return requestV2UrgencyReview(request, env(DB), input());
 }
 
+test('admin entry HTML has correctly quoted executable module import (regression: blank admin after deploy)', () => {
+  const adminHtml = readFileSync('public/admin-v2.html', 'utf8');
+  const clientHtml = readFileSync('public/client-v2.html', 'utf8');
+  for (const [name, html] of [['admin', adminHtml], ['client', clientHtml]]) {
+    const scripts = [...html.matchAll(/<script\b[^>]*>/g)];
+    assert.equal(scripts.length, 1, name + ' must load exactly one entry module');
+    assert.match(scripts[0][0], /\bsrc="\/js\/[a-z0-9-]+\.js(?:\?v=[a-z0-9-]+)?"(?=\s|>)/i,
+      name + ' module src must have a closing double quote before >');
+    assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
+    assert.match(html, /<\/script>/, name + ' must terminate the script element');
+  }
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-formphotos-1"><\/script>/);
+});
+
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
   const DB = database(); assert.equal(DB.migrationCount, 19);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);

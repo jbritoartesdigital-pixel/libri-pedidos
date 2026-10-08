@@ -175,6 +175,12 @@ export function renderStoreSettings(
         </div>
       </div>
 
+      <div class="notice info" style="margin-top:14px">
+        Os arquivos continuam privados. A limpeza automática está desativada; os prazos acima servem para identificar pedidos antigos.
+      </div>
+      <button class="btn btn-ghost" id="viewRetention" type="button">Ver fotos antigas e fazer backup</button>
+      <div id="retentionResults" class="list" style="margin-top:12px"></div>
+
       <button
         id="saveSettings"
         class="btn btn-primary"
@@ -185,6 +191,46 @@ export function renderStoreSettings(
       </button>
     </section>
   `;
+
+  document.getElementById('viewRetention')?.addEventListener('click', async () => {
+    const place = document.getElementById('retentionResults');
+    place.innerHTML = '<small>Verificando fotos antigas...</small>';
+    try {
+      const data = await api('/api/admin/v2/storage/retention');
+      const policy = data.retention;
+      if (!policy.enabled) {
+        place.textContent = 'Primeiro escolha um prazo e salve as configurações. Sem prazo, nenhuma foto será indicada para exclusão.';
+        return;
+      }
+      place.innerHTML = '<p class="muted">' + esc(policy.message) + '</p>' +
+        ((policy.orders || []).map(item => `
+          <div class="row-card">
+            <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+            <small>${item.photoCount} foto(s) • finalizado em ${esc(String(item.finalizedAt).slice(0,10))}</small>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <a class="btn btn-secondary btn-small"
+                href="/api/admin/v2/orders/${esc(item.code)}/download-folder">Baixar backup ZIP</a>
+              <button class="btn btn-ghost btn-small" type="button"
+                data-delete-old-photos="${esc(item.code)}">Excluir fotos após backup</button>
+            </div>
+          </div>`).join('') || '<small>Nenhuma foto atingiu o prazo selecionado.</small>');
+      place.querySelectorAll('[data-delete-old-photos]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const code = button.dataset.deleteOldPhotos;
+          if (prompt('Digite o código exato ' + code + ' para continuar:') !== code) return;
+          if (!confirm('Você já baixou e conferiu o ZIP com as fotos? Esta exclusão é irreversível.')) return;
+          button.disabled = true;
+          try {
+            const out = await api('/api/admin/v2/storage/retention/' + code + '/purge', {
+              method: 'POST', body: JSON.stringify({ confirmCode: code, backupConfirmed: true }),
+            });
+            button.closest('.row-card')?.remove();
+            showToast(out.result.removed + ' foto(s) removidas do armazenamento.');
+          } catch (error) { button.disabled = false; showToast(error.message); }
+        });
+      });
+    } catch (error) { place.textContent = error.message || 'Erro ao consultar fotos.'; }
+  });
 
   document
     .getElementById(

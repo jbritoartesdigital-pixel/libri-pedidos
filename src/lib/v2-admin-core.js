@@ -561,10 +561,13 @@ export async function cleanupAbandonedUnpaidV2Orders(env) {
     WHERE o.status = 'awaiting_payment'
       AND o.briefing_status = 'locked'
       AND o.archived_at IS NULL
-      AND datetime(COALESCE((
-        SELECT u.decided_at FROM v2_urgency_requests u
-        WHERE u.order_id = o.id AND u.status = 'approved'
-      ), o.created_at)) <= datetime('now', '-24 hours')
+      AND datetime(MAX(
+        o.created_at,
+        COALESCE((SELECT u.decided_at FROM v2_urgency_requests u
+          WHERE u.order_id = o.id AND u.status = 'approved'), o.created_at),
+        COALESCE((SELECT MAX(h.created_at) FROM v2_order_history h
+          WHERE h.order_id = o.id AND h.action_code = 'order_unarchived'), o.created_at)
+      )) <= datetime('now', '-24 hours')
       AND EXISTS (SELECT 1 FROM v2_checkout_holds h WHERE h.order_id = o.id)
       AND NOT EXISTS (
         SELECT 1 FROM v2_checkout_holds h

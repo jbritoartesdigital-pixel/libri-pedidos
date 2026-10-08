@@ -28,6 +28,8 @@ import {
 } from './v2-mercadopago.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
 
+import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
+
 export class V2CheckoutError extends Error {
   constructor(
     message,
@@ -2119,11 +2121,18 @@ async function repriceV2PaymentMethod(
       ),
     );
 
-  const totalCents =
-    Number(
-      row.total_cents
-      || 0,
-    );
+  const previousMethod = urgencyPaymentMethod(row.payment_method, 'pix');
+  const snapshot = safeJsonObject(row.pricing_snapshot_json);
+  const baseTotalCents = baseTotalFromSnapshot(row, snapshot);
+  const pricing = method === previousMethod
+    ? {
+        baseTotalCents,
+        totalCents: Number(row.total_cents || 0),
+        cardFeeCents: Number(snapshot.cardFeeCents || 0),
+        cardFeePercent: Number(snapshot.cardFeePercent || 0),
+      }
+    : priceWithCardProcessingFee(baseTotalCents, method);
+  const { totalCents, cardFeeCents, cardFeePercent } = pricing;
 
   const depositPercent =
     method === 'card'
@@ -2144,13 +2153,11 @@ async function repriceV2PaymentMethod(
       - depositCents,
     );
 
-  const snapshot =
-    safeJsonObject(
-      row.pricing_snapshot_json,
-    );
-
   const nextSnapshot = {
     ...snapshot,
+    baseTotalCents,
+    cardFeeCents,
+    cardFeePercent,
     totalCents,
     payment: {
       ...(snapshot.payment || {}),
@@ -2166,6 +2173,7 @@ async function repriceV2PaymentMethod(
       `
         UPDATE v2_order_pricing
         SET
+          total_cents = ?,
           payment_method = ?,
           deposit_percent = ?,
           deposit_cents = ?,
@@ -2176,6 +2184,7 @@ async function repriceV2PaymentMethod(
       `,
     )
     .bind(
+      totalCents,
       method,
       depositPercent,
       depositCents,
@@ -2324,13 +2333,18 @@ async function createUrgencyRequestOrderRecords(
   const appliedUrgencyPercent = Math.max(1, Math.min(100,
     Number.parseInt(urgencyPercent, 10) || 30));
   const urgencyAmountCents = Math.round(Number(quote.subtotalCents || 0) * appliedUrgencyPercent / 100);
-  const projectedTotalCents = Number(quote.subtotalCents || 0) + urgencyAmountCents;
+  const projectedBaseTotalCents = Number(quote.subtotalCents || 0) + urgencyAmountCents;
+  const { totalCents: projectedTotalCents, cardFeeCents: projectedCardFeeCents, cardFeePercent: projectedCardFeePercent } =
+    priceWithCardProcessingFee(projectedBaseTotalCents, quote.payment.method);
   const projectedDepositPercent = quote.payment.method === 'card' ? 100 : 50;
   const projectedDepositCents = Math.round(projectedTotalCents * projectedDepositPercent / 100);
   const projectedBalanceCents = Math.max(0, projectedTotalCents - projectedDepositCents);
   const projectedQuote = {
     ...quote,
     urgency: { approved: false, percent: appliedUrgencyPercent, amountCents: urgencyAmountCents },
+    baseTotalCents: projectedBaseTotalCents,
+    cardFeeCents: projectedCardFeeCents,
+    cardFeePercent: projectedCardFeePercent,
     totalCents: projectedTotalCents,
     payment: { ...quote.payment, depositPercent: projectedDepositPercent,
       depositCents: projectedDepositCents, balanceCents: projectedBalanceCents },
@@ -3257,9 +3271,9 @@ export async function repriceApprovedV2Urgency(
       / 100,
     );
 
-  const totalCents =
-    subtotalCents
-    + urgencyAmountCents;
+  const baseTotalCents = subtotalCents + urgencyAmountCents;
+  const { totalCents, cardFeeCents, cardFeePercent } =
+    priceWithCardProcessingFee(baseTotalCents, method);
 
   const depositPercent =
     method
@@ -3295,6 +3309,9 @@ export async function repriceApprovedV2Urgency(
         urgencyAmountCents,
     },
 
+    baseTotalCents,
+    cardFeeCents,
+    cardFeePercent,
     totalCents,
 
     payment: {

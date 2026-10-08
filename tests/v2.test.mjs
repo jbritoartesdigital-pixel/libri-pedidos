@@ -815,8 +815,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-delivery-popup-2'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-delivery-popup-2'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });

@@ -850,25 +850,86 @@ test('amount mismatch blocks unlocking; valid signature preserves order ID case 
   assert.equal(await validateMercadoPagoWebhook(signed, config, new URL('https://example.com/?data.id=ordabc123'), {}), false);
 });
 
-test('unpaid abandoned orders do not count as sales and are removed after checkout expiry', async t => {
+test('card rejection survives 30 minutes, keeps original link and allows changing to Pix', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
-  const body = input({ event: { honoreeName: 'Abandonado', type: 'birthday', date: day(50) },
-    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB) });
-  const checkout = await startV2Checkout(request, e, body);
+  mp.rejectNext();
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Retry cartao', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  assert.equal(checkout.payment.ready, false);
+  const code = checkout.order.code, token = checkout.order.publicToken;
+  DB.sqlite.prepare("UPDATE v2_orders SET created_at = datetime('now', '-40 minutes') WHERE order_code = ?").run(code);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00.000Z' WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)").run(code);
+  const afterCron = await runV2Scheduler(e);
+  assert.equal(afterCron.abandonedOrders.archived, 0);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(code).n, 1);
+  const area = await getV2CustomerArea(e, token);
+  assert.ok(area); assert.equal(area.order.archived, false);
+  assert.equal(area.payment.method, 'card');
+  assert.ok(area.payment.deadlineAt);
 
-  const centralBefore = await getV2Central(DB);
-  assert.equal(centralBefore.finance.salesCents, 0);
-  assert.equal(centralBefore.finance.receivableCents, 0);
+  const retry = await resumeV2Payment(request, e, token, {
+    clientRequestId: crypto.randomUUID(), paymentMethod: 'pix',
+  });
+  assert.equal(retry.order.code, code);
+  assert.equal(retry.payment.method, 'pix');
+  assert.equal(retry.payment.balanceCents, retry.payment.totalCents - retry.payment.amountDueNowCents);
+  assert.match(retry.payment.checkoutUrl, /^https:\/\//);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+  assert.equal(mp.posts, 1);
+});
 
-  DB.sqlite.prepare("UPDATE v2_orders SET updated_at = '2000-01-01T00:00:00.000Z' WHERE order_code = ?")
-    .run(checkout.order.code);
-  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00.000Z' WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)")
-    .run(checkout.order.code);
+test('after 24h, scheduler archives unpaid orders without deleting customer or purchase history', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  mp.rejectNext();
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Abandonado', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const code = checkout.order.code, token = checkout.order.publicToken;
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(code).id;
+  const itemCount = DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_items WHERE order_id = ?').get(id).n;
+  DB.sqlite.prepare("UPDATE v2_orders SET created_at = datetime('now', '-25 hours'), updated_at = datetime('now', '-25 hours') WHERE id = ?").run(id);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00.000Z' WHERE order_id = ?").run(id);
 
   const result = await runV2Scheduler(e);
-  assert.equal(result.abandonedOrders.deleted, 1);
-  assert.equal(mp.orders.get(checkout.payment.providerOrderId).status, 'cancelled');
-  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(checkout.order.code).n, 0);
+  assert.equal(result.abandonedOrders.archived, 1);
+  assert.equal(result.abandonedOrders.deleted, 0);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE id = ?').get(id).n, 1);
+  assert.ok(DB.sqlite.prepare('SELECT archived_at FROM v2_orders WHERE id = ?').get(id).archived_at);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_items WHERE order_id = ?').get(id).n, itemCount);
+  assert.equal((await getV2CustomerArea(e, token)).order.archived, true);
+  const financial = await getV2Central(DB);
+  assert.equal(financial.finance.salesCents, 0);
+  assert.equal(financial.finance.receivableCents, 0);
+  await assert.rejects(resumeV2Payment(request, e, token, { paymentMethod: 'pix' }), /pedido está salvo/);
+  assert.equal((await runV2Scheduler(e)).abandonedOrders.archived, 0);
+  const archived = await listV2ArchivedOrders(DB, { q: code });
+  assert.ok(archived.some(item => item.code === code));
+  await applyV2AdminAction(DB, code, 'unarchive');
+  const resumed = await resumeV2Payment(request, e, token, { clientRequestId: crypto.randomUUID(), paymentMethod: 'pix' });
+  assert.equal(resumed.order.code, code);
+  assert.equal(resumed.payment.ready, true);
+});
+
+test('unpaid checkout with outstanding provider payment is never archived while remote status is pending', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Pagamento pendente', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?').get(checkout.order.code).id;
+  DB.sqlite.prepare("UPDATE v2_orders SET created_at = datetime('now', '-25 hours') WHERE id = ?").run(id);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00.000Z' WHERE order_id = ?").run(id);
+  const result = await runV2Scheduler(e);
+  assert.equal(result.abandonedOrders.archived, 0);
+  assert.equal(DB.sqlite.prepare('SELECT archived_at FROM v2_orders WHERE id = ?').get(id).archived_at, null);
+  assert.equal(mp.orders.get(checkout.payment.providerOrderId).status, 'created');
 });
 
 test('scheduler repairs missing notifications, expires reservations and previews, cleans challenges, deduplicates events', async () => {

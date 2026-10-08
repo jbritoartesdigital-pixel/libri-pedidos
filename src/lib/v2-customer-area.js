@@ -249,6 +249,10 @@ async function contextByToken(
             o.delivery_end,
             o.briefing_status,
             o.source,
+            o.created_at,
+            o.archived_at,
+            (SELECT MAX(h.created_at) FROM v2_order_history h
+              WHERE h.order_id = o.id AND h.action_code = 'order_unarchived') AS payment_reactivated_at,
 
             c.name AS customer_name,
 
@@ -2258,7 +2262,7 @@ export async function getV2CustomerArea(
       context.briefing.data,
     );
 
-  const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent
+  const urgency = await env.DB.prepare(`SELECT status, decision_note, urgency_percent, decided_at
     FROM v2_urgency_requests WHERE order_id = ?`).bind(context.order.id).first();
 
   const termsAcceptance = await env.DB.prepare(
@@ -2396,6 +2400,8 @@ export async function getV2CustomerArea(
       },
       status:
         context.order.status,
+      archived:
+        Boolean(context.order.archived_at),
       statusLabel:
         statusLabel(
           context.order.status,
@@ -2423,6 +2429,15 @@ export async function getV2CustomerArea(
     payment: {
       method:
         context.order.payment_method,
+      deadlineAt: (() => {
+        const candidates = [
+          context.order.created_at,
+          urgency?.status === 'approved' ? urgency.decided_at : null,
+          context.order.payment_reactivated_at,
+        ].map(value => Date.parse(value || '')).filter(Number.isFinite);
+        const time = Math.max(...candidates);
+        return Number.isFinite(time) ? new Date(time + 24 * 60 * 60 * 1000).toISOString() : null;
+      })(),
       totalCents:
         Number(
           context.order.total_cents || 0,

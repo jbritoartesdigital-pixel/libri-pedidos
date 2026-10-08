@@ -1,0 +1,96 @@
+name: Recuperar pedido LIBRI-1011
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacao:
+        description: "Digite LIBRI-1011 para confirmar a recuperação sem sobrescrever outros pedidos"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  recuperar:
+    if: ${{ inputs.confirmacao == 'LIBRI-1011' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Instalar Wrangler
+        run: pnpm install --frozen-lockfile
+
+      - name: Impedir recuperação antes do deploy de proteção de 24h
+        run: |
+          gh run list --workflow=publicar.yml --limit 1 --json headSha,conclusion > "$RUNNER_TEMP/latest-publish.json"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const runs = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (runs[0]?.conclusion !== "success" || runs[0]?.headSha !== process.env.GITHUB_SHA) {
+              throw new Error("Publique e valide a main atual no workflow Publicar Portal de Pedidos antes de restaurar.");
+            }
+            console.log("Worker com proteção de 24h publicado antes da recuperação.");
+          ' "$RUNNER_TEMP/latest-publish.json"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Baixar backup do D1 anterior à exclusão
+        run: |
+          mkdir -p "$RUNNER_TEMP/libri-backup"
+          gh run download 37702764730 --repo "$GITHUB_REPOSITORY" --name backup-d1-before-deploy --dir "$RUNNER_TEMP/libri-backup"
+          test -s "$RUNNER_TEMP/libri-backup/backup-d1-before-deploy.sql"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Consultar colisões no D1 sem modificar nada
+        run: |
+          npx wrangler d1 execute libri-pedidos-db --remote --json \
+            --command "SELECT id, order_code FROM v2_orders WHERE id = 74 OR order_code = 'LIBRI-1011'" \
+            > "$RUNNER_TEMP/order-check.json"
+          npx wrangler d1 execute libri-pedidos-db --remote --json \
+            --command "SELECT id, whatsapp FROM v2_customers WHERE id = 67" \
+            > "$RUNNER_TEMP/customer-check.json"
+          node scripts/restore-v2-order.mjs \
+            "$RUNNER_TEMP/libri-backup/backup-d1-before-deploy.sql" \
+            LIBRI-1011 "$RUNNER_TEMP/restore.sql" \
+            "$RUNNER_TEMP/order-check.json" "$RUNNER_TEMP/customer-check.json"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Backup atual antes da recuperação pontual
+        run: |
+          npx wrangler d1 export libri-pedidos-db --remote \
+            --output=backup-before-libri1011-recovery.sql --skip-confirmation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Guardar backup de segurança
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-before-libri1011-recovery
+          path: backup-before-libri1011-recovery.sql
+          retention-days: 14
+
+      - name: Restaurar somente o pedido e seus dados
+        run: |
+          npx wrangler d1 execute libri-pedidos-db --remote --yes --file="$RUNNER_TEMP/restore.sql"
+          npx wrangler d1 execute libri-pedidos-db --remote --json \
+            --command "SELECT o.order_code, o.status, o.archived_at, COUNT(i.id) AS items FROM v2_orders o LEFT JOIN v2_order_items i ON i.order_id = o.id WHERE o.order_code = 'LIBRI-1011' GROUP BY o.id"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

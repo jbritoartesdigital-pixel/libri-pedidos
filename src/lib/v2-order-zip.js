@@ -1052,7 +1052,7 @@ function briefingText(
         : 'Nenhum'
     }`,
     '',
-    'BRIEFING',
+    'DADOS DO CONVITE',
   ];
 
   for (
@@ -1215,7 +1215,7 @@ function summaryText(
     `Taxas registradas: ${moneyBr(feeCents)}`,
     `Saldo estimado: ${moneyBr(Math.max(0, Number(order.total_cents || 0) - paidCents))}`,
     '',
-    'BRIEFING',
+    'DADOS DO CONVITE',
     `Versão: ${briefing.schemaVersion}`,
     `Conclusão: ${briefing.completionPercent}%`,
     `Finalizado em: ${briefing.completedAt || ''}`,
@@ -1439,7 +1439,7 @@ function buildEntries(
   const entries = [
     {
       path:
-        'BRIEFING/briefing.txt',
+        'DADOS_DO_CONVITE/dados-do-convite.txt',
 
       kind:
         'text',
@@ -1452,7 +1452,7 @@ function buildEntries(
 
     {
       path:
-        'BRIEFING/resumo-pedido.txt',
+        'DADOS_DO_CONVITE/resumo-pedido.txt',
 
       kind:
         'text',

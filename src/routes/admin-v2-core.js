@@ -18,6 +18,7 @@ import {
 } from '../lib/v2-admin-core.js';
 
 import { lookupReturningV2Customer, searchV2AdminOrders } from '../lib/v2-admin-search.js';
+import { previewV2PhotoRetention, purgeV2FinishedOrderPhotos } from '../lib/v2-admin-storage.js';
 
 export async function handleAdminV2CoreApi(
   request,
@@ -30,6 +31,21 @@ export async function handleAdminV2CoreApi(
 
   const path =
     url.pathname;
+
+  if (method === 'GET' && path === '/api/admin/v2/storage/retention') {
+    return json({ ok: true, retention: await previewV2PhotoRetention(env.DB) });
+  }
+
+  const purgeMatch = path.match(/^\/api\/admin\/v2\/storage\/retention\/(LIBRI-\d+)\/purge$/);
+  if (method === 'POST' && purgeMatch) {
+    try {
+      return json({ ok: true, result: await purgeV2FinishedOrderPhotos(
+        env, purgeMatch[1], await readJson(request),
+      ) });
+    } catch (error) {
+      return fail(error.message || 'Não foi possível remover as fotos.', 422);
+    }
+  }
 
   if (method === 'GET' && path === '/api/admin/v2/customers/lookup') {
     try {

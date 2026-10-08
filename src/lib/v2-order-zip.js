@@ -503,22 +503,17 @@ function safeNamePart(
 function safeZipPath(
   value,
 ) {
-  return String(
-    value
-    || '',
-  )
-    .split('/')
-    .map(
-      (part) =>
-        safeNamePart(
-          part,
-          {
-            fallback:
-              'ARQUIVO',
-          },
-        ),
-    )
-    .join('/');
+  const parts = String(value || '').split('/');
+  return parts.map((part, index) => {
+    // safeNamePart replaces periods with underscores. Preserve a file's
+    // real extension so ZIP tools and image readers recognize its contents.
+    // Never treat dots in intermediate folder names as file extensions.
+    const extension = index === parts.length - 1
+      ? extensionFromFilename(part)
+      : '';
+    const stem = extension ? part.slice(0, -extension.length) : part;
+    return safeNamePart(stem, { fallback: 'ARQUIVO' }) + extension;
+  }).join('/');
 }
 
 function extensionFromFilename(

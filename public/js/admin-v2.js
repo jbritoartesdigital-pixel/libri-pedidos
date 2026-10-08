@@ -24,7 +24,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js';
+} from './admin-v2-order.js?v=20261008-formphotos-1';
 
 import {
   renderAgenda,

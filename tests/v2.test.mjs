@@ -682,6 +682,43 @@ test('no replacement delivery window leaves pending order intact without inventi
   assert.equal(mp.posts, 1);
 });
 
+test('customer-area API exposes a typed delivery-change response consumed by popup UI', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const original = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Aviso de entrega', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const token = original.order.publicToken;
+  DB.sqlite.prepare('UPDATE v2_orders SET delivery_start = ?, delivery_end = ? WHERE order_code=?')
+    .run(day(0), day(2), original.order.code);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at='2000-01-01T00:00:00Z' WHERE order_id=(SELECT id FROM v2_orders WHERE order_code=?)")
+    .run(original.order.code);
+  const res = await worker.fetch(
+    new Request(`https://example.com/api/v2/customer-area/${token}/payment`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ paymentMethod: 'pix', clientRequestId: crypto.randomUUID() }),
+    }),
+    e, { waitUntil() {} },
+  );
+  assert.equal(res.status, 409);
+  const data = await res.json();
+  assert.equal(data.details.code, 'delivery_window_shifted');
+  assert.deepEqual(data.details.details.previous, { start: day(0), end: day(2) });
+  assert.deepEqual(data.details.details.next, { start: day(1), end: day(3) });
+  assert.equal(mp.posts, 1);
+
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-delivery-popup-2'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-delivery-popup-2'));
+  assert.match(area, /delivery_window_shifted/);
+  assert.match(area, /confirmNewDeliveryWindow/);
+});
+
 test('admin can delete only unpaid pre-production orders and pending provider checkout is canceled', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({ event: { honoreeName: 'Teste apagar', type: 'birthday', date: day(50) },

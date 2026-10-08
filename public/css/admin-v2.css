@@ -1293,3 +1293,33 @@ button { -webkit-tap-highlight-color: transparent; }
     grid-template-columns: 1fr;
   }
 }
+
+/* Photos shared in the private client questionnaire, visible to Admin only. */
+.order-gallery-hint { display:block; color:var(--muted); margin-top:5px; font-size:12px; }
+.order-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:12px; margin-top:14px; }
+.order-photo-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.order-photo-open { width:100%; height:150px; padding:0; border:0; background:#f3ebea; cursor:zoom-in; display:block; }
+.order-photo-open img { display:block; width:100%; height:100%; object-fit:cover; }
+.order-photo-fallback { display:grid; place-items:center; height:100%; color:var(--muted); font-size:12px; }
+.order-photo-details { display:grid; gap:6px; padding:10px; min-width:0; }
+.order-photo-details small { color:var(--muted); font-size:11px; }
+.order-photo-details strong { font-size:12px; overflow-wrap:anywhere; }
+.order-photo-details p { color:var(--muted); margin:0 0 4px; font-size:12px; overflow-wrap:anywhere; }
+.order-photo-details .btn { justify-self:start; }
+.order-photo-viewer { border:0; border-radius:18px; padding:16px; width:min(800px,94vw); max-height:88vh; background:white; color:var(--ink); box-shadow:0 20px 70px rgba(0,0,0,.3); }
+.order-photo-viewer::backdrop { background:rgba(24,16,19,.82); }
+.order-photo-viewer-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; overflow-wrap:anywhere; }
+.order-photo-viewer img { display:block; width:100%; max-height:64vh; object-fit:contain; border-radius:10px; background:#f8f6f5; }
+.order-photo-viewer p { margin:10px 0; font-size:12px; color:var(--muted); white-space:pre-wrap; }
+.order-answer-group { margin-top:14px; }
+.order-answer-group h4 { font-size:13px; margin:0 0 9px; color:var(--rose-dark); }
+.order-answer-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.order-answer-item { border:1px solid var(--line); border-radius:11px; padding:11px; background:var(--surface-soft); min-width:0; }
+.order-answer-item strong { display:block; font-size:11px; color:var(--muted); line-height:1.45; }
+.order-answer-item p { font-size:13px; line-height:1.45; margin:5px 0 0; overflow-wrap:anywhere; white-space:pre-wrap; }
+@media(max-width:650px) {
+ .order-photo-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+ .order-photo-open { height:120px; }
+ .order-answer-grid { grid-template-columns:minmax(0,1fr); }
+ .order-photo-details { padding:8px; }
+}

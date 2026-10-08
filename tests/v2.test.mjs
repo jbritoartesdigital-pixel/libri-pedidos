@@ -37,6 +37,13 @@ test('admin entry HTML has correctly quoted executable module import (regression
   const adminHtml = readFileSync('public/admin-v2.html', 'utf8');
   const clientHtml = readFileSync('public/client-v2.html', 'utf8');
   for (const [name, html] of [['admin', adminHtml], ['client', clientHtml]]) {
+    const stylesheets = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/g)];
+    assert.equal(stylesheets.length, 1, name + ' must load exactly one stylesheet');
+    assert.match(
+      stylesheets[0][0],
+      /\bhref="\/css\/[a-z0-9-]+\.css(?:\?v=[a-z0-9-]+)?"(?=\s|>)/i,
+      name + ' stylesheet href must have a closing double quote before >',
+    );
     const scripts = [...html.matchAll(/<script\b[^>]*>/g)];
     assert.equal(scripts.length, 1, name + ' must load exactly one entry module');
     assert.match(scripts[0][0], /\bsrc="\/js\/[a-z0-9-]+\.js(?:\?v=[a-z0-9-]+)?"(?=\s|>)/i,
@@ -44,6 +51,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-formphotos-1">/);
   assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-formphotos-1"><\/script>/);
 });
 

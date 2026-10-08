@@ -706,7 +706,21 @@ async function salesByProduct(
             COALESCE(
               SUM(pr.total_cents),
               0
-            ) AS sales_cents
+            ) AS sales_cents,
+
+            COALESCE(
+              SUM((
+                SELECT COALESCE(SUM(
+                  CASE WHEN pay.payment_type = 'refund' THEN -pay.amount_cents
+                    WHEN pay.net_cents IS NOT NULL THEN pay.net_cents
+                    ELSE pay.amount_cents - COALESCE(pay.fee_cents, 0)
+                  END
+                ), 0)
+                FROM v2_payments pay
+                WHERE pay.order_id = s.order_id
+                  AND pay.status = 'approved'
+              )), 0
+            ) AS received_net_cents
           FROM first_sales s
           INNER JOIN v2_order_pricing pr
             ON pr.order_id = s.order_id
@@ -753,6 +767,7 @@ async function salesByProduct(
           numberValue(
             row.sales_cents,
           ),
+        receivedNetCents: numberValue(row.received_net_cents),
       }),
     );
 }
@@ -2202,13 +2217,35 @@ export async function getV2FinanceDashboard(
       ),
     ]);
 
+  let productionCosts = {};
+  try {
+    const row = await db.prepare(
+      "SELECT value FROM v2_settings WHERE key = 'production_costs_json'",
+    ).first();
+    const obj = JSON.parse(row?.value || '{}');
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) productionCosts = obj;
+  } catch {}
+  const enrichedProducts = byProduct.map(row => {
+    const costConfigured = Object.hasOwn(productionCosts, row.productCode);
+    const unitCostCents = costConfigured ? Number(productionCosts[row.productCode]) : null;
+    const totalCostCents = costConfigured ? unitCostCents * row.salesCount : null;
+    return {
+      ...row,
+      averageTicketCents: row.salesCount ? Math.round(row.salesCents / row.salesCount) : 0,
+      unitCostCents,
+      totalCostCents,
+      estimatedMarginCents: totalCostCents === null ? null : row.receivedNetCents - totalCostCents,
+      costConfigured,
+    };
+  });
+
   return {
     range,
 
     summary,
 
     breakdown: {
-      byProduct,
+      byProduct: enrichedProducts,
 
       byPaymentMethod,
 

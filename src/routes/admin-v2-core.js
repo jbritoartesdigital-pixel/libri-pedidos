@@ -108,6 +108,41 @@ export async function handleAdminV2CoreApi(
     });
   }
 
+  // Admin-only file preview. The global /api/admin/v2/* auth gate runs
+  // before this handler, so customer uploads never become public assets.
+  const uploadMatch = path.match(
+    /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/uploads\/(\d+)\/content$/,
+  );
+  if (uploadMatch && method === 'GET') {
+    if (!env.FILES) return fail('Armazenamento de imagens indisponível.', 503);
+    const row = await env.DB.prepare(`
+      SELECT u.r2_key, u.mime_type, u.original_filename
+      FROM v2_briefing_uploads u
+      JOIN v2_orders o ON o.id = u.order_id
+      WHERE o.order_code = ? AND u.id = ?
+      LIMIT 1
+    `).bind(uploadMatch[1], Number(uploadMatch[2])).first();
+    if (!row) return fail('Imagem não encontrada neste pedido.', 404);
+    const file = await env.FILES.get(row.r2_key);
+    if (!file) return fail('Imagem não encontrada no armazenamento.', 404);
+    const supportedImages = new Set([
+      'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
+    ]);
+    const isImage = supportedImages.has(row.mime_type);
+    const download = url.searchParams.get('download') === '1' || !isImage;
+    const safeName = String(row.original_filename || 'imagem')
+      .replace(/[\r\n"\\]/g, '_').slice(0, 160);
+    return new Response(file.body, {
+      headers: {
+        'content-type': isImage ? row.mime_type : 'application/octet-stream',
+        'content-disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName}"`,
+        'cache-control': 'private, no-store, max-age=0',
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'same-origin',
+      },
+    });
+  }
+
   const detailMatch =
     path
       .match(

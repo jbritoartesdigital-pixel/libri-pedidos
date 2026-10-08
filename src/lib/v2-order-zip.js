@@ -625,6 +625,8 @@ function labelFromKey(
     desired_colors: 'Quais cores deseja ver?',
     avoid_colors: 'Quais cores não deseja ver?',
     visual_feeling: 'Que sensação deseja transmitir?',
+    music_choice: 'Quer música no convite?',
+    music_request: 'Música escolhida (nome ou link)',
     must_have: 'O que não pode faltar?',
     must_avoid: 'O que evitar no convite?',
     exact_text: 'Texto que deve aparecer exatamente',

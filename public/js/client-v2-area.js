@@ -1603,33 +1603,74 @@ export async function startCustomerArea(
       try { const terms = await loadTerms(); modal(`Condições • ${terms.version}`, `<pre>${esc(terms.body)}</pre>`); }
       catch (error) { showToast(error.message); }
     });
-    document.getElementById('resumePayment')?.addEventListener('click', async event => {
+    const continuePayment = async (confirmedDeliveryWindow = null) => {
       const needsTerms = area.payment?.termsAccepted !== true;
       const termsControl = document.getElementById('resumeTerms');
-      if (needsTerms && !termsControl?.checked) { showToast('Leia e aceite as condições.'); return; }
-      const button = event.currentTarget;
-      button.disabled = true;
+      if (needsTerms && !termsControl?.checked) {
+        showToast('Leia e aceite as condições.');
+        return;
+      }
+      const button = document.getElementById('resumePayment');
+      if (button) button.disabled = true;
       try {
-        const payload = { clientRequestId: randomId(),
-          paymentMethod: document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method };
+        const payload = {
+          clientRequestId: randomId(),
+          paymentMethod: document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method,
+        };
+        if (confirmedDeliveryWindow) payload.confirmedDeliveryWindow = confirmedDeliveryWindow;
         if (needsTerms) {
           const terms = await loadTerms();
           payload.termsAccepted = true;
           payload.termsVersion = terms.version;
         }
         const result = await api(`/api/v2/customer-area/${token}/payment`, {
-          method: 'POST', body: JSON.stringify(payload),
+          method: 'POST',
+          body: JSON.stringify(payload),
         });
         if (result.alreadyPaid) {
-          area = await loadArea(); await render();
-          showToast(result.capacityReview ? 'Pagamento recebido. A Libri está revisando sua janela.' : 'Pagamento confirmado.');
-        } else if (result.payment?.checkoutUrl) window.location.href = result.payment.checkoutUrl;
-        else throw new Error('Pagamento indisponível. Atualize o pedido.');
+          area = await loadArea();
+          await render();
+          showToast(result.capacityReview
+            ? 'Pagamento recebido. A Libri está revisando sua janela.'
+            : 'Pagamento confirmado.');
+        } else if (result.payment?.checkoutUrl) {
+          window.location.href = result.payment.checkoutUrl;
+        } else {
+          throw new Error('Pagamento indisponível. Atualize o pedido.');
+        }
       } catch (error) {
-        button.disabled = false; showToast(error.message);
+        if (button) button.disabled = false;
+        const info = error.data?.details;
+        const windowChange = info?.code === 'delivery_window_shifted'
+          ? info?.details : null;
+        if (windowChange?.previous?.start && windowChange?.next?.start && windowChange?.next?.end) {
+          const previous = `${dateBr(windowChange.previous.start)} a ${dateBr(windowChange.previous.end)}`;
+          const next = `${dateBr(windowChange.next.start)} a ${dateBr(windowChange.next.end)}`;
+          modal('Nova data de entrega', `
+            <p>A primeira data de entrega passou. Encontramos uma nova janela disponível para seu pedido.</p>
+            <p class="muted">Previsão anterior: <strong>${esc(previous)}</strong></p>
+            <p>Nova previsão: <strong>${esc(next)}</strong></p>
+            <p>Seu pedido e o valor contratado continuam os mesmos.</p>
+            <button class="btn btn-primary" type="button" id="confirmNewDeliveryWindow">
+              Entendi, continuar pagamento
+            </button>
+          `);
+          document.getElementById('confirmNewDeliveryWindow')?.addEventListener('click', () => {
+            document.querySelector('.modal-close')?.click();
+            void continuePayment(windowChange.next);
+          });
+          return;
+        }
+        showToast(error.message);
         document.getElementById('paymentRetryNotice')?.classList.remove('hidden');
-        if (error.data?.code === 'terms_changed') { paymentTerms = null; if (termsControl) termsControl.checked = false; }
+        if (info?.code === 'terms_changed' || error.data?.code === 'terms_changed') {
+          paymentTerms = null;
+          if (termsControl) termsControl.checked = false;
+        }
       }
+    };
+    document.getElementById('resumePayment')?.addEventListener('click', () => {
+      void continuePayment();
     });
 
     app

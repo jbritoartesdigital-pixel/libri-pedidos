@@ -15,6 +15,7 @@ import {
 
 import {
   findV2DeliveryOptions,
+  findNextV2DeliveryWindow,
   planV2AllocationForWindow,
   validateV2DeliveryWindow,
   validateV2UrgencyWindow,
@@ -1229,6 +1230,50 @@ export async function resumeV2Payment(request, env, token, body = {}) {
     ) {
       return recovered;
     }
+
+    const snapshot = safeJsonObject(order.pricing_snapshot_json);
+    let effectiveStart = order.delivery_start;
+    let effectiveEnd = order.delivery_end;
+    let rescheduledDelivery = null;
+    if (order.urgency_status !== 'approved') {
+      try {
+        await validateV2DeliveryWindow(env.DB, {
+          eventDate: order.event_date,
+          start: effectiveStart,
+          end: effectiveEnd,
+        });
+      } catch (error) {
+        if (error.message !== 'Essa janela não é compatível com a data do evento.') {
+          throw error;
+        }
+        const nextWindow = await findNextV2DeliveryWindow(env.DB, {
+          eventDate: order.event_date,
+          previousStart: order.delivery_start,
+          pointsUnits: snapshot.pointsUnits,
+          excludeOrderId: order.id,
+        });
+        if (!nextWindow) {
+          throw new V2CheckoutError(
+            'A data original de entrega passou e não encontramos uma nova janela disponível. Entre em contato com a Libri para ajustar a entrega.',
+            { status: 409, code: 'delivery_window_unavailable' },
+          );
+        }
+        const previous = { start: order.delivery_start, end: order.delivery_end };
+        const accepted = body.confirmedDeliveryWindow?.start === nextWindow.start
+          && body.confirmedDeliveryWindow?.end === nextWindow.end;
+        if (!accepted) {
+          throw new V2CheckoutError(
+            'A primeira data de entrega passou. Confira a nova previsão para continuar.',
+            { status: 409, code: 'delivery_window_shifted',
+              details: { previous, next: nextWindow } },
+          );
+        }
+        effectiveStart = nextWindow.start;
+        effectiveEnd = nextWindow.end;
+        rescheduledDelivery = { previous, next: nextWindow };
+      }
+    }
+
     const orphanHold = await env.DB.prepare(`SELECT id FROM v2_checkout_holds WHERE order_id = ?
       AND status IN ('active', 'expired') AND NOT EXISTS
       (SELECT 1 FROM v2_payments WHERE order_id = ?) ORDER BY id DESC LIMIT 1`).bind(order.id, order.id).first();
@@ -1290,12 +1335,25 @@ export async function resumeV2Payment(request, env, token, body = {}) {
         requestedMethod,
       );
 
-    await validateV2DeliveryWindow(env.DB, { eventDate: order.event_date, start: order.delivery_start, end: order.delivery_end });
-    const snapshot = safeJsonObject(order.pricing_snapshot_json);
-    const plan = await planV2AllocationForWindow(env.DB, { start: order.delivery_start, end: order.delivery_end, pointsUnits: snapshot.pointsUnits });
+    const plan = await planV2AllocationForWindow(env.DB, { start: effectiveStart, end: effectiveEnd, pointsUnits: snapshot.pointsUnits });
     if (!plan.fits) throw new V2CheckoutError('A janela perdeu capacidade. Entre em contato com a Libri para revisar a entrega.', { status: 409, code: 'delivery_window_unavailable' });
     const { terms, termsHash, evidence, alreadyAccepted: termsAlreadyAccepted } =
       await paymentTermsEvidence(request, env, body, order.id);
+    if (rescheduledDelivery) {
+      // Customer explicitly acknowledged the new window. Preserve order ID,
+      // prices, checkout history and public URL; only the delivery dates change.
+      const changed = await env.DB.prepare(`UPDATE v2_orders SET delivery_start = ?, delivery_end = ?, updated_at = ?
+        WHERE id = ? AND delivery_start = ? AND delivery_end = ?`)
+        .bind(effectiveStart, effectiveEnd, nowIso(), order.id,
+          order.delivery_start, order.delivery_end).run();
+      if (Number(changed.meta?.changes || 0) !== 1) {
+        throw new V2CheckoutError('A entrega mudou enquanto você pagava. Atualize o pedido e tente novamente.',
+          { status: 409, code: 'delivery_window_changed' });
+      }
+      await env.DB.prepare(`INSERT INTO v2_order_history(order_id, action_code, description, metadata_json, created_at)
+        VALUES (?, 'delivery_window_rescheduled', 'Janela de entrega atualizada após confirmação da cliente.', ?, ?)`)
+        .bind(order.id, JSON.stringify(rescheduledDelivery), nowIso()).run();
+    }
     const settings = await loadV2Settings(env.DB);
     const minutes = Math.max(v2IntSetting(settings, 'checkout_hold_minutes', 30), v2IntSetting(settings, 'mercado_pago_order_expiry_minutes', 25) + 5);
     const hold = await createCapacityHold(env.DB, {
@@ -1313,7 +1371,8 @@ export async function resumeV2Payment(request, env, token, body = {}) {
         orderId: order.id, orderCode: order.order_code, publicToken: token,
         paymentMethod: paymentPricing.method, amountDueNowCents: paymentPricing.depositCents, customerEmail: order.email,
       });
-      return completedCheckoutResponse(env.DB, order.id);
+      const response = await completedCheckoutResponse(env.DB, order.id);
+      return rescheduledDelivery ? { ...response, deliveryRescheduled: rescheduledDelivery } : response;
     } catch (error) {
       // Keep the reservation on uncertain network failures: the provider may have created the order.
       if (error.status && error.status >= 400 && error.status < 500) {

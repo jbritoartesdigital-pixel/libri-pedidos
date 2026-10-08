@@ -565,6 +565,21 @@ test('card Orders API logs sanitized rejection causes and never exposes provider
   }
 });
 
+test('checkout price breakdown stays visible in mobile frontend even after deploy and method switch', () => {
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261008-card-fee-1'));
+  assert.match(store, /Acréscimo no cartão/);
+  assert.match(store, /quote.cardFeeCents/);
+  assert.match(area, /data-card-extra/);
+  assert.match(area, /cardTotalCents/);
+  assert.match(area, /Pix • entrada de 50%/);
+});
+
 test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', async () => {
   const DB = database();
   DB.sqlite.prepare("UPDATE v2_product_variants SET price_cents = 7000 WHERE product_id = (SELECT id FROM v2_products WHERE code = 'interactive_essential')").run();

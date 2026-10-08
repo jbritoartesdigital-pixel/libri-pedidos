@@ -1151,7 +1151,7 @@ function nextActionFromStatus(
   if (
     row.next_action
   ) {
-    return row.next_action;
+    return String(row.next_action).replace(/briefing/gi, 'dados do convite');
   }
 
   return {

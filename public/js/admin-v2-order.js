@@ -332,58 +332,120 @@ function paymentBlock(detail) {
   `;
 }
 
+
+function readableAnswer(value, definition) {
+  const options = new Map((definition?.options || []).map(option => [option.value, option.label]));
+  const defaults = { yes: 'Sim', no: 'Não', libri_decides: 'Deixo a Libri decidir' };
+  const translate = item => options.get(item) || defaults[item] || String(item);
+  if (Array.isArray(value)) return value.map(translate).join(', ');
+  return typeof value === 'object' && value !== null ? JSON.stringify(value) : translate(value);
+}
+
 function briefingBlock(detail) {
-  const entries =
-    Object.entries(
-      detail.briefing.data
-      || {},
-    );
+  const definitions = new Map((detail.briefing.fields || []).map(item => [item.key, item]));
+  const fallbackLabels = {
+    avoid_colors: 'Cores que a cliente não quer',
+    must_avoid: 'O que evitar no convite',
+    must_have: 'O que não pode faltar',
+  };
+  const groups = new Map();
+  for (const [key, value] of Object.entries(detail.briefing.data || {})) {
+    if (value === null || value === undefined || value === ''
+      || (Array.isArray(value) && value.length === 0)) continue;
+    const definition = definitions.get(key);
+    const section = definition?.section || 'Outras informações';
+    if (!groups.has(section)) groups.set(section, []);
+    groups.get(section).push({
+      label: definition?.label || fallbackLabels[key] || key.replaceAll('_', ' '),
+      text: readableAnswer(value, definition),
+    });
+  }
 
   return `
     <section class="card">
       <div class="section-title">
-        <h3>Briefing</h3>
-        <span class="status">
-          ${detail.briefing.completionPercent}%
-        </span>
+        <h3>Dados enviados pela cliente</h3>
+        <span class="status">${detail.briefing.completionPercent}% preenchido</span>
       </div>
-
-      ${
-        entries.length
-          ? `
-            <table class="simple-table">
-              <tbody>
-                ${entries.map(
-                  ([key, value]) => `
-                    <tr>
-                      <th>${esc(key.replace(/_/g, ' '))}</th>
-                      <td>${esc(Array.isArray(value) ? value.join(', ') : value)}</td>
-                    </tr>
-                  `,
-                ).join('')}
-              </tbody>
-            </table>
-          `
-          : '<div class="empty">Sem briefing preenchido.</div>'
-      }
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-        <button
-          id="copyProduction"
-          class="btn btn-secondary"
-          type="button"
-        >
-          Copiar briefing
+      ${groups.size ? [...groups.entries()].map(([section, items]) => `
+        <div class="order-answer-group">
+          <h4>${esc(section)}</h4>
+          <div class="order-answer-grid">
+            ${items.map(item => `
+              <div class="order-answer-item">
+                <strong>${esc(item.label)}</strong>
+                <p>${esc(item.text)}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('') : '<div class="empty">A cliente ainda não preencheu os dados do convite.</div>'}
+      <div class="order-quick-actions">
+        <button id="copyProduction" class="btn btn-secondary" type="button">
+          Copiar dados do pedido
         </button>
-
-        <button
-          id="copyFull"
-          class="btn btn-ghost"
-          type="button"
-        >
+        <button id="copyFull" class="btn btn-ghost" type="button">
           Copiar ficha completa
         </button>
       </div>
+    </section>
+  `;
+}
+
+function orderUploadsBlock(detail) {
+  const files = detail.uploads?.uploads || [];
+  const labels = {
+    person: 'Fotos da pessoa',
+    outfit: 'Fotos da roupa',
+    reference: 'Inspirações e referências',
+  };
+  const contentPath = file =>
+    '/api/admin/v2/orders/' + encodeURIComponent(detail.order.code)
+      + '/uploads/' + Number(file.id) + '/content';
+  const supported = file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType);
+
+  return `
+    <section class="card" id="adminOrderPhotos">
+      <div class="section-title">
+        <div>
+          <h3>Fotos e referências recebidas</h3>
+          <small class="order-gallery-hint">Abra cada imagem sem precisar baixar a pasta.</small>
+        </div>
+        <span class="status">${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}</span>
+      </div>
+      ${files.length ? `
+        <div class="order-photo-grid">
+          ${files.map((file, index) => `
+            <article class="order-photo-card">
+              <button type="button" class="order-photo-open" data-order-photo="${index}"
+                aria-label="Ver arquivo ${esc(file.originalFilename)}">
+                ${supported(file) ? `
+                  <img src="${esc(contentPath(file))}" loading="lazy"
+                    alt="${esc(file.fieldLabel || labels[file.category] || 'Foto enviada')}"
+                    decoding="async">
+                ` : '<span class="order-photo-fallback">Arquivo de imagem</span>'}
+              </button>
+              <div class="order-photo-details">
+                <small>${esc(file.fieldLabel || labels[file.category] || 'Imagem enviada')}</small>
+                <strong title="${esc(file.originalFilename)}">${esc(file.originalFilename)}</strong>
+                ${file.note ? `<p>${esc(file.note)}</p>` : ''}
+                <a class="btn btn-ghost btn-small" href="${esc(contentPath(file))}?download=1">
+                  Baixar original
+                </a>
+              </div>
+            </article>
+          `).join('')}
+        </div>
+      ` : '<div class="empty">A cliente ainda não enviou fotos ou referências.</div>'}
+      <dialog class="order-photo-viewer" id="orderPhotoViewer" aria-label="Visualização da foto">
+        <div class="order-photo-viewer-head">
+          <strong id="orderPhotoViewerTitle">Foto enviada</strong>
+          <button class="btn btn-ghost" type="button" id="orderPhotoViewerClose">Fechar</button>
+        </div>
+        <img id="orderPhotoViewerImg" alt="Foto anexada pela cliente">
+        <p id="orderPhotoViewerNote"></p>
+        <a class="btn btn-secondary" id="orderPhotoViewerDownload" href="#">Baixar original</a>
+      </dialog>
     </section>
   `;
 }
@@ -574,6 +636,8 @@ export async function openOrder(code, onChanged = null) {
             <button class="btn btn-primary" data-urgency-decision="approve">Aprovar encaixe</button>
             <button class="btn btn-danger" data-urgency-decision="reject">Rejeitar encaixe</button>
           </section>` : ''}
+
+        ${orderUploadsBlock(detail)}
 
         <div class="section-grid">
           ${briefingBlock(detail)}
@@ -832,6 +896,34 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  const photos = detail.uploads?.uploads || [];
+  const photoViewer = document.getElementById('orderPhotoViewer');
+  document.querySelectorAll('[data-order-photo]').forEach(button => {
+    button.addEventListener('click', () => {
+      const file = photos[Number(button.dataset.orderPhoto)];
+      if (!file) return;
+      const path = '/api/admin/v2/orders/' + encodeURIComponent(detail.order.code)
+        + '/uploads/' + Number(file.id) + '/content';
+      const displayable = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimeType);
+      if (!displayable || !photoViewer?.showModal) {
+        window.open(path, '_blank', 'noopener');
+        return;
+      }
+      const img = document.getElementById('orderPhotoViewerImg');
+      document.getElementById('orderPhotoViewerTitle').textContent = file.originalFilename;
+      document.getElementById('orderPhotoViewerNote').textContent = file.note || '';
+      document.getElementById('orderPhotoViewerDownload').href = path + '?download=1';
+      img.src = path;
+      photoViewer.showModal();
+    });
+  });
+  document.getElementById('orderPhotoViewerClose')?.addEventListener('click', () => {
+    photoViewer?.close();
+  });
+  photoViewer?.addEventListener('click', event => {
+    if (event.target === photoViewer) photoViewer.close();
+  });
 
   document.querySelectorAll('[data-urgency-decision]').forEach(button => {
     button.addEventListener('click', async () => {
@@ -1651,7 +1743,7 @@ export async function openOrder(code, onChanged = null) {
         await writeClipboard(
           detail.copy.production,
         );
-        showToast('Briefing copiado ✓');
+        showToast('Dados copiados ✓');
       },
     );
 

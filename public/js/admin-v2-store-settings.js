@@ -142,6 +142,45 @@ export function renderStoreSettings(
         </div>
       </div>
 
+      <div class="section-title" style="margin-top:20px"><h2>Meta, custos e arquivos</h2></div>
+      <p class="muted">Custos informados são estimativas internas. Não alteram o preço cobrado das clientes.</p>
+      <div class="form-grid">
+        <div class="field">
+          <label for="monthlyGoal">Meta mensal de recebimentos (R$)</label>
+          <input id="monthlyGoal" class="input" type="number" min="100" step="0.01"
+            value="${(Number(s.growth?.monthlyRevenueGoalCents ?? 200000) / 100).toFixed(2)}">
+        </div>
+        <div class="field">
+          <label for="retentionDays">Guardar fotos após a festa</label>
+          <select id="retentionDays" class="select">
+            ${[[0,'Sem prazo automático'],[30,'30 dias'],[90,'90 dias'],[180,'180 dias'],[365,'1 ano']]
+              .map(([days,label]) => `<option value="${days}" ${Number(s.growth?.uploadRetentionDays || 0) === days ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+          <small>Esta configuração só gera avisos de revisão. Não exclui nenhuma foto automaticamente.</small>
+        </div>
+        <div class="field full">
+          <h3>Custo estimado de produção por convite</h3>
+          <div class="form-grid">
+            ${(config.products || []).map(product => `
+              <div class="field">
+                <label for="cost-${esc(product.code)}">${esc(product.name)}</label>
+                <input class="input" id="cost-${esc(product.code)}"
+                  data-product-cost="${esc(product.code)}" type="number" min="0" step="0.01"
+                  placeholder="Ainda não informado"
+                  value="${s.growth?.productionCosts?.[product.code] === undefined ? ''
+                    : (Number(s.growth.productionCosts[product.code]) / 100).toFixed(2)}">
+              </div>`).join('')}
+          </div>
+          <small>Margem estimada: dinheiro líquido recebido dos pedidos menos custo estimado de produção. Não inclui outras despesas não cadastradas.</small>
+        </div>
+      </div>
+
+      <div class="notice info" style="margin-top:14px">
+        Os arquivos continuam privados. A limpeza automática está desativada; os prazos acima servem para identificar pedidos antigos.
+      </div>
+      <button class="btn btn-ghost" id="viewRetention" type="button">Ver fotos antigas e fazer backup</button>
+      <div id="retentionResults" class="list" style="margin-top:12px"></div>
+
       <button
         id="saveSettings"
         class="btn btn-primary"
@@ -152,6 +191,46 @@ export function renderStoreSettings(
       </button>
     </section>
   `;
+
+  document.getElementById('viewRetention')?.addEventListener('click', async () => {
+    const place = document.getElementById('retentionResults');
+    place.innerHTML = '<small>Verificando fotos antigas...</small>';
+    try {
+      const data = await api('/api/admin/v2/storage/retention');
+      const policy = data.retention;
+      if (!policy.enabled) {
+        place.textContent = 'Primeiro escolha um prazo e salve as configurações. Sem prazo, nenhuma foto será indicada para exclusão.';
+        return;
+      }
+      place.innerHTML = '<p class="muted">' + esc(policy.message) + '</p>' +
+        ((policy.orders || []).map(item => `
+          <div class="row-card">
+            <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+            <small>${item.photoCount} foto(s) • finalizado em ${esc(String(item.finalizedAt).slice(0,10))}</small>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <a class="btn btn-secondary btn-small"
+                href="/api/admin/v2/orders/${esc(item.code)}/download-folder">Baixar backup ZIP</a>
+              <button class="btn btn-ghost btn-small" type="button"
+                data-delete-old-photos="${esc(item.code)}">Excluir fotos após backup</button>
+            </div>
+          </div>`).join('') || '<small>Nenhuma foto atingiu o prazo selecionado.</small>');
+      place.querySelectorAll('[data-delete-old-photos]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const code = button.dataset.deleteOldPhotos;
+          if (prompt('Digite o código exato ' + code + ' para continuar:') !== code) return;
+          if (!confirm('Você já baixou e conferiu o ZIP com as fotos? Esta exclusão é irreversível.')) return;
+          button.disabled = true;
+          try {
+            const out = await api('/api/admin/v2/storage/retention/' + code + '/purge', {
+              method: 'POST', body: JSON.stringify({ confirmCode: code, backupConfirmed: true }),
+            });
+            button.closest('.row-card')?.remove();
+            showToast(out.result.removed + ' foto(s) removidas do armazenamento.');
+          } catch (error) { button.disabled = false; showToast(error.message); }
+        });
+      });
+    } catch (error) { place.textContent = error.message || 'Erro ao consultar fotos.'; }
+  });
 
   document
     .getElementById(
@@ -268,6 +347,16 @@ export function renderStoreSettings(
                       .getElementById('whatsappFinalizedTemplate')
                       .value
                       .trim(),
+                  monthly_revenue_goal_cents:
+                    Math.round(Number(document.getElementById('monthlyGoal').value) * 100),
+                  upload_retention_days:
+                    document.getElementById('retentionDays').value,
+                  production_costs_json: JSON.stringify(Object.fromEntries(
+                    [...document.querySelectorAll('[data-product-cost]')]
+                      .filter(input => input.value.trim() !== '')
+                      .map(input => [input.dataset.productCost,
+                        Math.round(Number(input.value) * 100)]),
+                  )),
                 },
               }),
           },

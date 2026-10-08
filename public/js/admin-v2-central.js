@@ -132,6 +132,39 @@ export async function renderCentral(openOrder) {
       </a>
     </div>
 
+    <section class="card" id="advancedOrderSearch">
+      <div class="section-title"><h2>Encontrar um pedido</h2><small>Inclui pedidos arquivados</small></div>
+      <div class="form-grid">
+        <div class="field"><label for="advOrderQuery">Nome, WhatsApp ou código</label>
+          <input class="input" id="advOrderQuery" type="search" placeholder="Cliente, festa ou LIBRI-..."></div>
+        <div class="field"><label for="advOrderStatus">Situação</label><select class="select" id="advOrderStatus">
+          <option value="">Todas</option>
+          ${[['awaiting_payment','Aguardando pagamento'],['briefing_pending','Dados pendentes'],
+            ['ready_for_production','Pronto para produção'],['in_production','Em produção'],
+            ['waiting_customer','Aguardando cliente'],['adjustments','Ajustes'],
+            ['approved','Aprovado'],['balance_pending','Saldo pendente'],
+            ['ready_for_delivery','Pronto para entrega'],['finalized','Finalizado'],
+            ['cancelled','Cancelado']].map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
+          </select></div>
+        <div class="field"><label for="advOrderProduct">Formato</label><select class="select" id="advOrderProduct">
+          <option value="">Todos</option>
+          ${[['cinematic_video','Convite em vídeo'],['interactive_essential','Interativo essencial'],
+            ['interactive_gif','Interativo GIF'],['interactive_animated','Interativo animado'],
+            ['cinematic_interactive','Interativo cinematográfico'],['book','Livro digital']]
+            .map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
+          </select></div>
+        <div class="field"><label for="advOrderArchived">Arquivados</label><select class="select" id="advOrderArchived">
+          <option value="all">Todos</option><option value="no">Somente ativos</option>
+          <option value="yes">Somente arquivados</option></select></div>
+        <div class="field"><label for="advOrderFrom">Festa a partir de</label>
+          <input class="input" id="advOrderFrom" type="date"></div>
+        <div class="field"><label for="advOrderTo">Festa até</label>
+          <input class="input" id="advOrderTo" type="date"></div>
+      </div>
+      <button type="button" class="btn btn-secondary" id="runAdvancedOrderSearch">Buscar pedidos</button>
+      <div id="advancedOrderResults" class="list" style="margin-top:12px" aria-live="polite"></div>
+    </section>
+
     <section class="card attention-center">
       <div class="section-title">
         <div>
@@ -148,6 +181,23 @@ export async function renderCentral(openOrder) {
             : empty('Nada pedindo sua atenção agora ✨')
         }
       </div>
+    </section>
+
+    <section class="card monthly-goal-card" aria-label="Meta mensal de faturamento">
+      <div class="section-title">
+        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)} 🎯</h2></div>
+        <span class="status">${Number(c.finance.monthlyGoal?.progressPercent || 0)}%</span>
+      </div>
+      <div class="monthly-goal-amounts">
+        <strong>${money(c.finance.monthlyGoal?.realizedCents || 0)}</strong>
+        <span>de ${money(c.finance.monthlyGoal?.targetCents || 200000)}</span>
+      </div>
+      <div class="monthly-goal-bar" role="progressbar" aria-valuenow="${Math.max(0, Number(c.finance.monthlyGoal?.progressPercent || 0))}"
+        aria-valuemin="0" aria-valuemax="100" aria-label="Progresso da meta mensal">
+        <span style="width:${Math.min(100, Math.max(0, Number(c.finance.monthlyGoal?.progressPercent || 0)))}%"></span>
+      </div>
+      <small>${c.finance.monthlyGoal?.reached ? 'Meta alcançada! ✨' : `Faltam ${money(c.finance.monthlyGoal?.remainingCents || 0)} para sua meta.`}
+        Base: recebimentos confirmados no mês, descontando estornos. Não inclui pedidos ainda não pagos.</small>
     </section>
 
     <div class="kpi-grid" style="margin-top:14px">
@@ -324,6 +374,22 @@ export async function renderCentral(openOrder) {
 
     <section class="card" style="margin-top:14px">
       <div class="section-title">
+        <h2>Produção dos próximos 7 dias</h2>
+        <span class="status">${Number(c.workload?.count || 0)} pedidos</span>
+      </div>
+      <p class="muted">${Number(c.workload?.scenes || 0)} cenas contratadas • Entregas que cruzam os próximos 7 dias.</p>
+      <div class="list">
+        ${(c.workload?.orders || []).slice(0, 12).map(item => `
+          <button type="button" class="row-card" data-open-order="${esc(item.code)}"
+            style="text-align:left;cursor:pointer">
+            <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+            <small>${dateBr(item.start)} a ${dateBr(item.end)} • ${item.scenes} cenas • ${esc(item.statusLabel)}</small>
+          </button>`).join('') || empty('Sem entregas programadas para os próximos sete dias.')}
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:14px">
+      <div class="section-title">
         <h2>Capacidade dos próximos 14 dias</h2>
         <span class="status blue">${(used / 100).toFixed(1)} pts ocupados</span>
       </div>
@@ -365,6 +431,33 @@ export async function renderCentral(openOrder) {
       </div>
     </section>
   `;
+
+  const searchButton = document.getElementById('runAdvancedOrderSearch');
+  searchButton?.addEventListener('click', async () => {
+    const values = [
+      ['q','advOrderQuery'], ['status','advOrderStatus'], ['product','advOrderProduct'],
+      ['archived','advOrderArchived'], ['from','advOrderFrom'], ['to','advOrderTo'],
+    ];
+    const params = new URLSearchParams(values.map(([key,id]) =>
+      [key, document.getElementById(id).value.trim()]));
+    const results = document.getElementById('advancedOrderResults');
+    searchButton.disabled = true;
+    results.innerHTML = '<small>Buscando...</small>';
+    try {
+      const data = await api('/api/admin/v2/orders/search?' + params);
+      results.innerHTML = (data.orders || []).map(item => `
+        <button class="row-card" type="button" data-searched-order="${esc(item.code)}"
+          style="text-align:left;cursor:pointer">
+          <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+          <small>${esc(item.customerName)} • ${dateBr(item.eventDate)}
+            • ${esc(item.status)} ${item.archived ? '• Arquivado' : ''}</small>
+        </button>`).join('') || empty('Nenhum pedido encontrado.');
+      results.querySelectorAll('[data-searched-order]').forEach(button =>
+        button.addEventListener('click', () => openOrder(button.dataset.searchedOrder)));
+    } catch (error) {
+      results.textContent = error.message || 'Não foi possível buscar.';
+    } finally { searchButton.disabled = false; }
+  });
 
   viewRoot
     .querySelectorAll('[data-open-order]')

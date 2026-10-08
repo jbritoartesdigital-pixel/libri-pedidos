@@ -14,7 +14,7 @@ import {
   renderStoreTerms,
   renderStoreContracts,
   renderStoreGallery,
-} from './admin-v2-store-settings.js';
+} from './admin-v2-store-settings.js?v=20261008-growth-1';
 
 import {
   renderStoreCombos,

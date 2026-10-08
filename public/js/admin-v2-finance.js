@@ -340,6 +340,32 @@ export async function renderFinance(openOrderDetail = null) {
           </article>
         </div>
 
+        <section class="card" style="margin:14px 0">
+          <div class="section-title">
+            <div><h2>Produtos mais vendidos e margem estimada</h2>
+              <small>Vendas iniciadas no período. Recebimentos líquidos incluem pagamentos confirmados desses pedidos até hoje.</small>
+            </div>
+          </div>
+          <div class="finance-performance-grid">
+            ${(finance.breakdown?.byProduct || []).map(product => `
+              <div class="finance-performance-card">
+                <strong>${esc(product.productName)}</strong>
+                <small>${product.salesCount} venda(s) • ticket médio ${money(product.averageTicketCents)}</small>
+                <div>Vendas: <strong>${money(product.salesCents)}</strong></div>
+                <div>Já recebido, líquido: <strong>${money(product.receivedNetCents)}</strong></div>
+                ${product.costConfigured ? `
+                  <div>Custo estimado: <strong>${money(product.totalCostCents)}</strong></div>
+                  <div>Margem estimada: <strong>${money(product.estimatedMarginCents)}</strong></div>`
+                : '<small>Configure o custo na Loja para calcular a margem.</small>'}
+              </div>`).join('') || empty('Sem vendas no período.')}
+          </div>
+          <div class="finance-method-line">
+            ${(finance.breakdown?.byPaymentMethod || []).map(item => `
+              <span>${item.paymentMethod === 'pix' ? 'Pix' : 'Cartão'}:
+                <strong>${item.salesCount} vendas • ${money(item.salesCents)}</strong></span>`).join(' • ')}
+          </div>
+        </section>
+
         <div class="section-grid">
           <section class="card">
             <div class="section-title">

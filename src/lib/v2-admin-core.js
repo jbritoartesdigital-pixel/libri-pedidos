@@ -3586,6 +3586,36 @@ async function capacitySnapshot(
     );
 }
 
+async function sevenDayWorkload(db, today) {
+  const until = addDays(today, 6);
+  const result = await db.prepare(`
+    SELECT o.order_code, o.honoree_display_name, o.delivery_start,
+      o.delivery_end, o.status,
+      COALESCE(MAX(CAST(json_extract(oi.configuration_json, '$.sceneCount') AS INTEGER)), 0) AS scenes
+    FROM v2_orders o
+    LEFT JOIN v2_order_items oi ON oi.order_id = o.id AND oi.item_type = 'product'
+    WHERE o.archived_at IS NULL
+      AND o.status NOT IN ('cancelled', 'finalized', 'awaiting_payment', 'awaiting_urgency_decision')
+      AND o.delivery_start <= ? AND o.delivery_end >= ?
+    GROUP BY o.id
+    ORDER BY o.delivery_start, o.order_code
+    LIMIT 100
+  `).bind(until, today).all();
+  const orders = (result.results || []).map(row => ({
+    code: row.order_code,
+    honoreeName: row.honoree_display_name,
+    start: row.delivery_start,
+    end: row.delivery_end,
+    statusLabel: statusLabel(row.status),
+    scenes: Number(row.scenes || 0),
+  }));
+  return {
+    until, count: orders.length,
+    scenes: orders.reduce((sum, item) => sum + item.scenes, 0),
+    orders,
+  };
+}
+
 async function financeSnapshot(
   db,
 ) {
@@ -3601,8 +3631,23 @@ async function financeSnapshot(
   const summary =
     finance.summary
     || {};
+  const settings = await db.prepare(`
+    SELECT value FROM v2_settings WHERE key = 'monthly_revenue_goal_cents'
+  `).first();
+  const goalCents = Math.max(10000, Number(settings?.value || 200000));
+  const realizedCents = Math.max(0,
+    Number(summary.cashInCents || 0) - Number(summary.refundsCents || 0));
+  const progressPercent = Math.min(100, Math.round(realizedCents * 100 / goalCents));
 
   return {
+    monthlyGoal: {
+      targetCents: goalCents,
+      realizedCents,
+      remainingCents: Math.max(0, goalCents - realizedCents),
+      progressPercent,
+      reached: realizedCents >= goalCents,
+      basis: 'confirmed_receipts_minus_refunds',
+    },
     period: {
       start:
         finance.range?.start
@@ -3774,6 +3819,7 @@ export async function getV2Central(
     deliveries,
     capacity,
     finance,
+    workload,
   ] =
     await Promise.all([
       centralAttention(
@@ -3806,9 +3852,8 @@ export async function getV2Central(
         db,
         today,
       ),
-      financeSnapshot(
-        db,
-      ),
+      financeSnapshot(db),
+      sevenDayWorkload(db, today),
     ]);
 
   return {
@@ -3823,6 +3868,7 @@ export async function getV2Central(
       deliveries,
     capacity,
     finance,
+    workload,
   };
 }
 

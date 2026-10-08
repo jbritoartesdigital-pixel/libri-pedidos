@@ -12,7 +12,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js';
+} from './admin-v2-central.js?v=20261008-growth-1';
 
 import {
   renderProduction,
@@ -20,7 +20,7 @@ import {
 
 import {
   renderManualOrder,
-} from './admin-v2-manual.js';
+} from './admin-v2-manual.js?v=20261008-growth-1';
 
 import {
   openOrder,
@@ -32,7 +32,7 @@ import {
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261008-admin-approved-1';
+} from './admin-v2-finance.js?v=20261008-growth-1';
 
 import {
   renderArchived,
@@ -40,7 +40,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js';
+} from './admin-v2-config.js?v=20261008-growth-1';
 
 import {
   refreshBell,

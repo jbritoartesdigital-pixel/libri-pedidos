@@ -1348,3 +1348,20 @@ button { -webkit-tap-highlight-color: transparent; }
   .order-photo-viewer-controls .btn { font-size:12px; padding:8px 10px; }
   .finance-fee-details { min-width:0; max-width:220px; }
 }
+
+
+.monthly-goal-card { margin-bottom:14px; border-color:rgba(184,91,118,.32); background:linear-gradient(120deg,#fff7f8,white); }
+.monthly-goal-amounts { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.monthly-goal-amounts strong { font-size:clamp(27px,4vw,38px); }
+.monthly-goal-amounts span { color:var(--muted); font-weight:700; }
+.monthly-goal-bar { height:16px; border-radius:99px; background:#eee3e6; overflow:hidden; }
+.monthly-goal-bar > span { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#c56381,#a24a69); transition:width .35s ease; }
+.monthly-goal-card > small { display:block; margin-top:10px; color:var(--muted); line-height:1.55; }
+.finance-performance-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(205px,1fr)); margin-top:12px; }
+.finance-performance-card { display:grid; gap:7px; padding:13px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); font-size:13px; }
+.finance-performance-card > strong { font-size:14px; }
+.finance-performance-card small { color:var(--muted); font-size:12px; }
+.finance-performance-card > div { display:flex; justify-content:space-between; gap:9px; flex-wrap:wrap; }
+.finance-method-line { margin-top:14px; font-size:12px; display:flex; flex-wrap:wrap; gap:10px; }
+#advancedOrderSearch { margin-bottom:14px; }
+#advancedOrderSearch .form-grid { margin:10px 0; }

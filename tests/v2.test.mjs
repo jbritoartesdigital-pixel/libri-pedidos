@@ -18,7 +18,7 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
-import { updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
+import { getV2StoreConfig, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -52,8 +52,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-admin-approved-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-admin-approved-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-growth-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-growth-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -593,8 +593,8 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-formphotos-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-formphotos-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261008-formphotos-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -838,8 +838,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-formphotos-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-formphotos-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1737,9 +1737,9 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261008-admin-approved-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261008-growth-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261008-admin-approved-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261008-formphotos-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261008-growth-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -1763,10 +1763,10 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261008-admin-approved-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261008-admin-approved-1'));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261008-growth-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261008-growth-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261008-admin-approved-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-admin-approved-1"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-growth-1"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {
@@ -1828,6 +1828,129 @@ test('WhatsApp shortcuts match unpaid order and photo requirements, without spam
     .run(JSON.stringify({ appearance_choice: 'no' }), id);
   detail = await getV2AdminOrderDetail(DB, checkout.order.code);
   assert.ok(!detail.whatsappActions.some(item => item.code === 'photos'));
+});
+
+
+test('monthly R$2000 goal and seven-day workload are computed from confirmed receipts', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  let central = await getV2Central(DB);
+  assert.equal(central.finance.monthlyGoal.targetCents, 200000);
+  assert.equal(central.finance.monthlyGoal.realizedCents, 0);
+  assert.equal(central.workload.count, 0);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Meta e agenda', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(1), end: day(3) }, ...await terms(DB),
+  }));
+  central = await getV2Central(DB);
+  assert.equal(central.finance.monthlyGoal.realizedCents, 0, 'unpaid does not count');
+  assert.equal(central.workload.count, 0, 'awaiting payment is not workload');
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  central = await getV2Central(DB);
+  assert.equal(central.finance.monthlyGoal.realizedCents, checkout.payment.amountDueNowCents);
+  assert.equal(central.workload.count, 1);
+  assert.equal(central.workload.orders[0].code, checkout.order.code);
+  await updateV2Settings(DB, { monthly_revenue_goal_cents: 100000 });
+  central = await getV2Central(DB);
+  assert.equal(central.finance.monthlyGoal.targetCents, 100000);
+  assert.equal(central.finance.monthlyGoal.remainingCents, 100000 - checkout.payment.amountDueNowCents);
+});
+
+test('top products show real receipts and configurable costs without altering prices', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Custo e margem', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  await updateV2Settings(DB, { production_costs_json: JSON.stringify({ interactive_essential: 1200 }) });
+  const report = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  const product = report.breakdown.byProduct.find(x => x.productCode === 'interactive_essential');
+  assert.ok(product);
+  assert.equal(product.costConfigured, true);
+  assert.equal(product.totalCostCents, 1200);
+  assert.equal(product.estimatedMarginCents, product.receivedNetCents - 1200);
+  assert.equal(product.averageTicketCents, product.salesCents);
+  assert.ok((await getV2StoreConfig(e)).settings.growth.monthlyRevenueGoalCents === 200000);
+});
+
+test('private returning-customer lookup and advanced order filters cover archive safely', async t => {
+  const DB = database(); providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    customer: { name: 'Cliente Antiga', whatsapp: '5511988887777', email: 'antiga@example.com' },
+    event: { honoreeName: 'Primeiro Evento', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const customerResponse = await worker.fetch(new Request(
+    'https://example.com/api/admin/v2/customers/lookup?whatsapp=5511988887777',
+  ), e, { waitUntil() {} });
+  assert.equal(customerResponse.status, 401, 'public cannot look up contact data');
+  const { lookupReturningV2Customer, searchV2AdminOrders } = await import('../src/lib/v2-admin-search.js');
+  const found = await lookupReturningV2Customer(DB, '11988887777');
+  assert.equal(found.name, 'Cliente Antiga');
+  assert.equal(found.previousOrders, 1);
+  assert.equal((await searchV2AdminOrders(DB, { q: 'Primeiro Evento' })).length, 1);
+  assert.equal((await searchV2AdminOrders(DB, { product: 'interactive_essential' })).length, 1);
+  assert.equal((await searchV2AdminOrders(DB, { archived: 'yes' })).length, 0);
+  DB.sqlite.prepare("UPDATE v2_orders SET archived_at='2026-01-01T00:00:00Z' WHERE order_code=?")
+    .run(checkout.order.code);
+  assert.equal((await searchV2AdminOrders(DB, { archived: 'yes' })).length, 1);
+  assert.equal((await searchV2AdminOrders(DB, { archived: 'no' })).length, 0);
+  await assert.rejects(searchV2AdminOrders(DB, { from: '2026-11-01', to: '2026-01-01' }));
+});
+
+test('retention never deletes automatically, requires finalization, manual backup and exact code', async t => {
+  const DB = database(); providerMock(t); const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Arquivo seguro', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const { previewV2PhotoRetention, purgeV2FinishedOrderPhotos } =
+    await import('../src/lib/v2-admin-storage.js');
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
+    .get(order.order.code).id;
+  const stamp = new Date().toISOString();
+  DB.sqlite.prepare(`INSERT INTO v2_briefing_uploads (
+    order_id, category, field_key, original_filename, stored_filename, mime_type,
+    size_bytes, r2_key, note, sort_order, created_at, updated_at)
+    VALUES (?, 'reference', 'reference_files', 'old.png', 'old.png', 'image/png',
+     3, ?, '', 0, ?, ?)`).run(id, 'orders/' + id + '/briefing/reference/old.png', stamp, stamp);
+  assert.equal((await previewV2PhotoRetention(DB)).enabled, false);
+  await updateV2Settings(DB, { upload_retention_days: 30 });
+  assert.equal((await previewV2PhotoRetention(DB)).orders.length, 0, 'not finalized yet');
+  DB.sqlite.prepare("UPDATE v2_orders SET status='finalized', finalized_at='2025-01-01T00:00:00Z' WHERE id=?")
+    .run(id);
+  assert.equal((await previewV2PhotoRetention(DB)).orders.length, 1);
+  await assert.rejects(purgeV2FinishedOrderPhotos(e, order.order.code, { backupConfirmed: true }));
+  const deleted = [];
+  e.FILES = { async delete(key) { deleted.push(key); } };
+  const out = await purgeV2FinishedOrderPhotos(e, order.order.code, {
+    confirmCode: order.order.code, backupConfirmed: true,
+  });
+  assert.equal(out.removed, 1);
+  assert.equal(deleted.length, 1);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_briefing_uploads WHERE order_id=?').get(id).n, 0);
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='photos_deleted_manually'").get(id).n, 1);
+});
+
+test('client upload and draft scripts guard connection recovery and clear user-facing help', () => {
+  const html = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
+  const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
+  const admin = readFileSync('public/js/admin-v2.js', 'utf8');
+  assert.ok(html.includes('/js/client-v2.js?v=20261008-growth-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(admin.includes('admin-v2-central.js?v=20261008-growth-1'));
+  assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
+  assert.match(area, /uploadCustomerPhoto/);
+  assert.match(area, /localStorage\.setItem/);
+  assert.match(area, /beforeIds/);
+  assert.match(area, /HELPFUL_EXAMPLES/);
+  assert.match(upload, /xhr\.upload\.onprogress/);
+  assert.match(clientCss, /\.photo-upload-progress/);
 });
 
 test('admin final checklist blocks incomplete delivery and requires manual final-file confirmation', async t => {

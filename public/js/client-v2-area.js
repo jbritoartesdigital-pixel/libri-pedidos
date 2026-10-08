@@ -12,6 +12,17 @@ import {
   showToast,
 } from './client-v2-core.js';
 
+import { uploadCustomerPhoto } from './client-v2-upload.js';
+
+const HELPFUL_EXAMPLES = {
+  theme_or_style: 'Exemplo: Jardim Encantado, cores lavanda e verde, estilo delicado.',
+  venue_address: 'Escreva o nome do local, rua e bairro. O endereço completo não aparece no card final.',
+  location_url: 'Abra o Google Maps, toque em Compartilhar e cole o link do local.',
+  music_request: 'Exemplo: nome da música + artista, ou um link de referência.',
+  exact_text: 'Use este campo apenas para frases que devem aparecer exatamente como foram escritas.',
+  references_note: 'Conte o que gostou nas imagens: cores, iluminação, cenário ou roupa.',
+};
+
 function inputHtml(
   definition,
   value,
@@ -22,10 +33,8 @@ function inputHtml(
   const label =
     `<label for="field-${esc(definition.key)}">${esc(definition.label)}${definition.required ? ' *' : ''}</label>`;
 
-  const help =
-    definition.help
-      ? `<small>${esc(definition.help)}</small>`
-      : '';
+  const helpful = definition.help || HELPFUL_EXAMPLES[definition.key] || '';
+  const help = helpful ? `<small class="field-help">${esc(helpful)}</small>` : '';
 
   if (
     definition.type
@@ -227,6 +236,11 @@ function uploadRuleHtml(
         <span class="help" style="margin-left:8px">
           ${uploads.length} de ${rule.max}
         </span>
+      </div>
+      <div class="photo-upload-progress hidden" data-upload-progress="${esc(rule.fieldKey)}"
+        role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="photo-upload-progress-track"><span style="width:0%"></span></div>
+        <small>Enviando 0%...</small>
       </div>
 
       <div class="upload-list">
@@ -944,6 +958,7 @@ function briefingHtml(
 
   return `
     <section class="page-card">
+      <p class="muted" style="font-size:12px">As respostas são salvas ao preencher. Em caso de falha, um rascunho temporário fica neste navegador por até 7 dias. Evite dispositivos compartilhados.</p>
       <div class="progress-shell">
         <div class="progress-top">
           <strong>${esc(activeSection.title)}</strong>
@@ -1280,6 +1295,59 @@ export async function startCustomerArea(
 
   let area =
     await loadArea();
+
+  const draftKey = 'libri-v2-draft:' + token;
+  function storedDraft() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (!stored?.updatedAt || Date.now() - stored.updatedAt > 7 * 86400000) {
+        localStorage.removeItem(draftKey);
+        return {};
+      }
+      return stored.data && typeof stored.data === 'object' ? stored.data : {};
+    } catch { return {}; }
+  }
+  function rememberDraft(patch) {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({
+        updatedAt: Date.now(), data: { ...storedDraft(), ...patch },
+      }));
+    } catch {}
+  }
+  function confirmSavedDraft(patch) {
+    try {
+      const current = storedDraft();
+      for (const [key, value] of Object.entries(patch || {})) {
+        if (JSON.stringify(current[key]) === JSON.stringify(value)) delete current[key];
+      }
+      if (Object.keys(current).length) {
+        localStorage.setItem(draftKey, JSON.stringify({ updatedAt: Date.now(), data: current }));
+      } else {
+        localStorage.removeItem(draftKey);
+      }
+    } catch {}
+  }
+  if (!area.briefing.locked && !area.briefing.completed && Object.keys(storedDraft()).length) {
+    if (confirm('Encontramos informações não enviadas neste dispositivo. Quer recuperá-las?')) {
+      const patch = storedDraft();
+      area.briefing.data = { ...area.briefing.data, ...patch };
+      try {
+        const data = await api('/api/v2/customer-area/' + token + '/briefing', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            currentSection: area.briefing.currentSection,
+            data: patch,
+          }),
+        });
+        area.briefing.data = data.result.data;
+        area.briefing.schema = data.result.schema;
+        area.briefing.progress = data.result.progress;
+        confirmSavedDraft(patch);
+      } catch {
+        showToast('Rascunho recuperado. Confira e tente salvar quando a conexão voltar.');
+      }
+    }
+  }
 
   const returnUrl =
     new URL(
@@ -1777,10 +1845,8 @@ export async function startCustomerArea(
                 },
               );
 
-            applyBriefingSaveResult(
-              data.result,
-            );
-
+            applyBriefingSaveResult(data.result);
+            confirmSavedDraft(patch);
             return data.result;
           },
         );
@@ -1863,6 +1929,7 @@ export async function startCustomerArea(
         );
     }
 
+    rememberDraft(patch);
     pendingBriefingSection =
       currentSection;
 
@@ -1898,6 +1965,7 @@ export async function startCustomerArea(
     currentSection,
     patch,
   ) {
+    if (Object.keys(patch || {}).length) rememberDraft(patch);
     const pending =
       takePendingBriefing();
 
@@ -2063,73 +2131,60 @@ export async function startCustomerArea(
         },
       );
 
-    app
-      .querySelectorAll(
-        '[data-upload-field]',
-      )
-      .forEach(
-        (input) => {
-          input.addEventListener(
-            'change',
-            async () => {
-              const file =
-                input.files?.[0];
-
-              if (!file) {
-                return;
-              }
-
-              const form =
-                new FormData();
-
-              form.set(
-                'fieldKey',
-                input.dataset.uploadField,
-              );
-
-              form.set(
-                'file',
-                file,
-              );
-
-              input.disabled =
-                true;
-
-              showToast(
-                'Enviando foto...',
-              );
-
-              try {
-                await api(
-                  `/api/v2/customer-area/${token}/briefing/uploads`,
-                  {
-                    method:
-                      'POST',
-                    body:
-                      form,
-                  },
-                );
-
-                area =
-                  await loadArea();
-
-                await render();
-
-                showToast(
-                  'Foto enviada ✓',
-                );
-              } catch (error) {
-                input.disabled =
-                  false;
-
-                showToast(
-                  error.message,
-                );
-              }
-            },
+    app.querySelectorAll('[data-upload-field]').forEach(input => {
+      input.addEventListener('change', async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const fieldKey = input.dataset.uploadField;
+        const beforeIds = new Set(area.briefing.uploads.map(item => Number(item.id)));
+        const form = new FormData();
+        form.set('fieldKey', fieldKey);
+        form.set('file', file);
+        const progress = app.querySelector('[data-upload-progress="' + fieldKey + '"]');
+        const bar = progress?.querySelector('span');
+        const label = progress?.querySelector('small');
+        const updateProgress = percent => {
+          progress?.classList.remove('hidden');
+          progress?.setAttribute('aria-valuenow', String(percent));
+          if (bar) bar.style.width = percent + '%';
+          if (label) label.textContent = percent === 100 ? 'Envio concluído ✓' : 'Enviando ' + percent + '%...';
+        };
+        input.disabled = true;
+        updateProgress(0);
+        try {
+          await uploadCustomerPhoto(
+            '/api/v2/customer-area/' + token + '/briefing/uploads',
+            form, updateProgress,
           );
-        },
-      );
+          area = await loadArea();
+          await render();
+          showToast('Foto enviada ✓');
+        } catch (error) {
+          // The connection may fail after the server has saved the file.
+          // Check the actual uploads before asking the customer to retry.
+          let received = false;
+          try {
+            const latest = await loadArea();
+            received = latest.briefing.uploads.some(item =>
+              !beforeIds.has(Number(item.id))
+              && item.fieldKey === fieldKey
+              && item.originalFilename === file.name
+              && Number(item.sizeBytes) === file.size,
+            );
+            area = latest;
+          } catch {}
+          if (received) {
+            await render();
+            showToast('A foto chegou, mesmo com a conexão interrompida ✓');
+          } else {
+            input.disabled = false;
+            updateProgress(0);
+            if (label) label.textContent = 'Não enviou. Escolha novamente para tentar.';
+            showToast(error.message || 'Falha no envio. Você pode tentar novamente.');
+          }
+        }
+      });
+    });
 
     app
       .querySelectorAll(

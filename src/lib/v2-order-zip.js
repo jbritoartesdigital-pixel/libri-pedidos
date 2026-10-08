@@ -617,6 +617,25 @@ function personBaseName(
 function labelFromKey(
   key,
 ) {
+  const labels = {
+    event_time: 'Horário da festa',
+    venue_name: 'Nome do local',
+    venue_address: 'Endereço da festa',
+    theme_or_style: 'Tema ou estilo da festa',
+    special_info: 'Informações especiais',
+    age: 'Idade',
+    appearance_choice: 'Quem deve aparecer no convite?',
+    visual_style: 'Estilo da pessoa no convite',
+    outfit_choice: 'Preferência de roupa',
+    desired_colors: 'Quais cores deseja ver?',
+    avoid_colors: 'Quais cores não deseja ver?',
+    visual_feeling: 'Que sensação deseja transmitir?',
+    must_have: 'O que não pode faltar?',
+    must_avoid: 'O que evitar no convite?',
+    exact_text: 'Texto que deve aparecer exatamente',
+    references_note: 'Observações sobre as referências',
+  };
+  if (labels[key]) return labels[key];
   return String(
     key
     || '',
@@ -640,6 +659,13 @@ function labelFromKey(
 function textValue(
   value,
 ) {
+  const options = {
+    yes: 'Sim', no: 'Não', libri_decides: 'Deixo a Libri decidir',
+    joyful: 'Alegre', delicate: 'Delicado', magical: 'Mágico',
+    elegant: 'Elegante', fun: 'Divertido', cinematic: 'Cinematográfico',
+    stylized_doll: 'Bonequinho estilizado', realistic_detailed: 'Realista e detalhado',
+  };
+  const translate = item => options[item] || item;
   if (
     value === null
     || value === undefined
@@ -653,10 +679,7 @@ function textValue(
       value,
     )
   ) {
-    return value
-      .join(
-        ', ',
-      );
+    return value.map(translate).join(', ');
   }
 
   if (
@@ -670,9 +693,7 @@ function textValue(
     );
   }
 
-  return String(
-    value,
-  );
+  return String(translate(value));
 }
 
 function moneyBr(

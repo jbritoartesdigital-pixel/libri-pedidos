@@ -38,6 +38,9 @@ const SETTINGS_ALLOWLIST =
 
     'mercado_pago_max_installments',
     'gallery_max_upload_mb',
+    'monthly_revenue_goal_cents',
+    'production_costs_json',
+    'upload_retention_days',
   ]);
 
 const INTEGER_SETTINGS =
@@ -113,6 +116,8 @@ const INTEGER_SETTINGS =
         max: 200,
       },
     ],
+    ['monthly_revenue_goal_cents', { min: 10000, max: 100000000 }],
+    ['upload_retention_days', { min: 0, max: 3650 }],
   ]);
 
 const GALLERY_MIME_TYPES =
@@ -1201,6 +1206,13 @@ export async function getV2StoreConfig(
             10,
           )
           || 80,
+      },
+
+      growth: {
+        monthlyRevenueGoalCents: Number(settings.monthly_revenue_goal_cents || 200000),
+        productionCosts: parseJson(settings.production_costs_json || '{}', {}),
+        uploadRetentionDays: Number(settings.upload_retention_days || 0),
+        automaticDeletionEnabled: false,
       },
 
       checkout: {
@@ -2587,6 +2599,23 @@ export async function updateV2Settings(
             },
           ),
         );
+    } else if (key === 'production_costs_json') {
+      let costs;
+      try { costs = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue; } catch {
+        throw new Error('Custos por produto inválidos.');
+      }
+      if (!costs || typeof costs !== 'object' || Array.isArray(costs)) {
+        throw new Error('Custos por produto inválidos.');
+      }
+      const safe = {};
+      for (const [productCode, rawCost] of Object.entries(costs)) {
+        if (!/^[a-z0-9_-]{1,80}$/.test(productCode)
+          || !Number.isSafeInteger(Number(rawCost)) || Number(rawCost) < 0 || Number(rawCost) > 100000000) {
+          throw new Error('Confira os custos informados.');
+        }
+        safe[productCode] = Number(rawCost);
+      }
+      value = JSON.stringify(safe);
     } else {
       value =
         cleanText(

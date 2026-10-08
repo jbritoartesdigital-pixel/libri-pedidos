@@ -1039,6 +1039,79 @@ test('finance does not pretend Mercado Pago fees are zero before reconciliation'
   assert.equal(finance.movements[0].netCents, null);
 });
 
+test('Mercado Pago effective deductions reconcile even when fee_details lists only part of charge', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Taxas MP completas', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const gross = checkout.payment.amountDueNowCents;
+  mp.setFinanceDetails(checkout.payment.providerOrderId, {
+    feeCents: 174,
+    netCents: gross - 348,
+  });
+  mp.approve(checkout.payment.providerOrderId);
+  const synced = await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  assert.equal(synced.financeReconciled, true);
+  const original = DB.sqlite.prepare('SELECT id, amount_cents, fee_cents, net_cents FROM v2_payments WHERE provider_order_id=?')
+    .get(checkout.payment.providerOrderId);
+  assert.equal(original.amount_cents, gross);
+  assert.equal(original.fee_cents, 348);
+  assert.equal(original.net_cents, gross - 348);
+  let finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeeCents, 348);
+  assert.equal(finance.summary.netCashMovementCents, gross - 348);
+  assert.equal(finance.movements[0].feeCents, 348);
+  assert.equal(finance.movements[0].netCents, gross - 348);
+  assert.equal((await getV2AdminOrderDetail(DB, checkout.order.code)).payment.feeCents, 348);
+
+  // Existing reconciled rows must display correctly without a DB migration.
+  DB.sqlite.prepare('UPDATE v2_payments SET fee_cents = 174 WHERE id=?').run(original.id);
+  finance = await getV2FinanceDashboard(DB, { preset: 'this_month' });
+  assert.equal(finance.summary.mercadoPagoFeeCents, 348);
+  assert.equal(finance.movements[0].feeCents, 348);
+  assert.equal((await getV2AdminOrderDetail(DB, checkout.order.code)).payment.feeCents, 348);
+});
+
+test('customer can specify a music name or link in interactive and cinematic invitations', async t => {
+  const DB = database(); providerMock(t); const e = env(DB);
+  const interactive = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Música interativa', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(interactive.order.code).id;
+  let area = await getV2CustomerArea(e, interactive.order.publicToken);
+  const fields = () => area.briefing.schema.sections.flatMap(s => s.fields);
+  assert.ok(fields().some(x => x.key === 'music_choice'));
+  assert.ok(!fields().some(x => x.key === 'music_request'));
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ music_choice: 'yes', music_request: 'Canção escolhida - artista ou URL' }), id);
+  area = await getV2CustomerArea(e, interactive.order.publicToken);
+  const music = fields().find(x => x.key === 'music_request');
+  assert.ok(music, 'music input should appear when yes');
+  assert.equal(music.required, false, 'optional song allows Libri to choose');
+  assert.match(music.label, /Qual música você prefere/);
+  assert.equal(area.briefing.data.music_request, 'Canção escolhida - artista ou URL');
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ music_choice: 'no' }), id);
+  area = await getV2CustomerArea(e, interactive.order.publicToken);
+  assert.ok(!fields().some(x => x.key === 'music_request'));
+
+  const video = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Música no vídeo', type: 'birthday', date: day(51) },
+    deliveryWindow: { start: day(13), end: day(15) },
+    selection: { productCode: 'cinematic_video', paymentMethod: 'pix' },
+    ...await terms(DB),
+  }));
+  const videoId = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(video.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?').run(JSON.stringify({ music_choice: 'yes' }), videoId);
+  const videoArea = await getV2CustomerArea(e, video.order.publicToken);
+  assert.ok(videoArea.briefing.schema.sections.flatMap(s => s.fields).some(x => x.key === 'music_request'));
+});
+
 test('approved Mercado Pago payment reconciles real fee and net amount from Payments API', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const checkout = await startV2Checkout(request, e, input({

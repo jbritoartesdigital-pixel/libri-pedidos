@@ -592,6 +592,96 @@ test('customer can switch an unpaid regular order from card to Pix without creat
   assert.equal(mp.orders.get(first.payment.providerOrderId).status, 'cancelled');
 });
 
+test('late payment retry proposes next delivery dates in a popup without changing original order until confirmed', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Entrega venceu', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const originalCode = checkout.order.code;
+  const token = checkout.order.publicToken;
+  DB.sqlite.prepare('UPDATE v2_orders SET delivery_start = ?, delivery_end = ? WHERE order_code = ?')
+    .run(day(0), day(2), originalCode);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at = '2000-01-01T00:00:00Z' WHERE order_id = (SELECT id FROM v2_orders WHERE order_code = ?)")
+    .run(originalCode);
+
+  const first = await resumeV2Payment(request, e, token, {
+    clientRequestId: crypto.randomUUID(),
+    paymentMethod: 'pix',
+  }).then(() => null, error => error);
+  assert.equal(first.code, 'delivery_window_shifted');
+  assert.deepEqual(first.details.previous, { start: day(0), end: day(2) });
+  assert.deepEqual(first.details.next, { start: day(1), end: day(3) });
+  assert.equal(mp.posts, 1, 'the popup must not create a new provider order');
+  assert.equal(mp.orders.get(checkout.payment.providerOrderId).status, 'created',
+    'no cancellation before customer approves the new date');
+  assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE order_code=?')
+    .get(originalCode).delivery_start, day(0));
+
+  const agreed = await resumeV2Payment(request, e, token, {
+    clientRequestId: crypto.randomUUID(),
+    paymentMethod: 'pix',
+    confirmedDeliveryWindow: first.details.next,
+  });
+  assert.equal(agreed.order.code, originalCode);
+  assert.equal(agreed.payment.method, 'pix');
+  assert.deepEqual(agreed.deliveryRescheduled, first.details);
+  assert.equal(agreed.payment.amountDueNowCents, Math.round(agreed.payment.totalCents * 0.5));
+  assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE order_code=?')
+    .get(originalCode).delivery_start, day(1));
+  assert.equal(DB.sqlite.prepare('SELECT delivery_end FROM v2_orders WHERE order_code=?')
+    .get(originalCode).delivery_end, day(3));
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE action_code='delivery_window_rescheduled'").get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+  assert.equal(mp.posts, 2);
+  assert.equal(mp.orders.get(checkout.payment.providerOrderId).status, 'cancelled');
+  const area = await getV2CustomerArea(e, token);
+  assert.deepEqual(area.order.deliveryWindow, { start: day(1), end: day(3) });
+});
+
+test('rescheduled delivery rejects forged or outdated confirmation and recalculates nearest free window', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Janela livre', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
+    .get(checkout.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_orders SET delivery_start=?, delivery_end=? WHERE id=?')
+    .run(day(0), day(2), id);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at='2000-01-01' WHERE order_id=?").run(id);
+  await setV2AgendaPeriod(DB, { start: day(1), end: day(1), blocked: true });
+  const rejected = await resumeV2Payment(request, e, checkout.order.publicToken, {
+    paymentMethod: 'card',
+    confirmedDeliveryWindow: { start: day(1), end: day(3) },
+  }).then(() => null, error => error);
+  assert.equal(rejected.code, 'delivery_window_shifted');
+  assert.deepEqual(rejected.details.next, { start: day(2), end: day(4) });
+  assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE id=?')
+    .get(id).delivery_start, day(0));
+  assert.equal(mp.posts, 1);
+});
+
+test('no replacement delivery window leaves pending order intact without inventing availability', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Sem janela', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(checkout.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_orders SET delivery_start=?, delivery_end=?, event_date=? WHERE id=?')
+    .run(day(0), day(2), day(3), id);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at='2000-01-01' WHERE order_id=?").run(id);
+  const rejected = await resumeV2Payment(request, e, checkout.order.publicToken, { paymentMethod: 'pix' })
+    .then(() => null, error => error);
+  assert.equal(rejected.code, 'delivery_window_unavailable');
+  assert.match(rejected.message, /não encontramos uma nova janela/i);
+  assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE id=?').get(id).delivery_start, day(0));
+  assert.equal(mp.posts, 1);
+});
+
 test('admin can delete only unpaid pre-production orders and pending provider checkout is canceled', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({ event: { honoreeName: 'Teste apagar', type: 'birthday', date: day(50) },

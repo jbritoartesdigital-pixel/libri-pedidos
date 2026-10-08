@@ -652,7 +652,7 @@ test('rescheduled delivery rejects forged or outdated confirmation and recalcula
   DB.sqlite.prepare('UPDATE v2_orders SET delivery_start=?, delivery_end=? WHERE id=?')
     .run(day(0), day(2), id);
   DB.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at='2000-01-01' WHERE order_id=?").run(id);
-  await setV2AgendaPeriod(DB, { start: day(1), end: day(1), blocked: true });
+  await setV2AgendaPeriod(DB, { start: day(1), end: day(3), blocked: true });
   const rejected = await resumeV2Payment(request, e, checkout.order.publicToken, {
     paymentMethod: 'card',
     confirmedDeliveryWindow: { start: day(1), end: day(3) },

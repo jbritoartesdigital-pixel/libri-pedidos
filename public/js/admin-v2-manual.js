@@ -317,6 +317,7 @@ export async function renderManualOrder() {
         <div class="field">
           <label for="manualWhatsapp">WhatsApp</label>
           <input id="manualWhatsapp" class="input" inputmode="tel">
+          <div id="returningCustomerNotice" class="notice info hidden" aria-live="polite"></div>
         </div>
 
         <div class="field">
@@ -424,6 +425,33 @@ export async function renderManualOrder() {
 
     <div id="manualQuoteArea"></div>
   `;
+
+  let lookupTimer = null;
+  const phone = document.getElementById('manualWhatsapp');
+  const notice = document.getElementById('returningCustomerNotice');
+  phone.addEventListener('input', () => {
+    clearTimeout(lookupTimer);
+    notice.classList.add('hidden');
+    const queried = phone.value.replace(/\\D/g, '');
+    if (queried.length < 10) return;
+    lookupTimer = setTimeout(async () => {
+      try {
+        const data = await api('/api/admin/v2/customers/lookup?whatsapp=' + encodeURIComponent(queried));
+        if (phone.value.replace(/\\D/g, '') !== queried || !data.customer) return;
+        const customer = data.customer;
+        notice.classList.remove('hidden');
+        notice.innerHTML = `Cliente já atendida: <strong>${esc(customer.name)}</strong>
+          (${Number(customer.previousOrders || 0)} pedido(s)).
+          <button class="btn btn-secondary btn-small" type="button" id="applyPreviousCustomer">Usar dados anteriores</button>`;
+        document.getElementById('applyPreviousCustomer')?.addEventListener('click', () => {
+          if (!confirm('Usar nome e e-mail cadastrados anteriormente?')) return;
+          document.getElementById('manualCustomerName').value = customer.name;
+          document.getElementById('manualEmail').value = customer.email || '';
+          notice.textContent = 'Dados anteriores preenchidos. Confira antes de criar o pedido.';
+        });
+      } catch { notice.classList.add('hidden'); }
+    }, 400);
+  });
 
   renderVariants(
     config,

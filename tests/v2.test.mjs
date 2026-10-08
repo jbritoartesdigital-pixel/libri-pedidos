@@ -1911,11 +1911,11 @@ test('retention never deletes automatically, requires finalization, manual backu
   const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
     .get(order.order.code).id;
   const stamp = new Date().toISOString();
-  DB.sqlite.prepare(\`INSERT INTO v2_briefing_uploads (
+  DB.sqlite.prepare(`INSERT INTO v2_briefing_uploads (
     order_id, category, field_key, original_filename, stored_filename, mime_type,
     size_bytes, r2_key, note, sort_order, created_at, updated_at)
     VALUES (?, 'reference', 'reference_files', 'old.png', 'old.png', 'image/png',
-     3, ?, '', 0, ?, ?)\`).run(id, 'orders/' + id + '/briefing/reference/old.png', stamp, stamp);
+     3, ?, '', 0, ?, ?)`).run(id, 'orders/' + id + '/briefing/reference/old.png', stamp, stamp);
   assert.equal((await previewV2PhotoRetention(DB)).enabled, false);
   await updateV2Settings(DB, { upload_retention_days: 30 });
   assert.equal((await previewV2PhotoRetention(DB)).orders.length, 0, 'not finalized yet');

@@ -11,7 +11,7 @@ import {
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261008-delivery-popup-2';
+} from './client-v2-area.js?v=20261008-card-fee-1';
 
 async function bootstrap() {
   const route =

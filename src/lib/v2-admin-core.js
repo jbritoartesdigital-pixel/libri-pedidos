@@ -839,7 +839,7 @@ function finalizeChecklistFrom(
       code:
         'briefing',
       label:
-        'Briefing concluído',
+        'Dados preenchidos',
       ok:
         order.briefing_status
         === 'completed'
@@ -962,7 +962,7 @@ function orderWhatsappActions(
       code:
         'briefing',
       label:
-        'Cobrar briefing',
+        'Pedir dados da festa',
       message,
       url:
         whatsappUrl(
@@ -1121,7 +1121,7 @@ function statusLabel(
     awaiting_payment:
       'Aguardando pagamento',
     briefing_pending:
-      'Briefing pendente',
+      'Dados pendentes',
     ready_for_production:
       'Pronto para produção',
     in_production:
@@ -1160,7 +1160,7 @@ function nextActionFromStatus(
     awaiting_payment:
       'Aguardar pagamento',
     briefing_pending:
-      'Aguardar briefing',
+      'Aguardar dados da festa',
     ready_for_production:
       'Iniciar produção',
     in_production:
@@ -2042,7 +2042,7 @@ function buildBriefingTexts(
         : 'Nenhum'
     }`,
     '',
-    'BRIEFING',
+    'DADOS DO CONVITE',
     ...creativeLines,
     '',
     `ARQUIVOS: ${uploadSummary}`,
@@ -2841,7 +2841,7 @@ async function centralAttention(
           === 'briefing_pending'
         ) {
           reason =
-            'Briefing pendente da cliente';
+            'Aguardando dados da cliente';
         } else if (
           (
             row.status

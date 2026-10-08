@@ -1725,3 +1725,10 @@ a {
   color: var(--muted);
   line-height: 1.4;
 }
+
+
+.photo-upload-progress { margin:11px 0; }
+.photo-upload-progress-track { background:#ebe5e7; border-radius:99px; height:10px; overflow:hidden; }
+.photo-upload-progress-track > span { display:block; background:#c46b85; height:100%; width:0; border-radius:99px; transition:width .2s; }
+.photo-upload-progress small { display:block; font-size:12px; margin-top:5px; }
+.field-help { display:block; margin-top:5px; line-height:1.45; color:var(--muted); }

@@ -432,12 +432,12 @@ export async function renderManualOrder() {
   phone.addEventListener('input', () => {
     clearTimeout(lookupTimer);
     notice.classList.add('hidden');
-    const queried = phone.value.replace(/\\D/g, '');
+    const queried = phone.value.replace(/\D/g, '');
     if (queried.length < 10) return;
     lookupTimer = setTimeout(async () => {
       try {
         const data = await api('/api/admin/v2/customers/lookup?whatsapp=' + encodeURIComponent(queried));
-        if (phone.value.replace(/\\D/g, '') !== queried || !data.customer) return;
+        if (phone.value.replace(/\D/g, '') !== queried || !data.customer) return;
         const customer = data.customer;
         notice.classList.remove('hidden');
         notice.innerHTML = `Cliente já atendida: <strong>${esc(customer.name)}</strong>

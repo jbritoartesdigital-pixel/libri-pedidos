@@ -122,7 +122,7 @@ export function renderStoreSettings(
 
       <div class="form-grid">
         <div class="field full">
-          <label for="whatsappBriefingTemplate">Cobrar briefing</label>
+          <label for="whatsappBriefingTemplate">Pedir dados do convite</label>
           <textarea id="whatsappBriefingTemplate" class="textarea">${esc(s.whatsappTemplates.briefing)}</textarea>
         </div>
 

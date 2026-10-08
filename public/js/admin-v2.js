@@ -161,7 +161,7 @@ async function renderCurrent() {
   } else if (
     state.view === 'finance'
   ) {
-    await renderFinance();
+    await renderFinance(open);
   } else if (
     state.view === 'archived'
   ) {

@@ -17,6 +17,8 @@ import {
   markV2ExternalPreviewApproval,
 } from '../lib/v2-admin-core.js';
 
+import { lookupReturningV2Customer, searchV2AdminOrders } from '../lib/v2-admin-search.js';
+
 export async function handleAdminV2CoreApi(
   request,
   env,
@@ -28,6 +30,24 @@ export async function handleAdminV2CoreApi(
 
   const path =
     url.pathname;
+
+  if (method === 'GET' && path === '/api/admin/v2/customers/lookup') {
+    try {
+      return json({
+        ok: true,
+        customer: await lookupReturningV2Customer(env.DB, url.searchParams.get('whatsapp')),
+      });
+    } catch { return fail('Não foi possível consultar a cliente.', 422); }
+  }
+
+  if (method === 'GET' && path === '/api/admin/v2/orders/search') {
+    try {
+      return json({
+        ok: true,
+        orders: await searchV2AdminOrders(env.DB, Object.fromEntries(url.searchParams.entries())),
+      });
+    } catch (error) { return fail(error.message || 'Busca inválida.', 422); }
+  }
 
   if (
     method

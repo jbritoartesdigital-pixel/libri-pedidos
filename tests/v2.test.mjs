@@ -1827,7 +1827,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   );
 
   assert.match(area, /Seu próximo passo/);
-  assert.match(area, /Continuar briefing/);
+  assert.match(area, /Preencher dados/);
   assert.match(area, /Abrir prévia/);
   assert.match(area, /Ver saldo/);
 

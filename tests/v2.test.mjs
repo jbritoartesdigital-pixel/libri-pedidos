@@ -18,7 +18,7 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
-import { updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
+import { getV2StoreConfig, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }

@@ -175,7 +175,7 @@ function statusLabel(
     awaiting_payment:
       'Aguardando pagamento',
     briefing_pending:
-      'Briefing pendente',
+      'Dados da festa pendentes',
     ready_for_production:
       'Pronto para produção',
     in_production:
@@ -2135,7 +2135,7 @@ function assertEditable(
   ) {
     const error =
       new Error(
-        'O briefing será liberado assim que o pagamento for confirmado.',
+        'O formulário será liberado assim que o pagamento for confirmado.',
       );
 
     error.status =
@@ -2152,7 +2152,7 @@ function assertEditable(
   ) {
     const error =
       new Error(
-        'Este briefing já foi enviado para a Libri.',
+        'Os dados deste pedido já foram enviados para a Libri.',
       );
 
     error.status =
@@ -2243,7 +2243,7 @@ function supportMessage(
 function completedMessage(
   context,
 ) {
-  return `Oi, Ju! 💛 Finalizei meu pedido ${context.order.order_code}, da ${context.order.honoree_display_name}. Meu briefing já está preenchido e os arquivos foram enviados.`;
+  return `Oi, Ju! 💛 Finalizei meu pedido ${context.order.order_code}, da ${context.order.honoree_display_name}. Já preenchi os dados do convite e enviei os arquivos.`;
 }
 
 export async function getV2CustomerArea(
@@ -2727,7 +2727,7 @@ export async function saveV2Briefing(
           SET
             briefing_status = 'in_progress',
             status = 'briefing_pending',
-            next_action = 'Briefing em preenchimento',
+            next_action = 'Dados da festa em preenchimento',
             updated_at = ?
           WHERE
             id = ?
@@ -3059,7 +3059,7 @@ export async function uploadV2BriefingFile(
           SET
             briefing_status = 'in_progress',
             status = 'briefing_pending',
-            next_action = 'Briefing em preenchimento',
+            next_action = 'Dados da festa em preenchimento',
             updated_at = ?
           WHERE
             id = ?
@@ -3426,7 +3426,7 @@ export async function submitV2Briefing(
   ) {
     const error =
       new Error(
-        'Ainda faltam algumas informações antes de enviar o briefing.',
+        'Ainda faltam algumas informações antes de enviar os dados.',
       );
 
     error.status =
@@ -3492,7 +3492,7 @@ export async function submitV2Briefing(
           VALUES (
             ?,
             'briefing_completed',
-            'Briefing concluído e enviado pela cliente.',
+            'Dados do convite preenchidos e enviados pela cliente.',
             ?,
             ?
           )
@@ -3518,7 +3518,7 @@ export async function submitV2Briefing(
       orderId:
         context.order.id,
       title:
-        'Briefing concluído ✓',
+        'Dados da festa enviados ✓',
       body:
         `${context.order.order_code} • ${context.order.honoree_display_name} • pronto para produção`,
       actionUrl:
@@ -3551,7 +3551,7 @@ export async function submitV2Briefing(
       title:
         'Tudo pronto! 💛',
       message:
-        'Seu pedido foi enviado para a Libri. Agora o briefing e os arquivos já estão organizados para a produção.',
+        'Os dados e as fotos do pedido foram enviados para a Libri e estão organizados para a produção.',
       whatsappButtonLabel:
         'Avisar a Libri no WhatsApp 💛',
       whatsappUrl:

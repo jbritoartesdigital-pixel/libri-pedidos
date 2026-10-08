@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js';
+} from './client-v2-store.js?v=20261008-card-fee-1';
 
 import {
   startCustomerArea,

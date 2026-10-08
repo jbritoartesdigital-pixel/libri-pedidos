@@ -11,6 +11,8 @@ import {
   createV2AdminNotification,
 } from './v2-notifications.js';
 
+import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
+
 const TOKEN_RE =
   /^ord_[a-f0-9]{36}$/;
 
@@ -257,6 +259,7 @@ async function contextByToken(
             c.name AS customer_name,
 
             p.total_cents,
+            p.pricing_snapshot_json,
             p.payment_method,
             p.deposit_cents,
             p.balance_cents
@@ -2376,6 +2379,19 @@ export async function getV2CustomerArea(
       - paidCents,
     );
 
+  const pricingSnapshot = parseJson(context.order.pricing_snapshot_json, {});
+  const baseTotalCents = baseTotalFromSnapshot(context.order, pricingSnapshot);
+  const proposedCard = priceWithCardProcessingFee(baseTotalCents, 'card');
+  const currentMethod = context.order.payment_method;
+  // Pre-existing unpaid card orders keep the previously agreed price unless
+  // the customer actively changes method.
+  const currentGrandfatheredCard = currentMethod === 'card'
+    && !Number(pricingSnapshot.cardFeeCents || 0);
+  const cardTotalCents = currentGrandfatheredCard
+    ? Number(context.order.total_cents || 0)
+    : proposedCard.totalCents;
+  const cardFeeCents = cardTotalCents - baseTotalCents;
+
   return {
     order: {
       code:
@@ -2429,6 +2445,10 @@ export async function getV2CustomerArea(
     payment: {
       method:
         context.order.payment_method,
+      baseTotalCents,
+      cardTotalCents,
+      cardFeeCents,
+      cardFeePercent: cardFeeCents > 0 ? 4.97 : 0,
       deadlineAt: (() => {
         const candidates = [
           context.order.created_at,

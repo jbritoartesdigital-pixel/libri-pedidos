@@ -1683,6 +1683,27 @@ function flattenFields(
   );
 }
 
+// Reuse the same customer-visible questions and choice labels inside the
+// authenticated Admin. Do not show raw keys like "must_avoid" to staff.
+export async function getV2AdminBriefingFieldMeta(db, token) {
+  const context = await contextByToken(db, token);
+  if (!context) return { fields: [], uploads: [] };
+  const schema = buildSchema(context, context.briefing.data);
+  return {
+    fields: schema.sections.flatMap(section =>
+      section.fields.map(definition => ({
+        key: definition.key,
+        label: definition.label,
+        section: section.title,
+        options: definition.options || [],
+      })),
+    ),
+    uploads: schema.uploadRules.map(rule => ({
+      fieldKey: rule.fieldKey, label: rule.label,
+    })),
+  };
+}
+
 function isFilled(
   value,
 ) {

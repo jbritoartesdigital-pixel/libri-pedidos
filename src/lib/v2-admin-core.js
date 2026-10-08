@@ -337,24 +337,6 @@ export async function cancelV2Order(
     };
   }
 
-  // Only ask for files that the customer's current questionnaire requires.
-  // An optional set of references must never trigger a missing-photo message.
-  if (isLive && !isUnpaid && Number(payments?.paidCents || 0) > 0) {
-    const missing = requiredUploadRules.filter(rule =>
-      Number(rule.min || 0) > 0
-      && uploads.filter(file => file.fieldKey === rule.fieldKey).length < Number(rule.min),
-    );
-    if (missing.length) {
-      const categories = missing.map(rule => rule.label.toLowerCase()).join(' e ');
-      const message = `Oi, ${order.customer_name}! 💛 Para continuar o convite de ${order.honoree_display_name}, ainda precisamos de ${categories}. Você pode enviar pelo seu pedido: ${values.customerAreaUrl}?tab=briefing`;
-      actions.push({
-        code: 'photos',
-        label: 'Pedir fotos pendentes',
-        message,
-        url: whatsappUrl(order.whatsapp, message),
-      });
-    }
-  }
 
   if (
     order.status
@@ -1067,6 +1049,25 @@ function orderWhatsappActions(
           message,
         ),
     });
+  }
+
+  // Only ask for files that the customer's current questionnaire requires.
+  // An optional set of references must never trigger a missing-photo message.
+  if (isLive && !isUnpaid && Number(payments?.paidCents || 0) > 0) {
+    const missing = requiredUploadRules.filter(rule =>
+      Number(rule.min || 0) > 0
+      && uploads.filter(file => file.fieldKey === rule.fieldKey).length < Number(rule.min),
+    );
+    if (missing.length) {
+      const categories = missing.map(rule => rule.label.toLowerCase()).join(' e ');
+      const message = `Oi, ${order.customer_name}! 💛 Para continuar o convite de ${order.honoree_display_name}, ainda precisamos de ${categories}. Você pode enviar pelo seu pedido: ${values.customerAreaUrl}?tab=briefing`;
+      actions.push({
+        code: 'photos',
+        label: 'Pedir fotos pendentes',
+        message,
+        url: whatsappUrl(order.whatsapp, message),
+      });
+    }
   }
 
   if (

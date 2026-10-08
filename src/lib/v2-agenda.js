@@ -806,6 +806,45 @@ export async function findV2DeliveryOptions(
   };
 }
 
+// When a saved, unpaid order has reached the first day of its original
+// delivery window, suggest the earliest NEW three-day window that actually
+// fits its production load. Never move a window without the customer's OK.
+export async function findNextV2DeliveryWindow(
+  db,
+  { eventDate, previousStart, pointsUnits },
+) {
+  const firstPossibleDay = addDays(currentBrazilDay(), 1);
+  const previousStartDay = parseIsoDay(previousStart);
+  if (previousStartDay >= firstPossibleDay) return null;
+
+  const units = Number.parseInt(pointsUnits, 10);
+  if (!Number.isInteger(units) || units <= 0) {
+    throw new Error('Carga de produção inválida.');
+  }
+
+  const settings = await loadV2Settings(db);
+  const lastPossibleEnd = addDays(
+    parseIsoDay(eventDate),
+    -v2IntSetting(settings, 'minimum_delivery_days_before_event', 3),
+  );
+  const lastPossibleStart = addDays(lastPossibleEnd, -(NORMAL_DELIVERY_WINDOW_DAYS - 1));
+  if (firstPossibleDay > lastPossibleStart) return null;
+
+  const capacityMap = await loadCapacityMap(db, firstPossibleDay, lastPossibleEnd, settings);
+  for (
+    let start = firstPossibleDay;
+    start <= lastPossibleStart;
+    start = addDays(start, 1)
+  ) {
+    const end = addDays(start, NORMAL_DELIVERY_WINDOW_DAYS - 1);
+    const plan = planAllocation(capacityMap, start, end, units);
+    if (plan.fits && plan.allocation.length) {
+      return { start: formatIsoDay(start), end: formatIsoDay(end) };
+    }
+  }
+  return null;
+}
+
 export async function planV2AllocationForWindow(
   db,
   {

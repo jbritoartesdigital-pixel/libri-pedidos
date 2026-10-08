@@ -926,6 +926,54 @@ async function cashByProvider(
     );
 }
 
+function breakdownForMovement(row, grossCents, effectiveFeeCents) {
+  if (row.provider !== 'mercado_pago'
+    || row.payment_type === 'refund'
+    || row.net_cents === null
+    || row.net_cents === undefined) return null;
+
+  let payload = {};
+  try { payload = JSON.parse(row.provider_payload_json || '{}'); } catch {}
+  const verifiedFees = payload?.libriFinance?.collectorFees;
+  const parts = [];
+
+  if (Array.isArray(verifiedFees)) {
+    for (const item of verifiedFees) {
+      const value = Number(item?.amountCents);
+      if (!Number.isSafeInteger(value) || value <= 0) continue;
+      parts.push({
+        label: item.type === 'mercadopago_fee' ? 'Taxa Mercado Pago' : 'Taxa identificada pelo provedor',
+        amountCents: value,
+      });
+    }
+  } else {
+    // Historical fee_cents saved *before* gross-net correction represented
+    // collector fee_details only, and can be lower than the effective fee.
+    const previouslyRecorded = Number(row.fee_cents || 0);
+    if (previouslyRecorded > 0 && previouslyRecorded < effectiveFeeCents) {
+      parts.push({
+        label: 'Taxa registrada anteriormente',
+        amountCents: previouslyRecorded,
+      });
+    }
+  }
+
+  const sum = parts.reduce((total, item) => total + item.amountCents, 0);
+  // Invalid provider details must not be presented as verified deductions.
+  if (sum > effectiveFeeCents) {
+    return {
+      parts: [],
+      otherCents: effectiveFeeCents,
+      note: 'Detalhamento não disponível para esta transação.',
+    };
+  }
+  return {
+    parts,
+    otherCents: Math.max(0, effectiveFeeCents - sum),
+    note: !Array.isArray(verifiedFees) ? 'Detalhamento parcial ou indisponível no histórico.' : '',
+  };
+}
+
 async function movementsForRange(
   db,
   range,
@@ -1185,6 +1233,10 @@ async function movementsForRange(
               : feeCents,
 
           feeKnown,
+
+          feeBreakdown: feeKnown && !isRefund
+            ? breakdownForMovement(row, amountCents, feeCents)
+            : null,
 
           netCents:
             signedNetCents,

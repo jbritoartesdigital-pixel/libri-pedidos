@@ -11,7 +11,7 @@ export const V2_WHATSAPP_TEMPLATE_KEYS = {
 
 export const DEFAULT_V2_WHATSAPP_TEMPLATES = {
   briefing:
-    'Oi, {cliente}! 💛 O briefing do convite de {homenageado} ainda está pendente. Assim que você finalizar, consigo seguir com a produção. Continue por aqui: {link}?tab=briefing',
+    'Oi, {cliente}! 💛 Ainda faltam alguns dados do convite de {homenageado}. Quando você terminar de preencher, consigo seguir com a produção. Continue por aqui: {link}?tab=briefing',
 
   preview:
     'Oi, {cliente}! 💛 A prévia do convite de {homenageado} já está disponível para conferência: {link}?tab=preview',
@@ -147,6 +147,7 @@ export function renderV2WhatsappTemplate(
     template
     || '',
   )
+    .replace(/briefing/gi, 'dados do convite')
     .replace(
       /\{(cliente|homenageado|pedido|link|saldo)\}/g,
       (

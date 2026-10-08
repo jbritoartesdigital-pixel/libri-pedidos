@@ -570,9 +570,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261008-card-fee-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-formphotos-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-formphotos-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261008-formphotos-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -815,8 +815,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-formphotos-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-formphotos-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1520,6 +1520,85 @@ test('manual finance entries are audited and bounded by real order values', asyn
   );
 });
 
+test('admin sees client photos inline with protected R2 access and human-friendly form answers', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Fotos do pedido', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  const order = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(checkout.order.code);
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?').run(JSON.stringify({
+    avoid_colors: 'Vermelho', must_avoid: 'Não usar corações',
+    visual_feeling: ['magical', 'delicate'],
+    appearance_choice: 'yes',
+  }), order.id);
+  const now = new Date().toISOString();
+  const uploadId = Number(DB.sqlite.prepare(`
+    INSERT INTO v2_briefing_uploads (
+      order_id, category, field_key, original_filename, stored_filename,
+      mime_type, size_bytes, r2_key, note, sort_order, created_at, updated_at
+    ) VALUES (?, 'reference', 'reference_files', 'festa.png', 'festa.png',
+      'image/png', 3, ?, 'Inspiração aprovada', 0, ?, ?)
+  `).run(order.id, 'orders/' + order.id + '/briefing/reference/demo.png', now, now).lastInsertRowid);
+  const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(detail.uploads.uploads.length, 1);
+  assert.equal(detail.uploads.uploads[0].id, uploadId);
+  assert.equal(detail.uploads.uploads[0].fieldLabel, 'Referências visuais');
+  assert.equal(detail.briefing.fields.find(x => x.key === 'avoid_colors').label,
+    'Tem alguma cor que você não quer?');
+  assert.equal(detail.briefing.fields.find(x => x.key === 'must_avoid').label,
+    'Tem algo que você não quer no convite?');
+  assert.match(detail.copy.production, /Tem alguma cor que você não quer\?: Vermelho/);
+  assert.match(detail.copy.production, /Que sensação você quer para o convite\?: Mágico, Delicado/);
+
+  let getCount = 0;
+  e.FILES = { async get(key) {
+    assert.equal(key, 'orders/' + order.id + '/briefing/reference/demo.png');
+    getCount++;
+    return { body: new Blob(['png']).stream() };
+  }};
+  const path = `/api/admin/v2/orders/${checkout.order.code}/uploads/${uploadId}/content`;
+  const { handleAdminV2CoreApi } = await import('../src/routes/admin-v2-core.js');
+  const inline = await handleAdminV2CoreApi(
+    new Request('https://example.com' + path), e, new URL('https://example.com' + path));
+  assert.equal(inline.status, 200);
+  assert.equal(inline.headers.get('content-type'), 'image/png');
+  assert.match(inline.headers.get('content-disposition'), /^inline;/);
+  assert.match(inline.headers.get('cache-control'), /no-store/);
+  assert.equal(await inline.text(), 'png');
+
+  const download = await handleAdminV2CoreApi(new Request('https://example.com' + path + '?download=1'),
+    e, new URL('https://example.com' + path + '?download=1'));
+  assert.match(download.headers.get('content-disposition'), /^attachment;/);
+  assert.equal(await download.text(), 'png');
+  const mismatch = await handleAdminV2CoreApi(new Request('https://example.com' + path.replace(checkout.order.code, 'LIBRI-99999')),
+    e, new URL('https://example.com' + path.replace(checkout.order.code, 'LIBRI-99999')));
+  assert.equal(mismatch.status, 404);
+  assert.equal(getCount, 2);
+  const unauthorized = await worker.fetch(new Request('https://example.com' + path), e, { waitUntil() {} });
+  assert.equal(unauthorized.status, 401);
+  assert.equal(getCount, 2);
+});
+
+test('customer and admin use plain-language labels, photo viewer and fresh mobile assets', () => {
+  const admin = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const customer = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const shell = readFileSync('public/admin-v2.html', 'utf8');
+  const entry = readFileSync('public/js/admin-v2.js', 'utf8');
+  const publicShell = readFileSync('public/client-v2.html', 'utf8');
+  assert.match(admin, /Fotos e referências recebidas/);
+  assert.match(admin, /data-order-photo/);
+  assert.match(admin, /orderPhotoViewer/);
+  assert.match(admin, /Dados enviados pela cliente/);
+  assert.match(admin, /definition\?\.label/);
+  assert.match(customer, /Preencher dados/);
+  assert.match(customer, /Enviar dados/);
+  assert.doesNotMatch(customer, /'Briefing'/);
+  assert.ok(shell.includes('admin-v2.js?v=20261008-formphotos-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261008-formphotos-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261008-formphotos-1'));
+});
+
 test('admin final checklist blocks incomplete delivery and requires manual final-file confirmation', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -1748,7 +1827,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   );
 
   assert.match(area, /Seu próximo passo/);
-  assert.match(area, /Continuar briefing/);
+  assert.match(area, /Preencher dados/);
   assert.match(area, /Abrir prévia/);
   assert.match(area, /Ver saldo/);
 

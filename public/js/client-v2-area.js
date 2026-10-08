@@ -315,13 +315,13 @@ function nextStepCard(
     && !area.briefing.completed
   ) {
     title =
-      'Preencher o briefing';
+      'Preencher os dados do convite';
     body =
-      'Envie os dados e referências do convite. A produção começa depois que o briefing estiver completo.';
+      'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.';
     tab =
       'briefing';
     buttonLabel =
-      'Continuar briefing';
+      'Preencher dados';
   } else if (
     status
     === 'waiting_customer'
@@ -476,7 +476,7 @@ function tabButtons(
       id:
         'briefing',
       label:
-        'Briefing',
+        'Preencher dados',
       visible:
         true,
     },
@@ -592,7 +592,7 @@ function summaryHtml(
               ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
               : awaitingBalance
                 ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
-                : 'Aqui ficam seu briefing, prévias e documentos quando estiverem disponíveis.'}
+                : 'Aqui você acompanha seus dados, prévias e documentos.'}
         </p>
       </div>
 
@@ -738,19 +738,19 @@ function summaryHtml(
           ? `
             <div class="notice info section-block">
               ${capacityReview
-                ? 'Seu pagamento já foi confirmado. A Libri está revisando a janela de entrega antes de liberar o briefing.'
-                : 'O briefing será liberado assim que o pagamento for confirmado. Se você acabou de pagar, pode atualizar esta página em alguns instantes.'}
+                ? 'Seu pagamento foi confirmado. A Libri está revisando a data de entrega antes de liberar o formulário.'
+                : 'Você poderá preencher os dados do convite assim que o pagamento for confirmado. Se acabou de pagar, atualize esta página em alguns instantes.'}
             </div>
           `
           : area.briefing.completed
             ? `
               <div class="notice success section-block">
-                Briefing enviado ✓
+                Dados enviados ✓
               </div>
             `
             : `
               <div class="notice section-block">
-                Seu briefing está ${area.briefing.progress}% preenchido.
+                Seus dados estão ${area.briefing.progress}% preenchidos.
               </div>
             `
       }
@@ -879,12 +879,12 @@ function briefingHtml(
     return `
       <section class="page-card">
         <div class="page-head">
-          <span class="eyebrow">Briefing</span>
+          <span class="eyebrow">Dados do convite</span>
           <h1 class="page-title">${capacityReview ? 'Pagamento confirmado' : 'Aguardando pagamento'}</h1>
           <p class="page-subtitle">
             ${capacityReview
-              ? 'A Libri está revisando sua janela de entrega. O briefing será liberado assim que essa revisão terminar.'
-              : 'Assim que o pagamento for confirmado, o briefing criativo é liberado aqui.'}
+              ? 'A Libri está revisando sua data de entrega. O formulário será liberado assim que a revisão terminar.'
+              : 'Assim que o pagamento for confirmado, você poderá preencher os dados do convite aqui.'}
           </p>
         </div>
 
@@ -1032,7 +1032,7 @@ function briefingHtml(
                     class="btn btn-primary btn-large"
                     type="button"
                   >
-                    Enviar briefing
+                    Enviar dados
                   </button>
                 `
                 : `
@@ -2398,7 +2398,7 @@ export async function startCustomerArea(
               false;
 
             button.textContent =
-              'Enviar briefing';
+              'Enviar dados';
 
             const missing =
               error.data?.details?.fields

@@ -21,6 +21,8 @@ import {
   renderV2WhatsappTemplate,
 } from './v2-whatsapp-templates.js';
 
+import { getV2AdminBriefingFieldMeta } from './v2-customer-area.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -1577,6 +1579,7 @@ async function orderUploads(
           SELECT
             id,
             category,
+            field_key,
             original_filename,
             stored_filename,
             mime_type,
@@ -1629,6 +1632,7 @@ async function orderUploads(
             row.id,
           category:
             row.category,
+          fieldKey: row.field_key,
           originalFilename:
             row.original_filename,
           storedFilename:
@@ -1955,48 +1959,21 @@ function valueForText(
   );
 }
 
-function briefingLines(
-  briefing,
-) {
-  return Object
-    .entries(
-      briefing.data
-      || {},
-    )
-    .filter(
-      (
-        [
-          ,
-          value,
-        ],
-      ) =>
-        value !== null
-        && value !== undefined
-        && value !== ''
-        && !(
-          Array.isArray(
-            value,
-          )
-          && !value.length
-        ),
-    )
-    .map(
-      (
-        [
-          key,
-          value,
-        ],
-      ) =>
-        `${
-          labelFromKey(
-            key,
-          )
-        }: ${
-          valueForText(
-            value,
-          )
-        }`,
-    );
+function briefingLines(briefing, fields = []) {
+  const definitions = new Map(fields.map(item => [item.key, item]));
+  return Object.entries(briefing.data || {})
+    .filter(([, value]) => value !== null && value !== undefined
+      && value !== '' && !(Array.isArray(value) && !value.length))
+    .map(([key, value]) => {
+      const definition = definitions.get(key);
+      const options = new Map((definition?.options || [])
+        .map(option => [option.value, option.label]));
+      const label = definition?.label || labelFromKey(key);
+      const text = Array.isArray(value)
+        ? value.map(item => options.get(item) || valueForText(item)).join(', ')
+        : options.get(value) || valueForText(value);
+      return label + ': ' + text;
+    });
 }
 
 function buildBriefingTexts(
@@ -2004,6 +1981,7 @@ function buildBriefingTexts(
   items,
   briefing,
   uploads,
+  fields = [],
 ) {
   const product =
     items.find(
@@ -2020,10 +1998,7 @@ function buildBriefingTexts(
           === 'addon',
       );
 
-  const creativeLines =
-    briefingLines(
-      briefing,
-    );
+  const creativeLines = briefingLines(briefing, fields);
 
   const uploadSummary =
     Object
@@ -2260,13 +2235,8 @@ export async function getV2AdminOrderDetail(
       ),
     ]);
 
-  const texts =
-    buildBriefingTexts(
-      order,
-      items,
-      briefing,
-      uploads,
-    );
+  const fieldMeta = await getV2AdminBriefingFieldMeta(db, order.public_token);
+  const texts = buildBriefingTexts(order, items, briefing, uploads, fieldMeta.fields);
 
   const whatsappTemplates =
     await loadV2WhatsappTemplates(
@@ -2402,8 +2372,14 @@ export async function getV2AdminOrderDetail(
 
     payment:
       payments,
-    briefing,
-    uploads,
+    briefing: { ...briefing, fields: fieldMeta.fields },
+    uploads: {
+      ...uploads,
+      uploads: uploads.uploads.map(upload => ({
+        ...upload,
+        fieldLabel: fieldMeta.uploads.find(item => item.fieldKey === upload.fieldKey)?.label || '',
+      })),
+    },
     previews,
     terms,
     contracts,

@@ -1566,7 +1566,7 @@ function addonExplanation(
         'Confirmação de presença vinculada ao seu convite.',
       items: [
         'Depois da compra, você escolhe se a confirmação será livre ou por lista de convidados.',
-        'Se escolher lista, os nomes são informados no briefing.',
+        'Se escolher lista, os nomes serão informados ao preencher os dados do pedido.',
       ],
     };
   }
@@ -3731,7 +3731,7 @@ function renderCustomer(
           Agora, só o essencial
         </h1>
         <p class="page-subtitle">
-          O briefing criativo completo vem somente depois da confirmação do pagamento.
+          As informações do convite serão preenchidas depois da confirmação do pagamento.
         </p>
       </div>
 
@@ -4036,7 +4036,7 @@ function renderReview(
         </h1>
         <p class="page-subtitle">
           Depois desta revisão você escolhe a forma de pagamento.
-          O briefing criativo continua para depois da confirmação.
+          Os dados do convite serão preenchidos depois da confirmação.
         </p>
       </div>
 

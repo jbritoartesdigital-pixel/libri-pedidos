@@ -2444,7 +2444,7 @@ export async function getV2CustomerArea(
           context.order.status,
         ),
       nextAction:
-        context.order.next_action,
+        String(context.order.next_action || '').replace(/briefing/gi, 'dados do convite'),
       source:
         context.order.source,
     },

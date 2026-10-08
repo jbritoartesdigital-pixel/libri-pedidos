@@ -1837,6 +1837,16 @@ function quoteHtml(
 
   return `
     <div class="quote-card">
+      ${quote.cardFeeCents > 0 ? `
+        <div class="quote-row">
+          <span>Valor do convite e adicionais</span>
+          <strong>${money(quote.baseTotalCents)}</strong>
+        </div>
+        <div class="quote-row">
+          <span>Acréscimo no cartão (taxa 4,97%)</span>
+          <strong>${money(quote.cardFeeCents)}</strong>
+        </div>
+      ` : ''}
       <div class="quote-row total">
         <span>Total</span>
         <strong>${money(quote.totalCents)}</strong>
@@ -4207,8 +4217,7 @@ async function renderPayment(
           <span class="choice-main">
             <strong>Cartão</strong>
             <small>
-              100% pelo Mercado Pago.
-              Parcelamento disponível conforme o checkout.
+              Pagamento integral pelo Mercado Pago. Acréscimo para compensar taxa de 4,97%, informado no total. Parcelamento conforme o checkout.
             </small>
           </span>
         </label>

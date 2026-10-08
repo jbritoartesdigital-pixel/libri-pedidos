@@ -565,6 +565,108 @@ test('card Orders API logs sanitized rejection causes and never exposes provider
   }
 });
 
+test('checkout price breakdown stays visible in mobile frontend even after deploy and method switch', () => {
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261008-card-fee-1'));
+  assert.match(store, /Acréscimo no cartão/);
+  assert.match(store, /quote.cardFeeCents/);
+  assert.match(area, /data-card-extra/);
+  assert.match(area, /cardTotalCents/);
+  assert.match(area, /Pix • entrada de 50%/);
+});
+
+test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', async () => {
+  const DB = database();
+  DB.sqlite.prepare("UPDATE v2_product_variants SET price_cents = 7000 WHERE product_id = (SELECT id FROM v2_products WHERE code = 'interactive_essential')").run();
+  const pix = await calculateCommercialV2Quote(DB, { productCode: 'interactive_essential', paymentMethod: 'pix' });
+  const card = await calculateCommercialV2Quote(DB, { productCode: 'interactive_essential', paymentMethod: 'card' });
+  assert.equal(pix.totalCents, 7000);
+  assert.equal(pix.cardFeeCents, 0);
+  assert.equal(pix.payment.depositCents, 3500);
+  assert.equal(pix.payment.balanceCents, 3500);
+  assert.equal(card.baseTotalCents, 7000);
+  assert.equal(card.cardFeeCents, 366);
+  assert.equal(card.cardFeePercent, 4.97);
+  assert.equal(card.totalCents, 7366);
+  assert.equal(card.payment.depositCents, 7366);
+  assert.equal(card.payment.balanceCents, 0);
+  assert.equal(card.totalCents - Math.round(card.totalCents * 0.0497), 7000);
+});
+
+test('card fee is the exact Mercado Pago checkout total, and switching back to Pix removes it', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  DB.sqlite.prepare("UPDATE v2_product_variants SET price_cents = 7000 WHERE product_id = (SELECT id FROM v2_products WHERE code = 'interactive_essential')").run();
+  const card = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Taxa transparente', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  assert.equal(card.payment.totalCents, 7366);
+  assert.equal(card.payment.amountDueNowCents, 7366);
+  assert.equal(mp.bodies[0].total_amount, '73.66');
+  const stored = DB.sqlite.prepare('SELECT total_cents, pricing_snapshot_json FROM v2_order_pricing').get();
+  assert.equal(stored.total_cents, 7366);
+  assert.equal(JSON.parse(stored.pricing_snapshot_json).cardFeeCents, 366);
+
+  const customerArea = await getV2CustomerArea(e, card.order.publicToken);
+  assert.equal(customerArea.payment.cardTotalCents, 7366);
+  assert.equal(customerArea.payment.baseTotalCents, 7000);
+  assert.equal(customerArea.payment.cardFeeCents, 366);
+
+  const pix = await resumeV2Payment(request, e, card.order.publicToken, {
+    clientRequestId: crypto.randomUUID(), paymentMethod: 'pix',
+  });
+  assert.equal(pix.order.code, card.order.code);
+  assert.equal(pix.payment.totalCents, 7000);
+  assert.equal(pix.payment.amountDueNowCents, 3500);
+  assert.equal(mp.bodies[1].total_amount, '35.00');
+  assert.equal((await getV2CustomerArea(e, card.order.publicToken)).payment.cardTotalCents, 7366);
+
+  const cardAgain = await resumeV2Payment(request, e, card.order.publicToken, {
+    clientRequestId: crypto.randomUUID(), paymentMethod: 'card',
+  });
+  assert.equal(cardAgain.order.code, card.order.code);
+  assert.equal(cardAgain.payment.totalCents, 7366);
+  assert.equal(cardAgain.payment.amountDueNowCents, 7366);
+  assert.equal(mp.bodies[2].total_amount, '73.66');
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+});
+
+test('pre-existing unpaid card orders preserve their contracted total on unchanged retry', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const initial = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Preço acordado antes da taxa', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'card' },
+    ...await terms(DB, 'card'),
+  }));
+  const originalId = initial.payment.providerOrderId;
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(initial.order.code).id;
+  const oldSnapshot = JSON.parse(DB.sqlite.prepare('SELECT pricing_snapshot_json FROM v2_order_pricing WHERE order_id=?').get(id).pricing_snapshot_json);
+  delete oldSnapshot.cardFeeCents;
+  delete oldSnapshot.cardFeePercent;
+  delete oldSnapshot.baseTotalCents;
+  const agreedCents = oldSnapshot.subtotalCents;
+  oldSnapshot.totalCents = agreedCents;
+  oldSnapshot.payment.depositCents = agreedCents;
+  DB.sqlite.prepare('UPDATE v2_order_pricing SET total_cents=?, deposit_cents=?, pricing_snapshot_json=? WHERE order_id=?')
+    .run(agreedCents, agreedCents, JSON.stringify(oldSnapshot), id);
+  mp.orders.get(originalId).status = 'expired';
+  mp.orders.get(originalId).status_detail = 'expired';
+  const resumed = await resumeV2Payment(request, e, initial.order.publicToken, {
+    clientRequestId: crypto.randomUUID(), paymentMethod: 'card',
+  });
+  assert.equal(resumed.payment.totalCents, agreedCents);
+  assert.equal(resumed.payment.amountDueNowCents, agreedCents);
+  assert.equal((await getV2CustomerArea(e, initial.order.publicToken)).payment.cardTotalCents, agreedCents);
+});
+
 test('customer can switch an unpaid regular order from card to Pix without creating another order', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const body = input({
@@ -713,8 +815,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-delivery-popup-2'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-delivery-popup-2'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261008-card-fee-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261008-card-fee-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });

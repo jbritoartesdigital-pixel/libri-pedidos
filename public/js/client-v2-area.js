@@ -532,8 +532,11 @@ function summaryHtml(
   const urgencyPercent = Number(area.urgency?.percent || 0);
   const isPix = area.payment.method === 'pix';
   const totalCents = Number(area.payment.totalCents || 0);
-  const pixDueCents = Math.round(totalCents * 0.5);
-  const pixBalanceCents = Math.max(0, totalCents - pixDueCents);
+  const pixTotalCents = Number(area.payment.baseTotalCents ?? totalCents);
+  const cardTotalCents = Number(area.payment.cardTotalCents ?? totalCents);
+  const cardExtraCents = Math.max(0, cardTotalCents - pixTotalCents);
+  const pixDueCents = Math.round(pixTotalCents * 0.5);
+  const pixBalanceCents = Math.max(0, pixTotalCents - pixDueCents);
   const dueNowCents = isPix
     ? pixDueCents
     : totalCents;
@@ -613,7 +616,7 @@ function summaryHtml(
                 id="paymentDueNow"
                 class="payment-priority-total"
                 data-pix="${pixDueCents}"
-                data-card="${totalCents}"
+                data-card="${cardTotalCents}"
               >${money(dueNowCents)}</strong>
             </div>
             <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
@@ -622,11 +625,13 @@ function summaryHtml(
           <p
             id="paymentBreakdown"
             class="muted"
-            data-total="${totalCents}"
+            data-total="${pixTotalCents}"
             data-balance="${pixBalanceCents}"
+            data-card-total="${cardTotalCents}"
+            data-card-extra="${cardExtraCents}"
           >${isPix
-            ? `Total do pedido: ${money(totalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
-            : `Total do pedido: ${money(totalCents)}`}</p>
+            ? `Total do pedido: ${money(pixTotalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+            : `Total do pedido: ${money(cardTotalCents)}${cardExtraCents > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardExtraCents)}` : ''}`}</p>
 
           <p class="muted"><strong>Escolha como deseja pagar.</strong> Se não conseguiu com um meio, pode trocar sem refazer o pedido.</p>
           <div
@@ -634,7 +639,7 @@ function summaryHtml(
             class="payment-methods"
           >
             <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
-            <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • 100%</label>
+            <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • ${money(cardTotalCents)}${cardExtraCents > 0 ? ' (inclui acréscimo para taxa 4,97%)' : ''}</label>
           </div>
 
           <div class="notice info compact-notice hidden" id="paymentRetryNotice">Não foi possível concluir essa tentativa. Escolha outra forma acima ou tente novamente. Seu pedido permanece salvo.</div>
@@ -1580,10 +1585,12 @@ export async function startCustomerArea(
                     ),
                   );
 
+                const cardTotal = money(Number(breakdown.dataset.cardTotal));
+                const cardFee = Number(breakdown.dataset.cardExtra || 0);
                 breakdown.textContent =
                   method === 'pix'
                     ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
-                    : `Total do pedido: ${orderTotal}`;
+                    : `Total do pedido: ${cardTotal}${cardFee > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardFee)}` : ''}`;
               }
 
               if (reviewLine) {

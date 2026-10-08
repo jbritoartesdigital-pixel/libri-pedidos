@@ -11,6 +11,8 @@ import {
   v2IntSetting,
 } from './v2-catalog.js';
 
+import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
+
 function cleanText(
   value,
   maxLength = 200,
@@ -824,7 +826,7 @@ export async function calculateCommercialV2Quote(
       )
       : 0;
 
-  const totalCents =
+  const baseTotalCents =
     subtotalCents
     + urgencyAmountCents;
 
@@ -843,6 +845,9 @@ export async function calculateCommercialV2Quote(
       'Escolha Pix ou cartão.',
     );
   }
+
+  const { totalCents, cardFeeCents, cardFeePercent } =
+    priceWithCardProcessingFee(baseTotalCents, paymentMethod);
 
   const depositPercent =
     paymentMethod
@@ -923,6 +928,9 @@ export async function calculateCommercialV2Quote(
         urgencyAmountCents,
     },
 
+    baseTotalCents,
+    cardFeeCents,
+    cardFeePercent,
     totalCents,
 
     payment: {

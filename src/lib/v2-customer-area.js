@@ -1723,7 +1723,7 @@ export async function getV2AdminBriefingFieldMeta(db, token) {
       })),
     ),
     uploads: schema.uploadRules.map(rule => ({
-      fieldKey: rule.fieldKey, label: rule.label,
+      fieldKey: rule.fieldKey, label: rule.label, min: rule.min,
     })),
   };
 }

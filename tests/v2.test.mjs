@@ -7,6 +7,7 @@ import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
 import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
+import { downloadV2OrderFolder } from '../src/lib/v2-order-zip.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { runV2Scheduler } from '../src/lib/v2-scheduler.js';
@@ -1540,6 +1541,53 @@ test('manual finance entries are audited and bounded by real order values', asyn
     ),
     true,
   );
+});
+
+test('ZIP export keeps real JPEG PNG TXT and PDF file extensions for ChatGPT and image viewers', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Pacote de mídias', type: 'birthday', date: day(50) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  const order = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
+    .get(checkout.order.code);
+  const now = new Date().toISOString();
+  for (const item of [
+    { category: 'person', fieldKey: 'person_photos', name: 'foto original.jpeg',
+      mime: 'image/jpeg', key: 'photo-r2', bytes: 'JPEGIMAGE' },
+    { category: 'reference', fieldKey: 'reference_files', name: 'referencia.png',
+      mime: 'image/png', key: 'reference-r2', bytes: 'PNGIMAGE' },
+  ]) {
+    DB.sqlite.prepare(`
+      INSERT INTO v2_briefing_uploads (
+        order_id, category, field_key, original_filename, stored_filename,
+        mime_type, size_bytes, r2_key, note, sort_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?)
+    `).run(order.id, item.category, item.fieldKey, item.name, item.name,
+      item.mime, item.bytes.length, item.key, now, now);
+  }
+  e.FILES = {
+    async get(key) {
+      const bytes = { 'photo-r2': 'JPEGIMAGE', 'reference-r2': 'PNGIMAGE' }[key];
+      assert.ok(bytes, 'only order image keys should be retrieved');
+      return { body: new Blob([bytes]).stream() };
+    },
+  };
+  const response = await downloadV2OrderFolder(e, checkout.order.code);
+  assert.equal(response.status, 200);
+  const raw = new TextDecoder().decode(await response.arrayBuffer());
+  assert.match(raw, /DADOS_DO_CONVITE\/dados_do_convite\.txt/);
+  assert.match(raw, /DADOS_DO_CONVITE\/resumo_pedido\.txt/);
+  assert.match(raw, /FOTOS\/aniversariante_01\.jpeg/);
+  assert.match(raw, /REFERENCIAS\/referencia_01\.png/);
+  assert.match(raw, /DOCUMENTOS\/termos_aceitos\.txt/);
+  assert.match(raw, /JPEGIMAGE/);
+  assert.match(raw, /PNGIMAGE/);
+  assert.doesNotMatch(raw, /(?:aniversariante_01_jpeg|referencia_01_png|dados_do_convite_txt)/);
+  assert.match(response.headers.get('content-type'), /application\/zip/);
 });
 
 test('admin sees client photos inline with protected R2 access and human-friendly form answers', async t => {

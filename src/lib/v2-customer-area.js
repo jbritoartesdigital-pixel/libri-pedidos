@@ -1134,35 +1134,7 @@ function buildSchema(
         },
       ),
 
-      field(
-        'music_choice',
-        'Você quer música no convite?',
-        'choice',
-        {
-          required:
-            true,
-          options: [
-            {
-              value:
-                'yes',
-              label:
-                'Sim',
-            },
-            {
-              value:
-                'no',
-              label:
-                'Não',
-            },
-            {
-              value:
-                'libri_decides',
-              label:
-                'Deixo a Libri decidir',
-            },
-          ],
-        },
-      ),
+
     );
 
     const resources =
@@ -1381,6 +1353,58 @@ function buildSchema(
           ),
         );
       }
+    }
+  }
+
+  // All produced invitations can have a musical direction, including
+  // cinematic videos. Ask for a specific song only when music is requested.
+  if (
+    INTERACTIVE_PRODUCTS.has(context.product.code)
+    || CINEMATIC_PRODUCTS.has(context.product.code)
+  ) {
+    productFields.push(
+      field(
+        'music_choice',
+        'Você quer música no convite?',
+        'choice',
+        {
+          required:
+            true,
+          options: [
+            {
+              value:
+                'yes',
+              label:
+                'Sim',
+            },
+            {
+              value:
+                'no',
+              label:
+                'Não',
+            },
+            {
+              value:
+                'libri_decides',
+              label:
+                'Deixo a Libri decidir',
+            },
+          ],
+        },
+      ),
+    );
+
+    if (data.music_choice === 'yes') {
+      productFields.push(
+        field(
+          'music_request',
+          'Qual música você prefere? (nome ou link)',
+          'text',
+          {
+            help: 'Escreva o nome e o artista ou cole um link. Se não tiver uma música específica, pode deixar em branco para a Libri escolher.',
+          },
+        ),
+      );
     }
   }
 
@@ -2044,6 +2068,10 @@ function cleanBranches(
     !== 'customer_text'
   ) {
     delete data.speech_text;
+  }
+
+  if (data.music_choice !== 'yes') {
+    delete data.music_request;
   }
 
   const resources =

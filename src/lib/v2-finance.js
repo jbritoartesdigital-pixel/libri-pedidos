@@ -447,7 +447,7 @@ async function summaryForRange(
                     provider = 'mercado_pago'
                     AND payment_type != 'refund'
                     AND net_cents IS NOT NULL
-                    THEN fee_cents
+                    THEN amount_cents - net_cents
                   ELSE 0
                 END
               ),
@@ -862,6 +862,8 @@ async function cashByProvider(
             COALESCE(
               SUM(
                 CASE
+                  WHEN payment_type != 'refund' AND provider = 'mercado_pago' AND net_cents IS NOT NULL
+                    THEN amount_cents - net_cents
                   WHEN payment_type != 'refund'
                     THEN fee_cents
                   ELSE 0
@@ -1092,10 +1094,13 @@ async function movementsForRange(
             row.amount_cents,
           );
 
-        const feeCents =
-          numberValue(
-            row.fee_cents,
-          );
+        // The provider can report a partial fee_details breakdown while
+        // the actual credited amount has additional deductions.
+        // For reconciled payments, gross minus net is the full deduction.
+        const feeCents = row.provider === 'mercado_pago'
+          && row.net_cents !== null && row.net_cents !== undefined
+          ? Math.max(0, amountCents - numberValue(row.net_cents))
+          : numberValue(row.fee_cents);
 
         const isRefund =
           row.payment_type

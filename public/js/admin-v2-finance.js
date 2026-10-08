@@ -281,12 +281,13 @@ export async function renderFinance() {
 
         <div class="kpi-grid" style="margin-top:12px">
           <article class="kpi">
-            <span>Taxas Mercado Pago</span>
+            <span>Taxas e descontos Mercado Pago</span>
             <strong>
               ${summary.mercadoPagoFeesComplete
                 ? money(summary.mercadoPagoFeeCents)
                 : 'A conciliar'}
             </strong>
+            <small>Diferença entre o valor bruto e o valor líquido creditado.</small>
             ${summary.mercadoPagoFeesComplete
               ? ''
               : `<small>${Number(summary.mercadoPagoFeePendingCount || 0)} pagamento(s)</small>`}

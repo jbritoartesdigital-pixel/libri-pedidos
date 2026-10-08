@@ -1188,23 +1188,17 @@ async function reconcileMercadoPagoFinance(
     };
   }
 
-  const feeCents =
-    collectorFeeCents(
-      payment,
-    );
-
-  const netCents =
-    moneyToCents(
-      payment
-        ?.transaction_details
-        ?.net_received_amount,
-    );
+  const providerFeeDetailsCents = collectorFeeCents(payment);
+  const netCents = moneyToCents(
+    payment?.transaction_details?.net_received_amount,
+  );
 
   if (
-    feeCents === null
+    providerFeeDetailsCents === null
     || netCents === null
-    || feeCents < 0
+    || providerFeeDetailsCents < 0
     || netCents < 0
+    || netCents > expectedAmount
   ) {
     return {
       reconciled:
@@ -1214,6 +1208,11 @@ async function reconcileMercadoPagoFinance(
         'finance_details_unavailable',
     };
   }
+
+  // fee_details can list only one component of the provider's deductions.
+  // Preserve the *effective* total charged by Mercado Pago so that:
+  // gross - deductions = the actual credited amount.
+  const feeCents = expectedAmount - netCents;
 
   await env.DB
     .prepare(

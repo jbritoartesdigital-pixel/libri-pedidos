@@ -150,6 +150,23 @@ export async function renderCentral(openOrder) {
       </div>
     </section>
 
+    <section class="card monthly-goal-card" aria-label="Meta mensal de faturamento">
+      <div class="section-title">
+        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)} 🎯</h2></div>
+        <span class="status">${Number(c.finance.monthlyGoal?.progressPercent || 0)}%</span>
+      </div>
+      <div class="monthly-goal-amounts">
+        <strong>${money(c.finance.monthlyGoal?.realizedCents || 0)}</strong>
+        <span>de ${money(c.finance.monthlyGoal?.targetCents || 200000)}</span>
+      </div>
+      <div class="monthly-goal-bar" role="progressbar" aria-valuenow="${Math.max(0, Number(c.finance.monthlyGoal?.progressPercent || 0))}"
+        aria-valuemin="0" aria-valuemax="100" aria-label="Progresso da meta mensal">
+        <span style="width:${Math.min(100, Math.max(0, Number(c.finance.monthlyGoal?.progressPercent || 0)))}%"></span>
+      </div>
+      <small>${c.finance.monthlyGoal?.reached ? 'Meta alcançada! ✨' : `Faltam ${money(c.finance.monthlyGoal?.remainingCents || 0)} para sua meta.`}
+        Base: recebimentos confirmados no mês, descontando estornos. Não inclui pedidos ainda não pagos.</small>
+    </section>
+
     <div class="kpi-grid" style="margin-top:14px">
       <article class="kpi">
         <span>Vendas do mês</span>
@@ -321,6 +338,22 @@ export async function renderCentral(openOrder) {
         </div>
       </section>
     </div>
+
+    <section class="card" style="margin-top:14px">
+      <div class="section-title">
+        <h2>Produção dos próximos 7 dias</h2>
+        <span class="status">${Number(c.workload?.count || 0)} pedidos</span>
+      </div>
+      <p class="muted">${Number(c.workload?.scenes || 0)} cenas contratadas • Entregas que cruzam os próximos 7 dias.</p>
+      <div class="list">
+        ${(c.workload?.orders || []).slice(0, 12).map(item => `
+          <button type="button" class="row-card" data-open-order="${esc(item.code)}"
+            style="text-align:left;cursor:pointer">
+            <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+            <small>${dateBr(item.start)} a ${dateBr(item.end)} • ${item.scenes} cenas • ${esc(item.statusLabel)}</small>
+          </button>`).join('') || empty('Sem entregas programadas para os próximos sete dias.')}
+      </div>
+    </section>
 
     <section class="card" style="margin-top:14px">
       <div class="section-title">

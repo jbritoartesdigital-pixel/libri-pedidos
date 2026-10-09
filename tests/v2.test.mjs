@@ -6,7 +6,8 @@ import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
-import { getV2CustomerArea, saveV2Briefing } from '../src/lib/v2-customer-area.js';
+import { getV2CustomerArea, saveV2Briefing, submitV2Briefing } from '../src/lib/v2-customer-area.js';
+import { giftPixKeyError } from '../public/js/v2-gift-pix-validation.js';
 import { downloadV2OrderFolder } from '../src/lib/v2-order-zip.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
@@ -593,8 +594,8 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-gift-review-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-gift-review-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261008-formphotos-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -838,8 +839,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-gift-review-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-gift-review-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1217,6 +1218,95 @@ test('exported invitation zip includes readable category, size and gift Pix labe
   assert.match(zip, /gift_categories: 'Tipos de presentes sugeridos'/);
   assert.match(zip, /gift_clothing_size: 'Tamanho das roupinhas'/);
   assert.match(zip, /pix_holder: 'Titular da chave Pix'/);
+});
+
+test('gift Pix key format validation supports real Brazilian Pix types without marking unrelated fields', () => {
+  assert.equal(giftPixKeyError('cpf', '529.982.247-25'), null);
+  assert.match(giftPixKeyError('cpf', '529.982.247-26'), /CPF/);
+  assert.equal(giftPixKeyError('cnpj', '11.222.333/0001-81'), null);
+  assert.match(giftPixKeyError('cnpj', '11.222.333/0001-82'), /CNPJ/);
+  assert.equal(giftPixKeyError('email', 'presentes@example.com'), null);
+  assert.match(giftPixKeyError('email', 'errado'), /e-mail/);
+  assert.equal(giftPixKeyError('phone', '+5561999999999'), null);
+  assert.match(giftPixKeyError('phone', '61999999999'), /\+55/);
+  assert.equal(giftPixKeyError('random', '123e4567-e89b-12d3-a456-426614174000'), null);
+  assert.match(giftPixKeyError('random', 'invalid-key'), /aleatória/);
+  assert.equal(giftPixKeyError('email', ''), null, 'the existing required validation owns blank inputs');
+});
+
+test('gift Pix format is checked on server only while that branch is selected', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Pix presentes', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
+    .get(checkout.order.code).id;
+  const update = data => DB.sqlite.prepare(
+    'UPDATE v2_briefings SET data_json=? WHERE order_id=?',
+  ).run(JSON.stringify(data), id);
+  update({
+    interactive_resources: ['gifts'], gift_mode: 'pix',
+    pix_key_type: 'email', pix_key: 'not-an-email',
+    pix_holder: 'Responsável',
+  });
+  await assert.rejects(
+    submitV2Briefing(e, checkout.order.publicToken),
+    error => {
+      assert.equal(error.code, 'briefing_incomplete');
+      assert.ok(error.details.fields.some(item => item.key === 'pix_key'
+        && item.message.includes('e-mail')));
+      return true;
+    },
+  );
+  update({
+    interactive_resources: ['gifts'], gift_mode: 'pix',
+    pix_key_type: 'email', pix_key: 'presentes@example.com',
+    pix_holder: 'Responsável',
+  });
+  await assert.rejects(
+    submitV2Briefing(e, checkout.order.publicToken),
+    error => {
+      assert.ok(!error.details.fields.some(item => item.key === 'pix_key'),
+        'valid key does not add Pix errors to other unfinished fields');
+      return true;
+    },
+  );
+  update({ interactive_resources: [], gift_mode: 'pix', pix_key_type: 'email', pix_key: 'not-an-email' });
+  await assert.rejects(
+    submitV2Briefing(e, checkout.order.publicToken),
+    error => {
+      assert.ok(!error.details.fields.some(item => item.key === 'pix_key'),
+        'hidden gift keys cannot block submission');
+      return true;
+    },
+  );
+});
+
+test('client guides missing questions and confirms gift Pix before publishing the briefing', () => {
+  const client = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const core = readFileSync('public/js/client-v2.js', 'utf8');
+  const admin = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const customerCss = readFileSync('public/css/client-v2.css', 'utf8');
+  const adminCss = readFileSync('public/css/admin-v2.css', 'utf8');
+  assert.match(client, /confirmGiftPixBeforeSubmit/);
+  assert.match(client, /giftPixKeyError/);
+  assert.match(client, /window\.confirm/);
+  assert.match(client, /showBriefingMissing/);
+  assert.match(client, /briefing-field-invalid/);
+  assert.match(client, /scrollIntoView/);
+  assert.match(client, /await saveBriefingNow\(target, \{\}\)/);
+  assert.match(customerCss, /\.briefing-field-invalid/);
+  assert.match(admin, /productionQuickSummary/);
+  assert.match(admin, /orderProductionSummary/);
+  assert.match(admin, /Presentes após o vídeo/);
+  assert.match(adminCss, /\.production-summary-grid/);
+  assert.ok(core.includes('client-v2-area.js?v=20261009-gift-review-1'));
+  assert.ok(readFileSync('public/client-v2.html', 'utf8')
+    .includes('client-v2.css?v=20261009-gift-review-1'));
 });
 
 test('approved Mercado Pago payment reconciles real fee and net amount from Payments API', async t => {
@@ -1844,9 +1934,9 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261008-admin-approved-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261009-gift-review-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261009-gift-review-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261009-gift-review-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -1870,9 +1960,9 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261008-growth-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261008-growth-1'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261008-admin-approved-1"));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261009-gift-review-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-gift-review-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261009-gift-review-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-growth-1"));
 });
 
@@ -2048,8 +2138,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261009-gift-review-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261009-gift-review-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261008-growth-1'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);

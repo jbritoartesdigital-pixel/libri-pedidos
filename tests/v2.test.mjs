@@ -98,7 +98,7 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
 });
 
-test('briefing reference photos appear in both real and simulated children's style choices', () => {
+test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const css = readFileSync('public/css/client-v2.css', 'utf8');

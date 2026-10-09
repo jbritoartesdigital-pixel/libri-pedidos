@@ -899,7 +899,7 @@ function showBriefingMissing(missing) {
   }
 
   summary.classList.remove('hidden');
-  summary.innerHTML = '<strong>Confira os campos destacados:</strong>' +
+  summary.innerHTML = '<strong>Falta preencher nesta etapa. Confira os campos destacados:</strong>' +
     '<ul>' + (visible.length ? visible : missing.map(item => item.message))
       .map(message => '<li>' + esc(message) + '</li>').join('') + '</ul>';
   summary.setAttribute('role', 'alert');

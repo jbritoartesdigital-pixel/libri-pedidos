@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { captureFieldViewport, restoreFieldViewport } from '../public/js/client-v2-viewport.js';
 import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
@@ -85,16 +86,72 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /renderBriefingSimulation/);
   assert.match(storefront, /\/api\/v2\/briefing-simulation/);
   assert.match(storefront, /simulationBriefingAnswers/);
-  assert.match(storefront, /Nenhum dado, foto ou pedido será enviado/);
+  assert.match(storefront, /As respostas de teste são usadas apenas para atualizar perguntas condicionais/);
   assert.match(storefront, /Confirmar presença pelo WhatsApp/);
   assert.match(storefront, /Abrir a localização/);
   assert.match(storefront, /sugestões de presentes ou Pix/);
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-demo-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
+});
+
+test('briefing reference photos appear in both real and simulated children's style choices', () => {
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const css = readFileSync('public/css/client-v2.css', 'utf8');
+  for (const file of ['mascote-bonequinho.webp', 'mascote-realista.webp']) {
+    assert.ok(existsSync('public/images/exemplos/' + file), file + ' must exist');
+    assert.ok(area.includes('/images/exemplos/' + file));
+  }
+  assert.match(area, /definition\.key === 'visual_style'/);
+  assert.match(area, /stylized_doll/);
+  assert.match(area, /realistic_detailed/);
+  assert.match(area, /choice-reference-image/);
+  assert.match(store, /inputHtml\(/);
+  assert.match(css, /\.choice-reference-image/);
+});
+
+test('dependent briefing selections keep their visible position, in preview and in real order', () => {
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  assert.match(area, /render\(captureFieldViewport\(control\)\)/);
+  assert.match(area, /restoreFieldViewport\(viewport, app\)/);
+  assert.match(store, /preservePosition: true, control: input/);
+  assert.match(store, /if \(!preservePosition\)/);
+  assert.match(store, /revision !== simulationBriefingRenderRevision/);
+  const originalWindow = globalThis.window;
+  try {
+    const scrolls = [];
+    const focused = [];
+    globalThis.window = {
+      scrollY: 420,
+      scrollTo(options) { scrolls.push(options); },
+    };
+    const input = {
+      dataset: { field: 'visual_style' },
+      value: 'stylized_doll',
+      closest() { return { getBoundingClientRect: () => ({ top: 270 }) }; },
+    };
+    const saved = captureFieldViewport(input);
+    globalThis.window.scrollY = 0;
+    restoreFieldViewport(saved, {
+      querySelectorAll() {
+        return [{
+          dataset: { field: 'visual_style' },
+          value: 'stylized_doll',
+          closest() { return { getBoundingClientRect: () => ({ top: 450 }) }; },
+          focus(options) { focused.push(options); },
+        }];
+      },
+    });
+    assert.deepEqual(scrolls, [{ top: 180, behavior: 'instant' }]);
+    assert.deepEqual(focused, [{ preventScroll: true }]);
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });
 
 test('admin entry HTML has correctly quoted executable module import (regression: blank admin after deploy)', () => {
@@ -656,9 +713,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-demo-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-ui-2'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -901,8 +958,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-demo-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1364,7 +1421,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261009-pix-production-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261009-briefing-demo-1'));
+    'client-v2.js?v=20261009-briefing-ui-2'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2002,7 +2059,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261009-pix-production-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261009-pix-production-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261009-briefing-demo-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261009-briefing-ui-2'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -2204,8 +2261,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261009-briefing-demo-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261009-briefing-demo-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261009-briefing-ui-2'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261008-growth-1'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);

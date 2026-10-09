@@ -13,6 +13,7 @@ import {
 } from './client-v2-core.js';
 
 import { uploadCustomerPhoto } from './client-v2-upload.js';
+import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const HELPFUL_EXAMPLES = {
   theme_or_style: 'Exemplo: Jardim Encantado, cores lavanda e verde, estilo delicado.',
@@ -58,6 +59,22 @@ export function inputHtml(
     definition.type
     === 'choice'
   ) {
+    // Use the original public images for children's style selection.
+    const childStyle = definition.key === 'visual_style'
+      && (definition.options || []).some(option => option.value === 'stylized_doll');
+    const styleExamples = childStyle ? {
+      stylized_doll: {
+        image: '/images/exemplos/mascote-bonequinho.webp',
+        alt: 'Exemplo de personagem infantil com estilo bonequinho',
+        detail: 'Traços infantis mais desenhados e delicados.',
+      },
+      realistic_detailed: {
+        image: '/images/exemplos/mascote-realista.webp',
+        alt: 'Exemplo de personagem infantil mais realista e detalhado',
+        detail: 'Traços e detalhes mais próximos de uma pessoa real.',
+      },
+    } : {};
+
     return `
       <div class="field full">
         <span class="field-label">
@@ -72,7 +89,7 @@ export function inputHtml(
                 value === option.value
                   ? 'selected'
                   : ''
-              }">
+              } ${styleExamples[option.value] ? 'choice-card-reference' : ''}">
                 <input
                   type="radio"
                   name="field-${esc(definition.key)}"
@@ -86,7 +103,14 @@ export function inputHtml(
                 >
 
                 <span class="choice-main">
+                  ${styleExamples[option.value] ? `
+                    <img class="choice-reference-image"
+                      src="${styleExamples[option.value].image}"
+                      alt="${esc(styleExamples[option.value].alt)}"
+                      loading="lazy" decoding="async" width="320" height="400">
+                  ` : ''}
                   <strong>${esc(option.label)}</strong>
+                  ${styleExamples[option.value] ? `<small>${esc(styleExamples[option.value].detail)}</small>` : ''}
                 </span>
               </label>
             `,
@@ -1468,7 +1492,7 @@ export async function startCustomerArea(
     area.support.whatsappUrl,
   );
 
-  async function render() {
+  async function render(viewport = null) {
     if (
       activeTab === 'preview'
       && !area.modules.previews.available
@@ -1532,6 +1556,7 @@ export async function startCustomerArea(
       </div>
     `;
 
+    restoreFieldViewport(viewport, app);
     setHelp(
       area.support.whatsappUrl,
     );
@@ -2107,7 +2132,7 @@ export async function startCustomerArea(
                     revision
                     === briefingChoiceRevision
                   ) {
-                    await render();
+                    await render(captureFieldViewport(control));
                   }
                 } catch (error) {
                   showToast(
@@ -2117,7 +2142,7 @@ export async function startCustomerArea(
                   area =
                     await loadArea();
 
-                  await render();
+                  await render(captureFieldViewport(control));
                 }
 
                 return;

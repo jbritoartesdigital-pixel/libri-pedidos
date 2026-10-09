@@ -362,6 +362,57 @@ function musicPreferenceBlock(detail) {
   `;
 }
 
+function productionQuickBlock(detail) {
+  const product = detail.contractedSummary?.product || {};
+  const data = detail.briefing?.data || {};
+  const uploads = detail.uploads?.uploads || [];
+  const count = field => uploads.filter(upload => upload.fieldKey === field).length;
+  const selected = Array.isArray(data.interactive_resources) ? data.interactive_resources : [];
+  const extra = [];
+  if (data.gift_page_video === 'yes') extra.push('Página extra de presentes após o vídeo');
+  else if (selected.includes('gifts')) extra.push('Presentes no convite interativo');
+  if (selected.includes('location')) extra.push('Localização');
+  if (selected.includes('simple_rsvp')) extra.push('Confirmação simples');
+  const speech = {
+    libri_writes: 'Libri cria as falas',
+    customer_text: 'Fala enviada pela cliente',
+    no_speech: 'Sem falas',
+  }[data.speech_preference] || 'Não se aplica';
+  const music = {
+    yes: data.music_request ? 'Escolhida pela cliente: ' + data.music_request : 'Sim, Libri escolhe',
+    no: 'Sem música',
+    libri_decides: 'Libri decide',
+  }[data.music_choice] || 'Não informada';
+  const items = [
+    ['Formato', product.name || 'Não identificado'],
+    ['Cenas', Number(product.sceneCount) > 0 ? String(product.sceneCount) : 'Não se aplica'],
+    ['Falas', speech],
+    ['Música', music],
+    ['Fotos da pessoa', String(count('person_photos'))],
+    ['Fotos de roupas', String(count('outfit_photos'))],
+    ['Referências', String(count('reference_files'))],
+    ['Páginas e opções extras', extra.join(' • ') || 'Nenhuma selecionada'],
+  ];
+  return `
+    <section class="card" id="orderProductionQuick">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">Produção em um olhar</span>
+          <h3>Resumo para criar o convite</h3>
+        </div>
+        <span class="status">${Number(detail.briefing?.completionPercent || 0)}% dos dados</span>
+      </div>
+      <div class="production-quick-grid">
+        ${items.map(([label, value]) => `
+          <div class="production-quick-cell">
+            <small>${esc(label)}</small>
+            <strong>${esc(value)}</strong>
+          </div>`).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function briefingBlock(detail) {
   const definitions = new Map((detail.briefing.fields || []).map(item => [item.key, item]));
   const fallbackLabels = {
@@ -651,6 +702,8 @@ export async function openOrder(code, onChanged = null) {
                 : ''
             }
           </section>
+
+          ${productionQuickBlock(detail)}
 
           ${contractedBlock(detail)}
 

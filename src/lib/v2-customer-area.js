@@ -12,6 +12,7 @@ import {
 } from './v2-notifications.js';
 
 import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
+import { giftPixKeyError } from '../../public/js/v2-gift-pix-validation.js';
 
 const TOKEN_RE =
   /^ord_[a-f0-9]{36}$/;
@@ -3540,6 +3541,21 @@ export async function submitV2Briefing(
       context.briefing.data,
       context.uploads,
     );
+
+  // Validate the gift Pix key only if its input belongs to the active
+  // questionnaire. Old/hidden/irrelevant values must not block submission.
+  if (flattenFields(schema).some(field => field.key === 'pix_key')) {
+    const pixProblem = giftPixKeyError(
+      context.briefing.data.pix_key_type,
+      context.briefing.data.pix_key,
+    );
+    if (pixProblem) errors.push({
+      type: 'field',
+      key: 'pix_key',
+      section: 'product',
+      message: pixProblem,
+    });
+  }
 
   if (
     errors.length

@@ -13,6 +13,7 @@ import {
 } from './client-v2-core.js';
 
 import { uploadCustomerPhoto } from './client-v2-upload.js';
+import { giftPixKeyError, GIFT_PIX_TYPE_LABELS } from './v2-gift-pix-validation.js';
 
 const HELPFUL_EXAMPLES = {
   theme_or_style: 'Exemplo: Jardim Encantado, cores lavanda e verde, estilo delicado.',
@@ -865,20 +866,61 @@ function missingBriefingItems(
   return missing;
 }
 
-function showBriefingMissing(
-  missing,
-) {
-  modal(
-    'Falta preencher nesta etapa',
-    `
-      <div class="notice error">
-        ${missing.map(
-          (item) =>
-            `<div>• ${esc(item.message)}</div>`,
-        ).join('')}
-      </div>
-    `,
-  );
+function showBriefingMissing(missing) {
+  // Show the problem beside the actual fields, not only inside a modal.
+  const existing = document.getElementById('briefingMissingNotice');
+  existing?.remove();
+  if (!missing.length) return;
+  const notice = document.createElement('div');
+  notice.id = 'briefingMissingNotice';
+  notice.className = 'notice error briefing-missing-notice';
+  notice.setAttribute('role', 'alert');
+  notice.innerHTML = '<strong>Confira os campos destacados:</strong><ul>'
+    + missing.map(item => '<li>' + esc(item.message) + '</li>').join('')
+    + '</ul>';
+  const form = app.querySelector('.page-card .form-grid');
+  form?.parentElement?.insertBefore(notice, form);
+  let focusTarget = null;
+  for (const item of missing) {
+    let node = item.type === 'upload'
+      ? [...app.querySelectorAll('[data-upload-field]')]
+        .find(element => element.dataset.uploadField === item.key)
+      : [...app.querySelectorAll('[data-field]')]
+        .find(element => element.dataset.field === item.key);
+    if (!node) continue;
+    const group = node.closest('.field, .upload-zone');
+    group?.classList.add('briefing-field-invalid');
+    group?.querySelectorAll('[data-field], [data-upload-field]').forEach(input =>
+      input.setAttribute('aria-invalid', 'true'));
+    if (!focusTarget) focusTarget = node.type === 'file' ? group : node;
+  }
+  if (focusTarget) {
+    if (focusTarget.classList?.contains('upload-zone')) {
+      focusTarget.setAttribute('tabindex', '-1');
+    }
+    focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try { focusTarget.focus({ preventScroll: true }); } catch {}
+  } else {
+    notice.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function giftPixReviewRequired(data) {
+  return ['pix', 'both'].includes(data?.gift_mode)
+    && String(data?.pix_key || '').trim().length > 0;
+}
+
+function confirmGiftPixBeforeSubmit(data) {
+  const message = [
+    'Confira os dados do Pix para a página de presentes:',
+    '',
+    'Tipo: ' + (GIFT_PIX_TYPE_LABELS[data.pix_key_type] || 'Não informado'),
+    'Chave: ' + String(data.pix_key || ''),
+    'Titular: ' + String(data.pix_holder || ''),
+    '',
+    'Os dados estão corretos e podem aparecer para seus convidados?',
+  ].join('\n');
+  return window.confirm(message);
 }
 
 function briefingHtml(
@@ -2359,10 +2401,7 @@ export async function startCustomerArea(
             if (
               missing.length
             ) {
-              showBriefingMissing(
-                missing,
-              );
-
+              showBriefingMissing(missing);
               return;
             }
 
@@ -2406,6 +2445,38 @@ export async function startCustomerArea(
               sectionId,
               {},
             );
+
+            // Check every step before submitting, and navigate directly to
+            // the first missing field (even if it is in an earlier step).
+            const missingAll = area.briefing.schema.sections.flatMap(section =>
+              missingBriefingItems(area, section)
+                .map(item => ({ ...item, section: section.id })));
+            if (missingAll.length) {
+              const target = missingAll[0].section;
+              if (target !== sectionId) {
+                await saveBriefingNow(target, {});
+                await render();
+              }
+              showBriefingMissing(missingAll.filter(item => item.section === target));
+              return;
+            }
+
+            if (giftPixReviewRequired(area.briefing.data)) {
+              const pixError = giftPixKeyError(
+                area.briefing.data.pix_key_type,
+                area.briefing.data.pix_key,
+              );
+              if (pixError || !confirmGiftPixBeforeSubmit(area.briefing.data)) {
+                await saveBriefingNow('product', {});
+                await render();
+                showBriefingMissing([{
+                  type: 'field',
+                  key: 'pix_key',
+                  message: pixError || 'Confira os dados Pix e confirme novamente antes de enviar.',
+                }]);
+                return;
+              }
+            }
 
             const data =
               await api(
@@ -2459,21 +2530,25 @@ export async function startCustomerArea(
               error.data?.details?.fields
               || [];
 
-            if (
-              missing.length
-            ) {
-              modal(
-                'Ainda falta um pouquinho',
-                `
-                  <div class="notice error">
-                    ${missing.map(
-                      (item) =>
-                        `<div>• ${esc(item.message)}</div>`,
-                    ).join('')}
-                  </div>
-                `,
-              );
-
+            if (missing.length) {
+              const annotated = missing.map(item => {
+                const section = item.section || area.briefing.schema.sections
+                  .find(section => section.fields.some(field => field.key === item.key))?.id
+                  || (item.type === 'upload'
+                    ? (item.key === 'reference_files' ? 'references' : 'appearance')
+                    : area.briefing.currentSection);
+                return { ...item, section };
+              });
+              const target = annotated[0].section;
+              try {
+                if (target !== area.briefing.currentSection) {
+                  await saveBriefingNow(target, {});
+                  await render();
+                }
+              } catch (navigationError) {
+                showToast(navigationError.message || 'Não foi possível abrir a etapa.');
+              }
+              showBriefingMissing(annotated.filter(item => item.section === target));
               return;
             }
 

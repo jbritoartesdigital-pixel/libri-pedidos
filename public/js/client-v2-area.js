@@ -12,7 +12,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { uploadCustomerPhoto } from './client-v2-upload.js';
+import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const HELPFUL_EXAMPLES = {
@@ -243,10 +243,11 @@ function uploadRuleHtml(
 
       <div>
         <label class="btn btn-secondary">
-          Adicionar foto
+          Selecionar fotos
           <input
             class="hidden"
             type="file"
+            multiple
             accept="${esc(rule.accept.join(','))}"
             data-upload-field="${esc(rule.fieldKey)}"
             ${
@@ -258,7 +259,7 @@ function uploadRuleHtml(
         </label>
 
         <span class="help" style="margin-left:8px">
-          ${uploads.length} de ${rule.max}
+          ${uploads.length} de ${rule.max} fotos • ${Math.max(0, rule.max - uploads.length)} disponíveis
         </span>
       </div>
       <div class="photo-upload-progress hidden" data-upload-progress="${esc(rule.fieldKey)}"
@@ -2191,55 +2192,92 @@ export async function startCustomerArea(
 
     app.querySelectorAll('[data-upload-field]').forEach(input => {
       input.addEventListener('change', async () => {
-        const file = input.files?.[0];
-        if (!file) return;
+        if (briefingUploadsRunning) return;
         const fieldKey = input.dataset.uploadField;
-        const beforeIds = new Set(area.briefing.uploads.map(item => Number(item.id)));
-        const form = new FormData();
-        form.set('fieldKey', fieldKey);
-        form.set('file', file);
+        const rule = area.briefing.schema.uploadRules.find(item => item.fieldKey === fieldKey);
+        const existingCount = area.briefing.uploads
+          .filter(item => item.fieldKey === fieldKey).length;
+        const batch = planCustomerPhotoBatch(input.files, existingCount, rule);
+        input.value = '';
+        if (batch.error) {
+          showToast(batch.error);
+          return;
+        }
+        if (!batch.files.length) return;
+
+        // One request per photo preserves backend limits, database consistency
+        // and the existing R2 upload semantics. Never send concurrent uploads.
+        briefingUploadsRunning = true;
+        const uploadInputs = [...app.querySelectorAll('[data-upload-field]')];
+        uploadInputs.forEach(control => { control.disabled = true; });
         const progress = app.querySelector('[data-upload-progress="' + fieldKey + '"]');
         const bar = progress?.querySelector('span');
         const label = progress?.querySelector('small');
-        const updateProgress = percent => {
-          progress?.classList.remove('hidden');
-          progress?.setAttribute('aria-valuenow', String(percent));
-          if (bar) bar.style.width = percent + '%';
-          if (label) label.textContent = percent === 100 ? 'Envio concluído ✓' : 'Enviando ' + percent + '%...';
-        };
-        input.disabled = true;
-        updateProgress(0);
+        progress?.classList.remove('hidden');
+        let completed = 0;
+        let failure = '';
+        let confirmationUnknown = false;
         try {
-          await uploadCustomerPhoto(
-            '/api/v2/customer-area/' + token + '/briefing/uploads',
-            form, updateProgress,
-          );
-          area = await loadArea();
-          await render();
-          showToast('Foto enviada ✓');
-        } catch (error) {
-          // The connection may fail after the server has saved the file.
-          // Check the actual uploads before asking the customer to retry.
-          let received = false;
-          try {
-            const latest = await loadArea();
-            received = latest.briefing.uploads.some(item =>
-              !beforeIds.has(Number(item.id))
-              && item.fieldKey === fieldKey
-              && item.originalFilename === file.name
-              && Number(item.sizeBytes) === file.size,
-            );
-            area = latest;
-          } catch {}
-          if (received) {
-            await render();
-            showToast('A foto chegou, mesmo com a conexão interrompida ✓');
-          } else {
-            input.disabled = false;
+          for (const [index, file] of batch.files.entries()) {
+            const seen = new Set(area.briefing.uploads.map(item => Number(item.id)));
+            const form = new FormData();
+            form.set('fieldKey', fieldKey);
+            form.set('file', file);
+            const updateProgress = percent => {
+              const overall = Math.round((index + percent / 100) * 100 / batch.files.length);
+              progress?.setAttribute('aria-valuenow', String(overall));
+              if (bar) bar.style.width = overall + '%';
+              if (label) label.textContent =
+                `Enviando foto ${index + 1} de ${batch.files.length} • ${overall}%`;
+            };
             updateProgress(0);
-            if (label) label.textContent = 'Não enviou. Escolha novamente para tentar.';
-            showToast(error.message || 'Falha no envio. Você pode tentar novamente.');
+            try {
+              await uploadCustomerPhoto(
+                '/api/v2/customer-area/' + token + '/briefing/uploads',
+                form, updateProgress,
+              );
+              area = await loadArea();
+              completed += 1;
+            } catch (error) {
+              // After a dropped response, the photo may already exist in R2/D1.
+              // Reconcile by a newly allocated database ID before moving on.
+              let checked = false;
+              let received = false;
+              try {
+                const latest = await loadArea();
+                checked = true;
+                received = latest.briefing.uploads.some(item =>
+                  !seen.has(Number(item.id))
+                  && item.fieldKey === fieldKey
+                  && item.originalFilename === file.name
+                  && Number(item.sizeBytes) === file.size);
+                area = latest;
+              } catch {}
+              if (received) {
+                completed += 1;
+                continue;
+              }
+              confirmationUnknown = !checked;
+              failure = error.message || 'Não foi possível enviar a foto.';
+              break; // Never silently skip a failed photo.
+            }
           }
+          if (completed > 0) {
+            await render();
+          }
+          if (confirmationUnknown) {
+            showToast('Não foi possível conferir se a última foto chegou. Atualize o pedido antes de tentar novamente.');
+          } else if (failure) {
+            showToast(`${completed} foto(s) enviadas. Outra foto falhou: ${failure}`);
+          } else {
+            showToast(`${completed} foto(s) enviadas com sucesso ✓`);
+          }
+        } catch (error) {
+          showToast('Não foi possível atualizar as fotos. Confira o pedido antes de tentar novamente.');
+        } finally {
+          briefingUploadsRunning = false;
+          // Re-render replaces the inputs on success; reset old ones on failure.
+          uploadInputs.forEach(control => { control.disabled = false; });
         }
       });
     });

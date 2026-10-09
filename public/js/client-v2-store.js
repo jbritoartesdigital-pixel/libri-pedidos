@@ -11,7 +11,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { inputHtml } from './client-v2-area.js?v=20261009-briefing-ui-2';
+import { inputHtml } from './client-v2-area.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const EVENT_TYPES = [

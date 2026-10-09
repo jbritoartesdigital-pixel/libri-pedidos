@@ -2,12 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  # One-time deployment for the validated RSVP list mode fix.
-  # Removing this path-specific trigger after success does not deploy.
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/v2-customer-area.js'
 
 jobs:
   deploy:

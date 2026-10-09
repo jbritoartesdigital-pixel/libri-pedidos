@@ -447,6 +447,26 @@ a {
   line-height: 1.45;
 }
 
+/* Real example images from the original Libri briefing, now available in V2. */
+.choice-card-reference {
+  align-items: flex-start;
+}
+.choice-card-reference .choice-main {
+  flex: 1;
+  min-width: 0;
+}
+.choice-reference-image {
+  display: block;
+  width: 100%;
+  max-height: 188px;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: #fff8fa;
+  border: 1px solid var(--line);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

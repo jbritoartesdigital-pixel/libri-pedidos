@@ -12,7 +12,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js';
+import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const HELPFUL_EXAMPLES = {

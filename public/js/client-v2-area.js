@@ -82,14 +82,14 @@ export function inputHtml(
           ${definition.required ? ' *' : ''}
         </span>
 
-        <div class="grid two">
+        <div class="grid two ${childStyle ? 'choice-grid-references' : ''}">
           ${(definition.options || []).map(
             (option) => `
               <label class="choice-card ${
                 value === option.value
                   ? 'selected'
                   : ''
-              } ${styleExamples[option.value] ? 'choice-card-reference' : ''}">
+              } ${styleExamples[option.value] ? 'choice-card-reference' : ''} ${childStyle && option.value === 'libri_decides' ? 'choice-card-reference-other' : ''}">
                 <input
                   type="radio"
                   name="field-${esc(definition.key)}"
@@ -1010,8 +1010,11 @@ function briefingHtml(
     );
 
   return `
-    <section class="page-card">
-      <p class="muted" style="font-size:12px">As respostas são salvas ao preencher. Em caso de falha, um rascunho temporário fica neste navegador por até 7 dias. Evite dispositivos compartilhados.</p>
+    <section class="page-card briefing-form">
+      <p class="briefing-save-note">
+        <span>Salvamento automático. Evite dispositivos compartilhados.</span>
+        <span id="briefingSaveStatus" role="status" aria-live="polite">Salvamento automático</span>
+      </p>
       <div class="progress-shell">
         <div class="progress-top">
           <strong>${esc(activeSection.title)}</strong>

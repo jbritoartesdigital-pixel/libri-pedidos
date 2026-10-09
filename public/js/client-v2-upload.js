@@ -28,3 +28,27 @@ export function uploadCustomerPhoto(url, form, onProgress = () => {}) {
     xhr.send(form);
   });
 }
+
+// The same limits and MIME types enforced by the V2 backend are checked before
+// a batch starts, so no partial set is uploaded by accident.
+export function planCustomerPhotoBatch(fileList, existingCount, rule) {
+  const files = Array.from(fileList || []);
+  const remaining = Math.max(0, Number(rule?.max || 0) - Number(existingCount || 0));
+  if (!files.length) return { files: [], error: '' };
+  if (!rule || files.length > remaining) {
+    return {
+      files: [],
+      error: remaining
+        ? `Você pode adicionar no máximo ${remaining} foto(s) neste campo.`
+        : 'Você já atingiu o limite de fotos deste campo.',
+    };
+  }
+  const types = new Set(rule.accept || []);
+  if (files.some(file => !types.has(String(file.type || '').toLowerCase()))) {
+    return { files: [], error: 'Envie somente JPG, PNG, WebP, HEIC ou HEIF.' };
+  }
+  if (files.some(file => file.size <= 0 || file.size > Number(rule.maxBytes || 0))) {
+    return { files: [], error: 'Cada foto deve ter no máximo 30 MB.' };
+  }
+  return { files, error: '' };
+}

@@ -6,7 +6,7 @@ import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
-import { getV2CustomerArea, saveV2Briefing } from '../src/lib/v2-customer-area.js';
+import { getV2CustomerArea, saveV2Briefing, submitV2Briefing } from '../src/lib/v2-customer-area.js';
 import { downloadV2OrderFolder } from '../src/lib/v2-order-zip.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
@@ -52,8 +52,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261008-growth-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261008-growth-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-pix-production-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-pix-production-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -593,8 +593,8 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-pix-production-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-pix-production-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261008-formphotos-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -838,8 +838,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-pix-production-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-pix-production-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1209,6 +1209,99 @@ test('wedding gift lists still support registry link and Pix with no child sizin
   assert.ok(!fields.some(f => f.key === 'gift_categories'));
   assert.ok(!fields.some(f => f.key === 'gift_clothing_size'));
   assert.ok(fields.find(f => f.key === 'gift_mode').options.some(x => x.value === 'both'));
+});
+
+test('gift Pix is checked for format and exact recipient and confirmation is reset on edits', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Presente Pix protegido', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) }, ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  const token = checkout.order.publicToken;
+  const save = async patch => saveV2Briefing(e, token, { currentSection: 'product', data: patch });
+  await save({ interactive_resources: ['gifts'] });
+  await save({ gift_mode: 'both' });
+  await save({ gift_categories: ['toys'] });
+  let state = await save({
+    pix_key_type: 'email',
+    pix_key: 'presentes@exemplo.com',
+    pix_holder: 'Responsável da festa',
+  });
+  let fields = state.schema.sections.flatMap(section => section.fields);
+  let confirmation = fields.find(field => field.key === 'pix_confirmed');
+  assert.equal(confirmation.required, true);
+  assert.match(confirmation.help, /presentes@exemplo.com/);
+  assert.match(confirmation.help, /Responsável da festa/);
+  assert.ok(confirmation.options.some(option => option.value === 'yes'));
+  const incomplete = await submitV2Briefing(e, token).catch(error => error);
+  assert.equal(incomplete.code, 'briefing_incomplete');
+  assert.ok(incomplete.details.fields.some(item => item.key === 'pix_confirmed'));
+
+  state = await save({ pix_confirmed: 'yes' });
+  assert.equal(state.data.pix_confirmed, 'yes');
+  state = await save({ pix_key: 'outra@exemplo.com' });
+  assert.equal(state.data.pix_confirmed, undefined, 'changing Pix must cancel previous confirmation');
+  await save({ pix_key_type: 'cpf', pix_key: '00000000000' });
+  const invalid = await submitV2Briefing(e, token).catch(error => error);
+  assert.ok(invalid.details.fields.some(item => item.key === 'pix_key' && /formato/.test(item.message)));
+
+  await save({ pix_key: '529.982.247-25' });
+  const cpfOk = await submitV2Briefing(e, token).catch(error => error);
+  assert.ok(!cpfOk.details.fields.some(item => item.key === 'pix_key'), 'valid CPF check digits pass');
+
+  state = await save({ gift_mode: 'suggestions' });
+  for (const key of ['pix_key', 'pix_key_type', 'pix_holder', 'pix_confirmed']) {
+    assert.equal(state.data[key], undefined);
+  }
+});
+
+test('video gift page has required Pix recipient confirmation just like interactive orders', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Página extra', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'cinematic_video', scenes: 4, paymentMethod: 'pix' },
+    ...await terms(DB),
+  }));
+  mp.approve(order.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, order.payment.providerOrderId);
+  const save = async patch => saveV2Briefing(e, order.order.publicToken,
+    { currentSection: 'product', data: patch });
+  await save({ gift_page_video: 'yes' });
+  await save({ gift_mode: 'pix' });
+  const data = await save({ pix_key_type: 'random',
+    pix_key: '123e4567-e89b-12d3-a456-426614174000', pix_holder: 'Titular' });
+  assert.ok(data.schema.sections.flatMap(s => s.fields).some(f =>
+    f.key === 'pix_confirmed' && f.required));
+  const result = await save({ gift_page_video: 'no' });
+  assert.ok(!result.schema.sections.flatMap(s => s.fields).some(f => f.key === 'pix_confirmed'));
+  assert.equal(result.data.pix_confirmed, undefined);
+});
+
+test('approved briefing and Admin UX shows inline validation and production at a glance', () => {
+  const customer = readFileSync('public/js/client-v2-area.js','utf8');
+  const admin = readFileSync('public/js/admin-v2-order.js','utf8');
+  const customerCss = readFileSync('public/css/client-v2.css','utf8');
+  const adminCss = readFileSync('public/css/admin-v2.css','utf8');
+  assert.match(customer, /briefing-field-invalid/);
+  assert.match(customer, /scrollIntoView/);
+  assert.match(customer, /aria-invalid/);
+  assert.match(customer, /id="briefingErrors"/);
+  assert.match(customer, /showBriefingMissing\(missing\)/);
+  assert.match(admin, /productionQuickBlock\(detail\)/);
+  assert.match(admin, /Página extra de presentes após o vídeo/);
+  assert.match(admin, /Fotos da pessoa/);
+  assert.match(admin, /Referências/);
+  assert.match(admin, /Falas/);
+  assert.match(admin, /Música/);
+  assert.match(customerCss, /\.briefing-field-invalid/);
+  assert.match(adminCss, /\.production-quick-grid/);
+  assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
+    'admin-v2.js?v=20261009-pix-production-1'));
+  assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
+    'client-v2.js?v=20261009-pix-production-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -1844,9 +1937,9 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261008-admin-approved-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261008-growth-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261009-pix-production-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261009-pix-production-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261009-pix-production-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -1870,9 +1963,9 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261008-growth-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261008-growth-1'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261008-admin-approved-1"));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261009-pix-production-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-pix-production-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261009-pix-production-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-growth-1"));
 });
 
@@ -2048,8 +2141,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261008-growth-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261008-growth-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261009-pix-production-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261009-pix-production-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261008-growth-1'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);

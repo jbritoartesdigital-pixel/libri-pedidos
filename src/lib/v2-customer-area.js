@@ -44,6 +44,35 @@ const CINEMATIC_PRODUCTS =
     'cinematic_interactive',
   ]);
 
+function validPixKey(type, rawKey) {
+  const raw = String(rawKey || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!type || !raw) return false;
+  if (type === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) && raw.length <= 254;
+  if (type === 'phone') return /^\+?55\d{10,11}$/.test(raw.replace(/[\s()-]/g, ''));
+  if (type === 'random') return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(raw);
+  const size = type === 'cpf' ? 11 : type === 'cnpj' ? 14 : 0;
+  if (digits.length !== size || /^([0-9])\1+$/.test(digits)) return false;
+  if (size === 11) {
+    const checkDigit = length => {
+      const sum = [...digits.slice(0, length)].reduce((sum, digit, i) =>
+        sum + Number(digit) * (length + 1 - i), 0);
+      return (sum * 10 % 11) % 10;
+    };
+    return checkDigit(9) === Number(digits[9]) && checkDigit(10) === Number(digits[10]);
+  }
+  if (size === 14) {
+    const checkDigit = length => {
+      const weights = length === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+      const mod = [...digits.slice(0, length)].reduce((sum, digit, i) =>
+        sum + Number(digit) * weights[i], 0) % 11;
+      return mod < 2 ? 0 : 11 - mod;
+    };
+    return checkDigit(12) === Number(digits[12]) && checkDigit(13) === Number(digits[13]);
+  }
+  return false;
+}
+
 function cleanText(
   value,
   max = 6000,
@@ -1429,6 +1458,21 @@ function buildSchema(
             'textarea',
           ),
         );
+
+        if (data.pix_key_type && cleanText(data.pix_key) && cleanText(data.pix_holder)) {
+          productFields.push(field(
+            'pix_confirmed',
+            'Confira sua chave Pix e o titular. Os dados estão corretos?',
+            'choice',
+            {
+              required: true,
+              help: 'Tipo: ' + (data.pix_key_type || '') + ' | Chave: '
+                + data.pix_key + ' | Titular: ' + data.pix_holder
+                + '. A Libri não confirma a titularidade junto ao banco. Revise com atenção.',
+              options: [{ value: 'yes', label: 'Sim, conferi os dados do Pix' }],
+            },
+          ));
+        }
       }
   }
 
@@ -1946,6 +1990,15 @@ function validationErrors(
     }
   }
 
+  const hasPix = flattenFields(schema).some(field => field.key === 'pix_key');
+  if (hasPix && data.pix_key && data.pix_key_type &&
+    !validPixKey(data.pix_key_type, data.pix_key)) {
+    errors.push({
+      type: 'field', key: 'pix_key', section: 'product',
+      message: 'Confira o formato da chave Pix informada.',
+    });
+  }
+
   const counts =
     uploadCounts(uploads);
 
@@ -2189,6 +2242,7 @@ function cleanBranches(
         'pix_key',
         'pix_holder',
         'pix_message',
+        'pix_confirmed',
       ]
     ) {
       delete data[key];
@@ -2235,6 +2289,7 @@ function cleanBranches(
       delete data.pix_key;
       delete data.pix_holder;
       delete data.pix_message;
+      delete data.pix_confirmed;
     }
   }
 
@@ -2773,6 +2828,15 @@ export async function saveV2Briefing(
         definition,
         value,
       );
+  }
+
+  // Any modification of the actual Pix payment destination invalidates
+  // the customer's previous confirmation, including changed gift modes.
+  if (['pix_key_type', 'pix_key', 'pix_holder'].some(key =>
+    Object.prototype.hasOwnProperty.call(patch, key)
+    && String(patch[key] ?? '') !== String(context.briefing.data[key] ?? '')
+  )) {
+    delete data.pix_confirmed;
   }
 
   cleanBranches(data, context);

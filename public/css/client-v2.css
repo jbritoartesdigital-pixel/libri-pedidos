@@ -1732,3 +1732,12 @@ a {
 .photo-upload-progress-track > span { display:block; background:#c46b85; height:100%; width:0; border-radius:99px; transition:width .2s; }
 .photo-upload-progress small { display:block; font-size:12px; margin-top:5px; }
 .field-help { display:block; margin-top:5px; line-height:1.45; color:var(--muted); }
+
+
+/* Inline validation in the customer's order briefing. */
+.briefing-field-invalid { outline:2px solid #c43850; outline-offset:3px; border-radius:10px; background:rgba(195,56,80,.045); }
+.briefing-field-invalid [aria-invalid="true"]:not([type="hidden"]) { border-color:#bd344b; }
+.briefing-inline-error { display:block; color:#a3263e; font-weight:700; margin:7px 0 3px; font-size:12px; }
+#briefingErrors:not(.hidden) { margin-bottom:16px; }
+#briefingErrors ul { margin:8px 0 0; padding-left:20px; }
+#briefingErrors li { margin-bottom:4px; }

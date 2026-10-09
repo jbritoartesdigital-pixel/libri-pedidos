@@ -11,7 +11,7 @@ import {
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261008-growth-1';
+} from './client-v2-area.js?v=20261009-pix-production-1';
 
 async function bootstrap() {
   const route =

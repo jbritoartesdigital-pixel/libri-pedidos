@@ -77,6 +77,77 @@ test('simulation briefing uses real schema without creating orders, payments or 
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_briefing_uploads').get().n, 0);
 });
 
+test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
+  const product = { code: 'interactive_essential', name: 'Convite interativo' };
+  const addons = [{ code: 'confirmation_libri', name: 'Confirmação de Presença Libri' }];
+  const schemaFor = data => buildV2BriefingSimulationSchema({
+    product, eventType: 'birthday', addons, data,
+  });
+  const fields = data => schemaFor(data).sections.flatMap(section => section.fields);
+  const initial = fields({});
+  const mode = initial.find(item => item.key === 'rsvp_mode');
+  assert.equal(mode?.required, true);
+  assert.deepEqual(mode.options.map(option => option.value), ['free', 'guest_list', 'unknown']);
+  assert.ok(!initial.some(item => item.key === 'rsvp_list_behavior'));
+  assert.ok(!initial.some(item => item.key === 'guest_list'));
+
+  const closed = fields({ rsvp_mode: 'guest_list' });
+  const behavior = closed.find(item => item.key === 'rsvp_list_behavior');
+  assert.ok(behavior, 'closed lists must explicitly choose a behavior');
+  assert.equal(behavior.type, 'choice');
+  assert.equal(behavior.required, true);
+  assert.deepEqual(behavior.options.map(option => option.value), ['strict', 'flexible']);
+  assert.match(behavior.options[0].label, /somente as pessoas cadastradas/);
+  assert.match(behavior.options[1].label, /adicionar acompanhantes até o limite/);
+  assert.match(behavior.help, /diretamente no aplicativo Libri RSVP/);
+  assert.ok(!closed.some(item => item.key === 'guest_list'), 'never ask for guest names');
+  for (const behaviorChoice of ['strict', 'flexible']) {
+    const resolved = fields({ rsvp_mode: 'guest_list', rsvp_list_behavior: behaviorChoice });
+    assert.equal(resolved.find(item => item.key === 'rsvp_list_behavior').required, true);
+    assert.ok(!resolved.some(item => item.key === 'guest_list'));
+  }
+  for (const rsvp_mode of ['free', 'unknown']) {
+    const other = fields({ rsvp_mode });
+    assert.ok(!other.some(item => item.key === 'rsvp_list_behavior'));
+    assert.ok(!other.some(item => item.key === 'guest_list'));
+  }
+  const withoutAddon = buildV2BriefingSimulationSchema({
+    product, eventType: 'birthday', addons: [], data: { rsvp_mode: 'guest_list' },
+  }).sections.flatMap(section => section.fields);
+  assert.ok(!withoutAddon.some(item => item.key === 'rsvp_list_behavior' || item.key === 'rsvp_mode'));
+});
+
+test('paid Libri RSVP order persists the closed-list behavior and clears it when switching to free', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'RSVP modo lista', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'interactive_essential', paymentMethod: 'pix', addonCodes: ['confirmation_libri'] },
+    ...await terms(DB),
+  }));
+  mp.approve(order.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, order.payment.providerOrderId);
+  const token = order.order.publicToken;
+  const save = async patch => saveV2Briefing(e, token, { currentSection: 'addons', data: patch });
+
+  let result = await save({ rsvp_mode: 'guest_list' });
+  assert.ok(result.schema.sections.flatMap(x => x.fields).some(x => x.key === 'rsvp_list_behavior'));
+  assert.ok(!result.schema.sections.flatMap(x => x.fields).some(x => x.key === 'guest_list'));
+  const strict = await save({ rsvp_list_behavior: 'strict' });
+  assert.equal(strict.data.rsvp_list_behavior, 'strict');
+  const flexible = await save({ rsvp_list_behavior: 'flexible' });
+  assert.equal(flexible.data.rsvp_list_behavior, 'flexible');
+  assert.equal((await getV2CustomerArea(e, token)).briefing.data.rsvp_list_behavior, 'flexible');
+  result = await save({ rsvp_mode: 'free' });
+  assert.equal(result.data.rsvp_mode, 'free');
+  assert.equal(result.data.rsvp_list_behavior, undefined);
+  assert.ok(!result.schema.sections.flatMap(x => x.fields).some(x => x.key === 'rsvp_list_behavior'));
+  const invalid = await save({ rsvp_list_behavior: 'strict' });
+  assert.equal(invalid.data.rsvp_list_behavior, undefined, 'hidden choice cannot be injected');
+});
+
 test('customer simulation continues to briefing with direct interactive upgrade explanation', () => {
   const storefront = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');

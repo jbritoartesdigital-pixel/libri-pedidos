@@ -7,6 +7,7 @@ import {
 import {
   loadV2Catalog,
 } from '../lib/v2-catalog.js';
+import { buildV2BriefingSimulationSchema } from '../lib/v2-customer-area.js';
 
 import {
   calculateCommercialV2Quote,
@@ -487,6 +488,37 @@ export async function handlePublicV2Api(
       ok: true,
       catalog,
     });
+  }
+
+  /* ==================================================
+     BRIEFING PREVIEW (SEM PEDIDOS / SEM PAGAMENTO)
+  ================================================== */
+  if (method === 'POST' && path === '/api/v2/briefing-simulation') {
+    try {
+      // A schema-only preview. Never call any order, payment or storage API.
+      const size = Number(request.headers.get('content-length') || 0);
+      if (size > 16000) return fail('Dados da simulação muito grandes.', 413);
+      const body = await readJson(request);
+      if (JSON.stringify(body).length > 16000) {
+        return fail('Dados da simulação muito grandes.', 413);
+      }
+      const catalog = await loadV2Catalog(env.DB);
+      const product = catalog.products.find(item => item.code === body.productCode);
+      if (!product) return fail('Formato não encontrado.', 404);
+      const requested = Array.isArray(body.addonCodes) ? body.addonCodes : [];
+      if (requested.length > 25) return fail('Seleção de adicionais inválida.', 422);
+      const addons = requested.map(code => catalog.addons.find(item => item.code === code));
+      if (addons.some(item => !item)) return fail('Adicional não encontrado.', 422);
+      const schema = buildV2BriefingSimulationSchema({
+        product,
+        eventType: body.eventType,
+        addons,
+        data: body.data || {},
+      });
+      return json({ ok: true, simulation: true, schema });
+    } catch (error) {
+      return fail(error?.message || 'Não foi possível visualizar o briefing.', 422);
+    }
   }
 
   /* ==================================================

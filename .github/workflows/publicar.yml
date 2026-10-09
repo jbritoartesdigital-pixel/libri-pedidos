@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Single approved release: the upload helper is modified only by this PR.
+  # Removing this path-specific trigger later does not initiate another run.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/client-v2-upload.js'
 
 jobs:
   deploy:

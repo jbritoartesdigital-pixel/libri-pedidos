@@ -7,11 +7,11 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261009-briefing-ui-2';
+} from './client-v2-store.js?v=20261009-mobile-briefing-3';
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261009-briefing-ui-2';
+} from './client-v2-area.js?v=20261009-mobile-briefing-3';
 
 async function bootstrap() {
   const route =

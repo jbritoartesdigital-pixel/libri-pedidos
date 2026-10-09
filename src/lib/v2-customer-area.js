@@ -924,6 +924,7 @@ function buildSchema(
   if (
     mayAppear(data)
   ) {
+    const libriChoosesAppearance = data.appearance_choice === 'libri_decides';
     appearanceFields.push(
       field(
         'visual_style',
@@ -931,7 +932,10 @@ function buildSchema(
         'choice',
         {
           required:
-            true,
+            !libriChoosesAppearance,
+          help: libriChoosesAppearance
+            ? 'Opcional: pode deixar o estilo por conta da Libri.'
+            : '',
           options:
             visualStyleOptions(data, context.order.event_type),
         },
@@ -943,7 +947,10 @@ function buildSchema(
         'choice',
         {
           required:
-            true,
+            !libriChoosesAppearance,
+          help: libriChoosesAppearance
+            ? 'Opcional: a Libri pode decidir se você preferir.'
+            : '',
           options: [
             {
               value:
@@ -1796,10 +1803,12 @@ function buildSchema(
       uploadRule(
         'person_photos',
         'person',
-        2,
+        data.appearance_choice === 'libri_decides' ? 0 : 2,
         5,
         'Fotos da pessoa que pode aparecer',
-        'Envie de 2 a 5 fotos nítidas. Não precisa escolher uma favorita.',
+        data.appearance_choice === 'libri_decides'
+          ? 'Opcional: envie até 5 fotos se quiser que a Libri avalie a inclusão da pessoa.'
+          : 'Envie de 2 a 5 fotos nítidas. Não precisa escolher uma favorita.',
       ),
     );
 

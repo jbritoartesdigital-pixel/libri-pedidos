@@ -2419,7 +2419,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(store, /Seu prazo precisa ser ajustado/);
   assert.match(store, /STORE_KEY_SIMULATION/);
   assert.match(store, /Nenhum pedido, cobrança, agenda ou lançamento financeiro será criado/);
-  assert.match(store, /Simulação concluída/);
+  assert.match(store, /Briefing visualizado/);
   assert.match(store, /state\.simulationMode/);
 
   const simulatedCustomer = store.slice(
@@ -2584,7 +2584,7 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
 
   assert.match(
     source,
-    /Agora não/,
+    /Não, quero apenas o vídeo/,
   );
 
   assert.match(
@@ -3160,7 +3160,7 @@ test('store client keeps the approved commercial journey and a single final reco
   assert.match(recommendation, /promo-sheet/);
   assert.match(recommendation, /Oferta para adicionar agora/);
   assert.match(recommendation, /addonExplanationHtml/);
-  assert.match(recommendation, /O que muda no seu pedido/);
+  assert.match(recommendation, /Na prática, o que seus convidados podem fazer/);
 
   const addonExplanation = source.slice(
     source.indexOf('function addonExplanation('),
@@ -3178,7 +3178,7 @@ test('store client keeps the approved commercial journey and a single final reco
     recommendationTitle,
     /Quer deixar seu convite interativo/,
   );
-  assert.match(recommendation, /Agora não/);
+  assert.match(recommendation, /Não, quero apenas o vídeo/);
   assert.equal(
     recommendation.includes('name="finalOfferAddon"'),
     false,

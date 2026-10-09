@@ -12,7 +12,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { uploadCustomerPhoto } from './client-v2-upload.js';
+import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const HELPFUL_EXAMPLES = {
@@ -82,14 +82,14 @@ export function inputHtml(
           ${definition.required ? ' *' : ''}
         </span>
 
-        <div class="grid two">
+        <div class="grid two ${childStyle ? 'choice-grid-references' : ''}">
           ${(definition.options || []).map(
             (option) => `
               <label class="choice-card ${
                 value === option.value
                   ? 'selected'
                   : ''
-              } ${styleExamples[option.value] ? 'choice-card-reference' : ''}">
+              } ${styleExamples[option.value] ? 'choice-card-reference' : ''} ${childStyle && option.value === 'libri_decides' ? 'choice-card-reference-other' : ''}">
                 <input
                   type="radio"
                   name="field-${esc(definition.key)}"
@@ -243,10 +243,11 @@ function uploadRuleHtml(
 
       <div>
         <label class="btn btn-secondary">
-          Adicionar foto
+          Selecionar fotos
           <input
             class="hidden"
             type="file"
+            multiple
             accept="${esc(rule.accept.join(','))}"
             data-upload-field="${esc(rule.fieldKey)}"
             ${
@@ -258,7 +259,7 @@ function uploadRuleHtml(
         </label>
 
         <span class="help" style="margin-left:8px">
-          ${uploads.length} de ${rule.max}
+          ${uploads.length} de ${rule.max} fotos • ${Math.max(0, rule.max - uploads.length)} disponíveis
         </span>
       </div>
       <div class="photo-upload-progress hidden" data-upload-progress="${esc(rule.fieldKey)}"
@@ -1010,8 +1011,11 @@ function briefingHtml(
     );
 
   return `
-    <section class="page-card">
-      <p class="muted" style="font-size:12px">As respostas são salvas ao preencher. Em caso de falha, um rascunho temporário fica neste navegador por até 7 dias. Evite dispositivos compartilhados.</p>
+    <section class="page-card briefing-form">
+      <p class="briefing-save-note">
+        <span>Salvamento automático. Evite dispositivos compartilhados.</span>
+        <span id="briefingSaveStatus" role="status" aria-live="polite">Salvamento automático</span>
+      </p>
       <div class="progress-shell">
         <div class="progress-top">
           <strong>${esc(activeSection.title)}</strong>
@@ -1492,6 +1496,22 @@ export async function startCustomerArea(
     area.support.whatsappUrl,
   );
 
+  let briefingSaveFeedback = 'Salvamento automático';
+  let briefingSaveFeedbackState = 'idle';
+  let briefingSaveRevision = 0;
+  let briefingUploadsRunning = false;
+  let briefingUploadNeedsRefresh = false;
+
+  function setBriefingSaveFeedback(label, state = 'idle') {
+    briefingSaveFeedback = label;
+    briefingSaveFeedbackState = state;
+    const indicator = app.querySelector('#briefingSaveStatus');
+    if (indicator) {
+      indicator.textContent = label;
+      indicator.dataset.state = state;
+    }
+  }
+
   async function render(viewport = null) {
     if (
       activeTab === 'preview'
@@ -1557,6 +1577,9 @@ export async function startCustomerArea(
     `;
 
     restoreFieldViewport(viewport, app);
+    if (activeTab === 'briefing') {
+      setBriefingSaveFeedback(briefingSaveFeedback, briefingSaveFeedbackState);
+    }
     setHelp(
       area.support.whatsappUrl,
     );
@@ -1881,6 +1904,8 @@ export async function startCustomerArea(
     currentSection,
     patch,
   ) {
+    const revision = ++briefingSaveRevision;
+    setBriefingSaveFeedback('Salvando…', 'saving');
     const job =
       briefingSaveQueue
         .then(
@@ -1902,9 +1927,18 @@ export async function startCustomerArea(
 
             applyBriefingSaveResult(data.result);
             confirmSavedDraft(patch);
+            if (revision === briefingSaveRevision
+              && !Object.keys(pendingBriefingPatch).length) {
+              setBriefingSaveFeedback('Salvo ✓', 'saved');
+            }
             return data.result;
           },
-        );
+        ).catch(error => {
+          if (revision === briefingSaveRevision) {
+            setBriefingSaveFeedback('Não salvo', 'error');
+          }
+          throw error;
+        });
 
     briefingSaveQueue =
       job.catch(
@@ -1985,6 +2019,8 @@ export async function startCustomerArea(
     }
 
     rememberDraft(patch);
+    ++briefingSaveRevision;
+    setBriefingSaveFeedback('Salvando…', 'saving');
     pendingBriefingSection =
       currentSection;
 
@@ -2188,55 +2224,105 @@ export async function startCustomerArea(
 
     app.querySelectorAll('[data-upload-field]').forEach(input => {
       input.addEventListener('change', async () => {
-        const file = input.files?.[0];
-        if (!file) return;
+        if (briefingUploadsRunning) return;
+        if (briefingUploadNeedsRefresh) {
+          showToast('Atualize o pedido para conferir os envios antes de selecionar novas fotos.');
+          return;
+        }
         const fieldKey = input.dataset.uploadField;
-        const beforeIds = new Set(area.briefing.uploads.map(item => Number(item.id)));
-        const form = new FormData();
-        form.set('fieldKey', fieldKey);
-        form.set('file', file);
+        const rule = area.briefing.schema.uploadRules.find(item => item.fieldKey === fieldKey);
+        const existingCount = area.briefing.uploads
+          .filter(item => item.fieldKey === fieldKey).length;
+        const batch = planCustomerPhotoBatch(input.files, existingCount, rule);
+        input.value = '';
+        if (batch.error) {
+          showToast(batch.error);
+          return;
+        }
+        if (!batch.files.length) return;
+
+        // One request per photo preserves backend limits, database consistency
+        // and the existing R2 upload semantics. Never send concurrent uploads.
+        briefingUploadsRunning = true;
+        const uploadInputs = [...app.querySelectorAll('[data-upload-field]')];
+        uploadInputs.forEach(control => { control.disabled = true; });
         const progress = app.querySelector('[data-upload-progress="' + fieldKey + '"]');
         const bar = progress?.querySelector('span');
         const label = progress?.querySelector('small');
-        const updateProgress = percent => {
-          progress?.classList.remove('hidden');
-          progress?.setAttribute('aria-valuenow', String(percent));
-          if (bar) bar.style.width = percent + '%';
-          if (label) label.textContent = percent === 100 ? 'Envio concluído ✓' : 'Enviando ' + percent + '%...';
-        };
-        input.disabled = true;
-        updateProgress(0);
+        progress?.classList.remove('hidden');
+        let completed = 0;
+        let failure = '';
+        let confirmationUnknown = false;
         try {
-          await uploadCustomerPhoto(
-            '/api/v2/customer-area/' + token + '/briefing/uploads',
-            form, updateProgress,
-          );
-          area = await loadArea();
-          await render();
-          showToast('Foto enviada ✓');
-        } catch (error) {
-          // The connection may fail after the server has saved the file.
-          // Check the actual uploads before asking the customer to retry.
-          let received = false;
-          try {
-            const latest = await loadArea();
-            received = latest.briefing.uploads.some(item =>
-              !beforeIds.has(Number(item.id))
-              && item.fieldKey === fieldKey
-              && item.originalFilename === file.name
-              && Number(item.sizeBytes) === file.size,
-            );
-            area = latest;
-          } catch {}
-          if (received) {
-            await render();
-            showToast('A foto chegou, mesmo com a conexão interrompida ✓');
-          } else {
-            input.disabled = false;
+          for (const [index, file] of batch.files.entries()) {
+            const seen = new Set(area.briefing.uploads.map(item => Number(item.id)));
+            const form = new FormData();
+            form.set('fieldKey', fieldKey);
+            form.set('file', file);
+            const updateProgress = percent => {
+              const overall = Math.round((index + percent / 100) * 100 / batch.files.length);
+              progress?.setAttribute('aria-valuenow', String(overall));
+              if (bar) bar.style.width = overall + '%';
+              if (label) label.textContent =
+                `Enviando foto ${index + 1} de ${batch.files.length} • ${overall}%`;
+            };
             updateProgress(0);
-            if (label) label.textContent = 'Não enviou. Escolha novamente para tentar.';
-            showToast(error.message || 'Falha no envio. Você pode tentar novamente.');
+            try {
+              await uploadCustomerPhoto(
+                '/api/v2/customer-area/' + token + '/briefing/uploads',
+                form, updateProgress,
+              );
+              area = await loadArea();
+              completed += 1;
+            } catch (error) {
+              // After a dropped response, the photo may already exist in R2/D1.
+              // Reconcile by a newly allocated database ID before moving on.
+              let checked = false;
+              let received = false;
+              try {
+                const latest = await loadArea();
+                checked = true;
+                received = latest.briefing.uploads.some(item =>
+                  !seen.has(Number(item.id))
+                  && item.fieldKey === fieldKey
+                  && item.originalFilename === file.name
+                  && Number(item.sizeBytes) === file.size);
+                area = latest;
+              } catch {}
+              if (received) {
+                completed += 1;
+                continue;
+              }
+              confirmationUnknown = !checked;
+              if (confirmationUnknown) briefingUploadNeedsRefresh = true;
+              failure = error.message || 'Não foi possível enviar a foto.';
+              break; // Never silently skip a failed photo.
+            }
           }
+          if (completed > 0) {
+            await render();
+          } else if (failure) {
+            progress?.classList.add('hidden');
+          }
+          if (confirmationUnknown) {
+            showToast('Não foi possível conferir se a última foto chegou. Atualize o pedido antes de tentar novamente.');
+          } else if (failure) {
+            showToast(`${completed} foto(s) enviadas. Outra foto falhou: ${failure}`);
+          } else {
+            showToast(`${completed} foto(s) enviadas com sucesso ✓`);
+          }
+        } catch (error) {
+          showToast('Não foi possível atualizar as fotos. Confira o pedido antes de tentar novamente.');
+        } finally {
+          briefingUploadsRunning = false;
+          // Re-render replaces the inputs on success; reset old ones on failure.
+          app.querySelectorAll('[data-upload-field]').forEach(control => {
+            control.disabled = briefingUploadNeedsRefresh
+              || area.briefing.uploads.filter(item =>
+                item.fieldKey === control.dataset.uploadField).length
+                  >= (area.briefing.schema.uploadRules.find(item =>
+                    item.fieldKey === control.dataset.uploadField)?.max || 0);
+          });
         }
       });
     });

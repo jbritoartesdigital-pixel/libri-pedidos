@@ -1496,6 +1496,21 @@ export async function startCustomerArea(
     area.support.whatsappUrl,
   );
 
+  let briefingSaveFeedback = 'Salvamento automático';
+  let briefingSaveFeedbackState = 'idle';
+  let briefingSaveRevision = 0;
+  let briefingUploadsRunning = false;
+
+  function setBriefingSaveFeedback(label, state = 'idle') {
+    briefingSaveFeedback = label;
+    briefingSaveFeedbackState = state;
+    const indicator = app.querySelector('#briefingSaveStatus');
+    if (indicator) {
+      indicator.textContent = label;
+      indicator.dataset.state = state;
+    }
+  }
+
   async function render(viewport = null) {
     if (
       activeTab === 'preview'
@@ -1561,6 +1576,9 @@ export async function startCustomerArea(
     `;
 
     restoreFieldViewport(viewport, app);
+    if (activeTab === 'briefing') {
+      setBriefingSaveFeedback(briefingSaveFeedback, briefingSaveFeedbackState);
+    }
     setHelp(
       area.support.whatsappUrl,
     );
@@ -1885,6 +1903,8 @@ export async function startCustomerArea(
     currentSection,
     patch,
   ) {
+    const revision = ++briefingSaveRevision;
+    setBriefingSaveFeedback('Salvando…', 'saving');
     const job =
       briefingSaveQueue
         .then(
@@ -1906,9 +1926,18 @@ export async function startCustomerArea(
 
             applyBriefingSaveResult(data.result);
             confirmSavedDraft(patch);
+            if (revision === briefingSaveRevision
+              && !Object.keys(pendingBriefingPatch).length) {
+              setBriefingSaveFeedback('Salvo ✓', 'saved');
+            }
             return data.result;
           },
-        );
+        ).catch(error => {
+          if (revision === briefingSaveRevision) {
+            setBriefingSaveFeedback('Não salvo', 'error');
+          }
+          throw error;
+        });
 
     briefingSaveQueue =
       job.catch(
@@ -1989,6 +2018,8 @@ export async function startCustomerArea(
     }
 
     rememberDraft(patch);
+    ++briefingSaveRevision;
+    setBriefingSaveFeedback('Salvando…', 'saving');
     pendingBriefingSection =
       currentSection;
 
@@ -2264,6 +2295,8 @@ export async function startCustomerArea(
           }
           if (completed > 0) {
             await render();
+          } else if (failure) {
+            progress?.classList.add('hidden');
           }
           if (confirmationUnknown) {
             showToast('Não foi possível conferir se a última foto chegou. Atualize o pedido antes de tentar novamente.');

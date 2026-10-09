@@ -11,6 +11,8 @@ import {
   showToast,
 } from './client-v2-core.js';
 
+import { inputHtml } from './client-v2-area.js?v=20261009-briefing-demo-1';
+
 const EVENT_TYPES = [
   {
     value:
@@ -1237,7 +1239,7 @@ function recommendationReason(
     offer?.kind
     === 'product_upgrade'
   ) {
-    return 'Você escolheu a versão em vídeo. O próximo degrau é transformar a experiência em interativa sem mudar a quantidade de cenas.';
+    return 'O vídeo continua como você escolheu. A diferença é que os convidados recebem um link com botões para acessar as informações da festa, em vez de assistir somente ao vídeo.';
   }
 
   if (
@@ -3353,11 +3355,9 @@ function renderRecommendation(
           === 'product_upgrade'
             ? `
               <p class="promo-copy">
-                Transforme seu convite em
-                <strong>${esc(offer.product.name)}</strong>
-                mantendo a mesma quantidade de cenas
-                por mais
-                <strong>${money(offer.priceDeltaCents)}</strong>.
+                Seu <strong>vídeo continua igual</strong>, com as mesmas cenas.
+                Por mais <strong>${money(offer.priceDeltaCents)}</strong>,
+                você recebe também uma <strong>página interativa</strong> para os convidados acessarem pelo link.
               </p>
             `
             : offer.kind
@@ -3416,15 +3416,15 @@ function renderRecommendation(
               === 'product_upgrade'
                 ? `
                   <div class="addon-explanation">
-                    <strong>O que muda no seu pedido</strong>
-                    <p>${esc(
-                      offer.product.shortDescription
-                      || 'Seu convite passa para a versão interativa correspondente.',
-                    )}</p>
+                    <strong>Na prática, o que seus convidados podem fazer?</strong>
                     <ul>
-                      <li>Você mantém a mesma quantidade de cenas.</li>
-                      <li>O valor exibido é somente a diferença para o upgrade.</li>
+                      <li><strong>Assistir ao vídeo</strong> personalizado da festa.</li>
+                      <li><strong>Confirmar presença pelo WhatsApp</strong> em um botão.</li>
+                      <li><strong>Abrir a localização</strong> diretamente no mapa.</li>
+                      <li><strong>Ver sugestões de presentes ou Pix</strong>, se você optar por incluir.</li>
                     </ul>
+                    <p>Você compartilha <strong>um único link</strong>, com vídeo e botões interativos.
+                      A confirmação avançada com lista de convidados é um adicional separado.</p>
                   </div>
                 `
                 : ''
@@ -3436,7 +3436,7 @@ function renderRecommendation(
             class="btn btn-ghost"
             type="button"
           >
-            Agora não
+            Não, quero apenas o vídeo
           </button>
 
           <button
@@ -3447,7 +3447,7 @@ function renderRecommendation(
             ${
               offer.kind
               === 'product_upgrade'
-                ? `Deixar interativo por + ${money(offer.priceDeltaCents)}`
+                ? `Quero vídeo + interativo por + ${money(offer.priceDeltaCents)}`
                 : offer.kind
                   === 'combo'
                     ? `Aplicar e economizar ${money(offer.combo.discountCents || 0)}`
@@ -4297,7 +4297,7 @@ function renderTerms(
         <p class="page-subtitle">
           ${
             state.simulationMode
-              ? 'Esta é a última tela da simulação. Você pode conferir as condições, mas nada será contratado.'
+              ? 'Você pode conferir as condições e, em seguida, testar o briefing que a cliente preencheria. Nenhuma cobrança será criada.'
               : 'Leia as condições do pedido e, depois do aceite, siga para o pagamento.'
           }
         </p>
@@ -4350,7 +4350,7 @@ function renderTerms(
           'payBtn',
         nextLabel:
           state.simulationMode
-            ? 'Concluir simulação'
+            ? 'Testar o briefing da cliente'
             : 'Ir para o pagamento',
       })}
     </section>
@@ -4396,49 +4396,10 @@ function renderTerms(
     .addEventListener(
       'click',
       async () => {
-        if (
-          state.simulationMode
-        ) {
-          localStorage.removeItem(
-            storeKeyFor(
-              true,
-            ),
-          );
-
-          modal(
-            'Simulação concluída',
-            `
-              <div class="notice success">
-                <strong>Nenhum pedido foi criado.</strong>
-                <p style="margin:8px 0 0">
-                  Nenhuma cobrança foi aberta, nenhum espaço da agenda foi reservado e nada entrou no Financeiro.
-                </p>
-              </div>
-
-              <div class="action-row">
-                <button
-                  id="restartSimulation"
-                  class="btn btn-primary"
-                  type="button"
-                >
-                  Simular outro pedido
-                </button>
-              </div>
-            `,
-          );
-
-          document
-            .getElementById(
-              'restartSimulation',
-            )
-            ?.addEventListener(
-              'click',
-              () => {
-                window.location.href =
-                  '/pedido?simular=1';
-              },
-            );
-
+        if (state.simulationMode) {
+          state.step = 11;
+          persist(state);
+          render();
           return;
         }
 
@@ -4583,6 +4544,127 @@ function renderTerms(
         }
       },
     );
+}
+
+// Keep simulation answers in this browser tab only. They never reach D1,
+// payment providers or photo storage; only schema field visibility is requested.
+let simulationBriefingAnswers = {};
+let simulationBriefingSection = 0;
+
+async function renderBriefingSimulation(state, render) {
+  loading('Abrindo o formulário de teste...', 'Os dados preenchidos aqui não serão enviados.');
+  const product = productFor(state);
+  const response = await api('/api/v2/briefing-simulation', {
+    method: 'POST',
+    body: JSON.stringify({
+      productCode: product?.code || state.selection.productCode,
+      eventType: state.event.type,
+      addonCodes: state.selection.addonCodes || [],
+      data: simulationBriefingAnswers,
+    }),
+  });
+  const sections = response.schema.sections || [];
+  if (!sections.length) throw new Error('O briefing de teste não tem etapas.');
+  simulationBriefingSection = Math.min(simulationBriefingSection, sections.length - 1);
+  const section = sections[simulationBriefingSection];
+  const sectionUploads = response.schema.uploadRules.filter(rule =>
+    (section.id === 'appearance' && ['person_photos', 'outfit_photos'].includes(rule.fieldKey))
+    || (section.id === 'references' && rule.fieldKey === 'reference_files'));
+  app.innerHTML = `
+    <section class="page-card">
+      <div class="simulation-banner">
+        <strong>Simulação do briefing • sem pagamento</strong>
+        <span>Veja exatamente as perguntas que a cliente receberia após pagar.
+          Nenhum dado, foto ou pedido será enviado.</span>
+      </div>
+      <div class="page-head">
+        <span class="eyebrow">Etapa ${simulationBriefingSection + 1} de ${sections.length}</span>
+        <h1 class="page-title">${esc(section.title)}</h1>
+        <p class="page-subtitle">${esc(section.description || 'Preencha apenas para visualizar como as perguntas funcionam.')}</p>
+      </div>
+      <div class="form-grid">
+        ${(section.fields || []).map(def => inputHtml(
+          def, simulationBriefingAnswers[def.key])).join('')}
+      </div>
+      ${sectionUploads.length ? `
+        <div class="notice info" style="margin-top:14px">
+          <strong>Fotos solicitadas no pedido real</strong>
+          ${sectionUploads.map(rule => `<p>${esc(rule.label)}: ${rule.min} a ${rule.max} imagens.
+            ${esc(rule.help)}</p>`).join('')}
+          <small>Para sua segurança, o teste não recebe nem armazena fotos.</small>
+        </div>` : ''}
+      <div class="action-row" style="margin-top:18px">
+        <button id="simBriefingPrev" class="btn btn-ghost" type="button">
+          ${simulationBriefingSection ? 'Voltar etapa' : 'Voltar às condições'}
+        </button>
+        <button id="simBriefingNext" class="btn btn-primary btn-large" type="button">
+          ${simulationBriefingSection === sections.length - 1
+            ? 'Concluir visualização' : 'Próxima etapa'}
+        </button>
+      </div>
+    </section>
+  `;
+
+  const updateAnswer = input => {
+    const key = input.dataset.field;
+    if (!key) return;
+    if (input.dataset.multi === '1') {
+      const values = new Set(Array.isArray(simulationBriefingAnswers[key])
+        ? simulationBriefingAnswers[key] : []);
+      if (input.checked) values.add(input.value);
+      else values.delete(input.value);
+      simulationBriefingAnswers[key] = [...values];
+    } else if (input.type !== 'radio' || input.checked) {
+      simulationBriefingAnswers[key] = input.value;
+    }
+  };
+  app.querySelectorAll('[data-field]').forEach(input => {
+    const isChoice = input.type === 'checkbox' || input.type === 'radio';
+    input.addEventListener(isChoice ? 'change' : 'input', async () => {
+      updateAnswer(input);
+      if (isChoice) {
+        try { await renderBriefingSimulation(state, render); }
+        catch (error) { showToast(error.message); }
+      }
+    });
+    if (!isChoice && ['pix_key', 'pix_holder', 'age'].includes(input.dataset.field)) {
+      input.addEventListener('change', async () => {
+        try { await renderBriefingSimulation(state, render); }
+        catch (error) { showToast(error.message); }
+      });
+    }
+  });
+  document.getElementById('simBriefingPrev')?.addEventListener('click', () => {
+    if (simulationBriefingSection > 0) {
+      simulationBriefingSection -= 1;
+      renderBriefingSimulation(state, render).catch(error => showToast(error.message));
+    } else {
+      state.step = 10;
+      render();
+    }
+  });
+  document.getElementById('simBriefingNext')?.addEventListener('click', () => {
+    if (simulationBriefingSection < sections.length - 1) {
+      simulationBriefingSection += 1;
+      renderBriefingSimulation(state, render).catch(error => showToast(error.message));
+      return;
+    }
+    modal('Briefing visualizado 💛', `
+      <div class="notice success">
+        <strong>Você percorreu o formulário da cliente.</strong>
+        <p>Esta foi apenas uma simulação. Nenhum pedido ou pagamento foi criado
+          e nenhuma resposta ou imagem foi salva no servidor.</p>
+      </div>
+      <button id="restartSimulation" class="btn btn-primary" type="button">
+        Simular outro pedido
+      </button>`);
+    document.getElementById('restartSimulation')?.addEventListener('click', () => {
+      simulationBriefingAnswers = {};
+      simulationBriefingSection = 0;
+      localStorage.removeItem(storeKeyFor(true));
+      window.location.href = '/pedido?simular=1';
+    });
+  });
 }
 
 export async function startStore(
@@ -4783,10 +4865,17 @@ export async function startStore(
       return;
     }
 
-    renderTerms(
-      state,
-      render,
-    );
+    if (state.step === 11 && state.simulationMode) {
+      renderBriefingSimulation(state, render).catch(error => {
+        showToast(error.message);
+        state.step = 10;
+        persist(state);
+        renderTerms(state, render);
+      });
+      return;
+    }
+
+    renderTerms(state, render);
   };
 
   render();

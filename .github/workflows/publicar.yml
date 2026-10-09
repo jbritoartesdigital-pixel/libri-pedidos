@@ -2,16 +2,9 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/publicar.yml'
 
 jobs:
   deploy:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.event.head_commit.message == 'chore(deploy): trigger approved briefing preview release')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

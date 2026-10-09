@@ -865,21 +865,50 @@ function missingBriefingItems(
   return missing;
 }
 
-function showBriefingMissing(
-  missing,
-) {
-  modal(
-    'Falta preencher nesta etapa',
-    `
-      <div class="notice error">
-        ${missing.map(
-          (item) =>
-            `<div>• ${esc(item.message)}</div>`,
-        ).join('')}
-      </div>
-    `,
-  );
+function showBriefingMissing(missing) {
+  const summary = app.querySelector('#briefingErrors');
+  if (!summary) return;
+
+  // Clear previous flags, then highlight each missing field in place.
+  app.querySelectorAll('.briefing-field-invalid').forEach(box => {
+    box.classList.remove('briefing-field-invalid');
+  });
+  app.querySelectorAll('[aria-invalid="true"]').forEach(control =>
+    control.removeAttribute('aria-invalid'));
+  app.querySelectorAll('.briefing-inline-error').forEach(message => message.remove());
+
+  const visible = [];
+  let first = null;
+  for (const item of missing) {
+    const key = CSS.escape(String(item.key || ''));
+    const control = item.type === 'upload'
+      ? app.querySelector('[data-upload-field="' + key + '"]')
+      : app.querySelector('[data-field="' + key + '"]');
+    if (!control) continue;
+    const box = item.type === 'upload' ? control.closest('.upload-zone')
+      : control.closest('.field');
+    if (!box) continue;
+    box.classList.add('briefing-field-invalid');
+    control.setAttribute('aria-invalid', 'true');
+    const text = document.createElement('small');
+    text.className = 'briefing-inline-error';
+    text.textContent = item.message;
+    box.appendChild(text);
+    if (!first) first = box;
+    visible.push(item.message);
+  }
+
+  summary.classList.remove('hidden');
+  summary.innerHTML = '<strong>Confira os campos destacados:</strong>' +
+    '<ul>' + (visible.length ? visible : missing.map(item => item.message))
+      .map(message => '<li>' + esc(message) + '</li>').join('') + '</ul>';
+  summary.setAttribute('role', 'alert');
+  const focusTarget = first || summary;
+  if (first) first.setAttribute('tabindex', '-1');
+  focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  focusTarget.focus({ preventScroll: true });
 }
+
 
 function briefingHtml(
   area,
@@ -992,6 +1021,7 @@ function briefingHtml(
         }
       </div>
 
+      <div id="briefingErrors" class="notice error hidden" tabindex="-1"></div>
       <div class="form-grid">
         ${activeSection.fields.map(
           (definition) =>
@@ -2459,21 +2489,17 @@ export async function startCustomerArea(
               error.data?.details?.fields
               || [];
 
-            if (
-              missing.length
-            ) {
-              modal(
-                'Ainda falta um pouquinho',
-                `
-                  <div class="notice error">
-                    ${missing.map(
-                      (item) =>
-                        `<div>• ${esc(item.message)}</div>`,
-                    ).join('')}
-                  </div>
-                `,
-              );
-
+            if (missing.length) {
+              const firstSection = missing.find(item => item.section)?.section;
+              if (firstSection && firstSection !== area.briefing.currentSection) {
+                try {
+                  await saveBriefingNow(firstSection, {});
+                  await render();
+                } catch {
+                  showToast('Confira os campos obrigatórios das etapas anteriores.');
+                }
+              }
+              showBriefingMissing(missing);
               return;
             }
 

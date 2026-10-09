@@ -2379,7 +2379,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);
-  assert.match(area, /beforeIds/);
+  assert.match(area, /const seen = new Set/);
   assert.match(area, /HELPFUL_EXAMPLES/);
   assert.match(upload, /xhr\.upload\.onprogress/);
   assert.match(clientCss, /\.photo-upload-progress/);

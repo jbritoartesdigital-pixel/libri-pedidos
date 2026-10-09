@@ -3167,7 +3167,7 @@ test('store client keeps the approved commercial journey and a single final reco
     source.indexOf('function addonFamilySummary('),
   );
   assert.match(addonExplanation, /O que você leva/);
-  assert.match(recommendation, /Deixar interativo por/);
+  assert.match(recommendation, /Quero vídeo \+ interativo por/);
   assert.match(recommendation, /replaceState/);
 
   const recommendationTitle = source.slice(

@@ -6,7 +6,7 @@ import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
-import { getV2CustomerArea } from '../src/lib/v2-customer-area.js';
+import { getV2CustomerArea, saveV2Briefing } from '../src/lib/v2-customer-area.js';
 import { downloadV2OrderFolder } from '../src/lib/v2-order-zip.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
@@ -1110,6 +1110,113 @@ test('customer can specify a music name or link in interactive and cinematic inv
   DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?').run(JSON.stringify({ music_choice: 'yes' }), videoId);
   const videoArea = await getV2CustomerArea(e, video.order.publicToken);
   assert.ok(videoArea.briefing.schema.sections.flatMap(s => s.fields).some(x => x.key === 'music_request'));
+});
+
+test('cinematic video offers optional end-of-video gift page with selectable categories, sizes and Pix', async t => {
+  const DB = database(); const mp = providerMock(t); const e = env(DB);
+  const video = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Presentes no vídeo', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    selection: { productCode: 'cinematic_video', scenes: 4, paymentMethod: 'pix' },
+    ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(video.order.code).id;
+  const fields = async () => (await getV2CustomerArea(e, video.order.publicToken))
+    .briefing.schema.sections.flatMap(s => s.fields);
+  const initial = await fields();
+  assert.equal(initial.find(f => f.key === 'gift_page_video')?.required, true);
+  assert.match(initial.find(f => f.key === 'gift_page_video')?.label || '', /ao final do vídeo/);
+  assert.ok(!initial.some(f => f.key === 'interactive_resources'));
+  assert.ok(!initial.some(f => f.key === 'gift_mode'));
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ gift_page_video: 'yes' }), id);
+  assert.equal((await fields()).find(f => f.key === 'gift_mode')?.required, true);
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ gift_page_video: 'yes', gift_mode: 'both',
+      gift_categories: ['clothes', 'shoes', 'toys', 'books', 'educational', 'other'],
+      gift_clothing_size: '3 anos', gift_shoe_size: '25', gift_other_details: 'Fraldas',
+      pix_key_type: 'email', pix_key: 'presentes@example.com', pix_holder: 'Responsável' }), id);
+  const enabled = await fields();
+  const byKey = key => enabled.find(f => f.key === key);
+  assert.equal(byKey('gift_categories')?.type, 'multi_choice');
+  assert.equal(byKey('gift_categories')?.required, true);
+  assert.deepEqual(byKey('gift_categories').options.map(x => x.label), [
+    'Roupinhas', 'Calçados', 'Brinquedos', 'Livros', 'Materiais educativos', 'Outros',
+  ]);
+  assert.equal(byKey('gift_clothing_size')?.required, true);
+  assert.equal(byKey('gift_shoe_size')?.required, true);
+  assert.equal(byKey('gift_other_details')?.required, true);
+  assert.equal(byKey('pix_key')?.required, true);
+  assert.equal(byKey('pix_holder')?.required, true);
+  assert.ok(byKey('pix_key_type').options.some(v => v.label === 'Chave aleatória'));
+  assert.equal(byKey('gift_suggestions').required, false);
+
+  mp.approve(video.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, video.payment.providerOrderId);
+  const cleaned = await saveV2Briefing(e, video.order.publicToken, {
+    currentSection: 'product',
+    data: { gift_mode: 'suggestions', gift_categories: ['toys', 'books'] },
+  });
+  assert.equal(cleaned.data.gift_mode, 'suggestions');
+  assert.deepEqual(cleaned.data.gift_categories, ['toys', 'books']);
+  for (const key of ['pix_key', 'pix_key_type', 'pix_holder', 'gift_clothing_size',
+    'gift_shoe_size', 'gift_other_details']) assert.equal(cleaned.data[key], undefined);
+
+  const omitted = await saveV2Briefing(e, video.order.publicToken, {
+    currentSection: 'product', data: { gift_page_video: 'no' },
+  });
+  assert.equal(omitted.data.gift_page_video, 'no');
+  assert.ok(!omitted.schema.sections.flatMap(s => s.fields).some(f => f.key === 'gift_mode'));
+  for (const key of ['gift_mode', 'gift_categories', 'gift_suggestions', 'pix_key']) {
+    assert.equal(omitted.data[key], undefined);
+  }
+});
+
+test('interactive invitation keeps gifts without video page and accepts legacy written suggestions', async t => {
+  const DB = database(); providerMock(t); const e = env(DB);
+  const interactive = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Lista antiga', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(interactive.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ interactive_resources: ['gifts'], gift_mode: 'suggestions',
+      gift_suggestions: 'Livros e fraldas, tamanho G' }), id);
+  const area = await getV2CustomerArea(e, interactive.order.publicToken);
+  const fields = area.briefing.schema.sections.flatMap(s => s.fields);
+  assert.ok(!fields.some(f => f.key === 'gift_page_video'));
+  assert.equal(fields.find(f => f.key === 'gift_categories')?.required, false,
+    'existing written gift lists must remain valid');
+  assert.equal(area.briefing.data.gift_suggestions, 'Livros e fraldas, tamanho G');
+  const options = fields.find(f => f.key === 'gift_mode')?.options || [];
+  assert.ok(options.some(x => x.value === 'both' && /Pix/.test(x.label)));
+});
+
+test('wedding gift lists still support registry link and Pix with no child sizing requirements', async t => {
+  const DB = database(); providerMock(t); const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Casal', type: 'wedding', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?').get(order.order.code).id;
+  DB.sqlite.prepare('UPDATE v2_briefings SET data_json=? WHERE order_id=?')
+    .run(JSON.stringify({ interactive_resources: ['gifts'], gift_mode: 'registry' }), id);
+  const fields = (await getV2CustomerArea(e, order.order.publicToken))
+    .briefing.schema.sections.flatMap(s => s.fields);
+  assert.equal(fields.find(f => f.key === 'gift_registry_url')?.required, true);
+  assert.ok(!fields.some(f => f.key === 'gift_categories'));
+  assert.ok(!fields.some(f => f.key === 'gift_clothing_size'));
+  assert.ok(fields.find(f => f.key === 'gift_mode').options.some(x => x.value === 'both'));
+});
+
+test('exported invitation zip includes readable category, size and gift Pix labels', () => {
+  const zip = readFileSync('src/lib/v2-order-zip.js', 'utf8');
+  assert.match(zip, /gift_page_video: 'Página extra de presentes/);
+  assert.match(zip, /gift_categories: 'Tipos de presentes sugeridos'/);
+  assert.match(zip, /gift_clothing_size: 'Tamanho das roupinhas'/);
+  assert.match(zip, /pix_holder: 'Titular da chave Pix'/);
 });
 
 test('approved Mercado Pago payment reconciles real fee and net amount from Payments API', async t => {

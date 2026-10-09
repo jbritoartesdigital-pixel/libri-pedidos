@@ -94,9 +94,9 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
 });
 
 test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
@@ -825,9 +825,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-briefing-ui-2'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261009-mobile-briefing-3'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -1070,8 +1070,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261009-briefing-ui-2'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1533,7 +1533,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261009-pix-production-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261009-briefing-ui-2'));
+    'client-v2.js?v=20261009-mobile-briefing-3'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2171,7 +2171,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261009-pix-production-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261009-pix-production-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261009-briefing-ui-2'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -2373,8 +2373,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261009-briefing-ui-2'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261009-briefing-ui-2'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261009-mobile-briefing-3'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261008-growth-1'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);

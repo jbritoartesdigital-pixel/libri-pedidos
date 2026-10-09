@@ -2457,6 +2457,10 @@ export async function startCustomerArea(
                 await saveBriefingNow(target, {});
                 await render();
               }
+              if (target === sectionId) {
+                button.disabled = false;
+                button.textContent = 'Enviar dados';
+              }
               showBriefingMissing(missingAll.filter(item => item.section === target));
               return;
             }

@@ -2,9 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/deploy-pix-production-20261009.flag'
 
 jobs:
   deploy:

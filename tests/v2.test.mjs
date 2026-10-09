@@ -20,6 +20,7 @@ import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
 import { getV2StoreConfig, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
+import { planCustomerPhotoBatch } from '../public/js/client-v2-upload.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 function env(DB) { return { DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' }; }
@@ -184,6 +185,85 @@ test('dependent briefing selections keep their visible position, in preview and 
   } finally {
     globalThis.window = originalWindow;
   }
+});
+
+test('child style references are side by side on mobile and Libri decides remains full width', () => {
+  const component = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const css = readFileSync('public/css/client-v2.css', 'utf8');
+  assert.match(component, /choice-grid-references/);
+  assert.match(component, /choice-card-reference-other/);
+  assert.match(css, /\.grid\.two\.choice-grid-references\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.grid\.two\.choice-grid-references \.choice-card-reference-other\s*\{\s*grid-column:\s*1 \/ -1/);
+  assert.match(css, /\.briefing-form \.page-title/);
+  assert.match(css, /\.briefing-form \.action-row/);
+});
+
+test('Libri decides does not require style, outfit or photos, but explicit appearance does', () => {
+  const generate = (appearance_choice, outfit_choice) =>
+    buildV2BriefingSimulationSchema({
+      product: { code: 'cinematic_video', name: 'Vídeo' },
+      eventType: 'birthday',
+      data: { appearance_choice, age: 4, ...(outfit_choice ? { outfit_choice } : {}) },
+    });
+  let schema = generate('libri_decides');
+  const appearance = schema.sections.find(section => section.id === 'appearance');
+  assert.equal(appearance.fields.find(field => field.key === 'appearance_choice').required, true);
+  assert.equal(appearance.fields.find(field => field.key === 'visual_style').required, false);
+  assert.equal(appearance.fields.find(field => field.key === 'outfit_choice').required, false);
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'person_photos').min, 0);
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'person_photos').max, 5);
+  assert.ok(appearance.fields.find(field => field.key === 'visual_style').options.some(x => x.value === 'stylized_doll'));
+  schema = generate('yes');
+  assert.equal(schema.sections.find(section => section.id === 'appearance').fields.find(field => field.key === 'visual_style').required, true);
+  assert.equal(schema.sections.find(section => section.id === 'appearance').fields.find(field => field.key === 'outfit_choice').required, true);
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'person_photos').min, 2);
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'person_photos').max, 5);
+  schema = generate('libri_decides', 'send_photo');
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'outfit_photos').min, 1);
+  assert.equal(schema.uploadRules.find(rule => rule.fieldKey === 'outfit_photos').max, 2);
+});
+
+test('multi-photo selection preserves max count, server mime and size policies', () => {
+  const rule = {
+    max: 5, maxBytes: 30 * 1024 * 1024,
+    accept: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+  };
+  const photo = (name, type = 'image/jpeg', size = 10000) => ({ name, type, size });
+  let plan = planCustomerPhotoBatch([photo('a.jpg'), photo('b.jpg'), photo('c.jpg')], 2, rule);
+  assert.equal(plan.error, '');
+  assert.equal(plan.files.length, 3);
+  plan = planCustomerPhotoBatch([photo('d.jpg'), photo('e.jpg')], 4, rule);
+  assert.equal(plan.files.length, 0);
+  assert.match(plan.error, /no máximo 1 foto/);
+  assert.match(planCustomerPhotoBatch([photo('a.jpg')], 5, rule).error, /limite de fotos/);
+  assert.match(planCustomerPhotoBatch([photo('a.pdf', 'application/pdf')], 0, rule).error, /JPG/);
+  assert.match(planCustomerPhotoBatch([photo('huge.jpg', 'image/jpeg', 30 * 1024 * 1024 + 1)], 0, rule).error, /30 MB/);
+  assert.equal(planCustomerPhotoBatch([], 0, rule).files.length, 0);
+  assert.equal(planCustomerPhotoBatch([photo('a.heic', 'image/heic')], 0, rule).error, '');
+  for (const max of [2, 5, 6]) {
+    assert.equal(planCustomerPhotoBatch(Array.from({ length: max }, (_, i) => photo(String(i))), 0, { ...rule, max }).files.length, max);
+    assert.notEqual(planCustomerPhotoBatch(Array.from({ length: max + 1 }, (_, i) => photo(String(i))), 0, { ...rule, max }).error, '');
+  }
+});
+
+test('bulk upload is sequential, reconciles uncertain writes and save indicator remains discreet', () => {
+  const area = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const css = readFileSync('public/css/client-v2.css', 'utf8');
+  assert.match(area, /multiple\s+accept=/);
+  assert.match(area, /planCustomerPhotoBatch\(input\.files, existingCount, rule\)/);
+  assert.match(area, /for \(const \[index, file\] of batch\.files\.entries\(\)\)/);
+  assert.match(area, /await uploadCustomerPhoto\(/);
+  assert.match(area, /!seen\.has\(Number\(item\.id\)\)/);
+  assert.match(area, /confirmationUnknown = !checked/);
+  assert.match(area, /break; \/\/ Never silently skip a failed photo/);
+  assert.match(area, /briefingUploadsRunning/);
+  assert.match(area, /aria-live="polite">Salvamento automático/);
+  assert.match(area, /setBriefingSaveFeedback\('Salvo ✓', 'saved'\)/);
+  assert.match(area, /setBriefingSaveFeedback\('Não salvo', 'error'\)/);
+  assert.match(css, /#briefingSaveStatus/);
+  assert.match(store, /\['pix_key', 'pix_holder', 'age'\]/);
+  assert.match(store, /preservePosition: true, control: input/);
 });
 
 test('admin entry HTML has correctly quoted executable module import (regression: blank admin after deploy)', () => {

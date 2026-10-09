@@ -362,6 +362,70 @@ function musicPreferenceBlock(detail) {
   `;
 }
 
+function productionQuickSummary(detail) {
+  const product = detail.contractedSummary?.product || {};
+  const data = detail.briefing?.data || {};
+  const files = detail.uploads?.uploads || [];
+  const photoCount = files.filter(file => ['person', 'outfit'].includes(file.category)).length;
+  const references = files.filter(file => file.category === 'reference').length;
+  const speech = {
+    libri_writes: 'A Libri cria as falas',
+    customer_text: 'Texto da cliente',
+    no_speech: 'Sem falas',
+  }[data.speech_preference] || 'Não informado / não aplicável';
+  const music = {
+    yes: data.music_request ? String(data.music_request) : 'Sim, escolha da Libri',
+    no: 'Sem música',
+    libri_decides: 'A Libri decide',
+  }[data.music_choice] || 'Não informado';
+  const resources = Array.isArray(data.interactive_resources) ? data.interactive_resources : [];
+  const extraPages = [];
+  if (data.gift_page_video === 'yes') extraPages.push('Presentes após o vídeo');
+  if (resources.includes('gifts')) extraPages.push('Presentes no interativo');
+  if (resources.includes('location')) extraPages.push('Localização');
+  if (resources.includes('simple_rsvp')) extraPages.push('Confirmação simples');
+  const gifts = data.gift_mode && (data.gift_page_video === 'yes' || resources.includes('gifts'));
+  const giftsDetail = gifts
+    ? 'Presentes: ' + ({
+      suggestions: 'Sugestões',
+      pix: 'Pix',
+      both: 'Sugestões + Pix',
+      registry: 'Lista/site',
+      none: 'Não incluir',
+    }[data.gift_mode] || data.gift_mode)
+    : '';
+  const rows = [
+    ['Formato', product.name || 'Não informado'],
+    ['Cenas contratadas', product.sceneCount ? String(product.sceneCount) : 'Não aplicável'],
+    ['Música', music],
+    ['Falas', speech],
+    ['Fotos recebidas', String(photoCount)],
+    ['Referências', String(references)],
+    ['Páginas/opções extras', extraPages.join(' • ') || 'Nenhuma informada'],
+    ...(giftsDetail ? [['Detalhes dos presentes', giftsDetail]] : []),
+  ];
+  return `
+    <section class="card production-summary-card" id="orderProductionSummary">
+      <div class="section-title">
+        <div>
+          <span class="eyebrow">Produção</span>
+          <h3>Resumo rápido do convite</h3>
+        </div>
+        <span class="status">${Number(detail.briefing?.completionPercent || 0)}% dos dados</span>
+      </div>
+      <div class="production-summary-grid">
+        ${rows.map(([label, value]) => `
+          <div class="production-summary-item">
+            <small>${esc(label)}</small><strong>${esc(value)}</strong>
+          </div>
+        `).join('')}
+      </div>
+      ${gifts && ['pix', 'both'].includes(data.gift_mode)
+        ? '<small class="muted">Dados Pix informados no briefing detalhado. Confira o titular e a chave antes de produzir.</small>'
+        : ''}
+    </section>`;
+}
+
 function briefingBlock(detail) {
   const definitions = new Map((detail.briefing.fields || []).map(item => [item.key, item]));
   const fallbackLabels = {
@@ -653,6 +717,8 @@ export async function openOrder(code, onChanged = null) {
           </section>
 
           ${contractedBlock(detail)}
+
+          ${productionQuickSummary(detail)}
 
           ${paymentBlock(detail)}
         </div>

@@ -1761,3 +1761,114 @@ a {
 #briefingErrors:not(.hidden) { margin-bottom:16px; }
 #briefingErrors ul { margin:8px 0 0; padding-left:20px; }
 #briefingErrors li { margin-bottom:4px; }
+
+/* 2026-10-09 | Briefing mobile: comparar estilos em vez de empilhar imagens. */
+.grid.two.choice-grid-references {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+.choice-grid-references .choice-card-reference {
+  position: relative;
+  display: block;
+  min-width: 0;
+  padding: 9px;
+}
+.choice-grid-references .choice-card-reference > input {
+  position: absolute;
+  z-index: 1;
+  top: 13px;
+  left: 13px;
+  margin: 0;
+  width: 19px;
+  height: 19px;
+  background: white;
+}
+.choice-grid-references .choice-card-reference .choice-main {
+  display: block;
+  width: 100%;
+}
+.choice-grid-references .choice-reference-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  border-radius: 11px;
+  margin-bottom: 9px;
+}
+.choice-grid-references .choice-card-reference strong {
+  font-size: 14px;
+  line-height: 1.24;
+}
+.choice-grid-references .choice-card-reference small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+.grid.two.choice-grid-references .choice-card-reference-other {
+  grid-column: 1 / -1;
+  padding: 13px;
+}
+.choice-grid-references .choice-card-reference:focus-within {
+  outline: 2px solid var(--rose);
+  outline-offset: 2px;
+}
+
+/* Restrict compacting to the briefing, keeping checkout and payment untouched. */
+.briefing-form .page-head {
+  margin-bottom: 14px;
+}
+.briefing-form .form-grid {
+  gap: 12px;
+}
+.briefing-form .field {
+  gap: 6px;
+  scroll-margin-bottom: 100px;
+}
+.briefing-save-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+#briefingSaveStatus {
+  flex: 0 0 auto;
+  font-weight: 750;
+  color: #49765b;
+}
+#briefingSaveStatus[data-state="saving"] { color: #826f40; }
+#briefingSaveStatus[data-state="error"] { color: var(--danger); }
+
+@media (max-width: 540px) {
+  .briefing-form .page-title {
+    font-size: clamp(25px, 7.1vw, 31px);
+    line-height: 1.1;
+  }
+  .briefing-form .page-subtitle {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .briefing-form .choice-card:not(.choice-card-reference) {
+    padding: 11px 12px;
+  }
+  .briefing-form .action-row {
+    gap: 8px;
+    padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+  }
+  .briefing-form .action-row .btn {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .briefing-form .action-row .btn-ghost {
+    flex: 0 1 auto;
+  }
+  .briefing-form .action-row .btn-primary {
+    flex: 1 1 140px;
+  }
+}

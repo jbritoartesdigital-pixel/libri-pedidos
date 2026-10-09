@@ -1732,3 +1732,12 @@ a {
 .photo-upload-progress-track > span { display:block; background:#c46b85; height:100%; width:0; border-radius:99px; transition:width .2s; }
 .photo-upload-progress small { display:block; font-size:12px; margin-top:5px; }
 .field-help { display:block; margin-top:5px; line-height:1.45; color:var(--muted); }
+
+
+/* Explain validation in place and guide the client to the missing field. */
+.briefing-missing-notice { margin:12px 0 18px; }
+.briefing-missing-notice ul { margin:8px 0 0; padding-left:20px; }
+.briefing-field-invalid { outline:2px solid #c85e6a; outline-offset:4px; border-radius:12px; }
+.briefing-field-invalid > label,.briefing-field-invalid > .field-label { color:#a13445; }
+.briefing-field-invalid [aria-invalid="true"] { border-color:#c85e6a; }
+.briefing-field-invalid:focus-within { outline-color:#ab3a53; }

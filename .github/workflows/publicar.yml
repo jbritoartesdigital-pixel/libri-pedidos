@@ -2,12 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  # One release only: the new viewport module changes on the feature merge.
-  # Removal of this temporary trigger does NOT deploy again.
-  push:
-    branches: [main]
-    paths:
-      - 'public/js/client-v2-viewport.js'
 
 jobs:
   deploy:

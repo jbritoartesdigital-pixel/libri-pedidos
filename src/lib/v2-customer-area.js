@@ -772,6 +772,29 @@ function visualStyleOptions(
   ];
 }
 
+// Schema preview is completely stateless: it never creates an order,
+// bypasses payment protection, or persists contact/media details.
+export function buildV2BriefingSimulationSchema({ product, eventType, addons = [], data = {} }) {
+  if (!product || !/^[a-z0-9_-]{2,80}$/.test(String(product.code || ''))) {
+    throw new Error('Selecione um formato válido para visualizar o briefing.');
+  }
+  if (!['birthday', '15_years', 'wedding', 'celebration', 'other', 'baptism'].includes(eventType)) {
+    throw new Error('Escolha um tipo de evento válido.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Dados de simulação inválidos.');
+  }
+  const context = {
+    order: { event_type: eventType },
+    product: { code: product.code, name: product.name || 'Seu convite' },
+    addons: Array.isArray(addons) ? addons.map(addon => ({
+      code: String(addon.code || '').slice(0, 80),
+      name: String(addon.name || '').slice(0, 120),
+    })) : [],
+  };
+  return buildSchema(context, data);
+}
+
 function buildSchema(
   context,
   data,

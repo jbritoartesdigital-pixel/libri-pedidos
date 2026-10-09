@@ -1500,6 +1500,7 @@ export async function startCustomerArea(
   let briefingSaveFeedbackState = 'idle';
   let briefingSaveRevision = 0;
   let briefingUploadsRunning = false;
+  let briefingUploadNeedsRefresh = false;
 
   function setBriefingSaveFeedback(label, state = 'idle') {
     briefingSaveFeedback = label;
@@ -2224,6 +2225,10 @@ export async function startCustomerArea(
     app.querySelectorAll('[data-upload-field]').forEach(input => {
       input.addEventListener('change', async () => {
         if (briefingUploadsRunning) return;
+        if (briefingUploadNeedsRefresh) {
+          showToast('Atualize o pedido para conferir os envios antes de selecionar novas fotos.');
+          return;
+        }
         const fieldKey = input.dataset.uploadField;
         const rule = area.briefing.schema.uploadRules.find(item => item.fieldKey === fieldKey);
         const existingCount = area.briefing.uploads
@@ -2289,6 +2294,7 @@ export async function startCustomerArea(
                 continue;
               }
               confirmationUnknown = !checked;
+              if (confirmationUnknown) briefingUploadNeedsRefresh = true;
               failure = error.message || 'Não foi possível enviar a foto.';
               break; // Never silently skip a failed photo.
             }
@@ -2310,7 +2316,13 @@ export async function startCustomerArea(
         } finally {
           briefingUploadsRunning = false;
           // Re-render replaces the inputs on success; reset old ones on failure.
-          uploadInputs.forEach(control => { control.disabled = false; });
+          app.querySelectorAll('[data-upload-field]').forEach(control => {
+            control.disabled = briefingUploadNeedsRefresh
+              || area.briefing.uploads.filter(item =>
+                item.fieldKey === control.dataset.uploadField).length
+                  >= (area.briefing.schema.uploadRules.find(item =>
+                    item.fieldKey === control.dataset.uploadField)?.max || 0);
+          });
         }
       });
     });

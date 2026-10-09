@@ -23,7 +23,7 @@ const HELPFUL_EXAMPLES = {
   references_note: 'Conte o que gostou nas imagens: cores, iluminação, cenário ou roupa.',
 };
 
-function inputHtml(
+export function inputHtml(
   definition,
   value,
 ) {

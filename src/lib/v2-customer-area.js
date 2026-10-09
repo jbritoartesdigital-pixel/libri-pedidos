@@ -1677,14 +1677,28 @@ function buildSchema(
     ) {
       addonFields.push(
         field(
-          'guest_list',
-          'Cole a lista de convidados',
-          'textarea',
+          'rsvp_list_behavior',
+          'Como funciona a sua lista fechada?',
+          'choice',
           {
             required:
               true,
             help:
-              'Pode colocar uma pessoa por linha.',
+              'Os nomes e os limites são cadastrados diretamente no aplicativo Libri RSVP. Você não precisa enviar a lista aqui.',
+            options: [
+              {
+                value:
+                  'strict',
+                label:
+                  'Estrita: somente as pessoas cadastradas podem confirmar.',
+              },
+              {
+                value:
+                  'flexible',
+                label:
+                  'Flexível: permite adicionar acompanhantes até o limite definido no aplicativo.',
+              },
+            ],
           },
         ),
       );
@@ -2333,7 +2347,10 @@ function cleanBranches(
     data.rsvp_mode
     !== 'guest_list'
   ) {
+    // Preserve previously submitted guest names on existing closed-list orders,
+    // but do not keep a closed-list behavior when switching to Free/Undecided.
     delete data.guest_list;
+    delete data.rsvp_list_behavior;
   }
 }
 

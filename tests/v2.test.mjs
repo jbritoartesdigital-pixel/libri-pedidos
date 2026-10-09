@@ -7,7 +7,7 @@ import { database, day, providerMock } from './helpers.mjs';
 import { requestV2UrgencyReview, resumeV2Payment, startV2Checkout } from '../src/lib/v2-checkout.js';
 import { decideV2Urgency, validateUrgencyWindow } from '../src/lib/v2-urgency-admin.js';
 import { syncMercadoPagoOrder, validateMercadoPagoWebhook } from '../src/lib/v2-mercadopago.js';
-import { getV2CustomerArea, saveV2Briefing, submitV2Briefing } from '../src/lib/v2-customer-area.js';
+import { getV2CustomerArea, saveV2Briefing, submitV2Briefing, buildV2BriefingSimulationSchema } from '../src/lib/v2-customer-area.js';
 import { downloadV2OrderFolder } from '../src/lib/v2-order-zip.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
@@ -112,6 +112,38 @@ test("briefing reference photos appear in both real and simulated children\u0027
   assert.match(area, /choice-reference-image/);
   assert.match(store, /inputHtml\(/);
   assert.match(css, /\.choice-reference-image/);
+});
+
+test('birthday simulation without an age still shows original child style image choices', () => {
+  const visualChoices = (eventType, data = {}) => {
+    const schema = buildV2BriefingSimulationSchema({
+      product: { code: 'cinematic_video', name: 'Convite em vídeo' },
+      eventType,
+      data: { appearance_choice: 'yes', ...data },
+    });
+    const appearance = schema.sections.find(section => section.id === 'appearance');
+    return appearance.fields.find(field => field.key === 'visual_style').options
+      .map(option => option.value);
+  };
+  const child = ['stylized_doll', 'realistic_detailed', 'libri_decides'];
+  const older = ['realistic_detailed', 'stylized', 'libri_decides'];
+  assert.deepEqual(visualChoices('birthday'), child, 'simulation can skip the age field');
+  assert.deepEqual(visualChoices('birthday', { age: '' }), child);
+  assert.deepEqual(visualChoices('birthday', { age: '1' }), child);
+  assert.deepEqual(visualChoices('birthday', { age: '6' }), child);
+  assert.deepEqual(visualChoices('birthday', { age: '12' }), child);
+  assert.deepEqual(visualChoices('baptism'), child);
+  assert.deepEqual(visualChoices('birthday', { age: '13' }), older);
+  assert.deepEqual(visualChoices('birthday', { age: '25' }), older);
+  assert.deepEqual(visualChoices('15_years'), older);
+  assert.deepEqual(visualChoices('wedding'), older);
+
+  // The renderer shows both existing V1 images whenever 'stylized_doll'
+  // is present, and both real and test briefings reuse this same schema.
+  const sharedForm = readFileSync('public/js/client-v2-area.js', 'utf8');
+  assert.match(sharedForm, /some\(option => option\.value === 'stylized_doll'\)/);
+  assert.match(sharedForm, /mascote-bonequinho\.webp/);
+  assert.match(sharedForm, /mascote-realista\.webp/);
 });
 
 test('dependent briefing selections keep their visible position, in preview and in real order', () => {

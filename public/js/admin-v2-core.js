@@ -1,3 +1,5 @@
+import { recordAdminDiagnostic } from './admin-v2-diagnostics.js';
+
 export const app =
   document.getElementById('adminApp');
 
@@ -95,8 +97,10 @@ export function dateTimeBr(value) {
 }
 
 export async function api(path, options = {}) {
-  const response =
-    await fetch(
+  const method = String(options.method || 'GET').toUpperCase();
+  let response;
+  try {
+    response = await fetch(
       path,
       {
         credentials: 'same-origin',
@@ -113,6 +117,10 @@ export async function api(path, options = {}) {
         },
       },
     );
+  } catch (error) {
+    recordAdminDiagnostic({ type: 'NETWORK', route: path, method });
+    throw error;
+  }
 
   const contentType =
     response.headers.get('content-type')
@@ -124,6 +132,15 @@ export async function api(path, options = {}) {
       : null;
 
   if (!response.ok) {
+    if (response.status !== 401) {
+      recordAdminDiagnostic({
+        type: 'HTTP',
+        route: path,
+        method,
+        status: response.status,
+        errorId: response.headers.get('x-libri-error-id') || data?.errorId,
+      });
+    }
     const error =
       new Error(
         data?.error

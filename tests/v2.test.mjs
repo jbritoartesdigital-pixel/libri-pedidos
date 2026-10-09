@@ -256,6 +256,8 @@ test('bulk upload is sequential, reconciles uncertain writes and save indicator 
   assert.match(area, /await uploadCustomerPhoto\(/);
   assert.match(area, /!seen\.has\(Number\(item\.id\)\)/);
   assert.match(area, /confirmationUnknown = !checked/);
+  assert.match(area, /briefingUploadNeedsRefresh = true/);
+  assert.match(area, /if \(briefingUploadNeedsRefresh\)/);
   assert.match(area, /break; \/\/ Never silently skip a failed photo/);
   assert.match(area, /briefingUploadsRunning/);
   assert.match(area, /aria-live="polite">Salvamento automático/);

@@ -717,16 +717,20 @@ function uploadRule(
 
 function visualStyleOptions(
   data,
+  eventType,
 ) {
-  const age =
-    Number.parseInt(
-      data.age,
-      10,
-    );
+  // In the simulated briefing, the age can be left blank because advancing
+  // through questions does not require submitting the form. Treat an unknown
+  // birthday/baptism age as child-oriented until an age is explicitly entered.
+  // Known teenage/adult ages must continue using the generic style choices.
+  const rawAge = String(data.age ?? '').trim();
+  const age = rawAge ? Number(rawAge) : NaN;
+  const isChildAge = Number.isInteger(age) && age >= 1 && age <= 12;
+  const isChildEventWithoutAge = !Number.isFinite(age)
+    && ['birthday', 'baptism'].includes(eventType);
 
   if (
-    Number.isInteger(age)
-    && age <= 12
+    isChildAge || isChildEventWithoutAge
   ) {
     return [
       {
@@ -929,7 +933,7 @@ function buildSchema(
           required:
             true,
           options:
-            visualStyleOptions(data),
+            visualStyleOptions(data, context.order.event_type),
         },
       ),
 

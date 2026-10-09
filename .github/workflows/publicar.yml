@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # One-time release for the completed child-style reference fix.
+  # Restoring manual-only mode afterward will not trigger another deploy.
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/v2-customer-area.js'
 
 jobs:
   deploy:

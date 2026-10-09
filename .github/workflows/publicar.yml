@@ -9,7 +9,9 @@ on:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.event.head_commit.message == 'chore(deploy): trigger approved briefing preview release')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.event.head_commit.message == 'chore(deploy): trigger approved briefing preview release')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

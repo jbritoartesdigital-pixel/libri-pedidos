@@ -1278,13 +1278,18 @@ function buildSchema(
         );
       }
 
+      if (wedding && data.gift_mode === 'both') {
+        productFields.push(field(
+          'gift_suggestions',
+          'Quais sugestões de presente você quer mostrar?',
+          'textarea',
+          { required: true },
+        ));
+      }
+
       if (
-        [
-          'suggestions',
-          'both',
-        ].includes(
-          data.gift_mode,
-        )
+        !wedding
+        && ['suggestions', 'both'].includes(data.gift_mode)
       ) {
         const categories = Array.isArray(data.gift_categories)
           ? data.gift_categories : [];
@@ -2125,6 +2130,7 @@ function sanitizeField(
 
 function cleanBranches(
   data,
+  context,
 ) {
   if (
     data.appearance_choice
@@ -2160,8 +2166,13 @@ function cleanBranches(
     delete data.location_url;
   }
 
-  const wantsGifts = resources.includes('gifts')
-    || data.gift_page_video === 'yes';
+  const videoGiftPage = context.product.code === 'cinematic_video';
+  if (!videoGiftPage) delete data.gift_page_video;
+
+  const wantsGifts = videoGiftPage
+    ? data.gift_page_video === 'yes'
+    : resources.includes('gifts');
+  const wedding = context.order.event_type === 'wedding';
 
   if (!wantsGifts) {
     for (
@@ -2194,15 +2205,12 @@ function cleanBranches(
       delete data.gift_registry_url;
     }
 
-    if (
-      ![
-        'suggestions',
-        'both',
-      ].includes(
-        data.gift_mode,
-      )
-    ) {
+    const suggestionsEnabled = !wedding
+      && ['suggestions', 'both'].includes(data.gift_mode);
+    if (!suggestionsEnabled && !(wedding && data.gift_mode === 'both')) {
       delete data.gift_suggestions;
+    }
+    if (!suggestionsEnabled) {
       delete data.gift_categories;
       delete data.gift_clothing_size;
       delete data.gift_shoe_size;
@@ -2767,7 +2775,7 @@ export async function saveV2Briefing(
       );
   }
 
-  cleanBranches(data);
+  cleanBranches(data, context);
 
   const schema =
     buildSchema(

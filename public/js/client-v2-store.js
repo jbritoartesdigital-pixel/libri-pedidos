@@ -11,7 +11,8 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { inputHtml } from './client-v2-area.js?v=20261009-briefing-demo-1';
+import { inputHtml } from './client-v2-area.js?v=20261009-briefing-ui-2';
+import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 
 const EVENT_TYPES = [
   {
@@ -4546,13 +4547,17 @@ function renderTerms(
     );
 }
 
-// Keep simulation answers in this browser tab only. They never reach D1,
-// payment providers or photo storage; only schema field visibility is requested.
+// Simulated answers remain in memory in this tab. They are sent only to the
+// read-only schema endpoint to reveal conditional questions, never persisted.
 let simulationBriefingAnswers = {};
 let simulationBriefingSection = 0;
+let simulationBriefingRenderRevision = 0;
 
-async function renderBriefingSimulation(state, render) {
-  loading('Abrindo o formulário de teste...', 'Os dados preenchidos aqui não serão enviados.');
+async function renderBriefingSimulation(state, render, { preservePosition = false, control = null } = {}) {
+  const revision = ++simulationBriefingRenderRevision;
+  if (!preservePosition) {
+    loading('Abrindo o formulário de teste...', 'As respostas não serão salvas no servidor.');
+  }
   const product = productFor(state);
   const response = await api('/api/v2/briefing-simulation', {
     method: 'POST',
@@ -4563,8 +4568,10 @@ async function renderBriefingSimulation(state, render) {
       data: simulationBriefingAnswers,
     }),
   });
+  if (revision !== simulationBriefingRenderRevision) return;
   const sections = response.schema.sections || [];
   if (!sections.length) throw new Error('O briefing de teste não tem etapas.');
+  const viewport = preservePosition ? captureFieldViewport(control) : null;
   simulationBriefingSection = Math.min(simulationBriefingSection, sections.length - 1);
   const section = sections[simulationBriefingSection];
   const sectionUploads = response.schema.uploadRules.filter(rule =>
@@ -4574,8 +4581,8 @@ async function renderBriefingSimulation(state, render) {
     <section class="page-card">
       <div class="simulation-banner">
         <strong>Simulação do briefing • sem pagamento</strong>
-        <span>Veja exatamente as perguntas que a cliente receberia após pagar.
-          Nenhum dado, foto ou pedido será enviado.</span>
+        <span>Veja as mesmas perguntas do formulário real.
+          As respostas de teste são usadas apenas para atualizar perguntas condicionais, sem salvar pedidos, fotos ou pagamentos.</span>
       </div>
       <div class="page-head">
         <span class="eyebrow">Etapa ${simulationBriefingSection + 1} de ${sections.length}</span>
@@ -4605,6 +4612,8 @@ async function renderBriefingSimulation(state, render) {
     </section>
   `;
 
+  restoreFieldViewport(viewport, app);
+
   const updateAnswer = input => {
     const key = input.dataset.field;
     if (!key) return;
@@ -4623,7 +4632,7 @@ async function renderBriefingSimulation(state, render) {
     input.addEventListener(isChoice ? 'change' : 'input', async () => {
       updateAnswer(input);
       if (isChoice) {
-        try { await renderBriefingSimulation(state, render); }
+        try { await renderBriefingSimulation(state, render, { preservePosition: true, control: input }); }
         catch (error) { showToast(error.message); }
       }
     });

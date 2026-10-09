@@ -4638,8 +4638,11 @@ async function renderBriefingSimulation(state, render, { preservePosition = fals
     });
     if (!isChoice && ['pix_key', 'pix_holder', 'age'].includes(input.dataset.field)) {
       input.addEventListener('change', async () => {
-        try { await renderBriefingSimulation(state, render); }
-        catch (error) { showToast(error.message); }
+        try {
+          await renderBriefingSimulation(state, render, {
+            preservePosition: true, control: input,
+          });
+        } catch (error) { showToast(error.message); }
       });
     }
   });

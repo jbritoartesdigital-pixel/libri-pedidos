@@ -1162,11 +1162,35 @@ function buildSchema(
       );
     }
 
-    if (
-      resources.includes(
-        'gifts',
-      )
-    ) {
+
+  }
+
+  if (context.product.code === 'cinematic_video') {
+    productFields.push(field(
+      'gift_page_video',
+      'Você quer incluir uma página extra de presentes ao final do vídeo?',
+      'choice',
+      {
+        required: true,
+        help: 'Esta página aparece depois do convite em vídeo, com as sugestões e/ou os dados Pix que você escolher.',
+        options: [
+          { value: 'yes', label: 'Sim, quero a página de presentes' },
+          { value: 'no', label: 'Não quero incluir' },
+        ],
+      },
+    ));
+  }
+
+  const wantsGifts = (
+    INTERACTIVE_PRODUCTS.has(context.product.code)
+      && Array.isArray(data.interactive_resources)
+      && data.interactive_resources.includes('gifts')
+  ) || (
+    context.product.code === 'cinematic_video'
+      && data.gift_page_video === 'yes'
+  );
+
+  if (wantsGifts) {
       const wedding =
         context.order.event_type
         === 'wedding';
@@ -1262,17 +1286,65 @@ function buildSchema(
           data.gift_mode,
         )
       ) {
+        const categories = Array.isArray(data.gift_categories)
+          ? data.gift_categories : [];
+
         productFields.push(
           field(
-            'gift_suggestions',
-            'Quais sugestões de presente você quer mostrar?',
-            'textarea',
+            'gift_categories',
+            'Que tipos de presentes você gostaria de sugerir?',
+            'multi_choice',
             {
-              required:
-                true,
+              multiple: true,
+              required: !cleanText(data.gift_suggestions),
+              help: 'Marque todas as opções que desejar. Se já enviou uma lista por escrito, ela continuará valendo.',
+              options: [
+                { value: 'clothes', label: 'Roupinhas' },
+                { value: 'shoes', label: 'Calçados' },
+                { value: 'toys', label: 'Brinquedos' },
+                { value: 'books', label: 'Livros' },
+                { value: 'educational', label: 'Materiais educativos' },
+                { value: 'other', label: 'Outros' },
+              ],
             },
           ),
         );
+
+        if (categories.includes('clothes')) {
+          productFields.push(field(
+            'gift_clothing_size',
+            'Qual é o tamanho das roupinhas?',
+            'text',
+            { required: true, help: 'Exemplo: tamanho 2 ou 3 anos.' },
+          ));
+        }
+
+        if (categories.includes('shoes')) {
+          productFields.push(field(
+            'gift_shoe_size',
+            'Qual é a numeração dos calçados?',
+            'text',
+            { required: true, help: 'Exemplo: 23/24.' },
+          ));
+        }
+
+        if (categories.includes('other')) {
+          productFields.push(field(
+            'gift_other_details',
+            'Que outros presentes você gostaria de sugerir?',
+            'textarea',
+            { required: true },
+          ));
+        }
+
+        productFields.push(field(
+          'gift_suggestions',
+          'Quer acrescentar alguma preferência ou sugestão específica?',
+          'textarea',
+          {
+            help: 'Opcional. Pode informar personagens, cores, modelos ou escrever uma lista livre de presentes.',
+          },
+        ));
       }
 
       if (
@@ -1353,7 +1425,6 @@ function buildSchema(
           ),
         );
       }
-    }
   }
 
   // All produced invitations can have a musical direction, including
@@ -2089,17 +2160,20 @@ function cleanBranches(
     delete data.location_url;
   }
 
-  if (
-    !resources.includes(
-      'gifts',
-    )
-  ) {
+  const wantsGifts = resources.includes('gifts')
+    || data.gift_page_video === 'yes';
+
+  if (!wantsGifts) {
     for (
       const key
       of [
         'gift_mode',
         'gift_registry_url',
         'gift_suggestions',
+        'gift_categories',
+        'gift_clothing_size',
+        'gift_shoe_size',
+        'gift_other_details',
         'pix_key_type',
         'pix_key',
         'pix_holder',
@@ -2129,6 +2203,16 @@ function cleanBranches(
       )
     ) {
       delete data.gift_suggestions;
+      delete data.gift_categories;
+      delete data.gift_clothing_size;
+      delete data.gift_shoe_size;
+      delete data.gift_other_details;
+    } else {
+      const categories = Array.isArray(data.gift_categories)
+        ? data.gift_categories : [];
+      if (!categories.includes('clothes')) delete data.gift_clothing_size;
+      if (!categories.includes('shoes')) delete data.gift_shoe_size;
+      if (!categories.includes('other')) delete data.gift_other_details;
     }
 
     if (

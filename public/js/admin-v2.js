@@ -24,7 +24,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261008-admin-approved-1';
+} from './admin-v2-order.js?v=20261009-pix-production-1';
 
 import {
   renderAgenda,

@@ -3436,7 +3436,7 @@ function renderRecommendation(
             class="btn btn-ghost"
             type="button"
           >
-            Não, quero apenas o vídeo
+            ${offer.kind === 'product_upgrade' ? 'Não, quero apenas o vídeo' : 'Agora não'}
           </button>
 
           <button

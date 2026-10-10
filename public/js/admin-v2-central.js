@@ -92,6 +92,24 @@ function partyRow(item, today) {
   `;
 }
 
+function upcomingPartyRow(item) {
+  return `
+                  <button
+                    class="row-card"
+                    type="button"
+                    data-open-order="${esc(item.code)}"
+                    style="text-align:left;cursor:pointer"
+                  >
+                    <strong>${esc(item.honoreeName)}</strong>
+                    <small>
+                      ${dateBr(item.eventDate)}
+                      • ${esc(item.customerName)}
+                      • ${esc(item.statusLabel)}
+                    </small>
+                  </button>
+                `;
+}
+
 export async function renderCentral(openOrder) {
   setViewMeta(
     'Central',
@@ -127,6 +145,12 @@ export async function renderCentral(openOrder) {
   );
   const otherDeliveries = (c.upcomingDeliveries || [])
     .filter(item => !workloadCodes.has(item.code));
+
+  // Event-day-only notices belong in Festas de hoje, not in priorities.
+  // Keep ready-for-production orders actionable even on their party day.
+  const attentionItems = (c.attention || []).filter(item =>
+    item.attentionReason !== 'Festa hoje'
+      || item.status === 'ready_for_production');
 
   viewRoot.innerHTML = `
     <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
@@ -186,13 +210,13 @@ export async function renderCentral(openOrder) {
           <span class="eyebrow">Prioridade</span>
           <h2 style="margin:4px 0 0">Hoje precisa da sua atenção</h2>
         </div>
-        <span class="status">${c.attention.length}</span>
+        <span class="status">${attentionItems.length}</span>
       </div>
 
       <div class="list">
         ${
-          c.attention.length
-            ? c.attention.map(attentionRow).join('')
+          attentionItems.length
+            ? attentionItems.map(attentionRow).join('')
             : empty('Nada pedindo sua atenção agora ✨')
         }
       </div>
@@ -258,53 +282,22 @@ export async function renderCentral(openOrder) {
 
       <section class="card">
         <div class="section-title">
-          <h2>Festas de amanhã</h2>
-          <span class="status">${(c.partiesTomorrow || []).length}</span>
-        </div>
-
-        <div class="list">
-          ${
-            (c.partiesTomorrow || []).length
-              ? c.partiesTomorrow.map(
-                (item) =>
-                  partyRow(item, false),
-              ).join('')
-              : empty('Nenhuma festa amanhã.')
-          }
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="section-title">
           <h2>Próximas festas</h2>
           <span class="status">${(c.partiesUpcoming || []).length}</span>
         </div>
-
         <div class="list">
-          ${
-            (c.partiesUpcoming || []).length
-              ? c.partiesUpcoming.map(
-                (item) => `
-                  <button
-                    class="row-card"
-                    type="button"
-                    data-open-order="${esc(item.code)}"
-                    style="text-align:left;cursor:pointer"
-                  >
-                    <strong>${esc(item.honoreeName)}</strong>
-                    <small>
-                      ${dateBr(item.eventDate)}
-                      • ${esc(item.customerName)}
-                      • ${esc(item.statusLabel)}
-                    </small>
-                  </button>
-                `,
-              ).join('')
-              : empty('Nenhuma festa próxima.')
-          }
+          ${(c.partiesUpcoming || []).length
+            ? c.partiesUpcoming.slice(0, 3).map(upcomingPartyRow).join('')
+            : empty('Nenhuma festa próxima.')}
         </div>
+        ${(c.partiesUpcoming || []).length > 3 ? `
+          <details class="order-optional" style="margin-top:10px">
+            <summary>Ver mais festas (${c.partiesUpcoming.length - 3})</summary>
+            <div class="list" style="margin-top:10px">
+              ${c.partiesUpcoming.slice(3).map(upcomingPartyRow).join('')}
+            </div>
+          </details>` : ''}
       </section>
-
       <section class="card">
         <div class="section-title">
           <h2>Pagamentos pendentes</h2>

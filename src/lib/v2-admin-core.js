@@ -3851,10 +3851,10 @@ export async function getV2Central(
         db,
         tomorrow,
       ),
-      // Tomorrow is displayed separately, so upcoming parties start after it.
+      // Tomorrow appears among upcoming parties, not in a separate card.
       upcomingParties(
         db,
-        tomorrow,
+        today,
       ),
       centralPendingPayments(
         db,

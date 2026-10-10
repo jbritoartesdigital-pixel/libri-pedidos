@@ -1519,166 +1519,81 @@ export async function openOrder(code, onChanged = null) {
               button.dataset.orderAction;
 
             if (
-              action
-              === 'finalize'
+              action === 'finalize'
             ) {
-              const closeFinalize =
-                modal(
-                  'Checklist antes de finalizar',
-                  finalizeChecklistHtml(
-                    detail,
-                  ),
+              const closeFinalize = modal(
+                'Concluir pedido',
+                finalizeChecklistHtml(detail),
+              );
+
+              // Keep one checklist open and refresh only its missing items.
+              // Previously approval/payment closed two dialogs, reopened the
+              // entire order and made the user click Finalizar again.
+              const refreshChecklist = async () => {
+                const response = await api(
+                  `/api/admin/v2/orders/${detail.order.code}`,
                 );
-
-              const reopenFinalize =
-                async () => {
-                  closeFinalize();
-                  close();
-
-                  if (onChanged) {
-                    await onChanged();
-                  }
-
-                  await openOrder(
-                    detail.order.code,
-                    onChanged,
-                  );
-
-                  document
-                    .querySelector(
-                      '[data-order-action="finalize"]',
-                    )
-                    ?.click();
-                };
-
-              document
-                .querySelector(
-                  '[data-checklist-preview-whatsapp]',
-                )
-                ?.addEventListener(
-                  'click',
-                  async (event) => {
-                    if (
-                      await registerWhatsappApproval(
-                        event.currentTarget,
-                      )
-                    ) {
-                      await reopenFinalize();
+                detail = response.detail;
+                const body = document.querySelector('.modal-body');
+                if (!body) return;
+                body.innerHTML = finalizeChecklistHtml(detail);
+                bindChecklistActions();
+              };
+              const bindChecklistActions = () => {
+                document.querySelector('[data-checklist-preview-whatsapp]')
+                  ?.addEventListener('click', async event => {
+                    if (await registerWhatsappApproval(event.currentTarget)) {
+                      try { await refreshChecklist(); }
+                      catch (error) { showToast(error.message); }
                     }
-                  },
-                );
-
-              document
-                .querySelector(
-                  '[data-checklist-balance-received]',
-                )
-                ?.addEventListener(
-                  'click',
-                  async (event) => {
-                    if (
-                      !confirm(
-                        'Confirmar que o saldo restante foi recebido?',
-                      )
-                    ) {
+                  });
+                document.querySelector('[data-checklist-balance-received]')
+                  ?.addEventListener('click', async event => {
+                    const amount = Number(detail.payment?.remainingBalanceCents || 0);
+                    if (amount <= 0) {
+                      showToast('Este pedido já não tem saldo aberto.');
+                      await refreshChecklist();
                       return;
                     }
-
-                    const actionButton =
-                      event.currentTarget;
-
-                    actionButton.disabled =
-                      true;
-
+                    if (!confirm(`Você realmente recebeu ${money(amount)} por Pix fora do sistema? Isso criará UM lançamento de recebimento.`)) return;
+                    const btn = event.currentTarget;
+                    btn.disabled = true;
                     try {
-                      await api(
-                        `/api/admin/v2/orders/${detail.order.code}/action`,
-                        {
-                          method:
-                            'POST',
-                          body:
-                            JSON.stringify({
-                              action:
-                                'balance_received',
-                            }),
-                        },
-                      );
-
-                      showToast(
-                        'Saldo registrado ✓',
-                      );
-
-                      await reopenFinalize();
+                      await api(`/api/admin/v2/orders/${detail.order.code}/action`, {
+                        method: 'POST',
+                        body: JSON.stringify({action: 'balance_received'}),
+                      });
+                      showToast('Saldo registrado ✓');
+                      await refreshChecklist();
                     } catch (error) {
-                      actionButton.disabled =
-                        false;
-                      showToast(
-                        error.message,
-                      );
+                      btn.disabled = false;
+                      showToast(error.message);
                     }
-                  },
-                );
-
-              document
-                .getElementById(
-                  'confirmFinalizeOrder',
-                )
-                ?.addEventListener(
-                  'click',
-                  async (event) => {
-                    if (
-                      !document
-                        .getElementById(
-                          'finalDeliveryConfirmed',
-                        )
-                        ?.checked
-                    ) {
-                      showToast(
-                        'Confirme o arquivo ou link final antes de concluir.',
-                      );
+                  });
+                document.getElementById('confirmFinalizeOrder')
+                  ?.addEventListener('click', async event => {
+                    if (!document.getElementById('finalDeliveryConfirmed')?.checked) {
+                      showToast('Confirme que o arquivo ou link final está pronto.');
                       return;
                     }
-
-                    const confirmButton =
-                      event.currentTarget;
-
-                    confirmButton.disabled =
-                      true;
-
+                    const btn = event.currentTarget;
+                    btn.disabled = true;
                     try {
-                      await api(
-                        `/api/admin/v2/orders/${detail.order.code}/action`,
-                        {
-                          method:
-                            'POST',
-                          body:
-                            JSON.stringify({
-                              action:
-                                'finalize',
-                              finalDeliveryConfirmed:
-                                true,
-                            }),
-                        },
-                      );
-
+                      await api(`/api/admin/v2/orders/${detail.order.code}/action`, {
+                        method: 'POST',
+                        body: JSON.stringify({action: 'finalize', finalDeliveryConfirmed: true}),
+                      });
                       closeFinalize();
                       close();
-                      showToast(
-                        'Pedido finalizado ✓',
-                      );
-
-                      if (onChanged) {
-                        await onChanged();
-                      }
+                      showToast('Pedido finalizado ✓');
+                      if (onChanged) await onChanged();
                     } catch (error) {
-                      confirmButton.disabled =
-                        false;
-                      showToast(
-                        error.message,
-                      );
+                      btn.disabled = false;
+                      showToast(error.message);
                     }
-                  },
-                );
-
+                  });
+              };
+              bindChecklistActions();
               return;
             }
 

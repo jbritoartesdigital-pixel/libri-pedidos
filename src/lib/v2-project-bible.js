@@ -19,12 +19,12 @@ export async function getApprovedProjectBible(DB,orderCode){
     'SELECT folder_id,sync_status FROM v2_order_drive_folders WHERE order_code=? LIMIT 1'
   ).bind(orderCode).first();
   const rows=(await DB.prepare(
-    \`SELECT p.id,p.version_number,p.media_type,p.original_r2_key,p.preview_r2_key,
+    `SELECT p.id,p.version_number,p.media_type,p.original_r2_key,p.preview_r2_key,
       a.approved_at,a.evidence_json
      FROM v2_previews p
      JOIN v2_preview_approvals a ON a.preview_id=p.id AND a.order_id=p.order_id
      WHERE p.order_id=? AND p.status='approved'
-     ORDER BY p.version_number ASC,p.id ASC\`
+     ORDER BY p.version_number ASC,p.id ASC`
   ).bind(order.id).all()).results;
   const previews=rows.map(p=>{
     let channel='customer_area';

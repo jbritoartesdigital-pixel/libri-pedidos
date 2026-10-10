@@ -22,7 +22,9 @@ test('refresh token cifrado com AES-GCM não é legível nem adulterável',async
   const cipher=await encryptRefreshToken('refresh-token-only-tests',env);
   assert.ok(!cipher.includes('refresh-token'));
   assert.equal(await decryptRefreshToken(cipher,env),'refresh-token-only-tests');
-  await assert.rejects(()=>decryptRefreshToken(cipher.slice(0,-1)+'x',env));
+  const [version,iv,body]=cipher.split('.');
+  const tampered=version+'.'+(iv[0]==='A'?'B':'A')+iv.slice(1)+'.'+body;
+  await assert.rejects(()=>decryptRefreshToken(tampered,env));
 });
 test('OAuth gera PKCE, salva state hash e bloqueia replay',async t=>{
   const env=makeEnv(),flow=await startDriveOAuth(env);

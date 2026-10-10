@@ -887,6 +887,10 @@ export async function openOrder(code, onChanged = null) {
                   <button type="button" class="btn btn-ghost btn-small" id="syncApprovedPreview">Enviar última prévia aprovada</button>
                   <button type="button" class="btn btn-ghost btn-small" id="connectOrderDrive">Conectar Google Drive</button>
                 </div>
+                <label id="driveAutoSyncControl" class="checkline" style="margin-top:9px" hidden>
+                  <input id="driveAutoSyncEnabled" type="checkbox">
+                  <span>Sincronizar novas prévias aprovadas automaticamente</span>
+                </label>
                 <small id="orderDriveStatus" aria-live="polite">Verificando conexão…</small>
                 <div class="notice info" style="margin-top:9px">
                   A pasta fica exclusiva deste pedido. O vínculo não envia arquivos:
@@ -1039,12 +1043,15 @@ export async function openOrder(code, onChanged = null) {
   const connectDriveButton=document.getElementById('connectOrderDrive');
   const createFolderButton=document.getElementById('createOrderDriveFolder');
   const syncPreviewButton=document.getElementById('syncApprovedPreview');
+  const autoSyncToggle=document.getElementById('driveAutoSyncEnabled');
+  const autoSyncControl=document.getElementById('driveAutoSyncControl');
   driveFolderPanel?.addEventListener('toggle',async ()=>{
     if(!driveFolderPanel.open)return;
     try{
-      const [folder,account]=await Promise.all([
+      const [folder,account,sync]=await Promise.all([
         api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive-folder'),
-        api('/api/admin/v2/drive/status')
+        api('/api/admin/v2/drive/status'),
+        api('/api/admin/v2/drive/sync')
       ]);
       if(folder?.drive?.folderId)driveLinkInput.value=
         'https://drive.google.com/drive/folders/'+folder.drive.folderId;
@@ -1056,6 +1063,8 @@ export async function openOrder(code, onChanged = null) {
       createFolderButton.hidden=!info.connected;
       syncPreviewButton.hidden=!info.connected;
       syncPreviewButton.disabled=!(detail.previews||[]).some(preview=>preview.status==='approved');
+      autoSyncControl.hidden=!info.connected;
+      autoSyncToggle.checked=Boolean(sync?.sync?.enabled);
     }catch(error){driveStatus.textContent=error.message||'Erro ao consultar vínculo.';}
   });
   document.getElementById('saveOrderDriveFolder')?.addEventListener('click',async event=>{
@@ -1069,6 +1078,27 @@ export async function openOrder(code, onChanged = null) {
       showToast('Pasta do Drive vinculada com segurança.');
     }catch(error){showToast(error.message||'Não foi possível vincular pasta.');}
     finally{button.disabled=false;}
+  });
+  autoSyncToggle?.addEventListener('change',async()=>{
+    const enabled=autoSyncToggle.checked;
+    if(enabled&&!confirm('Ativar envio automático de NOVAS prévias aprovadas para as pastas vinculadas? Não inclui arquivos antigos nem cenas aprovadas fora do Pedidos.')){
+      autoSyncToggle.checked=false;
+      return;
+    }
+    autoSyncToggle.disabled=true;
+    try{
+      const result=await api('/api/admin/v2/drive/sync',{
+        method:'PUT',body:JSON.stringify({enabled})
+      });
+      autoSyncToggle.checked=Boolean(result?.sync?.enabled);
+      driveStatus.textContent=autoSyncToggle.checked?
+        'Automação ativada: novas prévias aprovadas serão enviadas em ciclos seguros.':
+        'Envio automático desativado.';
+      showToast(autoSyncToggle.checked?'Sincronização Drive ativada.':'Sincronização Drive desativada.');
+    }catch(error){
+      autoSyncToggle.checked=!enabled;
+      showToast(error.message||'Não foi possível atualizar a sincronização.');
+    }finally{autoSyncToggle.disabled=false;}
   });
   createFolderButton?.addEventListener('click',async()=>{
     createFolderButton.disabled=true;

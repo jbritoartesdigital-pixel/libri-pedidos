@@ -2,8 +2,11 @@ import {
   bindNav,
   loading,
   setBellCount,
+  showToast,
   state,
 } from './admin-v2-core.js';
+
+import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
 
 import {
   ensureAuth,
@@ -290,6 +293,8 @@ window.addEventListener(
     location.reload();
   },
 );
+
+initAdminDiagnostics({ onCopied: () => showToast('Diagnóstico copiado. Cole aqui na conversa.') });
 
 ensureAuth(ready)
   .catch(

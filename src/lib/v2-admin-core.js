@@ -3142,7 +3142,7 @@ async function partiesForDay(
 
 async function upcomingParties(
   db,
-  today,
+  afterDay,
 ) {
   const result =
     await db
@@ -3178,7 +3178,7 @@ async function upcomingParties(
         `,
       )
       .bind(
-        today,
+        afterDay,
       )
       .all();
 
@@ -3851,9 +3851,11 @@ export async function getV2Central(
         db,
         tomorrow,
       ),
+      // Tomorrow already has a dedicated card, so the upcoming list
+      // starts with the day after tomorrow.
       upcomingParties(
         db,
-        today,
+        tomorrow,
       ),
       centralPendingPayments(
         db,

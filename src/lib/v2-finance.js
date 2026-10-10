@@ -1566,6 +1566,8 @@ export async function createV2FinancePayment(
             o.id,
             o.order_code,
             o.status,
+            o.source,
+            o.briefing_status,
             pr.total_cents,
             pr.payment_method
           FROM v2_orders o
@@ -1744,6 +1746,36 @@ export async function createV2FinancePayment(
       totalCents
       - netPaidAfter,
     );
+
+  // A manual WhatsApp order starts as 'awaiting_payment'. When the admin
+  // actually records a received Pix installment, it must no longer appear
+  // as if the first payment had never arrived. This does NOT infer payment
+  // from merely sending a key, and never modifies Mercado Pago records.
+  if (
+    type !== 'refund'
+    && netPaidAfter > 0
+    && order.payment_method === 'pix'
+    && order.source === 'manual_whatsapp'
+    && order.briefing_status === 'locked'
+    && order.status === 'awaiting_payment'
+  ) {
+    await db.prepare(`
+      UPDATE v2_orders
+      SET status='briefing_pending',
+          next_action='Aguardar dados da festa',
+          briefing_status='available',
+          updated_at=?
+      WHERE id=? AND source='manual_whatsapp'
+        AND status='awaiting_payment' AND briefing_status='locked'
+        AND EXISTS (
+          SELECT 1 FROM v2_payments pay
+          WHERE pay.order_id=v2_orders.id
+            AND pay.provider='direct_pix'
+            AND pay.status='approved'
+            AND pay.payment_type!='refund'
+        )
+    `).bind(stamp, order.id).run();
+  }
 
   if (
     order.payment_method

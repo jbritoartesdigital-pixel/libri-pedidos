@@ -311,6 +311,18 @@ function paymentBlock(detail) {
         </div>
       </div>
 
+      ${
+        detail.pricing.paymentMethod === 'pix'
+        && Number(p.paidCents || 0) > 0
+        && Number(p.remainingBalanceCents || 0) > 0
+          ? `<p class="muted" style="font-size:12px;margin-top:10px">
+              Entrada recebida. A segunda parcela é cobrada por Pix no WhatsApp;
+              registre o saldo no Financeiro somente depois de confirmar o crédito.
+              Enviar a chave Pix não registra um pagamento.
+            </p>`
+          : ''
+      }
+
       <div class="list" style="margin-top:12px">
         ${(p.payments || []).map(
           (item) => `

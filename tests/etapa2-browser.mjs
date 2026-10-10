@@ -122,7 +122,7 @@ async function capture(browser,ref,label) {
     await page.clock.setFixedTime(new Date('2026-10-10T15:00:00Z'));
     await page.goto(instance.url+'/admin-v2/',{waitUntil:'domcontentloaded'});
     await page.locator('#viewRoot #advancedOrderSearch').waitFor({timeout:18000});
-    await page.locator('#authGate.hidden').waitFor();
+    assert.equal(await page.locator('#authGate').isVisible(),false,'login não deveria aparecer');
     await page.evaluate(()=>document.fonts.ready);
     assert.equal(await page.locator('#adminApp').isVisible(),true);
     assert.equal(await page.locator('#advancedOrderFilters').getAttribute('open'),null,

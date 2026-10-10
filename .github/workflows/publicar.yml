@@ -2,11 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  # Publicação única da correção da tela branca; removida após o deploy.
-  push:
-    branches: [main]
-    paths:
-      - 'public/js/admin-v2-core.js'
 
 jobs:
   deploy:
@@ -198,35 +193,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-      
-      - name: Conferir restauração do Admin V2 publicado
-        run: |
-          node --input-type=module <<'NODE'
-          const origin = 'https://pedidos.libriconvites.com.br';
-          for (let attempt=0; attempt<6; attempt++) {
-            try {
-              const [html, core, entry] = await Promise.all([
-                fetch(origin + '/admin-v2?hotfix=' + Date.now()),
-                fetch(origin + '/js/admin-v2-core.js?hotfix=' + Date.now()),
-                fetch(origin + '/js/admin-v2.js?v=20261010-admin-recovery-1'),
-              ]);
-              if (![html,core,entry].every(r=>r.status===200)) {
-                throw new Error('Arquivo indisponível: ' + [html.status,core.status,entry.status].join(','));
-              }
-              const [page, module, boot] = await Promise.all([html.text(),core.text(),entry.text()]);
-              if (!page.includes('admin-v2-boot-watchdog.js')
-                || !module.includes('export const app')
-                || !module.includes('export function esc')
-                || !module.includes('export function dateTimeBr')
-                || !boot.includes('renderCurrent')) {
-                throw new Error('Bundle antigo ou módulo Admin incompleto');
-              }
-              console.log('✓ Admin V2 e módulos recuperados confirmados em produção.');
-              process.exit(0);
-            } catch (err) {
-              console.log('Tentativa ' + (attempt+1) + ': ' + err.message);
-              await new Promise(r=>setTimeout(r,2500));
-            }
-          }
-          throw new Error('Admin V2 ainda não refletiu a correção.');
-          NODE
+

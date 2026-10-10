@@ -2478,7 +2478,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.ok(shell.includes('/css/admin-v2.css?v=20261009-admin-quickfinish-1'));
   assert.ok(shell.includes('/js/admin-v2.js?v=20261010-admin-recovery-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261009-admin-quickfinish-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261009-admin-quickfinish-1"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {

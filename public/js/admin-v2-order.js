@@ -1021,7 +1021,7 @@ export async function openOrder(code, onChanged = null) {
       const result=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/project-bible');
       const data=result?.projectBible;
       if(!data)throw Error('Histórico ainda não disponível.');
-      const blob=new Blob([JSON.stringify(data,null,2)+'\\n'],{type:'application/json'});
+      const blob=new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'});
       const url=URL.createObjectURL(blob);
       const link=document.createElement('a');
       link.href=url;

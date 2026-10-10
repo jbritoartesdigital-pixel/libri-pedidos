@@ -16,6 +16,23 @@ for (const file of ['src', 'public', 'scripts', 'tests'].filter(existsSync).flat
   }
   count++;
 }
+// Browser scripts are NOT bundled by the Worker dry-run. This explicit
+// ES-module import catches missing named exports that cause a white screen,
+// even though node --check accepts every file separately.
+const adminSmoke = spawnSync(process.execPath, [
+  '--input-type=module', '-e',
+  `globalThis.document = { getElementById: () => ({}) };
+  const order = await import('./public/js/admin-v2-order.js');
+  const finance = await import('./public/js/admin-v2-finance.js');
+  if (typeof order.openOrder !== 'function'
+    || typeof finance.renderFinance !== 'function') {
+    throw new Error('Entrypoints essenciais do Admin V2 indisponíveis');
+  }`
+], {encoding: 'utf8'});
+if (adminSmoke.status !== 0) {
+  throw new Error('Admin V2 com erro de importação em tempo de execução:\\n' + (adminSmoke.stderr || adminSmoke.stdout));
+}
+
 const config = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
 if (config.main !== 'src/index.js' || !existsSync(config.main)) throw new Error('Worker principal inválido.');
 if (!config.d1_databases.some(x => x.binding === 'DB') || !config.r2_buckets.some(x => x.binding === 'FILES') || config.assets.binding !== 'ASSETS') throw new Error('Bindings inválidos.');

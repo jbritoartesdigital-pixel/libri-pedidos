@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Publicação única da simplificação das festas após CI verde.
+  # Remover este trigger após o deploy confirmado, mantendo workflow_dispatch.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/admin-v2-central.js'
 
 jobs:
   deploy:

@@ -73,6 +73,10 @@ test('botão é somente administrativo e identifica exceções 500 sem stack no 
   assert.match(diagnosticUi, /dialog\.showModal\(\)/);
   assert.match(diagnosticUi, /libriDiagnosticReport/);
   assert.match(diagnosticUi, /Copiar relatório/);
+  assert.match(diagnosticUi, /Enviar ao ChatGPT/);
+  assert.match(diagnosticUi, /navigator\.share/);
+  assert.match(diagnosticUi, /navigator\.clipboard/);
+  assert.match(diagnosticUi, /https:\/\/chatgpt\.com\//);
   assert.match(diagnosticUi, /libriDiagnosticCloseFooter/);
   assert.match(core, /recordAdminDiagnostic/);
   assert.match(worker, /x-libri-error-id/);

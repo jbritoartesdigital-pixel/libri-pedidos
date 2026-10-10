@@ -42,12 +42,12 @@ export async function saveOrderDriveFolder(DB,code,raw){
     .bind(code).first();
   // Prevent a DB uniqueness race. Any unique violation is surfaced as conflict
   // by the admin route and does not expose the other order code.
-  await DB.prepare(\`INSERT INTO v2_order_drive_folders (order_code,folder_id,sync_status,updated_at)
+  await DB.prepare(`INSERT INTO v2_order_drive_folders (order_code,folder_id,sync_status,updated_at)
     VALUES (?,?,'pending_connection',datetime('now'))
     ON CONFLICT(order_code) DO UPDATE SET
       folder_id=excluded.folder_id,
       sync_status=CASE WHEN v2_order_drive_folders.folder_id=excluded.folder_id
         THEN v2_order_drive_folders.sync_status ELSE 'pending_connection' END,
-      updated_at=datetime('now')\`).bind(code,folderId).run();
+      updated_at=datetime('now')`).bind(code,folderId).run();
   return {...await readOrderDriveFolder(DB,code),changed:previous?.folder_id!==folderId};
 }

@@ -883,6 +883,8 @@ export async function openOrder(code, onChanged = null) {
                 </div>
                 <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
                   <button type="button" class="btn btn-secondary btn-small" id="saveOrderDriveFolder">Vincular pasta</button>
+                  <button type="button" class="btn btn-ghost btn-small" id="createOrderDriveFolder">Criar pasta no meu Drive</button>
+                  <button type="button" class="btn btn-ghost btn-small" id="syncApprovedPreview">Enviar última prévia aprovada</button>
                   <button type="button" class="btn btn-ghost btn-small" id="connectOrderDrive">Conectar Google Drive</button>
                 </div>
                 <small id="orderDriveStatus" aria-live="polite">Verificando conexão…</small>
@@ -1035,6 +1037,8 @@ export async function openOrder(code, onChanged = null) {
   const driveLinkInput=document.getElementById('orderDriveFolderId');
   const driveStatus=document.getElementById('orderDriveStatus');
   const connectDriveButton=document.getElementById('connectOrderDrive');
+  const createFolderButton=document.getElementById('createOrderDriveFolder');
+  const syncPreviewButton=document.getElementById('syncApprovedPreview');
   driveFolderPanel?.addEventListener('toggle',async ()=>{
     if(!driveFolderPanel.open)return;
     try{
@@ -1049,6 +1053,9 @@ export async function openOrder(code, onChanged = null) {
         info.configured?'Google Drive disponível, mas falta autorizar sua conta.':
         'Integração OAuth ainda não configurada no Worker.';
       connectDriveButton.hidden=!info.configured||info.connected;
+      createFolderButton.hidden=!info.connected;
+      syncPreviewButton.hidden=!info.connected;
+      syncPreviewButton.disabled=!(detail.previews||[]).some(preview=>preview.status==='approved');
     }catch(error){driveStatus.textContent=error.message||'Erro ao consultar vínculo.';}
   });
   document.getElementById('saveOrderDriveFolder')?.addEventListener('click',async event=>{
@@ -1062,6 +1069,36 @@ export async function openOrder(code, onChanged = null) {
       showToast('Pasta do Drive vinculada com segurança.');
     }catch(error){showToast(error.message||'Não foi possível vincular pasta.');}
     finally{button.disabled=false;}
+  });
+  createFolderButton?.addEventListener('click',async()=>{
+    createFolderButton.disabled=true;
+    try{
+      const data=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive/create-folder',{
+        method:'POST',body:JSON.stringify({})
+      });
+      const id=data?.folder?.folderId;
+      if(!id)throw Error('Drive não retornou pasta.');
+      driveLinkInput.value='https://drive.google.com/drive/folders/'+id;
+      driveStatus.textContent='Pasta pronta. Arquivos só serão enviados após aprovação.';
+      showToast('Pasta criada e vinculada no Drive.');
+    }catch(error){showToast(error.message||'Não foi possível criar a pasta.');}
+    finally{createFolderButton.disabled=false;}
+  });
+  syncPreviewButton?.addEventListener('click',async()=>{
+    const approved=(detail.previews||[]).filter(p=>p.status==='approved');
+    const last=approved.sort((a,b)=>Number(b.version)-Number(a.version))[0];
+    if(!last){showToast('Ainda não há prévia aprovada para enviar.');return;}
+    syncPreviewButton.disabled=true;
+    try{
+      const data=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive/upload-approved-preview',{
+        method:'POST',body:JSON.stringify({previewId:Number(last.id)})
+      });
+      if(!data?.upload?.fileId)throw Error('Drive não confirmou envio.');
+      driveStatus.textContent='Prévia v'+last.version+' confirmada no Google Drive.';
+      showToast(data.upload.alreadyUploaded?'Prévia já estava salva no Drive.':
+        'Prévia aprovada enviada ao Drive ✓');
+    }catch(error){showToast(error.message||'Falha ao enviar ao Drive.');}
+    finally{syncPreviewButton.disabled=false;}
   });
   connectDriveButton?.addEventListener('click',async()=>{
     connectDriveButton.disabled=true;

@@ -358,7 +358,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-compact-search-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-compact-search-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-clean-central-2"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1897,7 +1897,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261010-compact-search-1'));
+    'admin-v2.js?v=20261010-clean-central-2'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2275,6 +2275,63 @@ test('Production UI exposes completed filter and clears contradictory active-onl
   assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
 });
 
+test('Central separates tomorrow from upcoming parties without rewriting orders', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const seed = async (name, eventDay) => {
+    const checkout = await startV2Checkout(request, e, input({
+      event: { honoreeName: name, type: 'birthday', date: day(60) },
+      deliveryWindow: { start: day(12), end: day(14) },
+      ...await terms(DB),
+    }));
+    DB.sqlite.prepare(
+      "UPDATE v2_orders SET status='ready_for_production', event_date=? WHERE order_code=?"
+    ).run(eventDay, checkout.order.code);
+    return checkout.order.code;
+  };
+  const today = day(0);
+  const tomorrow = day(1);
+  const afterTomorrow = day(2);
+  const todayCode = await seed('Festa hoje', today);
+  const tomorrowCode = await seed('Festa amanhã', tomorrow);
+  const upcomingCode = await seed('Festa depois de amanhã', afterTomorrow);
+  const before = DB.sqlite.prepare(
+    'SELECT order_code,status,event_date FROM v2_orders ORDER BY id'
+  ).all();
+
+  const central = await getV2Central(DB);
+  assert.ok(central.partiesToday.some(item => item.code === todayCode));
+  assert.ok(central.partiesTomorrow.some(item => item.code === tomorrowCode));
+  assert.ok(central.partiesUpcoming.some(item => item.code === upcomingCode));
+  assert.ok(!central.partiesUpcoming.some(item => item.code === tomorrowCode),
+    'tomorrow is already visible in its dedicated card and must not be repeated');
+  assert.ok(!central.partiesUpcoming.some(item => item.code === todayCode));
+  assert.deepEqual(
+    DB.sqlite.prepare('SELECT order_code,status,event_date FROM v2_orders ORDER BY id').all(),
+    before, 'deduplication of party cards cannot modify existing orders',
+  );
+});
+
+test('Central merges overlapping delivery/production lists and folds repeated widgets', () => {
+  const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
+  const boot = readFileSync('public/js/admin-v2.js', 'utf8');
+  const before = central.indexOf('Entregas e produção • próximos 7 dias');
+  const after = central.indexOf('Ver capacidade diária dos próximos 14 dias');
+  assert.ok(before > 0 && after > before);
+  assert.ok(!central.includes('<h2>Próximas entregas</h2>'));
+  assert.ok(!central.includes('<h2>Produção dos próximos 7 dias</h2>'));
+  assert.match(central, /const workloadCodes = new Set/);
+  assert.match(central, /\.filter\(item => !workloadCodes\.has\(item\.code\)\)/);
+  assert.match(central, /Outras entregas \(\$\{otherDeliveries\.length\}\)/);
+  assert.match(central, /<details class="card order-optional">\s*<summary>Novos pedidos/);
+  assert.match(central, /<details class="card order-optional" style="margin-top:14px">\s*<summary>Ver capacidade diária/);
+  assert.ok(central.includes('Festas de hoje') && central.includes('Festas de amanhã')
+    && central.includes('Próximas festas'), 'party dayparts remain separate');
+  assert.ok(central.includes('Pagamentos pendentes'), 'unpaid orders remain actionable');
+  assert.match(boot, /admin-v2-central\.js\?v=20261010-clean-central-2/);
+});
+
 test('Central starts with only name search and keeps all optional order filters hidden', () => {
   const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
   const entry = readFileSync('public/js/admin-v2.js', 'utf8');
@@ -2308,8 +2365,8 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['archived','advOrderArchived'\]/);
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
-  assert.match(entry, /admin-v2-central\.js\?v=20261010-compact-search-1/);
-  assert.match(html, /admin-v2\.js\?v=20261010-compact-search-1/);
+  assert.match(entry, /admin-v2-central\.js\?v=20261010-clean-central-2/);
+  assert.match(html, /admin-v2\.js\?v=20261010-clean-central-2/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -2638,7 +2695,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261010-compact-search-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261010-clean-central-2'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2665,7 +2722,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261010-compact-search-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-compact-search-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-clean-central-2'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261010-balance-wa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
@@ -2844,7 +2901,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   assert.ok(html.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
   assert.ok(entry.includes('client-v2-area.js?v=20261009-mobile-briefing-3'));
-  assert.ok(admin.includes('admin-v2-central.js?v=20261010-compact-search-1'));
+  assert.ok(admin.includes('admin-v2-central.js?v=20261010-clean-central-2'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);

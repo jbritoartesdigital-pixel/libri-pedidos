@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Publicação única da Central enxuta, após CI verde.
+  # Remover este trigger após confirmar deploy: mudança apenas no YAML não republica.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/admin-v2-central.js'
 
 jobs:
   deploy:

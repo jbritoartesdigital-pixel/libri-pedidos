@@ -4,11 +4,23 @@ import {getApprovedProjectBible} from '../lib/v2-project-bible.js';
 import {driveConnectionStatus,startDriveOAuth,finishDriveOAuth,disconnectDrive}
   from '../lib/v2-google-drive-oauth.js';
 import {createOrderDriveFolder,uploadApprovedPreview} from '../lib/v2-google-drive-upload.js';
+import {getDriveSyncSetting,setDriveSyncSetting} from '../lib/v2-drive-auto-sync.js';
 
 /** Admin-only. Called after requireAdminPasskeyAuth in src/index.js. */
 export async function handleAdminDriveFolderV2Api(request,env,url){
   const method=request.method.toUpperCase();
   const path=url.pathname;
+  if(path==='/api/admin/v2/drive/sync'){
+    if(method==='GET')return json({ok:true,sync:await getDriveSyncSetting(env.DB)});
+    if(method!=='PUT')return fail('Método não permitido.',405);
+    try{
+      const body=await readJson(request);
+      if(!body||typeof body!=='object'||Array.isArray(body)||
+         Object.keys(body).some(key=>key!=='enabled')||
+         typeof body.enabled!=='boolean')return fail('Envie enabled como verdadeiro ou falso.',422);
+      return json({ok:true,sync:await setDriveSyncSetting(env,body.enabled)});
+    }catch(error){return fail(error.message||'Não foi possível alterar sincronização.',409);}
+  }
   if(path==='/api/admin/v2/drive/status'){
     return method==='GET'?json({ok:true,drive:await driveConnectionStatus(env)}):
       fail('Método não permitido.',405);

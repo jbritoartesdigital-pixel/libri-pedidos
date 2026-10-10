@@ -1465,3 +1465,39 @@ button { -webkit-tap-highlight-color: transparent; }
   .libri-diagnostic-body { padding: 10px 14px 0; }
   .libri-diagnostic-actions { padding: 8px 14px 14px; }
 }
+
+/* Order actions: what is used daily first, rare administrative tools folded. */
+.order-optional {
+  min-width: 0;
+  margin-top: 12px;
+}
+.order-optional > summary {
+  cursor: pointer;
+  font-weight: 750;
+  color: var(--rose-dark);
+  padding: 11px 10px;
+  border-radius: 10px;
+  list-style-position: inside;
+}
+.order-optional > summary:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 3px;
+}
+.order-optional[open] > summary { margin-bottom: 12px; background: var(--rose-soft); }
+.order-optional .section-grid { margin-top: 8px; }
+.order-briefing-panel { margin-top: 14px; scroll-margin-top: 18px; }
+#orderPreviewDetails { scroll-margin-top: 18px; }
+.order-quick-actions [data-order-action="finalize"] { font-weight: 800; }
+@media (max-width: 620px) {
+  .order-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .order-quick-actions .btn {
+    width: 100%;
+    min-height: 43px;
+    margin: 0;
+  }
+  .order-quick-actions > #toggleOrderBriefing { grid-column: 1; }
+  .order-quick-actions > [data-order-action="finalize"] { grid-column: 2; }
+}

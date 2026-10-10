@@ -35,7 +35,10 @@ jobs:
       # bloquear por diferenças de pixels; falhas funcionais/mobile bloqueiam.
       - name: Preparar Playwright no Chrome preinstalado
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          # Isola npm para não tocar no node_modules/lockfile mantidos por pnpm.
+          npm install --prefix /tmp/libri-browser-deps --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          ln -s /tmp/libri-browser-deps/node_modules/playwright node_modules/playwright
+          ln -s /tmp/libri-browser-deps/node_modules/pngjs node_modules/pngjs
 
       - name: Barrar deploy se o teste Android ou diagnóstico falhar
         run: node tests/etapa2-browser.mjs

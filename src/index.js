@@ -18,6 +18,7 @@ import {
 import {
   handleAdminV2CoreApi,
 } from './routes/admin-v2-core.js';
+import { handleAdminFlowV2Api } from './routes/admin-flow-v2.js';
 
 import {
   handleAdminAgendaV2Api,
@@ -323,6 +324,7 @@ async function handleAdminV2Api(
   }
 
   const handlers = [
+    handleAdminFlowV2Api,
     handleAdminV2CoreApi,
     handleAdminAgendaV2Api,
     handleAdminFinanceV2Api,

@@ -2,6 +2,11 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Deploy once when the reviewed Central search is merged; then restore manual.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/admin-v2-central.js'
 
 jobs:
   deploy:

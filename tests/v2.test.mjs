@@ -358,7 +358,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-finalized-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-compact-search-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -2273,6 +2273,43 @@ test('Production UI exposes completed filter and clears contradictory active-onl
   assert.match(production, /\['new', 'in_production'\]\.includes\(period\.value\)/);
   assert.match(production, /Os que já foram arquivados continuam na seção Arquivados/);
   assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
+});
+
+test('Central starts with only name search and keeps all optional order filters hidden', () => {
+  const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
+  const entry = readFileSync('public/js/admin-v2.js', 'utf8');
+  const html = readFileSync('public/admin-v2.html', 'utf8');
+
+  assert.match(central, /id="advOrderQuery" type="search"/);
+  assert.match(central, /<details id="advancedOrderFilters" class="order-search-more"/);
+  assert.doesNotMatch(central, /<details id="advancedOrderFilters"[^>]*\bopen\b/);
+  assert.match(central, /<summary>Mostrar mais filtros<\/summary>/);
+
+  const begin = central.indexOf('id="advOrderQuery" type="search"');
+  const details = central.indexOf('<details id="advancedOrderFilters"');
+  const end = central.indexOf('</details>', details);
+  assert.ok(begin > 0 && details > begin && end > details);
+  for (const id of [
+    'advOrderStatus', 'advOrderProduct', 'advOrderArchived',
+    'advOrderFrom', 'advOrderTo', 'runAdvancedOrderSearch',
+  ]) {
+    const position = central.indexOf('id="' + id + '"');
+    assert.ok(position > details && position < end,
+      id + ' must not use screen space until advanced filters are expanded');
+  }
+  assert.ok(central.indexOf('id="advancedOrderResults"') > end);
+  assert.match(central, /quickSearch\?\.addEventListener\('input'/);
+  assert.match(central, /quickSearch\?\.addEventListener\('keydown'/);
+  assert.match(central, /setTimeout\(runOrderSearch, 350\)/);
+  assert.match(central, /if \(!hasQuery && !hasExtraFilters\)/);
+  assert.match(central, /if \(revision !== searchRevision\) return/);
+  assert.match(central, /Mostrar mais filtros • ativos/);
+  assert.match(central, /\['q','advOrderQuery'\]/);
+  assert.match(central, /\['archived','advOrderArchived'\]/);
+  assert.match(central, /\['from','advOrderFrom'\]/);
+  assert.match(central, /\['to','advOrderTo'\]/);
+  assert.match(entry, /admin-v2-central\.js\?v=20261010-compact-search-1/);
+  assert.match(html, /admin-v2\.js\?v=20261010-compact-search-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {

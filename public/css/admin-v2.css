@@ -1501,3 +1501,23 @@ button { -webkit-tap-highlight-color: transparent; }
   .order-quick-actions > #toggleOrderBriefing { grid-column: 1; }
   .order-quick-actions > [data-order-action="finalize"] { grid-column: 2; }
 }
+
+/* Keep the Central fast: the search field is visible; advanced controls fold away. */
+#advancedOrderSearch .order-search-more > summary {
+  display: list-item;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 2px;
+  color: var(--rose-dark);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#advancedOrderSearch .order-search-more > summary:focus-visible {
+  outline: 2px solid var(--rose);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+#advancedOrderSearch .order-search-more .form-grid {
+  margin-top: 10px;
+}

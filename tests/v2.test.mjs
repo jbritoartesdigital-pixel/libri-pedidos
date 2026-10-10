@@ -357,8 +357,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-admin-quickfinish-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-admin-recovery-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-admin-recovery-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1331,6 +1331,24 @@ test('manual duplicated Pix can be annulled with audit while Mercado Pago remain
   ).get(order.id).n,1);
 });
 
+test('admin imports core contract and shows recovery rather than an indefinite white screen', () => {
+  const html = readFileSync('public/admin-v2.html', 'utf8');
+  const core = readFileSync('public/js/admin-v2-core.js', 'utf8');
+  const guard = readFileSync('public/js/admin-v2-boot-watchdog.js', 'utf8');
+  assert.ok(html.includes('admin-v2-boot-watchdog.js'));
+  assert.ok(guard.includes('adminBootRetry'));
+  for (const symbol of [
+    'app', 'authGate', 'viewRoot', 'viewTitle', 'viewEyebrow',
+    'modalRoot', 'state', 'esc', 'money', 'dateBr', 'dateTimeBr',
+  ]) {
+    assert.ok(
+      core.includes('export const ' + symbol + ' ') ||
+      core.includes('export function ' + symbol + '('),
+      'Admin core must export: ' + symbol,
+    );
+  }
+});
+
 test('admin order shows one-tap briefing/finalize, folds rarely used buttons and refreshes checklist in place', () => {
   const ui=readFileSync('public/js/admin-v2-order.js','utf8');
   const styles=readFileSync('public/css/admin-v2.css','utf8');
@@ -1711,7 +1729,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261009-admin-quickfinish-1'));
+    'admin-v2.js?v=20261010-admin-recovery-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2349,7 +2367,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261009-admin-quickfinish-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261010-admin-recovery-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261009-admin-quickfinish-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2376,7 +2394,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261009-admin-quickfinish-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-admin-quickfinish-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-admin-recovery-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261009-admin-quickfinish-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261009-admin-quickfinish-1"));
 });

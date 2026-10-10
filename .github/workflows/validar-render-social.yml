@@ -1,0 +1,33 @@
+name: Etapa 4 | Teste FFmpeg com vídeo fictício (sem publicação)
+on:
+  pull_request:
+    paths:
+      - 'scripts/libri-project-automation.mjs'
+      - 'tests/project-automation.test.mjs'
+      - 'tests/social-render.test.mjs'
+      - '.github/workflows/validar-render-social.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar FFmpeg apenas para este teste
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version
+          ffprobe -version
+      - name: Gerar Reels, Stories e capa com vídeo 100% fictício
+        run: |
+          node --test tests/project-automation.test.mjs tests/social-render.test.mjs
+      - name: Confirmar que nenhuma ação externa foi executada
+        run: |
+          node --check scripts/libri-project-automation.mjs
+          echo 'Sem dados reais, uploads, acesso ao Drive ou publicações'

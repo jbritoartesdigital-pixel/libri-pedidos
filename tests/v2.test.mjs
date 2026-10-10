@@ -358,7 +358,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-pix-production-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-pix-production-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-finance-date-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1258,6 +1258,17 @@ test('production search finds theme and exposes the planned card data', async t 
   assert.ok(rows[0].paidCents > 0);
 });
 
+test('finance edit date guard explains future dates before contacting the API', () => {
+  const admin = readFileSync('public/js/admin-v2-finance.js', 'utf8');
+  const backend = readFileSync('src/lib/v2-finance.js', 'utf8');
+  assert.match(admin, /export function financeReceiptDateMessage/);
+  assert.match(admin, /max="\$\{todaySaoPaulo\(\)\}"/);
+  assert.match(admin, /financeReceiptDateMessage\(paidDate\)/);
+  assert.match(admin, /A data .* ainda não chegou/);
+  assert.match(admin, /Datas futuras não entram como recebimento/);
+  assert.match(backend, /Datas futuras não são recebimentos/);
+});
+
 test('finance admin can correct direct Pix but not Mercado Pago reconciliation', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -1303,6 +1314,21 @@ test('finance admin can correct direct Pix but not Mercado Pago reconciliation',
     DB.sqlite.prepare('SELECT net_cents FROM v2_payments WHERE id=?').get(directPix.id).net_cents,
     2500,
   );
+
+  const oldDate = DB.sqlite.prepare('SELECT paid_at FROM v2_payments WHERE id=?')
+    .get(directPix.id).paid_at;
+  await assert.rejects(
+    updateV2FinancePayment(DB, directPix.id, {
+      amountCents: 3000,
+      paidDate: day(1),
+      paymentType: 'balance',
+    }),
+    /Datas futuras não são recebimentos/,
+  );
+  assert.equal(DB.sqlite.prepare('SELECT paid_at FROM v2_payments WHERE id=?')
+    .get(directPix.id).paid_at, oldDate);
+  assert.equal(DB.sqlite.prepare('SELECT amount_cents FROM v2_payments WHERE id=?')
+    .get(directPix.id).amount_cents, 2500);
 
   const mercadoPago = DB.sqlite.prepare(
     "SELECT id FROM v2_payments WHERE order_id=? AND provider='mercado_pago'"
@@ -1604,7 +1630,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261009-pix-production-1'));
+    'admin-v2.js?v=20261009-finance-date-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2242,7 +2268,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261009-pix-production-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261009-finance-date-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261009-pix-production-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2269,9 +2295,9 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261009-pix-production-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-pix-production-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-finance-date-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261009-pix-production-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261008-growth-1"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261009-finance-date-1"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {

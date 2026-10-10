@@ -1957,7 +1957,7 @@ export async function updateV2FinancePayment(
     || day > dateKeyInSaoPaulo()
   ) {
     throw new Error(
-      'Informe uma data de recebimento válida.',
+      'Informe uma data de recebimento válida, até hoje. Datas futuras não são recebimentos.',
     );
   }
 

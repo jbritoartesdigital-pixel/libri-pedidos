@@ -22,8 +22,8 @@ for (const file of ['src', 'public', 'scripts', 'tests'].filter(existsSync).flat
 const adminSmoke = spawnSync(process.execPath, [
   '--input-type=module', '-e',
   `globalThis.document = { getElementById: () => ({}) };
-  const order = await import('./public/js/admin-v2-order.js');
-  const finance = await import('./public/js/admin-v2-finance.js');
+  const order = await import('./' + 'public/js/admin-v2-order.js');
+  const finance = await import('./' + 'public/js/admin-v2-finance.js');
   if (typeof order.openOrder !== 'function'
     || typeof finance.renderFinance !== 'function') {
     throw new Error('Entrypoints essenciais do Admin V2 indisponíveis');

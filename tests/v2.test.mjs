@@ -1269,6 +1269,92 @@ test('finance edit date guard explains future dates before contacting the API', 
   assert.match(backend, /Datas futuras não são recebimentos/);
 });
 
+test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending the key does not', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Duas parcelas pelo WhatsApp', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(12), end: day(14) },
+    ...await terms(DB),
+  }));
+  const order = DB.sqlite.prepare(
+    'SELECT id,status,briefing_status FROM v2_orders WHERE order_code=?'
+  ).get(checkout.order.code);
+  assert.equal(order.status, 'awaiting_payment');
+  assert.equal(order.briefing_status, 'locked');
+  assert.equal((await getV2AdminOrderDetail(DB, checkout.order.code)).payment.paidCents, 0);
+
+  // The same explicit source as an order opened by the WhatsApp admin workflow.
+  DB.sqlite.prepare("UPDATE v2_orders SET source='manual_whatsapp' WHERE id=?")
+    .run(order.id);
+  const deposit = await createV2FinancePayment(DB, {
+    orderCode: checkout.order.code,
+    amountCents: checkout.payment.amountDueNowCents,
+    paidDate: day(-1),
+    paymentType: 'deposit',
+    note: 'Primeira parcela de Pix recebida fora do sistema',
+  });
+  assert.ok(deposit.id > 0);
+  const first = DB.sqlite.prepare(
+    'SELECT status,briefing_status FROM v2_orders WHERE id=?'
+  ).get(order.id);
+  assert.equal(first.status, 'briefing_pending');
+  assert.equal(first.briefing_status, 'available');
+  assert.equal(deposit.remainingCents, checkout.payment.totalCents - checkout.payment.amountDueNowCents);
+  const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(detail.payment.remainingBalanceCents, deposit.remainingCents);
+
+  // A future payment request sent on WhatsApp is NOT an approved receipt.
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=? AND provider='direct_pix'"
+  ).get(order.id).n, 1);
+
+  const balance = await createV2FinancePayment(DB, {
+    orderCode: checkout.order.code,
+    amountCents: deposit.remainingCents,
+    paidDate: day(-1),
+    paymentType: 'balance',
+    note: 'Segunda parcela confirmada no extrato depois do WhatsApp',
+  });
+  assert.equal(balance.remainingCents, 0);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.id).status,
+    'briefing_pending', 'settling the balance cannot falsely approve or deliver the invitation');
+  const paid = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(paid.payment.remainingBalanceCents, 0);
+  await assert.rejects(
+    createV2FinancePayment(DB, {
+      orderCode: checkout.order.code, amountCents: 1,
+      paidDate: day(-1), paymentType: 'balance',
+    }),
+    /não pode ser maior que o saldo/,
+    'repeated confirmation must not add a second receipt',
+  );
+});
+
+test('existing partial Pix receipts cannot display awaiting first payment in admin', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Status Pix WhatsApp', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(12), end: day(14) },
+    ...await terms(DB),
+  }));
+  await createV2FinancePayment(DB, {
+    orderCode: checkout.order.code, amountCents: 500,
+    paidDate: day(-1), paymentType: 'deposit',
+    note: 'Pix manual já confirmado no banco',
+  });
+  const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(detail.order.status, 'awaiting_payment',
+    'provider checkout status is not overwritten by a separate manual entry');
+  assert.match(detail.order.statusLabel, /Entrada recebida.*saldo pendente/);
+  assert.match(detail.order.nextAction, /saldo Pix.*WhatsApp/);
+  const ui=readFileSync('public/js/admin-v2-order.js','utf8');
+  assert.match(ui, /Enviar a chave Pix não registra um pagamento/);
+});
+
 test('manual duplicated Pix can be annulled with audit while Mercado Pago remains untouched', async t => {
   const DB = database(), mp = providerMock(t), e = env(DB);
   const checkout = await startV2Checkout(request, e, input({

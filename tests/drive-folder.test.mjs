@@ -17,8 +17,8 @@ function fixture(){
   insert.run('LIBRI-123457','token-ficticio-2',owner,'birthday','Evento Teste 2','2026-11-13');
   return DB;
 }
-const id1='1Wcy2HoogirGo5u9LvrgDbH5JZurF4iRa';
-const id2='1wOWAZu5ntoa7zbwnqUEA_9kyLX1gbgkz';
+const id1='1FakeDriveFolderIdABC123XYZ444';
+const id2='1FakeDriveFolderIdABC123XYZ555';
 test('aceitar apenas link/ID confiável de pasta Google Drive',()=>{
   assert.equal(parseDriveFolderId(id1),id1);
   assert.equal(parseDriveFolderId('https://drive.google.com/drive/folders/'+id1),id1);

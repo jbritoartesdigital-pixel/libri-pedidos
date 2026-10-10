@@ -194,6 +194,9 @@ function makeDiagnosticDialog() {
       <p id="libriDiagnosticFeedback" role="status" aria-live="polite"></p>
     </div>
     <footer class="libri-diagnostic-actions">
+      <button id="libriDiagnosticSend" type="button" class="btn btn-primary">
+        Enviar ao ChatGPT
+      </button>
       <button id="libriDiagnosticCopy" type="button" class="btn btn-secondary">
         Copiar relatório
       </button>
@@ -229,6 +232,30 @@ export function initAdminDiagnostics({ onCopied = () => {} } = {}) {
         if (event.target === dialog) dialog.close();
       });
       dialog.addEventListener('close', () => button.focus());
+      dialog.querySelector('#libriDiagnosticSend').addEventListener('click', async () => {
+        const report = dialog.querySelector('#libriDiagnosticReport');
+        const feedback = dialog.querySelector('#libriDiagnosticFeedback');
+        if (typeof navigator.share === 'function') {
+          try {
+            await navigator.share({title: 'Libri Pedidos | Diagnóstico', text: report.value});
+            feedback.textContent = 'Relatório compartilhado pelo aplicativo escolhido.';
+            return;
+          } catch (error) {
+            if (error?.name === 'AbortError') {
+              feedback.textContent = 'Compartilhamento cancelado.';
+              return;
+            }
+          }
+        }
+        if (await copyText(report.value)) {
+          feedback.textContent = 'Relatório copiado! Abra o ChatGPT e cole na conversa.';
+          window.open('https://chatgpt.com/', '_blank', 'noopener,noreferrer');
+        } else {
+          feedback.textContent = 'Selecione o relatório e copie manualmente para o ChatGPT.';
+          report.focus();
+          report.select();
+        }
+      });
       dialog.querySelector('#libriDiagnosticCopy').addEventListener('click', async () => {
         const report = dialog.querySelector('#libriDiagnosticReport');
         const feedback = dialog.querySelector('#libriDiagnosticFeedback');

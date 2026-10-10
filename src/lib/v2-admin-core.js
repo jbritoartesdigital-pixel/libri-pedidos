@@ -1150,7 +1150,16 @@ function whatsappUrl(
 
 function statusLabel(
   status,
+  paidCents = 0,
+  totalCents = 0,
 ) {
+  // A paid deposit is not an unpaid order. The balance is collected
+  // separately via Pix on WhatsApp; it is only settled when entered by admin.
+  const paid = Number(paidCents || 0);
+  const total = Number(totalCents || 0);
+  if (status === 'awaiting_payment' && paid > 0) {
+    return total > paid ? 'Entrada recebida • saldo pendente' : 'Pagamento registrado';
+  }
   return {
     configuring:
       'Configurando',
@@ -2330,6 +2339,8 @@ export async function getV2AdminOrderDetail(
       statusLabel:
         statusLabel(
           order.status,
+          payments.paidCents,
+          Number(order.total_cents || 0),
         ),
       nextAction:
         nextActionFromStatus(
@@ -2715,11 +2726,15 @@ export async function listV2Production(
         statusLabel:
           statusLabel(
             row.status,
+            row.paid_cents,
+            row.total_cents,
           ),
         nextAction:
-          nextActionFromStatus(
-            row,
-          ),
+          row.status === 'awaiting_payment' && Number(row.paid_cents || 0) > 0
+            ? Number(row.total_cents || 0) > Number(row.paid_cents || 0)
+              ? 'Cobrar saldo restante por Pix'
+              : 'Conferir pagamento registrado'
+            : nextActionFromStatus(row),
         deliveryWindow: {
           start:
             row.delivery_start,

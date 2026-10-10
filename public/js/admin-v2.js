@@ -35,7 +35,7 @@ import {
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261009-admin-quickfinish-1';
+} from './admin-v2-finance.js?v=20261010-void-closed-1';
 
 import {
   renderArchived,

@@ -47,18 +47,19 @@ test('Drive só cria pasta após autorização e só envia arquivo aprovado',asy
     if(uri.hostname==='oauth2.googleapis.com')
       return Response.json({access_token:'TEST_GOOGLE_ACCESS_TOKEN'});
     assert.equal(opts.headers?.authorization,'Bearer TEST_GOOGLE_ACCESS_TOKEN');
-    if(uri.pathname.endsWith('/drive/v3/files')&&opts.method==='POST')
-      return Response.json({id:ids.folder,mimeType:'application/vnd.google-apps.folder'});
-    if(uri.pathname.endsWith('/drive/v3/files')&&(!opts.method||opts.method==='GET'))
-      return Response.json({files:[]});
-    if(uri.pathname.includes('/drive/v3/files/'+ids.folder))
-      return Response.json({id:ids.folder,mimeType:'application/vnd.google-apps.folder',trashed:false});
     if(uri.pathname.includes('/upload/drive/v3/files')&&opts.method==='POST')
       return new Response(null,{status:200,headers:{
         location:'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=fake'
       }});
     if(uri.pathname.includes('/upload/drive/v3/files')&&opts.method==='PUT')
       return Response.json({id:ids.file,name:'Preview_v01.png'});
+    if(uri.pathname.endsWith('/drive/v3/files')&&opts.method==='POST')
+      return Response.json({id:ids.folder,mimeType:'application/vnd.google-apps.folder'});
+    if(uri.pathname.endsWith('/drive/v3/files')&&(!opts.method||opts.method==='GET'))
+      return Response.json({files:[]});
+    if(uri.pathname.includes('/drive/v3/files/'+ids.folder))
+      return Response.json({id:ids.folder,mimeType:'application/vnd.google-apps.folder',trashed:false});
+
     throw Error('API inesperada: '+uri.href);
   });
   await assert.rejects(()=>uploadApprovedPreview(env,'LIBRI-992211',unapprovedId),/não foi aprovada/);

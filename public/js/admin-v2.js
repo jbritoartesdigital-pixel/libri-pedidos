@@ -27,7 +27,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261009-pix-production-1';
+} from './admin-v2-order.js?v=20261009-admin-quickfinish-1';
 
 import {
   renderAgenda,
@@ -35,7 +35,7 @@ import {
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261009-finance-date-1';
+} from './admin-v2-finance.js?v=20261009-admin-quickfinish-1';
 
 import {
   renderArchived,

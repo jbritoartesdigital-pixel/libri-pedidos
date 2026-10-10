@@ -1372,3 +1372,97 @@ button { -webkit-tap-highlight-color: transparent; }
 .production-quick-cell { display:flex; flex-direction:column; gap:5px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); min-width:0; }
 .production-quick-cell small { color:var(--muted); font-size:11px; font-weight:700; }
 .production-quick-cell strong { overflow-wrap:anywhere; font-size:13px; line-height:1.45; }
+
+
+/* Diagnóstico do Admin: ícone discreto, relatório somente sob demanda. */
+.diagnostic-trigger {
+  background: transparent;
+  border-color: transparent;
+  opacity: .65;
+  font-size: 19px;
+  flex: 0 0 44px;
+}
+.diagnostic-trigger:hover,
+.diagnostic-trigger:focus-visible {
+  background: var(--rose-soft);
+  opacity: 1;
+}
+.libri-diagnostic-dialog {
+  width: min(540px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(23, 18, 25, .2);
+  color: var(--ink);
+  background: var(--surface);
+}
+.libri-diagnostic-dialog::backdrop {
+  background: rgba(18, 12, 20, .48);
+}
+.libri-diagnostic-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 18px 8px;
+}
+.libri-diagnostic-head h2 {
+  margin: 0 0 5px;
+  font-size: 19px;
+}
+.libri-diagnostic-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.libri-diagnostic-dismiss {
+  flex: 0 0 36px;
+  height: 36px;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 26px;
+  color: var(--muted);
+}
+.libri-diagnostic-dismiss:hover,
+.libri-diagnostic-dismiss:focus-visible {
+  background: var(--rose-soft);
+  color: var(--ink);
+}
+.libri-diagnostic-body { padding: 12px 18px 0; }
+#libriDiagnosticReport {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: min(315px, 46dvh);
+  min-height: 160px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #faf9f8;
+  color: var(--ink);
+  padding: 12px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#libriDiagnosticFeedback {
+  min-height: 20px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.libri-diagnostic-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 18px 18px;
+}
+@media (max-width: 430px) {
+  .libri-diagnostic-head { padding: 15px 14px 7px; }
+  .libri-diagnostic-body { padding: 10px 14px 0; }
+  .libri-diagnostic-actions { padding: 8px 14px 14px; }
+}

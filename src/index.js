@@ -19,6 +19,7 @@ import {
   handleAdminV2CoreApi,
 } from './routes/admin-v2-core.js';
 import { handleAdminFlowV2Api } from './routes/admin-flow-v2.js';
+import { handleAdminFlowGrantsV2Api, handleInternalFlowGrantRedeem } from './routes/admin-flow-grants-v2.js';
 
 import {
   handleAdminAgendaV2Api,
@@ -324,6 +325,7 @@ async function handleAdminV2Api(
   }
 
   const handlers = [
+    handleAdminFlowGrantsV2Api,
     handleAdminFlowV2Api,
     handleAdminV2CoreApi,
     handleAdminAgendaV2Api,
@@ -434,6 +436,11 @@ export default {
         )
     ) {
       try {
+        // Cross-Worker authorization: verifies a short-lived one-use device
+        // grant. No admin cookies or customer details pass through this path.
+        if (url.pathname === '/api/internal/flow/grant/redeem') {
+          return await handleInternalFlowGrantRedeem(request, env, url);
+        }
         /* ==================================================
            ADMIN V2
         ================================================== */

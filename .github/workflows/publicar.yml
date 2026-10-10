@@ -33,10 +33,9 @@ jobs:
       # Gate obrigatório antes de acessar R2, D1 ou publicar o Worker.
       # Apenas dados sintéticos. Alterações visuais geram evidências, sem
       # bloquear por diferenças de pixels; falhas funcionais/mobile bloqueiam.
-      - name: Instalar navegador e dependências da Etapa 2
+      - name: Preparar Playwright no Chrome preinstalado
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
-          npx playwright install --with-deps chromium
 
       - name: Barrar deploy se o teste Android ou diagnóstico falhar
         run: node tests/etapa2-browser.mjs

@@ -1,102 +1,10 @@
-export const app =
-  document.getElementById('adminApp');
-
-export const authGate =
-  document.getElementById('authGate');
-
-export const viewRoot =
-  document.getElementById('viewRoot');
-
-export const viewTitle =
-  document.getElementById('viewTitle');
-
-export const viewEyebrow =
-  document.getElementById('viewEyebrow');
-
-export const modalRoot =
-  document.getElementById('modalRoot');
-
-const toast =
-  document.getElementById('toast');
-
-export const state = {
-  view: 'central',
-  auth: null,
-  currentOrder: null,
-};
-
-export function esc(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-export function money(cents) {
-  return new Intl.NumberFormat(
-    'pt-BR',
-    {
-      style: 'currency',
-      currency: 'BRL',
-    },
-  ).format(
-    Number(cents || 0) / 100,
-  );
-}
-
-export function dateBr(value) {
-  if (!value) return '';
-
-  const date =
-    /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? new Date(`${value}T12:00:00Z`)
-      : new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      timeZone:
-        /^\d{4}-\d{2}-\d{2}$/.test(value)
-          ? 'UTC'
-          : 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    },
-  ).format(date);
-}
-
-export function dateTimeBr(value) {
-  if (!value) return '';
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value);
-  }
-
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    },
-  ).format(date);
-}
+import { recordAdminDiagnostic } from './admin-v2-diagnostics.js';
 
 export async function api(path, options = {}) {
-  const response =
-    await fetch(
+  const method = String(options.method || 'GET').toUpperCase();
+  let response;
+  try {
+    response = await fetch(
       path,
       {
         credentials: 'same-origin',
@@ -113,6 +21,10 @@ export async function api(path, options = {}) {
         },
       },
     );
+  } catch (error) {
+    recordAdminDiagnostic({ type: 'NETWORK', route: path, method });
+    throw error;
+  }
 
   const contentType =
     response.headers.get('content-type')
@@ -124,6 +36,15 @@ export async function api(path, options = {}) {
       : null;
 
   if (!response.ok) {
+    if (response.status !== 401) {
+      recordAdminDiagnostic({
+        type: 'HTTP',
+        route: path,
+        method,
+        status: response.status,
+        errorId: response.headers.get('x-libri-error-id') || data?.errorId,
+      });
+    }
     const error =
       new Error(
         data?.error

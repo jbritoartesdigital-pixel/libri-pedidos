@@ -74,6 +74,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import {runV2DriveSync} from './lib/v2-drive-auto-sync.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -402,6 +403,12 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runV2Scheduler(env).then(result => {
       console.log('V2 scheduler', JSON.stringify(result));
+    }));
+    // Cron de Drive opt-in. Sem OAuth ou consentimento, não faz nada.
+    ctx.waitUntil(runV2DriveSync(env).then(result=>{
+      console.log('V2 Drive sync',JSON.stringify(result));
+    }).catch(()=>{
+      console.error('V2 Drive sync: erro no ciclo; operação não confirmada.');
     }));
   },
   async fetch(

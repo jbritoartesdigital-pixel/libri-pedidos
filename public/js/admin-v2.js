@@ -19,7 +19,7 @@ import {
 
 import {
   renderProduction,
-} from './admin-v2-production.js';
+} from './admin-v2-production.js?v=20261010-finalized-1';
 
 import {
   renderManualOrder,

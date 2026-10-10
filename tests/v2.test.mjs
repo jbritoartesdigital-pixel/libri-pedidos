@@ -2337,13 +2337,13 @@ test('Central merges overlapping delivery/production lists and folds repeated wi
 
 test('Central shows three upcoming parties and folds extras without duplicating reminders', () => {
   const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
-  assert.match(central, /c\\.partiesUpcoming\\.slice\\(0, 3\\)\\.map\\(upcomingPartyRow\\)/);
-  assert.match(central, /c\\.partiesUpcoming\\.slice\\(3\\)\\.map\\(upcomingPartyRow\\)/);
+  assert.match(central, /c\.partiesUpcoming\.slice\(0, 3\)\.map\(upcomingPartyRow\)/);
+  assert.match(central, /c\.partiesUpcoming\.slice\(3\)\.map\(upcomingPartyRow\)/);
   assert.match(central, /<summary>Ver mais festas/);
-  assert.doesNotMatch(central, /<h2>Festas de amanhã<\\/h2>/);
-  assert.match(central, /item\\.attentionReason !== 'Festa hoje'/);
-  assert.match(central, /item\\.status === 'ready_for_production'/);
-  assert.match(central, /c\\.partiesToday\\.map\\(/);
+  assert.doesNotMatch(central, /<h2>Festas de amanhã<\/h2>/);
+  assert.match(central, /item\.attentionReason !== 'Festa hoje'/);
+  assert.match(central, /item\.status === 'ready_for_production'/);
+  assert.match(central, /c\.partiesToday\.map\(/);
   assert.match(central, /data-congrats=/);
   assert.match(central, /congratulationsWhatsappUrl/);
 });

@@ -66,8 +66,14 @@ test('botão é somente administrativo e identifica exceções 500 sem stack no 
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   const core = readFileSync('public/js/admin-v2-core.js', 'utf8');
   const worker = readFileSync('src/index.js', 'utf8');
-  assert.match(html, /id="copyAdminDiagnostic"/);
+  assert.match(html, /id="showAdminDiagnostic"/);
   assert.match(admin, /initAdminDiagnostics/);
+  assert.match(html, /aria-label="Ver diagnóstico técnico"/);
+  const diagnosticUi = readFileSync('public/js/admin-v2-diagnostics.js', 'utf8');
+  assert.match(diagnosticUi, /dialog\.showModal\(\)/);
+  assert.match(diagnosticUi, /libriDiagnosticReport/);
+  assert.match(diagnosticUi, /Copiar relatório/);
+  assert.match(diagnosticUi, /libriDiagnosticCloseFooter/);
   assert.match(core, /recordAdminDiagnostic/);
   assert.match(worker, /x-libri-error-id/);
   assert.match(worker, /crypto\.randomUUID\(\)/);

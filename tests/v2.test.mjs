@@ -358,7 +358,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-balance-wa-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-finalized-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -2263,6 +2263,16 @@ test('most complete eligible configured combo is the single public suggestion', 
     quote.suggestedCombo.discountCents,
     400,
   );
+});
+
+test('Production UI exposes completed filter and clears contradictory active-only date presets', () => {
+  const production = readFileSync('public/js/admin-v2-production.js', 'utf8');
+  const boot = readFileSync('public/js/admin-v2.js', 'utf8');
+  assert.match(production, /\['finalized', 'Finalizados'\]/);
+  assert.match(production, /status === 'finalized'/);
+  assert.match(production, /\['new', 'in_production'\]\.includes\(period\.value\)/);
+  assert.match(production, /Os que já foram arquivados continuam na seção Arquivados/);
+  assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {

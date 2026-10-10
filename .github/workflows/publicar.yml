@@ -2,9 +2,23 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Liberação única: alterações posteriores não fazem deploy por push,
+  # a menos que o commit tenha explicitamente o prefixo de release abaixo.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publicar.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: libri-pedidos-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: libri-pedidos-finalizar-20261010')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -160,6 +174,20 @@ jobs:
               db.close()
           PY
 
+      - name: Confirmar acesso seguro ao Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::Token Cloudflare não configurado"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::Conta Cloudflare não configurada"; exit 1; }
+          echo "✓ Credenciais Cloudflare disponíveis. Prosseguindo com validação remota."
+
+      - name: Verificar pacote Cloudflare sem publicar
+        run: pnpm exec wrangler deploy --dry-run --outdir .wrangler/release-check
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+
       - name: Garantir bucket R2 privado
         run: |
           if npx wrangler r2 bucket info libri-pedidos-files >/dev/null 2>&1; then
@@ -187,12 +215,34 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Guardar backup do D1
+      # Nunca anexar SQL de clientes em repositório público.
+      # Se houver segredo de backup opcional, anexar SOMENTE versão cifrada.
+      - name: Cifrar backup com AES-256 quando chave estiver disponível
+        id: d1_backup
+        env:
+          BACKUP_PASSWORD: ${{ secrets.LIBRI_D1_BACKUP_PASSWORD }}
+        run: |
+          if [ -n "$BACKUP_PASSWORD" ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -salt \
+              -in backup-d1-before-deploy.sql \
+              -out backup-d1-before-deploy.sql.enc \
+              -pass env:BACKUP_PASSWORD
+            echo "encrypted=true" >> "$GITHUB_OUTPUT"
+            echo "✓ Backup cifrado; somente o .enc pode ser armazenado."
+          else
+            echo "encrypted=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sem senha de cifragem: backup local temporário, sem anexo público."
+          fi
+          rm -f backup-d1-before-deploy.sql
+
+      - name: Guardar somente backup cifrado
+        if: ${{ steps.d1_backup.outputs.encrypted == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: backup-d1-before-deploy
-          path: backup-d1-before-deploy.sql
+          name: backup-d1-encriptado-${{ github.run_id }}
+          path: backup-d1-before-deploy.sql.enc
           retention-days: 14
+          if-no-files-found: error
 
       - name: Aplicar migrations no D1
         run: npx wrangler d1 migrations apply libri-pedidos-db --remote
@@ -215,4 +265,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Excluir cópias temporárias do backup
+        if: always()
+        run: rm -f backup-d1-before-deploy.sql backup-d1-before-deploy.sql.enc
 

@@ -120,6 +120,14 @@ export async function renderCentral(openOrder) {
       0,
     );
 
+  // The same delivery appears in both backend summaries. Keep the
+  // week workload visible and place only other deliveries in a disclosure.
+  const workloadCodes = new Set(
+    (c.workload?.orders || []).map(item => item.code),
+  );
+  const otherDeliveries = (c.upcomingDeliveries || [])
+    .filter(item => !workloadCodes.has(item.code));
+
   viewRoot.innerHTML = `
     <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
       <a
@@ -330,12 +338,11 @@ export async function renderCentral(openOrder) {
         </div>
       </section>
 
-      <section class="card">
-        <div class="section-title">
-          <h2>Novos pedidos</h2>
-          <span class="status">${(c.newOrders || []).length}</span>
-        </div>
-
+      <details class="card order-optional">
+        <summary>Novos pedidos (${(c.newOrders || []).length})</summary>
+        <p class="muted" style="font-size:12px;margin:0 0 10px">
+          Os pedidos que precisam de ação também aparecem nas prioridades.
+        </p>
         <div class="list">
           ${
             (c.newOrders || []).length
@@ -343,45 +350,12 @@ export async function renderCentral(openOrder) {
               : empty('Nenhum pedido novo.')
           }
         </div>
-      </section>
-    </div>
-
-    <div class="section-grid">
-      <section class="card">
-        <div class="section-title">
-          <h2>Próximas entregas</h2>
-        </div>
-
-        <div class="list">
-          ${
-            c.upcomingDeliveries.length
-              ? c.upcomingDeliveries.slice(0, 8).map(
-                (item) => `
-                  <button
-                    class="row-card"
-                    type="button"
-                    data-open-order="${esc(item.code)}"
-                    style="text-align:left;cursor:pointer"
-                  >
-                    <strong>
-                      ${esc(item.code)} • ${esc(item.honoreeName)}
-                    </strong>
-                    <small>
-                      ${dateBr(item.start)} a ${dateBr(item.end)}
-                      • ${esc(item.statusLabel)}
-                    </small>
-                  </button>
-                `,
-              ).join('')
-              : empty('Nenhuma entrega próxima.')
-          }
-        </div>
-      </section>
+      </details>
     </div>
 
     <section class="card" style="margin-top:14px">
       <div class="section-title">
-        <h2>Produção dos próximos 7 dias</h2>
+        <h2>Entregas e produção • próximos 7 dias</h2>
         <span class="status">${Number(c.workload?.count || 0)} pedidos</span>
       </div>
       <p class="muted">${Number(c.workload?.scenes || 0)} cenas contratadas • Entregas que cruzam os próximos 7 dias.</p>
@@ -391,16 +365,31 @@ export async function renderCentral(openOrder) {
             style="text-align:left;cursor:pointer">
             <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
             <small>${dateBr(item.start)} a ${dateBr(item.end)} • ${item.scenes} cenas • ${esc(item.statusLabel)}</small>
-          </button>`).join('') || empty('Sem entregas programadas para os próximos sete dias.')}
+          </button>`).join('') || empty('Sem entregas em produção para os próximos sete dias.')}
       </div>
+      ${otherDeliveries.length ? `
+        <details class="order-optional" style="margin-top:12px">
+          <summary>Outras entregas (${otherDeliveries.length})</summary>
+          <p class="muted" style="font-size:12px;margin:4px 0 10px">
+            Pedidos fora da fila de produção dos próximos sete dias.
+          </p>
+          <div class="list">
+            ${otherDeliveries.slice(0, 12).map(item => `
+              <button class="row-card" type="button"
+                data-open-order="${esc(item.code)}"
+                style="text-align:left;cursor:pointer">
+                <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
+                <small>${dateBr(item.start)} a ${dateBr(item.end)} • ${esc(item.statusLabel)}</small>
+              </button>`).join('')}
+          </div>
+        </details>` : ''}
     </section>
 
-    <section class="card" style="margin-top:14px">
-      <div class="section-title">
-        <h2>Capacidade dos próximos 14 dias</h2>
-        <span class="status blue">${(used / 100).toFixed(1)} pts ocupados</span>
-      </div>
-
+    <details class="card order-optional" style="margin-top:14px">
+      <summary>Ver capacidade diária dos próximos 14 dias</summary>
+      <p class="muted" style="font-size:12px;margin:0 0 12px">
+        ${(used / 100).toFixed(1)} pts ocupados no período.
+      </p>
       <div class="capacity-strip">
         ${c.capacity.map(
           (day) => {
@@ -436,7 +425,7 @@ export async function renderCentral(openOrder) {
           },
         ).join('')}
       </div>
-    </section>
+    </details>
   `;
 
   const searchButton = document.getElementById('runAdvancedOrderSearch');

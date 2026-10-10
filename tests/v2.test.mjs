@@ -357,7 +357,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-diagnostics-chat-1">/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
   assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-admin-quickfinish-1"><\/script>/);
 });
 
@@ -2815,7 +2815,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(admin, /renderArchived/);
   assert.match(adminHtml, /data-view="archived"/);
 
-  assert.match(order, /Checklist antes de finalizar/);
+  assert.match(order, /Concluir pedido/);
   assert.match(order, /finalDeliveryConfirmed/);
   assert.match(order, /detail\.whatsappActions/);
   assert.match(order, /risk-badge/);

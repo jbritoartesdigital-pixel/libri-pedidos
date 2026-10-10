@@ -15,7 +15,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261010-compact-search-1';
+} from './admin-v2-central.js?v=20261010-clean-central-2';
 
 import {
   renderProduction,

@@ -39,6 +39,8 @@ import {
   handleAdminOrdersV2Api,
 } from './routes/admin-orders-v2.js';
 
+import { handleAdminDriveFolderV2Api } from './routes/admin-drive-folder-v2.js';
+
 import {
   handleAdminStoreConfigV2Api,
 } from './routes/admin-store-config-v2.js';
@@ -325,6 +327,7 @@ async function handleAdminV2Api(
     handleAdminFinanceV2Api,
     handleAdminNotificationsV2Api,
     handleAdminOrderZipV2Api,
+    handleAdminDriveFolderV2Api,
     handleAdminOrdersV2Api,
     handleAdminStoreConfigV2Api,
     handleAdminContractsV2Api,

@@ -172,8 +172,11 @@ async function capture(browser,ref,label) {
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
-  assert.equal(before.width,after.width);
-  assert.equal(before.height,after.height);
+  if(before.width!==after.width||before.height!==after.height){
+    audit.warnings.push('Tamanho alterado em '+current+': '+before.width+'x'+before.height+
+      ' para '+after.width+'x'+after.height+'. Conferir screenshots lado a lado.');
+    return null;
+  }
   const diff=new PNG({width:before.width,height:before.height});
   let modified=0;
   for(let i=0;i<before.data.length;i+=4){

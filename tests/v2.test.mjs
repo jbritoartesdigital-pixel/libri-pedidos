@@ -2265,6 +2265,62 @@ test('most complete eligible configured combo is the single public suggestion', 
   );
 });
 
+test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const make = async (name, status, finalizedAt, archivedAt = null, offset = 0) => {
+    const checkout = await startV2Checkout(request, e, input({
+      event: { honoreeName: name, type: 'birthday', date: day(65 + offset) },
+      deliveryWindow: { start: day(12 + offset), end: day(14 + offset) },
+      ...await terms(DB),
+    }));
+    DB.sqlite.prepare(`
+      UPDATE v2_orders
+      SET status=?, finalized_at=?, archived_at=?, updated_at=datetime('now')
+      WHERE order_code=?
+    `).run(status, finalizedAt, archivedAt, checkout.order.code);
+    return checkout.order.code;
+  };
+
+  const old = await make('Finalizado antigo', 'finalized', '2026-08-08T11:00:00.000Z', null, 0);
+  const fresh = await make('Finalizado recente', 'finalized', '2026-10-08T11:00:00.000Z', null, 1);
+  const archived = await make('Finalizado arquivado', 'finalized',
+    '2026-10-09T11:00:00.000Z', '2026-10-10T11:00:00.000Z', 2);
+  const active = await make('Ativo em produção', 'in_production', null, null, 3);
+  const before = DB.sqlite.prepare(
+    "SELECT id,status,archived_at,finalized_at FROM v2_orders ORDER BY id"
+  ).all();
+
+  const defaultList = await listV2Production(DB);
+  assert.ok(defaultList.some(x => x.code === active), 'default operational queue remains intact');
+  for (const code of [old, fresh, archived]) {
+    assert.ok(!defaultList.some(x => x.code === code), 'completed orders must not flood operational queue');
+  }
+
+  const completed = await listV2Production(DB, { status: 'finalized' });
+  assert.deepEqual(completed.map(x => x.code), [fresh, old],
+    'Finalizados must show only unarchived completed orders, latest completion first');
+  assert.ok(completed.every(x => x.statusLabel === 'Finalizado'));
+  assert.ok(!completed.some(x => x.code === archived || x.code === active));
+  assert.deepEqual(
+    (await listV2Production(DB, { status: 'finalized', q: 'Finalizado antigo' })).map(x => x.code),
+    [old], 'search must still work for completed orders',
+  );
+  assert.deepEqual(
+    (await listV2Production(DB, { status: 'in_production' })).map(x => x.code),
+    [active], 'other status filters remain operational',
+  );
+  assert.equal(
+    (await listV2ArchivedOrders(DB)).some(x => x.code === archived),
+    true, 'archived finalized orders remain available in Arquivados',
+  );
+  assert.deepEqual(
+    DB.sqlite.prepare("SELECT id,status,archived_at,finalized_at FROM v2_orders ORDER BY id").all(),
+    before, 'opening the finalized filter must not update any order or payment',
+  );
+});
+
 test('archived orders leave operational views without losing financial history', async t => {
   const DB = database();
   const mp = providerMock(t);

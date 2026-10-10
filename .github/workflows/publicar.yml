@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # One-time release for validated finance date-feedback correction.
+  # Removing the scoped trigger after success does not publish again.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/admin-v2-finance.js'
 
 jobs:
   deploy:

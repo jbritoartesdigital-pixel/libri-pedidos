@@ -1,0 +1,37 @@
+name: Libri | conferir Google Drive OAuth sem ler valores
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/drive-oauth-status.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Conferir somente nomes das credenciais no Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler secret list --name libri-pedidos --format json > "$RUNNER_TEMP/secrets-list.json"
+          node --input-type=module - "$RUNNER_TEMP/secrets-list.json" <<'NODE'
+          import fs from 'node:fs';
+          const all=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const found=new Set(all.map(x=>x.name));
+          const required=['GOOGLE_DRIVE_CLIENT_ID','GOOGLE_DRIVE_CLIENT_SECRET','GOOGLE_DRIVE_ENCRYPTION_KEY'];
+          const missing=required.filter(x=>!found.has(x));
+          console.log('GOOGLE_DRIVE_OAUTH_SECRETS='+ (missing.length===0?'READY':'PENDING_'+missing.length+'_OF_3'));
+          console.log('A consulta mostra apenas a quantidade, nunca os valores nem os nomes disponíveis.');
+          NODE
+          rm -f "$RUNNER_TEMP/secrets-list.json"

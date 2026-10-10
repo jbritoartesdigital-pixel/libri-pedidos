@@ -1897,7 +1897,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261010-finalized-1'));
+    'admin-v2.js?v=20261010-compact-search-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2601,7 +2601,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261010-finalized-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261010-compact-search-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2628,7 +2628,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261009-admin-quickfinish-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-finalized-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-compact-search-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261010-balance-wa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });

@@ -358,7 +358,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-balance-wa-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-finalized-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1897,7 +1897,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261010-balance-wa-1'));
+    'admin-v2.js?v=20261010-finalized-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2265,6 +2265,72 @@ test('most complete eligible configured combo is the single public suggestion', 
   );
 });
 
+test('Production UI exposes completed filter and clears contradictory active-only date presets', () => {
+  const production = readFileSync('public/js/admin-v2-production.js', 'utf8');
+  const boot = readFileSync('public/js/admin-v2.js', 'utf8');
+  assert.match(production, /\['finalized', 'Finalizados'\]/);
+  assert.match(production, /status === 'finalized'/);
+  assert.match(production, /\['new', 'in_production'\]\.includes\(period\.value\)/);
+  assert.match(production, /Os que já foram arquivados continuam na seção Arquivados/);
+  assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
+});
+
+test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const make = async (name, status, finalizedAt, archivedAt = null, offset = 0) => {
+    const checkout = await startV2Checkout(request, e, input({
+      event: { honoreeName: name, type: 'birthday', date: day(65 + offset) },
+      deliveryWindow: { start: day(12 + offset), end: day(14 + offset) },
+      ...await terms(DB),
+    }));
+    DB.sqlite.prepare(`
+      UPDATE v2_orders
+      SET status=?, finalized_at=?, archived_at=?, updated_at=datetime('now')
+      WHERE order_code=?
+    `).run(status, finalizedAt, archivedAt, checkout.order.code);
+    return checkout.order.code;
+  };
+
+  const old = await make('Finalizado antigo', 'finalized', '2026-08-08T11:00:00.000Z', null, 0);
+  const fresh = await make('Finalizado recente', 'finalized', '2026-10-08T11:00:00.000Z', null, 1);
+  const archived = await make('Finalizado arquivado', 'finalized',
+    '2026-10-09T11:00:00.000Z', '2026-10-10T11:00:00.000Z', 2);
+  const active = await make('Ativo em produção', 'in_production', null, null, 3);
+  const before = DB.sqlite.prepare(
+    "SELECT id,status,archived_at,finalized_at FROM v2_orders ORDER BY id"
+  ).all();
+
+  const defaultList = await listV2Production(DB);
+  assert.ok(defaultList.some(x => x.code === active), 'default operational queue remains intact');
+  for (const code of [old, fresh, archived]) {
+    assert.ok(!defaultList.some(x => x.code === code), 'completed orders must not flood operational queue');
+  }
+
+  const completed = await listV2Production(DB, { status: 'finalized' });
+  assert.deepEqual(completed.map(x => x.code), [fresh, old],
+    'Finalizados must show only unarchived completed orders, latest completion first');
+  assert.ok(completed.every(x => x.statusLabel === 'Finalizado'));
+  assert.ok(!completed.some(x => x.code === archived || x.code === active));
+  assert.deepEqual(
+    (await listV2Production(DB, { status: 'finalized', q: 'Finalizado antigo' })).map(x => x.code),
+    [old], 'search must still work for completed orders',
+  );
+  assert.deepEqual(
+    (await listV2Production(DB, { status: 'in_production' })).map(x => x.code),
+    [active], 'other status filters remain operational',
+  );
+  assert.equal(
+    (await listV2ArchivedOrders(DB)).some(x => x.code === archived),
+    true, 'archived finalized orders remain available in Arquivados',
+  );
+  assert.deepEqual(
+    DB.sqlite.prepare("SELECT id,status,archived_at,finalized_at FROM v2_orders ORDER BY id").all(),
+    before, 'opening the finalized filter must not update any order or payment',
+  );
+});
+
 test('archived orders leave operational views without losing financial history', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -2535,7 +2601,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261010-balance-wa-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261010-finalized-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2562,7 +2628,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261009-admin-quickfinish-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-balance-wa-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-finalized-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261010-balance-wa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });

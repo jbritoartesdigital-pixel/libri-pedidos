@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # One validated release for restoring completed-order listing in Admin.
+  # Remove this scoped trigger after successful publication.
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/v2-admin-core.js'
 
 jobs:
   deploy:

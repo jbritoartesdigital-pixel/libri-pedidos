@@ -2480,27 +2480,23 @@ export async function listV2Production(
 ) {
   const clauses = [
     'o.archived_at IS NULL',
-    `o.status NOT IN (
-      'cancelled',
-      'finalized',
-      'awaiting_payment',
-      'briefing_pending'
-    )`,
   ];
 
   const binds = [];
 
-  if (
+  // Only show completed orders when the operator explicitly requests
+  // Finalizados. Keep the operational default and Arquivados separate.
+  if (status === 'finalized') {
+    clauses.push("o.status = 'finalized'");
+  } else if (
     status
     && status !== 'all'
   ) {
-    clauses.push(
-      'o.status = ?',
-    );
-
-    binds.push(
-      status,
-    );
+    clauses.push(`o.status NOT IN (
+      'cancelled', 'finalized', 'awaiting_payment', 'briefing_pending'
+    )`);
+    clauses.push('o.status = ?');
+    binds.push(status);
   } else {
     clauses.push(
       `o.status IN (
@@ -2672,6 +2668,8 @@ export async function listV2Production(
             )
           }
           ORDER BY
+            CASE WHEN ? = 'finalized'
+              THEN COALESCE(o.finalized_at, o.updated_at) END DESC,
             o.event_date,
             CASE o.status
               WHEN 'adjustments' THEN 0
@@ -2691,6 +2689,7 @@ export async function listV2Production(
       )
       .bind(
         ...binds,
+        status === 'finalized' ? 'finalized' : '',
       )
       .all();
 

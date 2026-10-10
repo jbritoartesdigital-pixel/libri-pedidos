@@ -63,6 +63,9 @@ export async function renderProduction(openOrder) {
       </select>
     </div>
 
+    <p id="productionFinalizedHelp" class="muted hidden" style="font-size:12px;margin:0 0 8px">
+      Exibindo pedidos finalizados. Os que já foram arquivados continuam na seção Arquivados.
+    </p>
     <div id="productionList" class="order-list"></div>
   `;
 
@@ -90,6 +93,10 @@ export async function renderProduction(openOrder) {
         .getElementById('productionWhen')
         .value;
 
+    document.getElementById('productionFinalizedHelp')?.classList.toggle(
+      'hidden',
+      status !== 'finalized',
+    );
     list.innerHTML =
       empty('Carregando...');
 
@@ -170,15 +177,23 @@ export async function renderProduction(openOrder) {
             </article>
           `,
         ).join('')
-        : empty('Nenhum pedido nessa fila.');
+        : empty(status === 'finalized'
+          ? 'Nenhum pedido finalizado fora dos arquivados.'
+          : 'Nenhum pedido nessa fila.');
   };
 
   document
     .getElementById('productionStatus')
-    .addEventListener(
-      'change',
-      load,
-    );
+    .addEventListener('change', () => {
+      // The date presets "Novos" and "Em produção" impose a different
+      // status on the API and would silently hide completed orders.
+      const status = document.getElementById('productionStatus').value;
+      const period = document.getElementById('productionWhen');
+      if (status === 'finalized' && ['new', 'in_production'].includes(period.value)) {
+        period.value = '';
+      }
+      load();
+    });
 
   document
     .getElementById('productionWhen')

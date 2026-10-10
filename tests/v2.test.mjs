@@ -357,7 +357,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-compact-search-1">/);
   assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-compact-search-1"><\/script>/);
 });
 

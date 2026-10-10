@@ -133,10 +133,16 @@ export async function renderCentral(openOrder) {
     </div>
 
     <section class="card" id="advancedOrderSearch">
-      <div class="section-title"><h2>Encontrar um pedido</h2><small>Inclui pedidos arquivados</small></div>
-      <div class="form-grid">
-        <div class="field"><label for="advOrderQuery">Nome, WhatsApp ou código</label>
-          <input class="input" id="advOrderQuery" type="search" placeholder="Cliente, festa ou LIBRI-..."></div>
+      <div class="section-title"><h2>Encontrar um pedido</h2></div>
+      <div class="field">
+        <label for="advOrderQuery">Nome, WhatsApp ou código</label>
+        <input class="input" id="advOrderQuery" type="search"
+          placeholder="Buscar cliente, festa ou LIBRI-..." autocomplete="off">
+      </div>
+      <details id="advancedOrderFilters" class="order-search-more" style="margin-top:10px">
+        <summary>Mostrar mais filtros</summary>
+        <p class="muted" style="font-size:12px;margin:8px 0">A busca também encontra pedidos arquivados.</p>
+        <div class="form-grid">
         <div class="field"><label for="advOrderStatus">Situação</label><select class="select" id="advOrderStatus">
           <option value="">Todas</option>
           ${[['awaiting_payment','Aguardando pagamento'],['briefing_pending','Dados pendentes'],
@@ -160,8 +166,9 @@ export async function renderCentral(openOrder) {
           <input class="input" id="advOrderFrom" type="date"></div>
         <div class="field"><label for="advOrderTo">Festa até</label>
           <input class="input" id="advOrderTo" type="date"></div>
-      </div>
-      <button type="button" class="btn btn-secondary" id="runAdvancedOrderSearch">Buscar pedidos</button>
+        </div>
+        <button type="button" class="btn btn-secondary" id="runAdvancedOrderSearch" style="margin-top:8px">Buscar com filtros</button>
+      </details>
       <div id="advancedOrderResults" class="list" style="margin-top:12px" aria-live="polite"></div>
     </section>
 
@@ -433,18 +440,46 @@ export async function renderCentral(openOrder) {
   `;
 
   const searchButton = document.getElementById('runAdvancedOrderSearch');
-  searchButton?.addEventListener('click', async () => {
+  const quickSearch = document.getElementById('advOrderQuery');
+  const searchResults = document.getElementById('advancedOrderResults');
+  const extraFilters = document.getElementById('advancedOrderFilters');
+  let searchDebounce;
+  let searchRevision = 0;
+
+  const refreshFilterIndicator = () => {
+    const active = ['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
+      .some(id => Boolean(document.getElementById(id)?.value))
+      || document.getElementById('advOrderArchived')?.value !== 'all';
+    const summary = extraFilters?.querySelector('summary');
+    if (summary) summary.textContent = active
+      ? 'Mostrar mais filtros • ativos' : 'Mostrar mais filtros';
+  };
+
+  async function runOrderSearch() {
+    const revision = ++searchRevision;
+    clearTimeout(searchDebounce);
+    const hasQuery = Boolean(quickSearch?.value.trim());
+    const hasExtraFilters = ['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
+      .some(id => Boolean(document.getElementById(id)?.value))
+      || document.getElementById('advOrderArchived')?.value !== 'all';
+    refreshFilterIndicator();
+    // Do not fetch (or show) every historical order when the name search is blank.
+    if (!hasQuery && !hasExtraFilters) {
+      searchResults.innerHTML = '';
+      return;
+    }
     const values = [
       ['q','advOrderQuery'], ['status','advOrderStatus'], ['product','advOrderProduct'],
       ['archived','advOrderArchived'], ['from','advOrderFrom'], ['to','advOrderTo'],
     ];
     const params = new URLSearchParams(values.map(([key,id]) =>
       [key, document.getElementById(id).value.trim()]));
-    const results = document.getElementById('advancedOrderResults');
+    const results = searchResults;
     searchButton.disabled = true;
     results.innerHTML = '<small>Buscando...</small>';
     try {
       const data = await api('/api/admin/v2/orders/search?' + params);
+      if (revision !== searchRevision) return;
       results.innerHTML = (data.orders || []).map(item => `
         <button class="row-card" type="button" data-searched-order="${esc(item.code)}"
           style="text-align:left;cursor:pointer">
@@ -455,9 +490,42 @@ export async function renderCentral(openOrder) {
       results.querySelectorAll('[data-searched-order]').forEach(button =>
         button.addEventListener('click', () => openOrder(button.dataset.searchedOrder)));
     } catch (error) {
-      results.textContent = error.message || 'Não foi possível buscar.';
-    } finally { searchButton.disabled = false; }
+      if (revision === searchRevision) {
+        results.textContent = error.message || 'Não foi possível buscar.';
+      }
+    } finally {
+      if (revision === searchRevision) searchButton.disabled = false;
+    }
+  }
+
+  searchButton?.addEventListener('click', runOrderSearch);
+  quickSearch?.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    // Invalidate older requests immediately so an old result never replaces
+    // a newer search or reappears after clearing the field.
+    ++searchRevision;
+    if (!quickSearch.value.trim()) {
+      if (['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
+        .some(id => Boolean(document.getElementById(id)?.value))
+        || document.getElementById('advOrderArchived')?.value !== 'all') {
+        searchDebounce = setTimeout(runOrderSearch, 350);
+      } else {
+        searchResults.innerHTML = '';
+        searchButton.disabled = false;
+      }
+      return;
+    }
+    searchDebounce = setTimeout(runOrderSearch, 350);
   });
+  quickSearch?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runOrderSearch();
+    }
+  });
+  ['advOrderStatus', 'advOrderProduct', 'advOrderArchived', 'advOrderFrom', 'advOrderTo']
+    .forEach(id => document.getElementById(id)
+      ?.addEventListener('change', refreshFilterIndicator));
 
   viewRoot
     .querySelectorAll('[data-open-order]')

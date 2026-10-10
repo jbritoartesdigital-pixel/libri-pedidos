@@ -2343,9 +2343,11 @@ export async function getV2AdminOrderDetail(
           Number(order.total_cents || 0),
         ),
       nextAction:
-        nextActionFromStatus(
-          order,
-        ),
+        order.status === 'awaiting_payment' && payments.paidCents > 0
+          ? payments.remainingBalanceCents > 0
+            ? 'Aguardar saldo Pix cobrado pelo WhatsApp'
+            : 'Pagamento registrado; verificar andamento'
+          : nextActionFromStatus(order),
       deliveryWindow: {
         start:
           order.delivery_start,

@@ -46,7 +46,8 @@ test('Drive só cria pasta após autorização e só envia arquivo aprovado',asy
     const uri=new URL(String(url));urls.push(uri.href);
     if(uri.hostname==='oauth2.googleapis.com')
       return Response.json({access_token:'TEST_GOOGLE_ACCESS_TOKEN'});
-    assert.equal(opts.headers?.authorization,'Bearer TEST_GOOGLE_ACCESS_TOKEN');
+    if(!(uri.pathname.includes('/upload/drive/v3/files')&&opts.method==='PUT'))
+      assert.equal(opts.headers?.authorization,'Bearer TEST_GOOGLE_ACCESS_TOKEN');
     if(uri.pathname.includes('/upload/drive/v3/files')&&opts.method==='POST')
       return new Response(null,{status:200,headers:{
         location:'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=fake'

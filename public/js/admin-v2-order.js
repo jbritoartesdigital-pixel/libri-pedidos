@@ -587,7 +587,7 @@ export async function openOrder(code, onChanged = null) {
       `/api/admin/v2/orders/${code}`,
     );
 
-  const detail =
+  let detail =
     data.detail;
 
   const canDelete =
@@ -649,6 +649,15 @@ export async function openOrder(code, onChanged = null) {
             </div>
 
             <div class="order-quick-actions">
+              <button id="toggleOrderBriefing" class="btn btn-primary" type="button"
+                aria-controls="orderBriefingPanel" aria-expanded="false">
+                Abrir briefing
+              </button>
+              ${(detail.allowedActions || []).includes('finalize') ? `
+                <button type="button" class="btn btn-success" data-order-action="finalize">
+                  Finalizar pedido
+                </button>
+              ` : ''}
               <a
                 class="btn btn-secondary"
                 href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\D/g,''))}"
@@ -658,21 +667,8 @@ export async function openOrder(code, onChanged = null) {
                 WhatsApp
               </a>
 
-              <a
-                class="btn btn-ghost"
-                href="/api/admin/v2/orders/${esc(detail.order.code)}/download-folder"
-              >
-                Baixar pasta ZIP
-              </a>
-
-              <a
-                class="btn btn-ghost"
-                href="${esc(detail.order.customerAreaPath || '#')}"
-                target="_blank"
-                rel="noopener"
-              >
-                Área da cliente
-              </a>
+              <button type="button" class="btn btn-ghost"
+                id="toggleOrderPreview">Ver prévia</button>
             </div>
 
             ${
@@ -705,9 +701,21 @@ export async function openOrder(code, onChanged = null) {
 
           ${productionQuickBlock(detail)}
 
-          ${contractedBlock(detail)}
-
-          ${paymentBlock(detail)}
+          <details class="order-optional card">
+            <summary>Ver contratação e pagamentos</summary>
+            <div class="section-grid">
+              ${contractedBlock(detail)}
+              ${paymentBlock(detail)}
+            </div>
+            <div class="order-quick-actions">
+              <a class="btn btn-ghost"
+                href="/api/admin/v2/orders/${esc(detail.order.code)}/download-folder">
+                Baixar pasta ZIP
+              </a>
+              <a class="btn btn-ghost" href="${esc(detail.order.customerAreaPath || '#')}"
+                target="_blank" rel="noopener">Área da cliente</a>
+            </div>
+          </details>
         </div>
 
         ${detail.order.status === 'awaiting_urgency_decision' ? `
@@ -721,18 +729,26 @@ export async function openOrder(code, onChanged = null) {
             <button class="btn btn-danger" data-urgency-decision="reject">Rejeitar encaixe</button>
           </section>` : ''}
 
-        ${orderUploadsBlock(detail)}
+        <section id="orderBriefingPanel" class="order-briefing-panel hidden"
+          aria-label="Dados enviados pela cliente">
+          ${orderUploadsBlock(detail)}
+          <div class="section-grid">
+            ${briefingBlock(detail)}
+          </div>
+        </section>
 
         <div class="section-grid">
-          ${briefingBlock(detail)}
-
           <section class="card">
+            <details class="order-optional">
+              <summary>Outras ações e observações</summary>
             <div class="section-title">
               <h3>Ações</h3>
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              ${(detail.allowedActions || []).map(
+              ${(detail.allowedActions || [])
+                .filter(action => !['finalize','balance_received'].includes(action))
+                .map(
                 (action) => `
                   <button
                     class="btn ${
@@ -833,10 +849,13 @@ export async function openOrder(code, onChanged = null) {
                 `,
               ).join('')}
             </div>
+            </details>
           </section>
         </div>
 
-        <div class="section-grid">
+        <details class="order-optional card" id="orderPreviewDetails">
+          <summary>Prévia, contratos e histórico</summary>
+          <div class="section-grid">
           <section class="card">
             <div class="section-title">
               <h3>Prévia</h3>
@@ -975,11 +994,29 @@ export async function openOrder(code, onChanged = null) {
         <div style="margin-top:14px">
           ${historyBlock(detail)}
         </div>
+        </details>
       `,
       {
         width: '1100px',
       },
     );
+
+  const briefingToggle = document.getElementById('toggleOrderBriefing');
+  briefingToggle?.addEventListener('click', () => {
+    const panel = document.getElementById('orderBriefingPanel');
+    if (!panel) return;
+    const opening = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !opening);
+    briefingToggle.setAttribute('aria-expanded', String(opening));
+    briefingToggle.textContent = opening ? 'Fechar briefing' : 'Abrir briefing';
+    if (opening) panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+  document.getElementById('toggleOrderPreview')?.addEventListener('click', () => {
+    const panel = document.getElementById('orderPreviewDetails');
+    if (!panel) return;
+    panel.open = true;
+    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
 
   const photos = detail.uploads?.uploads || [];
   const photoViewer = document.getElementById('orderPhotoViewer');

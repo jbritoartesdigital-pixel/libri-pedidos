@@ -873,6 +873,22 @@ export async function openOrder(code, onChanged = null) {
               <h3>Prévia</h3>
               <span class="status">${(detail.previews || []).length}</span>
               <button type="button" class="btn btn-ghost btn-small" id="downloadProjectBible" title="Baixar histórico das prévias aprovadas">Project Bible</button>
+              <details class="order-optional" id="driveFolderOptions" style="width:100%;margin-top:10px">
+                <summary>Google Drive · pasta deste pedido</summary>
+                <div class="field" style="margin-top:12px">
+                  <label for="orderDriveFolderId">Link da pasta da cliente</label>
+                  <input class="input" id="orderDriveFolderId" autocomplete="off" placeholder="Cole o link completo da pasta no Drive">
+                </div>
+                <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                  <button type="button" class="btn btn-secondary btn-small" id="saveOrderDriveFolder">Vincular pasta</button>
+                  <button type="button" class="btn btn-ghost btn-small" id="connectOrderDrive">Conectar Google Drive</button>
+                </div>
+                <small id="orderDriveStatus" aria-live="polite">Verificando conexão…</small>
+                <div class="notice info" style="margin-top:9px">
+                  A pasta fica exclusiva deste pedido. O vínculo não envia arquivos:
+                  a transferência só será ativada quando o Google autorizar e a mídia aprovada estiver identificada.
+                </div>
+              </details>
             </div>
 
             ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
@@ -1013,6 +1029,53 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  const driveFolderPanel=document.getElementById('driveFolderOptions');
+  const driveLinkInput=document.getElementById('orderDriveFolderId');
+  const driveStatus=document.getElementById('orderDriveStatus');
+  const connectDriveButton=document.getElementById('connectOrderDrive');
+  driveFolderPanel?.addEventListener('toggle',async ()=>{
+    if(!driveFolderPanel.open)return;
+    try{
+      const [folder,account]=await Promise.all([
+        api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive-folder'),
+        api('/api/admin/v2/drive/status')
+      ]);
+      if(folder?.drive?.folderId)driveLinkInput.value=
+        'https://drive.google.com/drive/folders/'+folder.drive.folderId;
+      const info=account?.drive||{};
+      driveStatus.textContent=info.connected?'Google Drive autorizado. Vincule uma pasta exclusiva.':
+        info.configured?'Google Drive disponível, mas falta autorizar sua conta.':
+        'Integração OAuth ainda não configurada no Worker.';
+      connectDriveButton.hidden=!info.configured||info.connected;
+    }catch(error){driveStatus.textContent=error.message||'Erro ao consultar vínculo.';}
+  });
+  document.getElementById('saveOrderDriveFolder')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    try{
+      const result=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive-folder',{
+        method:'PUT',body:JSON.stringify({folderId:driveLinkInput.value})
+      });
+      driveStatus.textContent='Pasta vinculada ao pedido. Envio ainda não ativado.';
+      showToast('Pasta do Drive vinculada com segurança.');
+    }catch(error){showToast(error.message||'Não foi possível vincular pasta.');}
+    finally{button.disabled=false;}
+  });
+  connectDriveButton?.addEventListener('click',async()=>{
+    connectDriveButton.disabled=true;
+    try{
+      const response=await api('/api/admin/v2/drive/oauth/start',{
+        method:'POST',body:JSON.stringify({})
+      });
+      const u=new URL(response.authorizationUrl);
+      if(u.protocol!=='https:'||u.hostname!=='accounts.google.com')throw Error('Endereço de autorização inválido.');
+      window.location.assign(u.href);
+    }catch(error){
+      driveStatus.textContent=error.message||'Não foi possível conectar o Google Drive.';
+      connectDriveButton.disabled=false;
+    }
+  });
 
   document.getElementById('downloadProjectBible')?.addEventListener('click',async event=>{
     const button=event.currentTarget;

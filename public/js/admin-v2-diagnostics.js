@@ -175,6 +175,37 @@ async function copyText(text) {
   return copied;
 }
 
+function makeDiagnosticDialog() {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'libri-diagnostic-dialog';
+  dialog.setAttribute('aria-labelledby', 'libriDiagnosticTitle');
+  dialog.innerHTML = `
+    <header class="libri-diagnostic-head">
+      <div>
+        <h2 id="libriDiagnosticTitle">🐞 Diagnóstico</h2>
+        <p>Informações técnicas desta aba, sem dados das clientes.</p>
+      </div>
+      <button id="libriDiagnosticClose" class="libri-diagnostic-dismiss"
+        type="button" aria-label="Fechar diagnóstico">×</button>
+    </header>
+    <div class="libri-diagnostic-body">
+      <textarea id="libriDiagnosticReport" readonly spellcheck="false"
+        aria-label="Relatório técnico para consultar ou copiar"></textarea>
+      <p id="libriDiagnosticFeedback" role="status" aria-live="polite"></p>
+    </div>
+    <footer class="libri-diagnostic-actions">
+      <button id="libriDiagnosticCopy" type="button" class="btn btn-secondary">
+        Copiar relatório
+      </button>
+      <button id="libriDiagnosticCloseFooter" type="button" class="btn btn-ghost">
+        Fechar
+      </button>
+    </footer>
+  `;
+  document.body.appendChild(dialog);
+  return dialog;
+}
+
 export function initAdminDiagnostics({ onCopied = () => {} } = {}) {
   loadStoredEvents();
   window.addEventListener('error', event => {
@@ -184,26 +215,47 @@ export function initAdminDiagnostics({ onCopied = () => {} } = {}) {
     recordAdminDiagnostic({ type: 'PROMISE', name: event.reason?.name });
   });
 
-  const button = document.getElementById('copyAdminDiagnostic');
+  const button = document.getElementById('showAdminDiagnostic');
   if (!button) return;
-  button.addEventListener('click', async () => {
+  let dialog = null;
+
+  button.addEventListener('click', () => {
+    if (!dialog) {
+      dialog = makeDiagnosticDialog();
+      const close = () => dialog.close();
+      dialog.querySelector('#libriDiagnosticClose').addEventListener('click', close);
+      dialog.querySelector('#libriDiagnosticCloseFooter').addEventListener('click', close);
+      dialog.addEventListener('click', event => {
+        if (event.target === dialog) dialog.close();
+      });
+      dialog.addEventListener('close', () => button.focus());
+      dialog.querySelector('#libriDiagnosticCopy').addEventListener('click', async () => {
+        const report = dialog.querySelector('#libriDiagnosticReport');
+        const feedback = dialog.querySelector('#libriDiagnosticFeedback');
+        if (await copyText(report.value)) {
+          feedback.textContent = 'Copiado! Envie aqui na conversa.';
+          onCopied();
+        } else {
+          feedback.textContent = 'Selecione o texto e copie manualmente.';
+          report.focus();
+          report.select();
+        }
+      });
+    }
+
     const script = document.querySelector('script[src*="/js/admin-v2.js"]');
     const build = script
       ? new URL(script.src, location.origin).searchParams.get('v') || ''
       : '';
     const view = document.querySelector('.nav-btn.active')?.dataset.view || '';
-    const report = buildAdminDiagnostic({
+    dialog.querySelector('#libriDiagnosticReport').value = buildAdminDiagnostic({
       view,
       build,
       platform: browserPlatform(navigator.userAgent),
       width: window.innerWidth,
       height: window.innerHeight,
     });
-    if (await copyText(report)) {
-      onCopied();
-    } else {
-      // Sem clipboard, deixa o texto disponível para seleção manual.
-      window.prompt('Copie este diagnóstico e envie aqui na conversa:', report);
-    }
+    dialog.querySelector('#libriDiagnosticFeedback').textContent = '';
+    dialog.showModal();
   });
 }

@@ -64,3 +64,10 @@ test('production route is GET/POST restricted appropriately',async()=>{
  const unsupported=await handleInternalFlowGrantRedeem(new Request(internalUrl),env,internalUrl);
  assert.equal(unsupported.status,405);
 });
+
+test('oversized request bodies are rejected even with absent Content-Length',async()=>{
+ const url='https://pedidos.libriconvites.com.br/api/internal/flow/grant/redeem';
+ const request=new Request(url,{method:'POST',headers:{'content-type':'application/json'},
+  body:JSON.stringify({grant:'flg_'+'a'.repeat(36),nonce:'b'.repeat(64),padding:'X'.repeat(2000)})});
+ assert.equal((await handleInternalFlowGrantRedeem(request,{DB:fakeDB()},new URL(url))).status,413);
+});

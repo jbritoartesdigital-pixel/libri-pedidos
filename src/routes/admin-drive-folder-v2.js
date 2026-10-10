@@ -1,9 +1,41 @@
 import {fail,json,readJson} from '../lib/http.js';
 import {readOrderDriveFolder,saveOrderDriveFolder} from '../lib/v2-drive-folder.js';
 import {getApprovedProjectBible} from '../lib/v2-project-bible.js';
+import {driveConnectionStatus,startDriveOAuth,finishDriveOAuth,disconnectDrive}
+  from '../lib/v2-google-drive-oauth.js';
 
 /** Admin-only. Called after requireAdminPasskeyAuth in src/index.js. */
 export async function handleAdminDriveFolderV2Api(request,env,url){
+  const method=request.method.toUpperCase();
+  const path=url.pathname;
+  if(path==='/api/admin/v2/drive/status'){
+    return method==='GET'?json({ok:true,drive:await driveConnectionStatus(env)}):
+      fail('Método não permitido.',405);
+  }
+  if(path==='/api/admin/v2/drive/oauth/start'){
+    if(method!=='POST')return fail('Método não permitido.',405);
+    try{
+      return json({ok:true,...await startDriveOAuth(env)});
+    }catch(error){return fail(error.message||'Não foi possível iniciar a conexão.',503);}
+  }
+  if(path==='/api/admin/v2/drive/oauth/callback'){
+    if(method!=='GET')return fail('Método não permitido.',405);
+    if(url.searchParams.has('error'))return Response.redirect(
+      'https://pedidos.libriconvites.com.br/admin-v2?drive=cancelled',302);
+    try{
+      await finishDriveOAuth(env,{
+        state:url.searchParams.get('state')||'',
+        code:url.searchParams.get('code')||''
+      });
+      return Response.redirect('https://pedidos.libriconvites.com.br/admin-v2?drive=connected',302);
+    }catch{
+      return Response.redirect('https://pedidos.libriconvites.com.br/admin-v2?drive=error',302);
+    }
+  }
+  if(path==='/api/admin/v2/drive/connection'){
+    if(method!=='DELETE')return fail('Método não permitido.',405);
+    return json({ok:true,drive:await disconnectDrive(env)});
+  }
   const bible=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/project-bible$/.exec(url.pathname);
   if(bible){
     if(request.method.toUpperCase()!=='GET')return fail('Método não permitido.',405);

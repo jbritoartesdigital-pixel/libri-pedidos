@@ -27,7 +27,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261009-admin-quickfinish-1';
+} from './admin-v2-order.js?v=20261010-balance-wa-1';
 
 import {
   renderAgenda,

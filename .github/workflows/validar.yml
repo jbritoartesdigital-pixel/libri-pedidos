@@ -25,10 +25,9 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: 'false'
 
-      - name: Instalar navegador e dependências da Etapa 2
+      - name: Preparar Playwright no Chrome preinstalado
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
-          npx playwright install --with-deps chromium
       - name: Testar Android e comparar telas com main, sem dados reais
         env:
           LIBRI_BASE_SHA: ${{ github.event.pull_request.base.sha }}

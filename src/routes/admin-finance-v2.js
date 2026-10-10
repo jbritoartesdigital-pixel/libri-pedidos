@@ -187,7 +187,7 @@ export async function handleAdminFinanceV2Api(
   }
 
   const voidMatch = path.match(
-    /^\\/api\\/admin\\/v2\\/finance\\/payments\\/(\\d+)\\/void$/,
+    /^\/api\/admin\/v2\/finance\/payments\/(\d+)\/void$/,
   );
   if (method === 'POST' && voidMatch) {
     try {

@@ -2,12 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  # One release after validation for manual WhatsApp Pix status sync.
-  # Restore manual-only after successful publication.
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/v2-finance.js'
 
 jobs:
   deploy:

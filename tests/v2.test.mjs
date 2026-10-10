@@ -1258,6 +1258,17 @@ test('production search finds theme and exposes the planned card data', async t 
   assert.ok(rows[0].paidCents > 0);
 });
 
+test('finance edit date guard explains future dates before contacting the API', () => {
+  const admin = readFileSync('public/js/admin-v2-finance.js', 'utf8');
+  const backend = readFileSync('src/lib/v2-finance.js', 'utf8');
+  assert.match(admin, /export function financeReceiptDateMessage/);
+  assert.match(admin, /max="\$\{todaySaoPaulo\(\)\}"/);
+  assert.match(admin, /financeReceiptDateMessage\(paidDate\)/);
+  assert.match(admin, /A data .* ainda não chegou/);
+  assert.match(admin, /Datas futuras não entram como recebimento/);
+  assert.match(backend, /Datas futuras não são recebimentos/);
+});
+
 test('finance admin can correct direct Pix but not Mercado Pago reconciliation', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -1303,6 +1314,21 @@ test('finance admin can correct direct Pix but not Mercado Pago reconciliation',
     DB.sqlite.prepare('SELECT net_cents FROM v2_payments WHERE id=?').get(directPix.id).net_cents,
     2500,
   );
+
+  const oldDate = DB.sqlite.prepare('SELECT paid_at FROM v2_payments WHERE id=?')
+    .get(directPix.id).paid_at;
+  await assert.rejects(
+    updateV2FinancePayment(DB, directPix.id, {
+      amountCents: 3000,
+      paidDate: day(1),
+      paymentType: 'balance',
+    }),
+    /Datas futuras não são recebimentos/,
+  );
+  assert.equal(DB.sqlite.prepare('SELECT paid_at FROM v2_payments WHERE id=?')
+    .get(directPix.id).paid_at, oldDate);
+  assert.equal(DB.sqlite.prepare('SELECT amount_cents FROM v2_payments WHERE id=?')
+    .get(directPix.id).amount_cents, 2500);
 
   const mercadoPago = DB.sqlite.prepare(
     "SELECT id FROM v2_payments WHERE order_id=? AND provider='mercado_pago'"

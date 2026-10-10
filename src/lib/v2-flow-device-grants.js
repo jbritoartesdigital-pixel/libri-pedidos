@@ -1,4 +1,4 @@
-import { fail, json, nowIso, randomToken, readJson } from './http.js';
+import { fail, json, nowIso, randomToken } from './http.js';
 
 const ORIGIN='https://pedidos.libriconvites.com.br';
 const HEX=/^[a-f0-9]{64}$/;
@@ -6,6 +6,22 @@ const te=new TextEncoder();
 async function digest(value){
  const b=new Uint8Array(await crypto.subtle.digest('SHA-256',te.encode(value)));
  return Array.from(b,n=>n.toString(16).padStart(2,'0')).join('');
+}
+async function limitedJson(request){
+ const reader=request.body?.getReader();
+ if(!reader)throw new SyntaxError('Corpo ausente.');
+ let size=0,parts=[];
+ try{
+  for(;;){
+   const {done,value}=await reader.read();if(done)break;
+   size+=value.byteLength;
+   if(size>1024){await reader.cancel().catch(()=>{});throw new RangeError('Solicitação muito grande.');}
+   parts.push(value);
+  }
+ }finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);let offset=0;
+ for(const part of parts){bytes.set(part,offset);offset+=part.byteLength;}
+ return JSON.parse(new TextDecoder().decode(bytes));
 }
 function label(value){
  if(typeof value!=='string'||!value.trim()||value.length>50||/[<>\x00-\x1f\x7f]/.test(value))
@@ -17,7 +33,7 @@ export async function issueFlowDeviceGrant(request,env){
  if(!request.headers.get('content-type')?.startsWith('application/json'))return fail('Envie JSON.',415);
  const length=Number(request.headers.get('content-length')||0);
  if(length>1024)return fail('Solicitação muito grande.',413);
- const body=await readJson(request);
+ const body=await limitedJson(request);
  if(!body||!HEX.test(body.nonce||''))return fail('Solicitação do aparelho inválida.',400);
  let deviceLabel;
  try{deviceLabel=label(body.label);}catch{return fail('Nome do aparelho inválido.',400);}
@@ -35,7 +51,7 @@ export async function issueFlowDeviceGrant(request,env){
 export async function redeemFlowDeviceGrant(request,env){
  if(request.headers.get('content-type')!=='application/json')return fail('Solicitação inválida.',415);
  if(Number(request.headers.get('content-length')||0)>1024)return fail('Solicitação inválida.',413);
- const body=await readJson(request);
+ const body=await limitedJson(request);
  if(!/^flg_[a-f0-9]{36}$/.test(body?.grant||'')||!HEX.test(body?.nonce||''))
   return fail('Autorização inválida.',401);
  const stamp=nowIso();

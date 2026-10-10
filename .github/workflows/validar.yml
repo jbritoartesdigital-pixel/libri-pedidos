@@ -10,6 +10,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -22,3 +24,22 @@ jobs:
         run: pnpm exec wrangler deploy --dry-run --outdir .wrangler/validation
         env:
           WRANGLER_SEND_METRICS: 'false'
+
+      - name: Preparar Playwright no Chrome preinstalado
+        run: |
+          # Isola npm para não tocar no node_modules/lockfile mantidos por pnpm.
+          npm install --prefix /tmp/libri-browser-deps --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          ln -s /tmp/libri-browser-deps/node_modules/playwright node_modules/playwright
+          ln -s /tmp/libri-browser-deps/node_modules/pngjs node_modules/pngjs
+      - name: Testar Android e comparar telas com main, sem dados reais
+        env:
+          LIBRI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node tests/etapa2-browser.mjs
+      - name: Guardar capturas e diagnóstico sanitizado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libri-etapa2-visual-PR-${{ github.run_id }}
+          path: .artifacts/etapa2/
+          retention-days: 7
+          if-no-files-found: ignore

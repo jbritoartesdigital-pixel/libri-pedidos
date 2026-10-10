@@ -30,6 +30,28 @@ jobs:
       - name: Testar fluxos V2 em SQLite
         run: npm test
 
+      # Gate obrigatório antes de acessar R2, D1 ou publicar o Worker.
+      # Apenas dados sintéticos. Alterações visuais geram evidências, sem
+      # bloquear por diferenças de pixels; falhas funcionais/mobile bloqueiam.
+      - name: Preparar Playwright no Chrome preinstalado
+        run: |
+          # Isola npm para não tocar no node_modules/lockfile mantidos por pnpm.
+          npm install --prefix /tmp/libri-browser-deps --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          ln -s /tmp/libri-browser-deps/node_modules/playwright node_modules/playwright
+          ln -s /tmp/libri-browser-deps/node_modules/pngjs node_modules/pngjs
+
+      - name: Barrar deploy se o teste Android ou diagnóstico falhar
+        run: node tests/etapa2-browser.mjs
+
+      - name: Guardar evidências dos testes no GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libri-etapa2-visual-deploy-${{ github.run_id }}
+          path: .artifacts/etapa2/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Validar imports relativos JavaScript
         run: |
           python3 <<'PY'

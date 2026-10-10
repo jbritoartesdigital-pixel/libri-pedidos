@@ -27,7 +27,10 @@ jobs:
 
       - name: Preparar Playwright no Chrome preinstalado
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          # Isola npm para não tocar no node_modules/lockfile mantidos por pnpm.
+          npm install --prefix /tmp/libri-browser-deps --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.58.2 pngjs@7.0.0
+          ln -s /tmp/libri-browser-deps/node_modules/playwright node_modules/playwright
+          ln -s /tmp/libri-browser-deps/node_modules/pngjs node_modules/pngjs
       - name: Testar Android e comparar telas com main, sem dados reais
         env:
           LIBRI_BASE_SHA: ${{ github.event.pull_request.base.sha }}

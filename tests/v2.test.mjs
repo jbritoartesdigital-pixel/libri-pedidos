@@ -2275,6 +2275,63 @@ test('Production UI exposes completed filter and clears contradictory active-onl
   assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
 });
 
+test('Central separates tomorrow from upcoming parties without rewriting orders', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const seed = async (name, eventDay) => {
+    const checkout = await startV2Checkout(request, e, input({
+      event: { honoreeName: name, type: 'birthday', date: day(60) },
+      deliveryWindow: { start: day(12), end: day(14) },
+      ...await terms(DB),
+    }));
+    DB.sqlite.prepare(
+      "UPDATE v2_orders SET status='ready_for_production', event_date=? WHERE order_code=?"
+    ).run(eventDay, checkout.order.code);
+    return checkout.order.code;
+  };
+  const today = day(0);
+  const tomorrow = day(1);
+  const afterTomorrow = day(2);
+  const todayCode = await seed('Festa hoje', today);
+  const tomorrowCode = await seed('Festa amanhã', tomorrow);
+  const upcomingCode = await seed('Festa depois de amanhã', afterTomorrow);
+  const before = DB.sqlite.prepare(
+    'SELECT order_code,status,event_date FROM v2_orders ORDER BY id'
+  ).all();
+
+  const central = await getV2Central(DB);
+  assert.ok(central.partiesToday.some(item => item.code === todayCode));
+  assert.ok(central.partiesTomorrow.some(item => item.code === tomorrowCode));
+  assert.ok(central.partiesUpcoming.some(item => item.code === upcomingCode));
+  assert.ok(!central.partiesUpcoming.some(item => item.code === tomorrowCode),
+    'tomorrow is already visible in its dedicated card and must not be repeated');
+  assert.ok(!central.partiesUpcoming.some(item => item.code === todayCode));
+  assert.deepEqual(
+    DB.sqlite.prepare('SELECT order_code,status,event_date FROM v2_orders ORDER BY id').all(),
+    before, 'deduplication of party cards cannot modify existing orders',
+  );
+});
+
+test('Central merges overlapping delivery/production lists and folds repeated widgets', () => {
+  const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
+  const boot = readFileSync('public/js/admin-v2.js', 'utf8');
+  const before = central.indexOf('Entregas e produção • próximos 7 dias');
+  const after = central.indexOf('Ver capacidade diária dos próximos 14 dias');
+  assert.ok(before > 0 && after > before);
+  assert.ok(!central.includes('<h2>Próximas entregas</h2>'));
+  assert.ok(!central.includes('<h2>Produção dos próximos 7 dias</h2>'));
+  assert.match(central, /const workloadCodes = new Set/);
+  assert.match(central, /\.filter\(item => !workloadCodes\.has\(item\.code\)\)/);
+  assert.match(central, /Outras entregas \(\$\{otherDeliveries\.length\}\)/);
+  assert.match(central, /<details class="card order-optional">\s*<summary>Novos pedidos/);
+  assert.match(central, /<details class="card order-optional" style="margin-top:14px">\s*<summary>Ver capacidade diária/);
+  assert.ok(central.includes('Festas de hoje') && central.includes('Festas de amanhã')
+    && central.includes('Próximas festas'), 'party dayparts remain separate');
+  assert.ok(central.includes('Pagamentos pendentes'), 'unpaid orders remain actionable');
+  assert.match(boot, /admin-v2-central\.js\?v=20261010-compact-search-1/);
+});
+
 test('Central starts with only name search and keeps all optional order filters hidden', () => {
   const central = readFileSync('public/js/admin-v2-central.js', 'utf8');
   const entry = readFileSync('public/js/admin-v2.js', 'utf8');

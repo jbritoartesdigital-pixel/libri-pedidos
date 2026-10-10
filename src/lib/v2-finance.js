@@ -1857,6 +1857,66 @@ export async function createV2FinancePayment(
   };
 }
 
+// An administrative correction is an annulment of an erroneous manual entry,
+// not a refund and never a deletion from the audit trail.
+export async function voidV2FinancePayment(db, paymentId, { reason, confirmation } = {}) {
+  const id = Number(paymentId);
+  const note = cleanText(reason, 500);
+  if (!Number.isSafeInteger(id) || id < 1 || confirmation !== 'ANULAR' || note.length < 8) {
+    throw new Error('Digite ANULAR e explique a correção (pelo menos 8 caracteres).');
+  }
+  const row = await db.prepare(`
+    SELECT p.id, p.order_id, p.provider, p.status, p.amount_cents,
+           p.payment_type, p.paid_at, o.order_code, o.status AS order_status,
+           pr.total_cents, pr.payment_method
+    FROM v2_payments p
+    INNER JOIN v2_orders o ON o.id=p.order_id
+    INNER JOIN v2_order_pricing pr ON pr.order_id=o.id
+    WHERE p.id=? LIMIT 1
+  `).bind(id).first();
+  if (!row) throw new Error('Lançamento não encontrado.');
+  if (row.provider !== 'direct_pix' || row.status !== 'approved' || row.payment_type === 'refund') {
+    throw new Error('Somente entradas Pix manuais ativas podem ser anuladas. O Mercado Pago não é alterado.');
+  }
+  if (['finalized', 'cancelled'].includes(row.order_status)) {
+    throw new Error('O pedido já foi encerrado; não é possível anular o recebimento por esta tela.');
+  }
+  const stamp = new Date().toISOString();
+  // Re-check status in the write so a repeated click cannot undo it twice.
+  const result = await db.prepare(`
+    UPDATE v2_payments SET status='cancelled', updated_at=?
+    WHERE id=? AND provider='direct_pix' AND status='approved' AND payment_type!='refund'
+      AND EXISTS (SELECT 1 FROM v2_orders o WHERE o.id=v2_payments.order_id
+        AND o.status NOT IN ('finalized','cancelled'))
+  `).bind(stamp,id).run();
+  if (Number(result.meta?.changes || 0) !== 1) {
+    throw new Error('Esse lançamento já foi corrigido. Atualize o financeiro.');
+  }
+  const totals = await db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN status='approved' AND payment_type!='refund'
+      THEN amount_cents WHEN status='approved' AND payment_type='refund'
+      THEN -amount_cents ELSE 0 END),0) AS paid_cents
+    FROM v2_payments WHERE order_id=?
+  `).bind(row.order_id).first();
+  const remainingCents = Math.max(0, Number(row.total_cents || 0) - Number(totals?.paid_cents || 0));
+  if (row.order_status === 'ready_for_delivery' && remainingCents > 0) {
+    await db.prepare(`
+      UPDATE v2_orders SET status='balance_pending',
+        next_action='Aguardar saldo final',updated_at=?
+      WHERE id=? AND status='ready_for_delivery'
+    `).bind(stamp,row.order_id).run();
+  }
+  await db.prepare(`
+    INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
+    VALUES(?, 'finance_payment_voided',
+      'Lançamento Pix manual anulado por correção administrativa.',?,?)
+  `).bind(row.order_id,JSON.stringify({
+    paymentId:id, amountCents:Number(row.amount_cents || 0),
+    paidAt:row.paid_at,reason:note,confirmation
+  }),stamp).run();
+  return {id,orderCode:row.order_code,remainingCents,voided:true};
+}
+
 export async function updateV2FinancePayment(
   db,
   paymentId,

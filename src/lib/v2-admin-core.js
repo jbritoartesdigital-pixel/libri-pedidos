@@ -1300,13 +1300,14 @@ function allowedActions(
     );
   }
 
-  if (
-    row.status
-    === 'ready_for_delivery'
-  ) {
-    actions.push(
-      'finalize',
-    );
+  // Finalization is a single audited action: the checklist (briefing,
+  // preview approval, full payment and delivery window) decides readiness,
+  // not a chain of manually selected intermediary production statuses.
+  if ([
+    'ready_for_production', 'in_production', 'waiting_customer',
+    'adjustments', 'approved', 'balance_pending', 'ready_for_delivery',
+  ].includes(row.status)) {
+    actions.push('finalize');
   }
 
   return [
@@ -4560,65 +4561,29 @@ export async function applyV2AdminAction(
       );
     }
 
-    await db.batch([
-      db
-        .prepare(
-          `
-            INSERT INTO v2_payments(
-              order_id,
-              provider,
-              payment_type,
-              method,
-              status,
-              amount_cents,
-              fee_cents,
-              net_cents,
-              provider_payload_json,
-              paid_at,
-              created_at,
-              updated_at
-            )
-            VALUES (
-              ?,
-              'direct_pix',
-              'balance',
-              'pix',
-              'approved',
-              ?,
-              0,
-              ?,
-              '{}',
-              ?,
-              ?,
-              ?
-            )
-          `,
+    // A single D1 batch serializes the write and status switch. The SELECT
+    // guards against two tabs/buttons recording the same balance twice.
+    const results = await db.batch([
+      db.prepare(`
+        INSERT INTO v2_payments (
+          order_id, provider, payment_type, method, status,
+          amount_cents, fee_cents, net_cents, provider_payload_json,
+          paid_at, created_at, updated_at
         )
-        .bind(
-          order.id,
-          amount,
-          amount,
-          stamp,
-          stamp,
-          stamp,
-        ),
-
-      db
-        .prepare(
-          `
-            UPDATE v2_orders
-            SET
-              status = 'ready_for_delivery',
-              next_action = 'Liberar entrega',
-              updated_at = ?
-            WHERE id = ?
-          `,
-        )
-        .bind(
-          stamp,
-          order.id,
-        ),
+        SELECT ?, 'direct_pix', 'balance', 'pix', 'approved',
+          ?, 0, ?, '{}', ?, ?, ?
+        FROM v2_orders
+        WHERE id=? AND status='balance_pending'
+      `).bind(order.id, amount, amount, stamp, stamp, stamp, order.id),
+      db.prepare(`
+        UPDATE v2_orders
+        SET status='ready_for_delivery', next_action='Liberar entrega', updated_at=?
+        WHERE id=? AND status='balance_pending'
+      `).bind(stamp, order.id),
     ]);
+    if (Number(results?.[0]?.meta?.changes || 0) !== 1) {
+      throw new Error('Saldo já registrado ou pedido alterado. Atualize antes de tentar novamente.');
+    }
 
     await insertHistory(
       db,

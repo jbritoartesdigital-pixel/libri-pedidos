@@ -18,7 +18,7 @@ import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWin
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
-import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment } from '../src/lib/v2-finance.js';
+import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment, voidV2FinancePayment } from '../src/lib/v2-finance.js';
 import { getV2StoreConfig, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 import { planCustomerPhotoBatch } from '../public/js/client-v2-upload.js';
 
@@ -357,8 +357,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-diagnostics-chat-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-diagnostics-chat-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261009-admin-quickfinish-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261009-admin-quickfinish-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1269,6 +1269,87 @@ test('finance edit date guard explains future dates before contacting the API', 
   assert.match(backend, /Datas futuras não são recebimentos/);
 });
 
+test('manual duplicated Pix can be annulled with audit while Mercado Pago remains untouched', async t => {
+  const DB = database(), mp = providerMock(t), e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Correção financeira', type: 'birthday', date: day(55) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(checkout.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
+  const order = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE order_code=?')
+    .get(checkout.order.code);
+  const paid = await getV2AdminOrderDetail(DB, order.order_code);
+  const remaining = paid.payment.remainingBalanceCents;
+  assert.ok(remaining > 0);
+  DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending' WHERE id=?").run(order.id);
+  const recorded = await applyV2AdminAction(DB, order.order_code, 'balance_received');
+  assert.equal(recorded.status, 'ready_for_delivery');
+  const manual = DB.sqlite.prepare(
+    "SELECT id,status,amount_cents FROM v2_payments WHERE order_id=? AND provider='direct_pix'"
+  ).get(order.id);
+  assert.equal(manual.amount_cents, remaining);
+  assert.equal((await getV2AdminOrderDetail(DB, order.order_code)).payment.remainingBalanceCents, 0);
+  await assert.rejects(
+    applyV2AdminAction(DB, order.order_code, 'balance_received'),
+    /não está disponível/,
+    'repeat balance button must not create another payment',
+  );
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=? AND provider='direct_pix'"
+  ).get(order.id).n, 1);
+  await assert.rejects(
+    voidV2FinancePayment(DB, manual.id, { reason:'Lançamento em duplicidade', confirmation:'INVALIDO' }),
+    /ANULAR/,
+  );
+  const mpRow = DB.sqlite.prepare(
+    "SELECT id,status,amount_cents FROM v2_payments WHERE order_id=? AND provider='mercado_pago'"
+  ).get(order.id);
+  await assert.rejects(
+    voidV2FinancePayment(DB, mpRow.id, { reason:'Lançamento em duplicidade', confirmation:'ANULAR' }),
+    /Mercado Pago/,
+  );
+  const corrected = await voidV2FinancePayment(DB, manual.id, {
+    reason: 'Saldo duplicado registrado por engano', confirmation:'ANULAR',
+  });
+  assert.equal(corrected.voided,true);
+  assert.equal(corrected.remainingCents,remaining);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_payments WHERE id=?').get(manual.id).status, 'cancelled');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.id).status, 'balance_pending');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_payments WHERE id=?').get(mpRow.id).status, 'approved');
+  assert.equal((await getV2AdminOrderDetail(DB, order.order_code)).payment.remainingBalanceCents, remaining);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='finance_payment_voided'"
+  ).get(order.id).n,1);
+  await assert.rejects(
+    voidV2FinancePayment(DB, manual.id, { reason:'Já foi anulada anteriormente', confirmation:'ANULAR' }),
+    /Somente entradas Pix manuais ativas/,
+  );
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='finance_payment_voided'"
+  ).get(order.id).n,1);
+});
+
+test('admin order shows one-tap briefing/finalize, folds rarely used buttons and refreshes checklist in place', () => {
+  const ui=readFileSync('public/js/admin-v2-order.js','utf8');
+  const styles=readFileSync('public/css/admin-v2.css','utf8');
+  const finance=readFileSync('public/js/admin-v2-finance.js','utf8');
+  const route=readFileSync('src/routes/admin-finance-v2.js','utf8');
+  assert.match(ui,/id="toggleOrderBriefing"/);
+  assert.match(ui,/id="orderBriefingPanel"/);
+  assert.match(ui,/id="orderPreviewDetails"/);
+  assert.match(ui,/Outras ações e observações/);
+  assert.match(ui,/Ver contratação e pagamentos/);
+  assert.match(ui,/\['finalize','balance_received'\]/);
+  assert.match(ui,/body.innerHTML = finalizeChecklistHtml\(detail\)/);
+  assert.doesNotMatch(ui,/await reopenFinalize\(\)/);
+  assert.match(styles,/\.order-briefing-panel/);
+  assert.match(finance,/data-void-payment/);
+  assert.match(finance,/Anular este lançamento/);
+  assert.match(route,/voidV2FinancePayment/);
+});
+
 test('finance admin can correct direct Pix but not Mercado Pago reconciliation', async t => {
   const DB = database();
   const mp = providerMock(t);
@@ -1630,7 +1711,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261009-diagnostics-chat-1'));
+    'admin-v2.js?v=20261009-admin-quickfinish-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261009-mobile-briefing-3'));
 });
@@ -2268,8 +2349,8 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261009-diagnostics-chat-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261009-pix-production-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261009-admin-quickfinish-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261009-admin-quickfinish-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
 });
 
@@ -2294,10 +2375,10 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261009-diagnostics-chat-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-diagnostics-chat-1'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261009-pix-production-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261009-finance-date-1"));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261009-admin-quickfinish-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261009-admin-quickfinish-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261009-admin-quickfinish-1"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261009-admin-quickfinish-1"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {
@@ -2545,13 +2626,14 @@ test('admin final checklist blocks incomplete delivery and requires manual final
 
   DB.sqlite.prepare(`
     UPDATE v2_orders
-    SET briefing_status='completed', status='ready_for_delivery', updated_at=datetime('now')
+    SET briefing_status='completed', status='in_production', updated_at=datetime('now')
     WHERE id=?
   `).run(order.id);
 
   const ready = await getV2AdminOrderDetail(DB, order.order_code);
   assert.equal(ready.finalizeChecklist.ready, true);
   assert.equal(ready.finalizeChecklist.items.every(item => item.ok), true);
+  assert.ok(ready.allowedActions.includes('finalize'), 'fully verified orders can finish without moving through intermediate statuses');
 
   await assert.rejects(
     applyV2AdminAction(DB, order.order_code, 'finalize'),
@@ -2733,7 +2815,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(admin, /renderArchived/);
   assert.match(adminHtml, /data-view="archived"/);
 
-  assert.match(order, /Checklist antes de finalizar/);
+  assert.match(order, /Concluir pedido/);
   assert.match(order, /finalDeliveryConfirmed/);
   assert.match(order, /detail\.whatsappActions/);
   assert.match(order, /risk-badge/);

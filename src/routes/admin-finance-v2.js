@@ -9,6 +9,7 @@ import {
   getV2FinanceDashboard,
   getV2FinanceSummary,
   updateV2FinancePayment,
+  voidV2FinancePayment,
 } from '../lib/v2-finance.js';
 
 function filtersFromUrl(
@@ -182,6 +183,22 @@ export async function handleAdminFinanceV2Api(
         || 'Não foi possível corrigir este lançamento.',
         422,
       );
+    }
+  }
+
+  const voidMatch = path.match(
+    /^\/api\/admin\/v2\/finance\/payments\/(\d+)\/void$/,
+  );
+  if (method === 'POST' && voidMatch) {
+    try {
+      return json({
+        ok: true,
+        result: await voidV2FinancePayment(
+          env.DB, voidMatch[1], await readJson(request),
+        ),
+      });
+    } catch (error) {
+      return fail(error?.message || 'Não foi possível anular o lançamento.', 422);
     }
   }
 

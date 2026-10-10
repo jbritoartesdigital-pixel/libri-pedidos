@@ -2,6 +2,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+  # Single release for the completed admin corrections; reset to manual-only
+  # after success. A later workflow edit does not match this path.
+  push:
+    branches: [main]
+    paths:
+      - 'public/js/admin-v2-order.js'
 
 jobs:
   deploy:

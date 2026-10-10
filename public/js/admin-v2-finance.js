@@ -431,7 +431,11 @@ export async function renderFinance(openOrderDetail = null) {
                                           data-edit-payment="${Number(row.id)}"
                                           data-amount-cents="${Number(row.amountCents || 0)}"
                                           data-paid-date="${esc(String(row.paidAt || '').slice(0, 10))}"
-                                          data-payment-type="${esc(row.paymentType || 'deposit')}">Editar</button>`
+                                          data-payment-type="${esc(row.paymentType || 'deposit')}">Editar</button>
+                                        <button class="btn btn-ghost btn-small" type="button"
+                                          data-void-payment="${Number(row.id)}"
+                                          data-void-code="${esc(row.orderCode || '')}"
+                                          data-void-amount="${Number(row.amountCents || 0)}">Anular erro</button>`
                                       : ''
                                   }
                                 </div>
@@ -670,6 +674,62 @@ export async function renderFinance(openOrderDetail = null) {
             );
           },
         );
+
+      // Never turn an erroneous manual record into a fake refund.
+      // The backend retains its history and recalculates the open balance.
+      content.querySelectorAll('[data-void-payment]').forEach(button => {
+        button.addEventListener('click', () => {
+          const paymentId = Number(button.dataset.voidPayment);
+          const code = button.dataset.voidCode;
+          const amount = money(Number(button.dataset.voidAmount || 0));
+          const closeVoid = modal('Anular lançamento incorreto', `
+            <div class="notice info">
+              <strong>${esc(code)} • ${amount}</strong><br>
+              Use somente se este recebimento foi registrado por engano ou em duplicidade.
+              O lançamento fica no histórico como anulado, deixa de contar no financeiro
+              e o saldo do pedido é recalculado. Isso não devolve dinheiro à cliente.
+              <strong> Não altera pagamentos do Mercado Pago.</strong>
+            </div>
+            <div class="field" style="margin-top:12px">
+              <label for="voidFinanceReason">Motivo da correção</label>
+              <textarea id="voidFinanceReason" class="textarea"
+                placeholder="Ex.: mesmo saldo registrado duas vezes" required></textarea>
+            </div>
+            <div class="field">
+              <label for="voidFinanceConfirm">Para confirmar, digite ANULAR</label>
+              <input id="voidFinanceConfirm" class="input" autocomplete="off">
+            </div>
+            <div class="action-row">
+              <span></span>
+              <button id="voidFinanceSubmit" type="button" class="btn btn-danger">
+                Anular este lançamento
+              </button>
+            </div>
+          `, {width: '620px'});
+          document.getElementById('voidFinanceSubmit')?.addEventListener('click', async event => {
+            const reason = document.getElementById('voidFinanceReason')?.value.trim() || '';
+            const confirmation = document.getElementById('voidFinanceConfirm')?.value.trim() || '';
+            if (reason.length < 8 || confirmation !== 'ANULAR') {
+              showToast('Explique o motivo e digite ANULAR para confirmar.');
+              return;
+            }
+            const submit = event.currentTarget;
+            submit.disabled = true;
+            try {
+              await api(`/api/admin/v2/finance/payments/${paymentId}/void`, {
+                method: 'POST',
+                body: JSON.stringify({reason, confirmation}),
+              });
+              closeVoid();
+              showToast('Recebimento manual anulado e saldo recalculado ✓');
+              await load();
+            } catch (error) {
+              submit.disabled = false;
+              showToast(error.message);
+            }
+          });
+        });
+      });
 
       content
         .querySelectorAll(

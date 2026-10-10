@@ -260,6 +260,23 @@ async function serveStaticShell(
   );
 }
 
+// Encapsula apenas falhas 5xx administrativas. Não registra dados, body ou URL do pedido.
+function withAdminErrorId(response) {
+  if (response.status < 500 || response.headers.has('x-libri-error-id')) {
+    return response;
+  }
+  const errorId = 'ERR-' + crypto.randomUUID()
+    .replace(/-/g, '').slice(0, 12).toUpperCase();
+  console.error('Admin V2 HTTP failure', errorId, 'status', response.status);
+  const headers = new Headers(response.headers);
+  headers.set('x-libri-error-id', errorId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function handleAdminV2Api(
   request,
   env,
@@ -415,11 +432,11 @@ export default {
               '/api/admin/v2/',
             )
         ) {
-          return await handleAdminV2Api(
+          return withAdminErrorId(await handleAdminV2Api(
             request,
             env,
             url,
-          );
+          ));
         }
 
         /* ==================================================
@@ -485,10 +502,11 @@ export default {
       } catch (
         error
       ) {
-        console.error(
-          'API error',
-          error,
-        );
+        // ID não contém dados pessoais. Permite correlacionar o relatório
+        // do Admin com uma falha inesperada nos logs do Cloudflare.
+        const errorId = 'ERR-' + crypto.randomUUID()
+          .replace(/-/g, '').slice(0, 12).toUpperCase();
+        console.error('API error', errorId, error);
 
         return json(
           {
@@ -497,6 +515,8 @@ export default {
 
             error:
               'Não foi possível concluir esta ação agora.',
+
+            errorId,
 
             devMessage:
               env.ENVIRONMENT
@@ -508,6 +528,7 @@ export default {
                 : undefined,
           },
           500,
+          { 'x-libri-error-id': errorId },
         );
       }
     }

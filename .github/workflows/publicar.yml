@@ -2,12 +2,6 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
-  # Validated one-time correction of historical duplicate manual Pix entries.
-  # Remove this scoped trigger after successful deployment.
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/v2-finance.js'
 
 jobs:
   deploy:

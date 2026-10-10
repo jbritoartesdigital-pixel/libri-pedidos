@@ -873,6 +873,8 @@ export async function openOrder(code, onChanged = null) {
               <h3>Prévia</h3>
               <span class="status">${(detail.previews || []).length}</span>
               <button type="button" class="btn btn-ghost btn-small" id="downloadProjectBible" title="Baixar histórico das prévias aprovadas">Project Bible</button>
+
+            </div>
               <details class="order-optional" id="driveFolderOptions" style="width:100%;margin-top:10px">
                 <summary>Google Drive · pasta deste pedido</summary>
                 <div class="field" style="margin-top:12px">
@@ -889,7 +891,6 @@ export async function openOrder(code, onChanged = null) {
                   a transferência só será ativada quando o Google autorizar e a mídia aprovada estiver identificada.
                 </div>
               </details>
-            </div>
 
             ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
             <div class="field">

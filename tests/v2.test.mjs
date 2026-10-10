@@ -3667,7 +3667,11 @@ test('admin and briefing surfaces expose the remaining Project Bible controls', 
 
   assert.match(
     central,
-    /Festas de amanhã/,
+    /Próximas festas/,
+  );
+  assert.doesNotMatch(
+    central,
+    /<h2>Festas de amanhã<\/h2>/,
   );
 
   assert.match(

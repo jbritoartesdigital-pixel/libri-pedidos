@@ -357,7 +357,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-clean-central-2">/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-compact-search-1">/);
   assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-clean-central-2"><\/script>/);
 });
 
@@ -2721,7 +2721,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261010-clean-central-2'));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261010-compact-search-1'));
   assert.ok(shell.includes('/js/admin-v2.js?v=20261010-clean-central-2'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261010-balance-wa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));

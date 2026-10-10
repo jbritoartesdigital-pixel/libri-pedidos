@@ -94,6 +94,19 @@ function todaySaoPaulo() {
   return `${map.year}-${map.month}-${map.day}`;
 }
 
+// Payment receipt dates describe money already received, not future due dates.
+// Input[type=date] displays DD/MM/YYYY on pt-BR browsers but returns ISO value.
+export function financeReceiptDateMessage(value, today = todaySaoPaulo()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) {
+    return 'Escolha uma data de recebimento válida.';
+  }
+  if (value > today) {
+    const br = iso => iso.split('-').reverse().join('/');
+    return `A data ${br(value)} ainda não chegou. Escolha até hoje (${br(today)}).`;
+  }
+  return '';
+}
+
 export async function renderFinance(openOrderDetail = null) {
   setViewMeta(
     'Financeiro',
@@ -536,8 +549,10 @@ export async function renderFinance(openOrderDetail = null) {
                             id="financeEditDate"
                             class="input"
                             type="date"
+                            max="${todaySaoPaulo()}"
                             value="${esc(button.dataset.paidDate || '')}"
                           >
+                          <small class="field-help">Somente hoje ou datas anteriores. Datas futuras não entram como recebimento.</small>
                         </div>
 
                         <div class="field">
@@ -607,15 +622,14 @@ export async function renderFinance(openOrderDetail = null) {
                           )
                           .value;
 
-                      if (
-                        !Number.isFinite(amount)
-                        || amount <= 0
-                        || !paidDate
-                      ) {
-                        showToast(
-                          'Confira o valor e a data.',
-                        );
-
+                      if (!Number.isFinite(amount) || amount <= 0) {
+                        showToast('Informe um valor recebido válido.');
+                        return;
+                      }
+                      const dateIssue = financeReceiptDateMessage(paidDate);
+                      if (dateIssue) {
+                        showToast(dateIssue);
+                        document.getElementById('financeEditDate')?.focus();
                         return;
                       }
 
@@ -766,8 +780,10 @@ export async function renderFinance(openOrderDetail = null) {
                     id="financeNewDate"
                     class="input"
                     type="date"
+                    max="${todaySaoPaulo()}"
                     value="${todaySaoPaulo()}"
                   >
+                  <small class="field-help">Registre a data em que o dinheiro foi recebido, até hoje.</small>
                 </div>
 
                 <div class="field full">
@@ -858,6 +874,13 @@ export async function renderFinance(openOrderDetail = null) {
                 showToast(
                   'Confira pedido, valor e data.',
                 );
+                return;
+              }
+
+              const dateIssue = financeReceiptDateMessage(paidDate);
+              if (dateIssue) {
+                showToast(dateIssue);
+                document.getElementById('financeNewDate')?.focus();
                 return;
               }
 

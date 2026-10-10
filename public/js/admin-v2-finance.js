@@ -688,7 +688,9 @@ export async function renderFinance(openOrderDetail = null) {
               Use somente se este recebimento foi registrado por engano ou em duplicidade.
               O lançamento fica no histórico como anulado, deixa de contar no financeiro
               e o saldo do pedido é recalculado. Isso não devolve dinheiro à cliente.
-              <strong> Não altera pagamentos do Mercado Pago.</strong>
+              <strong> Não altera pagamentos do Mercado Pago.</strong><br><br>
+              Se o pedido já foi finalizado, continuará finalizado.
+              Somente o lançamento incorreto será anulado no financeiro.
             </div>
             <div class="field" style="margin-top:12px">
               <label for="voidFinanceReason">Motivo da correção</label>
@@ -716,12 +718,14 @@ export async function renderFinance(openOrderDetail = null) {
             const submit = event.currentTarget;
             submit.disabled = true;
             try {
-              await api(`/api/admin/v2/finance/payments/${paymentId}/void`, {
+              const response = await api(`/api/admin/v2/finance/payments/${paymentId}/void`, {
                 method: 'POST',
                 body: JSON.stringify({reason, confirmation}),
               });
               closeVoid();
-              showToast('Recebimento manual anulado e saldo recalculado ✓');
+              showToast(response?.result?.closedOrderPreserved
+                ? 'Lançamento anulado ✓ O pedido permanece encerrado; somente o financeiro foi corrigido.'
+                : 'Recebimento manual anulado e saldo recalculado ✓');
               await load();
             } catch (error) {
               submit.disabled = false;

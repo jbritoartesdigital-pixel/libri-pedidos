@@ -32,7 +32,7 @@ import {
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261008-growth-1';
+} from './admin-v2-finance.js?v=20261009-finance-date-1';
 
 import {
   renderArchived,

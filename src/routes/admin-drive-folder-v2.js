@@ -3,6 +3,7 @@ import {readOrderDriveFolder,saveOrderDriveFolder} from '../lib/v2-drive-folder.
 import {getApprovedProjectBible} from '../lib/v2-project-bible.js';
 import {driveConnectionStatus,startDriveOAuth,finishDriveOAuth,disconnectDrive}
   from '../lib/v2-google-drive-oauth.js';
+import {createOrderDriveFolder,uploadApprovedPreview} from '../lib/v2-google-drive-upload.js';
 
 /** Admin-only. Called after requireAdminPasskeyAuth in src/index.js. */
 export async function handleAdminDriveFolderV2Api(request,env,url){
@@ -35,6 +36,25 @@ export async function handleAdminDriveFolderV2Api(request,env,url){
   if(path==='/api/admin/v2/drive/connection'){
     if(method!=='DELETE')return fail('Método não permitido.',405);
     return json({ok:true,drive:await disconnectDrive(env)});
+  }
+  const folderCreate=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive\/create-folder$/.exec(path);
+  if(folderCreate){
+    if(method!=='POST')return fail('Método não permitido.',405);
+    try{
+      const result=await createOrderDriveFolder(env,folderCreate[1]);
+      return json({ok:true,folder:result});
+    }catch(error){return fail(error.message||'Não foi possível criar pasta.',409);}
+  }
+  const mediaUpload=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive\/upload-approved-preview$/.exec(path);
+  if(mediaUpload){
+    if(method!=='POST')return fail('Método não permitido.',405);
+    try{
+      const body=await readJson(request);
+      if(!body||typeof body!=='object'||Array.isArray(body)||
+         Object.keys(body).some(key=>key!=='previewId'))return fail('ID de prévia inválido.',422);
+      const data=await uploadApprovedPreview(env,mediaUpload[1],body.previewId);
+      return json({ok:true,upload:data});
+    }catch(error){return fail(error.message||'Não foi possível enviar a prévia.',409);}
   }
   const bible=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/project-bible$/.exec(url.pathname);
   if(bible){

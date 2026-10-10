@@ -1878,16 +1878,15 @@ export async function voidV2FinancePayment(db, paymentId, { reason, confirmation
   if (row.provider !== 'direct_pix' || row.status !== 'approved' || row.payment_type === 'refund') {
     throw new Error('Somente entradas Pix manuais ativas podem ser anuladas. O Mercado Pago não é alterado.');
   }
-  if (['finalized', 'cancelled'].includes(row.order_status)) {
-    throw new Error('O pedido já foi encerrado; não é possível anular o recebimento por esta tela.');
-  }
+  // Correcting accounting history does not reverse or reopen a completed
+  // production order. A manual Pix duplicate must remain correctable even
+  // after delivery or administrative cancellation.
+  const closedOrder = ['finalized', 'cancelled'].includes(row.order_status);
   const stamp = new Date().toISOString();
   // Re-check status in the write so a repeated click cannot undo it twice.
   const result = await db.prepare(`
     UPDATE v2_payments SET status='cancelled', updated_at=?
     WHERE id=? AND provider='direct_pix' AND status='approved' AND payment_type!='refund'
-      AND EXISTS (SELECT 1 FROM v2_orders o WHERE o.id=v2_payments.order_id
-        AND o.status NOT IN ('finalized','cancelled'))
   `).bind(stamp,id).run();
   if (Number(result.meta?.changes || 0) !== 1) {
     throw new Error('Esse lançamento já foi corrigido. Atualize o financeiro.');
@@ -1912,9 +1911,19 @@ export async function voidV2FinancePayment(db, paymentId, { reason, confirmation
       'Lançamento Pix manual anulado por correção administrativa.',?,?)
   `).bind(row.order_id,JSON.stringify({
     paymentId:id, amountCents:Number(row.amount_cents || 0),
-    paidAt:row.paid_at,reason:note,confirmation
+    paidAt:row.paid_at,reason:note,confirmation,
+    orderStatusAtCorrection: row.order_status,
+    closedOrderPreserved: closedOrder,
+    remainingCentsAfterCorrection: remainingCents,
   }),stamp).run();
-  return {id,orderCode:row.order_code,remainingCents,voided:true};
+  return {
+    id,
+    orderCode:row.order_code,
+    remainingCents,
+    voided:true,
+    closedOrderPreserved:closedOrder,
+    orderStatus:row.order_status,
+  };
 }
 
 export async function updateV2FinancePayment(

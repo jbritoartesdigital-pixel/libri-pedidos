@@ -198,7 +198,7 @@ function visualDiff(previous,current,output) {
 }
 let browser;
 try{
-  browser=await chromium.launch({headless:true});
+  browser=await chromium.launch({headless:true,channel:'chrome'});
   if(base)await capture(browser,base,'main');
   await capture(browser,'','alteracao');
   if(base)for(const width of [320,390]) {

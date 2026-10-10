@@ -44,7 +44,7 @@ export async function handleAdminDriveFolderV2Api(request,env,url){
   }
   const match=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive-folder$/.exec(url.pathname);
   if(!match)return null;
-  const method=request.method.toUpperCase();
+
   if(method!=='GET'&&method!=='PUT')return fail('Método não permitido.',405);
   try{
     if(method==='GET'){

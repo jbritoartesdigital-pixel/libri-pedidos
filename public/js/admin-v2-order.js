@@ -872,6 +872,7 @@ export async function openOrder(code, onChanged = null) {
             <div class="section-title">
               <h3>Prévia</h3>
               <span class="status">${(detail.previews || []).length}</span>
+              <button type="button" class="btn btn-ghost btn-small" id="downloadProjectBible" title="Baixar histórico das prévias aprovadas">Project Bible</button>
             </div>
 
             ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
@@ -1012,6 +1013,27 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  document.getElementById('downloadProjectBible')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;
+    button.disabled=true;
+    try{
+      const result=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/project-bible');
+      const data=result?.projectBible;
+      if(!data)throw Error('Histórico ainda não disponível.');
+      const blob=new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='Project_Bible_'+detail.order.code+'.json';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+      showToast('Project Bible exportado com as prévias aprovadas.');
+    }catch(error){showToast(error.message||'Não foi possível exportar Project Bible.');}
+    finally{button.disabled=false;}
+  });
 
   const briefingToggle = document.getElementById('toggleOrderBriefing');
   briefingToggle?.addEventListener('click', () => {

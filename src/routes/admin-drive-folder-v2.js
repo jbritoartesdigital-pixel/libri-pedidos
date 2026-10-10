@@ -1,8 +1,15 @@
 import {fail,json,readJson} from '../lib/http.js';
 import {readOrderDriveFolder,saveOrderDriveFolder} from '../lib/v2-drive-folder.js';
+import {getApprovedProjectBible} from '../lib/v2-project-bible.js';
 
 /** Admin-only. Called after requireAdminPasskeyAuth in src/index.js. */
 export async function handleAdminDriveFolderV2Api(request,env,url){
+  const bible=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/project-bible$/.exec(url.pathname);
+  if(bible){
+    if(request.method.toUpperCase()!=='GET')return fail('Método não permitido.',405);
+    const data=await getApprovedProjectBible(env.DB,bible[1]);
+    return data?json({ok:true,projectBible:data}):fail('Pedido não encontrado.',404);
+  }
   const match=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive-folder$/.exec(url.pathname);
   if(!match)return null;
   const method=request.method.toUpperCase();

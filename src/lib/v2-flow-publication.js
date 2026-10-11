@@ -5,7 +5,12 @@ export async function verifyLivePublication(slug,fetchImpl=fetch){
  const url='https://libriconvites.com.br/'+encodeURIComponent(slug)+'/config.json';
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
  try{
-  const response=await fetchImpl(url,{redirect:'error',signal:controller.signal,headers:{accept:'application/json'}});
+  const response=await fetchImpl(url,{redirect:'follow',signal:controller.signal,headers:{accept:'application/json'}});
+  const final=new URL(response.url||url);
+  if(final.protocol!=='https:'||
+   !['libriconvites.com.br','www.libriconvites.com.br'].includes(final.hostname)||
+   final.pathname!=='/'+slug+'/config.json')
+   throw Error('O endereço final não pertence ao convite autorizado.');
   if(!response.ok)throw Error('Esta pasta ainda não existe no convite publicado. Nenhum vínculo foi criado.');
   const size=Number(response.headers.get('content-length')||0);
   if(size>65536)throw Error('Configuração do convite maior que o limite.');

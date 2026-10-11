@@ -17,7 +17,7 @@ export async function handleAdminFlowDriveV2Api(request,env,url){
    if(Number(request.headers.get('content-length')||0)>1024)return fail('Solicitação muito grande.',413);
    const body=await readJson(request);
    if(!body||typeof body!=='object'||Array.isArray(body)||
-    Object.keys(body).some(k=>!['orderCode','filename','size','sha256'].includes(k)))
+    Object.keys(body).some(k=>!['orderCode','filename','size','sha256','md5'].includes(k)))
     return fail('Metadados de arquivo inválidos.',400);
    return json({ok:true,upload:await startFlowDriveUpload(env,body)});
   }

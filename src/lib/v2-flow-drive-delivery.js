@@ -3,12 +3,13 @@ import {readOrderDriveFolder} from './v2-drive-folder.js';
 import {createOrderDriveFolder} from './v2-google-drive-upload.js';
 const CODE=/^LIBRI-[0-9]{1,15}$/;
 const HASH=/^[a-f0-9]{64}$/;
+const MD5=/^[a-f0-9]{32}$/;
 const FILE=/^[a-z0-9][a-z0-9_ .()-]{0,94}\.(png|jpg|jpeg|webp|mp4|mp3)$/i;
 const MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',mp4:'video/mp4',mp3:'audio/mpeg'};
 const GOOGLE='https://www.googleapis.com/drive/v3/files';
 const MAX=512*1024*1024,CHUNK=4*1024*1024;
 function validFile(f){
- if(!f||!CODE.test(f.orderCode)||!FILE.test(f.filename)||!HASH.test(f.sha256)||!Number.isSafeInteger(f.size)||f.size<1||f.size>MAX)
+ if(!f||!CODE.test(f.orderCode)||!FILE.test(f.filename)||!HASH.test(f.sha256)||!MD5.test(f.md5)||!Number.isSafeInteger(f.size)||f.size<1||f.size>MAX)
   throw Error('Arquivo final, tamanho ou pedido inválido.');
  return {...f,mime:MIME[f.filename.split('.').at(-1).toLowerCase()]};
 }
@@ -58,9 +59,9 @@ export async function startFlowDriveUpload(env,input,fetchImpl=fetch){
  const sessionUrl=checkLocation(init.headers.get('location'));
  const id=crypto.randomUUID();
  await env.DB.prepare(`INSERT INTO v2_flow_drive_uploads
- (id,order_code,folder_id,filename,mime_type,size_bytes,sha256,session_url,offset_bytes,state)
- VALUES (?,?,?,?,?,?,?,?,0,'ready')`).bind(id,file.orderCode,folder.folderId,file.filename,file.mime,
-  file.size,file.sha256,sessionUrl).run();
+ (id,order_code,folder_id,filename,mime_type,size_bytes,sha256,md5,session_url,offset_bytes,state)
+ VALUES (?,?,?,?,?,?,?,?,?,0,'ready')`).bind(id,file.orderCode,folder.folderId,file.filename,file.mime,
+  file.size,file.sha256,file.md5,sessionUrl).run();
  return {id,offset:0,total:file.size,filename:file.filename,folderId:folder.folderId};
 }
 async function readChunk(request,limit=CHUNK){
@@ -99,6 +100,7 @@ export async function forwardFlowDriveChunk(env,id,offset,request,fetchImpl=fetc
   });
   if(response.status===308){
    const range=response.headers.get('range');
+   if(!range)throw Error('Google Drive não confirmou os bytes recebidos.');
    let next=expected;
    if(range){
     const match=/^bytes=0-([0-9]+)$/.exec(range);
@@ -112,7 +114,7 @@ export async function forwardFlowDriveChunk(env,id,offset,request,fetchImpl=fetc
   if(response.status!==200&&response.status!==201)throw Error('Drive não confirmou o bloco ('+response.status+').');
   const data=await response.json();
   if(!/^[A-Za-z0-9_-]{12,128}$/.test(data?.id||'')||Number(data.size)!==row.size_bytes||
-   data.name!==row.filename)throw Error('Drive não confirmou integridade de nome e tamanho.');
+   data.name!==row.filename||String(data.md5Checksum||'').toLowerCase()!==row.md5)throw Error('Drive não confirmou integridade de nome, tamanho e conteúdo.');
   await env.DB.prepare(`UPDATE v2_flow_drive_uploads SET offset_bytes=?,state='done',
    google_file_id=?,updated_at=datetime('now') WHERE id=? AND state='uploading'`)
    .bind(row.size_bytes,data.id,id).run();

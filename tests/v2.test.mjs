@@ -362,7 +362,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 23);
+  const DB = database(); assert.equal(DB.migrationCount, 24);
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='v2_flow_device_grants'").get().n, 1);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');

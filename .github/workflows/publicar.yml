@@ -189,14 +189,13 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: 'false'
 
-      - name: Garantir bucket R2 privado
+      - name: Conferir bucket privado existente sem criar serviços
         run: |
-          if npx wrangler r2 bucket info libri-pedidos-files >/dev/null 2>&1; then
-            echo "✓ Bucket libri-pedidos-files já existe."
-          else
-            echo "Criando bucket privado libri-pedidos-files..."
-            npx wrangler r2 bucket create libri-pedidos-files
-          fi
+          npx wrangler r2 bucket info libri-pedidos-files >/dev/null || {
+            echo "::error::Bucket existente não encontrado; não criar novos recursos automaticamente."
+            exit 1
+          }
+          echo "✓ Bucket existente conferido, sem criação de serviço."
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

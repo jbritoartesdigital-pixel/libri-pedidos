@@ -589,6 +589,10 @@ export default {
        SHELL VISUAL V2
     ================================================== */
 
+    if (url.pathname === '/flow-connect') {
+      return serveStaticShell(request, env, '/flow-connect.html');
+    }
+
     if (
       isAdminV2Page(
         url.pathname,

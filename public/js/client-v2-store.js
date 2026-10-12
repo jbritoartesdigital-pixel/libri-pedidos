@@ -1858,7 +1858,7 @@ function quoteSavingsHtml(quote) {
   const originalCents = Number(quote?.productCents || 0)
     + Number(quote?.addonsCents || 0);
   const urgencyCents = Math.max(0, Number(quote?.urgency?.amountCents || 0));
-  const cardFeeCents = Math.max(0, Number(quote?.cardFeeCents || 0));
+  const cardFeeCents = Math.max(0, Number(quote.cardFeeCents || 0));
 
   return `
     ${couponCode ? `
@@ -2708,16 +2708,6 @@ function renderDetails(
       'click',
       async () => {
         capture();
-        const enteredCoupon = String(couponInput?.value || '').trim().toUpperCase();
-        if (enteredCoupon !== state.selection.couponCode) {
-          if (enteredCoupon) {
-            if (!await applyCoupon()) return;
-          } else if (state.selection.couponCode) {
-            showCouponError('Toque em Remover para retirar o cupom aplicado.');
-            return;
-          }
-        }
-
         const requiredFields = [
           { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
           { value: state.event.honoreeName, label: 'Nome da criança, casal ou evento', id: 'honoreeName' },
@@ -4097,6 +4087,16 @@ function renderCustomer(
       'click',
       async () => {
         capture();
+        const enteredCoupon = String(couponInput?.value || '').trim().toUpperCase();
+        if (enteredCoupon !== state.selection.couponCode) {
+          if (enteredCoupon) {
+            if (!await applyCoupon()) return;
+          } else if (state.selection.couponCode) {
+            showCouponError('Toque em Remover para retirar o cupom aplicado.');
+            return;
+          }
+        }
+
 
         const requiredFields = [
           { value: state.customer.name, label: 'Seu nome', id: 'customerName' },

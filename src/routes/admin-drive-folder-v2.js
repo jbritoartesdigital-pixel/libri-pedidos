@@ -5,11 +5,18 @@ import {driveConnectionStatus,startDriveOAuth,finishDriveOAuth,disconnectDrive}
   from '../lib/v2-google-drive-oauth.js';
 import {createOrderDriveFolder,uploadApprovedPreview} from '../lib/v2-google-drive-upload.js';
 import {getDriveSyncSetting,setDriveSyncSetting} from '../lib/v2-drive-auto-sync.js';
+import {checkDriveConnection} from '../lib/v2-drive-connection-check.js';
+import {uploadOrderFile,verifyDriveFolder} from '../lib/v2-drive-manual-upload.js';
 
 /** Admin-only. Called after requireAdminPasskeyAuth in src/index.js. */
 export async function handleAdminDriveFolderV2Api(request,env,url){
   const method=request.method.toUpperCase();
   const path=url.pathname;
+  if(path==='/api/admin/v2/drive/check'){
+    if(method!=='POST')return fail('Método não permitido.',405);
+    try{return json({ok:true,check:await checkDriveConnection(env)});}
+    catch(error){return fail(error.message||'Não foi possível testar o Drive.',409);}
+  }
   if(path==='/api/admin/v2/drive/sync'){
     if(method==='GET')return json({ok:true,sync:await getDriveSyncSetting(env.DB)});
     if(method!=='PUT')return fail('Método não permitido.',405);
@@ -50,6 +57,16 @@ export async function handleAdminDriveFolderV2Api(request,env,url){
     return json({ok:true,drive:await disconnectDrive(env)});
   }
   const folderCreate=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive\/create-folder$/.exec(path);
+  const fileUpload=/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,15})\/drive\/upload-file$/.exec(path);
+  if(fileUpload){
+    if(method!=='POST')return fail('Método não permitido.',405);
+    if(Number(request.headers.get('content-length'))>41*1024*1024)return fail('Arquivo acima de 40 MB.',413);
+    try{
+      const form=await request.formData();
+      if([...form.keys()].some(key=>key!=='file')||form.getAll('file').length!==1)return fail('Escolha um único arquivo.',422);
+      return json({ok:true,upload:await uploadOrderFile(env,fileUpload[1],form.get('file'))});
+    }catch(error){return fail(error.message||'Não foi possível enviar o arquivo.',409);}
+  }
   if(folderCreate){
     if(method!=='POST')return fail('Método não permitido.',405);
     try{
@@ -88,9 +105,11 @@ export async function handleAdminDriveFolderV2Api(request,env,url){
       Object.keys(body).some(key=>key!=='folderId')){
       return fail('Envie somente o identificador da pasta.',422);
     }
-    const result=await saveOrderDriveFolder(env.DB,match[1],body.folderId);
+    const {id}=await verifyDriveFolder(env,body.folderId);
+    const result=await saveOrderDriveFolder(env.DB,match[1],id);
     return result?json({ok:true,drive:result}):fail('Pedido não encontrado.',404);
   }catch(error){
     return fail(error?.message||'Não foi possível vincular a pasta.',409);
   }
 }
+

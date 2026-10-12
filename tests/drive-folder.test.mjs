@@ -50,7 +50,7 @@ test('cada pedido tem somente uma pasta exclusiva, não sincroniza sozinho',asyn
   assert.equal((await readOrderDriveFolder(DB,'LIBRI-123456')).folderId,id2);
   assert.equal(await readOrderDriveFolder(DB,'LIBRI-123459'),null);
 });
-test('rota admin valida conteúdo sem guardar credenciais',async()=>{
+test('rota admin valida conteúdo e exige acesso Google antes de vincular',async()=>{
   const DB=fixture();
   const base='https://pedidos.libriconvites.com.br/api/admin/v2/orders/LIBRI-123456/drive-folder';
   const call=async(method,body)=>handleAdminDriveFolderV2Api(
@@ -59,8 +59,8 @@ test('rota admin valida conteúdo sem guardar credenciais',async()=>{
   let res=await call('GET');
   assert.equal(res.status,200);assert.equal((await res.json()).drive.uploadEnabled,false);
   res=await call('PUT',{folderId:'https://drive.google.com/drive/folders/'+id1});
-  assert.equal(res.status,200);
-  assert.equal((await res.json()).drive.folderId,id1);
+  assert.equal(res.status,409);
+  assert.equal((await readOrderDriveFolder(DB,'LIBRI-123456')).folderId,null);
   res=await call('PUT',{folderId:id1,accessToken:'segredo'});
   assert.equal(res.status,422);
   res=await call('POST',{folderId:id1});
@@ -69,3 +69,4 @@ test('rota admin valida conteúdo sem guardar credenciais',async()=>{
   assert.ok(source.indexOf('await requireAdminPasskeyAuth(')<source.indexOf('handleAdminDriveFolderV2Api,'));
   assert.ok(!JSON.stringify(await DB.prepare('SELECT * FROM v2_order_drive_folders').all()).includes('segredo'));
 });
+

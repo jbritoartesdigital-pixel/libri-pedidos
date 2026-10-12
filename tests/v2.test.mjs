@@ -128,7 +128,7 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261012-video-rsvp-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-briefing-validation-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
 });
 

@@ -3866,8 +3866,10 @@ function renderCustomer(
           id="toggleCoupon"
           class="btn btn-link"
           type="button"
+          aria-controls="couponBox"
+          aria-expanded="${state.selection.couponCode ? 'true' : 'false'}"
         >
-          Adicionar cupom
+          ${state.quote?.coupon ? 'Alterar cupom' : 'Adicionar cupom'}
         </button>
 
         <div
@@ -3879,13 +3881,26 @@ function renderCustomer(
           }"
           style="max-width:360px"
         >
-          <label for="couponCode">Cupom</label>
+          <label for="couponCode">Código do cupom</label>
           <input
             id="couponCode"
             class="input"
             value="${esc(state.selection.couponCode || '')}"
             autocomplete="off"
+            autocapitalize="characters"
+            aria-describedby="couponFeedback"
           >
+          <div class="coupon-actions">
+            <button type="button" class="btn btn-secondary btn-small" id="applyCoupon">
+              Aplicar cupom
+            </button>
+            ${state.quote?.coupon ? `
+              <button type="button" class="btn btn-ghost btn-small" id="removeCoupon">
+                Remover
+              </button>
+            ` : ''}
+          </div>
+          <small id="couponFeedback" class="coupon-feedback" aria-live="polite"></small>
         </div>
       </div>
 
@@ -3924,16 +3939,6 @@ function renderCustomer(
         )
         .value
         .trim();
-
-    state.selection.couponCode =
-      document
-        .getElementById(
-          'couponCode',
-        )
-        ?.value
-        .trim()
-        .toUpperCase()
-      || '';
 
     persist(state);
   };
@@ -4191,11 +4196,11 @@ function renderReview(
         </div>
 
         ${
-          state.selection.couponCode
+          state.quote?.coupon
             ? `
               <div class="review-line">
                 <dt>Cupom</dt>
-                <dd>${esc(state.selection.couponCode)}</dd>
+                <dd>${esc(state.quote.coupon.code)} aplicado ✓</dd>
               </div>
             `
             : ''

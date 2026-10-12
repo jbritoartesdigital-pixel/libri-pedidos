@@ -3433,8 +3433,10 @@ function renderRecommendation(
       </div>
 
       ${totalOnlyHtml(state.quote)}
+    </section>
 
-      <div class="promo-backdrop" id="promoBackdrop">
+    <!-- Fora de .page-card: backdrop-filter cria containing block para fixed. -->
+    <div class="promo-backdrop" id="promoBackdrop">
         <div class="promo-sheet" role="dialog" aria-modal="true"
           aria-label="Oferta opcional" tabindex="-1">
           <div class="promo-content">
@@ -3558,7 +3560,6 @@ function renderRecommendation(
           </div>
         </div>
       </div>
-    </section>
   `;
 
   // O foco fica no pop-up, não em controles da etapa ao fundo.

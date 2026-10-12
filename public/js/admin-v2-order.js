@@ -886,6 +886,7 @@ export async function openOrder(code, onChanged = null) {
                   <button type="button" class="btn btn-ghost btn-small" id="createOrderDriveFolder">Criar pasta no meu Drive</button>
                   <button type="button" class="btn btn-ghost btn-small" id="syncApprovedPreview">Enviar última prévia aprovada</button>
                   <button type="button" class="btn btn-ghost btn-small" id="connectOrderDrive">Conectar Google Drive</button>
+                  <button type="button" class="btn btn-ghost btn-small" id="checkOrderDrive" hidden>Testar conexão</button>
                 </div>
                 <label id="driveAutoSyncControl" class="checkline" style="margin-top:9px" hidden>
                   <input id="driveAutoSyncEnabled" type="checkbox">
@@ -893,8 +894,16 @@ export async function openOrder(code, onChanged = null) {
                 </label>
                 <small id="orderDriveStatus" aria-live="polite">Verificando conexão…</small>
                 <div class="notice info" style="margin-top:9px">
-                  A pasta fica exclusiva deste pedido. O vínculo não envia arquivos:
-                  a transferência só será ativada quando o Google autorizar e a mídia aprovada estiver identificada.
+                  Crie uma pasta exclusiva para este pedido. O envio usa a última prévia aprovada.
+                  Pastas existentes precisam estar autorizadas para este aplicativo; colar um link não concede acesso ao Drive.
+                  O teste de conexão cria somente uma pasta e um arquivo de teste, sem alterar o pedido.
+                </div>
+                <a href="/drive-privacy.html" target="_blank" rel="noopener">Privacidade da conexão Google Drive</a>
+                <div id="manualDriveUpload" hidden style="margin-top:12px">
+                  <label for="manualDriveFile">Imagem, vídeo ou PDF · até 40 MB</label>
+                  <input type="file" class="input" id="manualDriveFile" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,application/pdf">
+                  <button type="button" class="btn btn-secondary btn-small" id="sendManualDriveFile" style="margin-top:8px">Enviar arquivo para esta pasta</button>
+                  <small>Cria um novo arquivo. Não substitui arquivos existentes nem altera o pedido.</small>
                 </div>
               </details>
 
@@ -1041,6 +1050,7 @@ export async function openOrder(code, onChanged = null) {
   const driveLinkInput=document.getElementById('orderDriveFolderId');
   const driveStatus=document.getElementById('orderDriveStatus');
   const connectDriveButton=document.getElementById('connectOrderDrive');
+  const checkDriveButton=document.getElementById('checkOrderDrive');
   const createFolderButton=document.getElementById('createOrderDriveFolder');
   const syncPreviewButton=document.getElementById('syncApprovedPreview');
   const autoSyncToggle=document.getElementById('driveAutoSyncEnabled');
@@ -1060,12 +1070,42 @@ export async function openOrder(code, onChanged = null) {
         info.configured?'Google Drive disponível, mas falta autorizar sua conta.':
         'Integração OAuth ainda não configurada no Worker.';
       connectDriveButton.hidden=!info.configured||info.connected;
+      checkDriveButton.hidden=!info.connected;
+      document.getElementById('manualDriveUpload').hidden=!info.connected;
       createFolderButton.hidden=!info.connected;
       syncPreviewButton.hidden=!info.connected;
       syncPreviewButton.disabled=!(detail.previews||[]).some(preview=>preview.status==='approved');
       autoSyncControl.hidden=!info.connected;
       autoSyncToggle.checked=Boolean(sync?.sync?.enabled);
     }catch(error){driveStatus.textContent=error.message||'Erro ao consultar vínculo.';}
+  });
+  checkDriveButton?.addEventListener('click',async()=>{
+    checkDriveButton.disabled=true;
+    try{
+      const result=await api('/api/admin/v2/drive/check',{method:'POST',body:JSON.stringify({})});
+      if(!result?.check?.fileId)throw Error('O Drive não confirmou o teste.');
+      driveStatus.textContent=result.check.message;
+      showToast('Pasta e arquivo de teste confirmados no Drive.');
+    }catch(error){driveStatus.textContent=error.message||'Falha no teste do Drive.';}
+    finally{checkDriveButton.disabled=false;}
+  });
+  document.getElementById('sendManualDriveFile')?.addEventListener('click',async event=>{
+    const button=event.currentTarget,file=document.getElementById('manualDriveFile').files?.[0];
+    if(!file){showToast('Escolha um arquivo primeiro.');return;}
+    if(file.size>40*1024*1024){showToast('Escolha um arquivo de até 40 MB.');return;}
+    button.disabled=true;
+    try{
+      const form=new FormData();form.append('file',file);
+      const response=await fetch('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive/upload-file',{
+        method:'POST',credentials:'same-origin',body:form
+      });
+      const result=await response.json();
+      if(!response.ok||!result.ok||!result.upload?.fileId)throw Error(result.error||'O Drive não confirmou o envio.');
+      driveStatus.textContent='Arquivo enviado para a pasta do pedido. Nenhum arquivo existente foi substituído.';
+      document.getElementById('manualDriveFile').value='';
+      showToast('Arquivo confirmado no Drive.');
+    }catch(error){driveStatus.textContent=error.message||'Falha ao enviar o arquivo.';}
+    finally{button.disabled=false;}
   });
   document.getElementById('saveOrderDriveFolder')?.addEventListener('click',async event=>{
     const button=event.currentTarget;
@@ -1074,7 +1114,7 @@ export async function openOrder(code, onChanged = null) {
       const result=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/drive-folder',{
         method:'PUT',body:JSON.stringify({folderId:driveLinkInput.value})
       });
-      driveStatus.textContent='Pasta vinculada ao pedido. Envio ainda não ativado.';
+      driveStatus.textContent='Pasta autorizada e vinculada ao pedido.';
       showToast('Pasta do Drive vinculada com segurança.');
     }catch(error){showToast(error.message||'Não foi possível vincular pasta.');}
     finally{button.disabled=false;}
@@ -2010,4 +2050,5 @@ export async function openOrder(code, onChanged = null) {
       },
     );
 }
+
 

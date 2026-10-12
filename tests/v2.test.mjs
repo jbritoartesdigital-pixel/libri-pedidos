@@ -132,6 +132,71 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
 });
 
+test('applied coupons show verified savings immediately and retain payment transparency', async () => {
+  const DB = database();
+  await saveV2Coupon(DB, 'ECONOMIA15', {
+    discountType: 'percent', discountValue: 15, active: true,
+    restrictions: { productCodes: [], eventTypes: [], addonCodes: [] },
+  });
+  const selection = { productCode: 'interactive_essential',
+    addonCodes: [], couponCode: 'ECONOMIA15', paymentMethod: 'pix' };
+  const pix = await calculateCommercialV2Quote(DB, selection);
+  const original = pix.productCents + pix.addonsCents;
+  assert.equal(pix.coupon?.code, 'ECONOMIA15');
+  assert.ok(pix.couponDiscountCents > 0);
+  assert.equal(original - pix.comboDiscountCents - pix.couponDiscountCents,
+    pix.subtotalCents, 'the displayed original and reductions must reconcile exactly');
+  assert.equal(pix.totalCents, pix.subtotalCents);
+  assert.equal(pix.payment.depositCents + pix.payment.balanceCents, pix.totalCents);
+  const card = await calculateCommercialV2Quote(DB, { ...selection, paymentMethod: 'card' });
+  assert.equal(card.couponDiscountCents, pix.couponDiscountCents,
+    'switching payment methods never changes the amount of coupon discount');
+  assert.equal(card.totalCents,
+    card.subtotalCents + card.cardFeeCents,
+    'card fee must be shown on a separate line, never disguised as a discount');
+  const noCoupon = await calculateCommercialV2Quote(DB,
+    { ...selection, couponCode: '' });
+  assert.equal(noCoupon.coupon, null);
+  assert.equal(noCoupon.couponDiscountCents, 0);
+  assert.equal(noCoupon.totalCents - pix.totalCents, pix.couponDiscountCents);
+});
+
+test('storefront validates coupons before showing success and keeps the itemized summary in all checkout stages', () => {
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const css = readFileSync('public/css/client-v2.css', 'utf8');
+  const html = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const priceBlock = store.slice(store.indexOf('function quoteSavingsHtml('),
+    store.indexOf('async function openExamples('));
+  const customer = store.slice(store.indexOf('function renderCustomer('),
+    store.indexOf('function renderReview('));
+  assert.match(priceBlock, /Cupom <strong>\$\{esc\(couponCode\)\}<\/strong> aplicado/);
+  assert.match(priceBlock, /Valor original \(convite e adicionais\)/);
+  assert.match(priceBlock, /<del class="quote-original-value">/);
+  assert.match(priceBlock, /Desconto do cupom/);
+  assert.match(priceBlock, /Desconto do combo/);
+  assert.match(priceBlock, /Valor com descontos/);
+  assert.match(priceBlock, /Adicional de urgência/);
+  assert.match(priceBlock, /Acréscimo no cartão \(taxa 4,97%\)/);
+  assert.match(priceBlock, /quote\.totalCents/);
+  assert.match(priceBlock, /quote\.payment\.depositCents/);
+  assert.match(customer, /id="applyCoupon"/);
+  assert.match(customer, /id="removeCoupon"/);
+  assert.match(customer, /const applyCoupon = async \(\) =>/);
+  assert.match(customer, /await updateQuote\(state\)/);
+  assert.match(customer, /if \(!state\.quote\?\.coupon \|\| state\.quote\.coupon\.code\.toUpperCase\(\) !== code\)/);
+  assert.match(customer, /state\.selection\.couponCode = previousCode/);
+  assert.match(customer, /showCouponError\(error\.message/);
+  assert.match(customer, /event\.key === 'Enter'/);
+  assert.match(customer, /enteredCoupon !== state\.selection\.couponCode/);
+  assert.match(store, /state\.quote\?\.coupon[\s\S]*?aplicado ✓/);
+  assert.match(css, /\.coupon-applied/);
+  assert.match(css, /\.quote-row\.quote-discount strong/);
+  assert.match(html, /client-v2\.js\?v=20261012-coupon-savings-1/);
+  assert.match(html, /client-v2\.css\?v=20261012-coupon-savings-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261012-coupon-savings-1/);
+});
+
 test('new coupons can be registered and edited without affecting orders or payments', async () => {
   const DB = database();
   const e = env(DB);
@@ -374,8 +439,8 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261012-coupon-savings-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261012-coupon-savings-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
 });
 
@@ -1108,9 +1173,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-coupon-savings-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261012-coupon-savings-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -1353,7 +1418,7 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-coupon-savings-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
@@ -2159,7 +2224,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261012-pix-reconfirm-1'));
+    'client-v2.js?v=20261012-coupon-savings-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2973,7 +3038,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261012-coupon-savings-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -3175,7 +3240,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261012-coupon-savings-1'));
   assert.ok(entry.includes('client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));

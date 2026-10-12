@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Publicação única: correção da reconfirmação do Pix após CI verde.
+      - 'public/js/client-v2-area.js'
 
 permissions:
   contents: read

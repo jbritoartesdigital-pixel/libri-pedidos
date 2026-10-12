@@ -1575,18 +1575,67 @@ a {
   padding-bottom: 24px;
 }
 
-/* A oferta é parte da página, não uma janela fixa sobre a viewport.
-   Em telas baixas, zoom e teclados abertos, todo o conteúdo pode rolar. */
+/* Pop-up compacto: sem empurrar o fluxo e sem cortar topo/rodapé. */
+.promo-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 12px
+    calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(43, 31, 35, 0.48);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .promo-sheet {
-  position: static;
-  width: min(680px, 100%);
-  margin: 16px auto 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: min(480px, 100%);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px)
+    - env(safe-area-inset-bottom, 0px));
+  margin: auto;
   border: 1px solid rgba(201, 111, 131, 0.35);
   border-radius: 22px;
-  background: rgba(255, 252, 250, 0.98);
+  background: #fffcfa;
   box-shadow: 0 18px 60px rgba(74, 45, 49, 0.22);
-  padding: 18px;
-  backdrop-filter: blur(18px);
+  overflow: hidden;
+  outline: none;
+}
+
+.promo-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 20px 15px;
+}
+
+.promo-details {
+  margin-top: 13px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.promo-details summary {
+  cursor: pointer;
+  padding: 5px 0;
+  color: var(--rose-dark);
+  font-size: 13px;
+  font-weight: 750;
+  list-style-position: inside;
+}
+
+.promo-details summary:focus-visible {
+  outline: 2px solid var(--rose-dark);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .promo-kicker {
@@ -1612,11 +1661,19 @@ a {
 }
 
 .promo-actions {
-  margin-top: 14px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: #fffcfa;
+}
+
+.promo-actions .btn {
+  min-width: 0;
+  white-space: normal;
+  min-height: 44px;
 }
 
 @media (max-width: 640px) {
@@ -1633,13 +1690,16 @@ a {
   }
 
   .promo-sheet {
-    padding: 14px;
     border-radius: 18px;
   }
 
+  .promo-content {
+    padding: 14px 14px 12px;
+  }
+
   .promo-actions {
-    display: grid;
     grid-template-columns: 1fr;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
   .promo-actions .btn {

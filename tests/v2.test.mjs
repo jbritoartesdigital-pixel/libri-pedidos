@@ -128,8 +128,8 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-coupon-savings-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261012-coupon-savings-1/);
 });
 
 test('applied coupons show verified savings immediately and retain payment transparency', async () => {
@@ -298,7 +298,7 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-coupon-savings-1/);
 });
 
 test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
@@ -348,7 +348,7 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-coupon-savings-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {

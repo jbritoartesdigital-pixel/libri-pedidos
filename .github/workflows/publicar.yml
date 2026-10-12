@@ -3,6 +3,12 @@ name: Publicar Portal de Pedidos
 
 on:
   workflow_dispatch:
+    inputs:
+      apply_migrations:
+        description: 'Aplicar migrations no banco de produção'
+        type: boolean
+        required: true
+        default: true
   # Liberação única: alterações posteriores não fazem deploy por push,
   # a menos que o commit tenha explicitamente o prefixo de release abaixo.
   push:
@@ -202,12 +208,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Ver migrations pendentes no D1
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply_migrations }}
         run: npx wrangler d1 migrations list libri-pedidos-db --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Criar backup do D1 antes das migrations
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply_migrations }}
         run: |
           npx wrangler d1 export libri-pedidos-db \
             --remote \
@@ -219,6 +227,7 @@ jobs:
       # Nunca anexar SQL de clientes em repositório público.
       # Se houver segredo de backup opcional, anexar SOMENTE versão cifrada.
       - name: Cifrar backup com AES-256 quando chave estiver disponível
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply_migrations }}
         id: d1_backup
         env:
           BACKUP_PASSWORD: ${{ secrets.LIBRI_D1_BACKUP_PASSWORD }}
@@ -246,12 +255,14 @@ jobs:
           if-no-files-found: error
 
       - name: Aplicar migrations no D1
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply_migrations }}
         run: npx wrangler d1 migrations apply libri-pedidos-db --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Conferir migrations após aplicação
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply_migrations }}
         run: npx wrangler d1 migrations list libri-pedidos-db --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

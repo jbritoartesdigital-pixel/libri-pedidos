@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Uma publicação do pop-up compacto de ofertas após CI verde.
+      - 'public/css/client-v2.css'
 
 permissions:
   contents: read

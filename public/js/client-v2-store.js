@@ -3433,9 +3433,14 @@ function renderRecommendation(
       </div>
 
       ${totalOnlyHtml(state.quote)}
+    </section>
 
-      <div class="promo-sheet" role="dialog" aria-label="Oferta opcional">
-        <span class="promo-kicker">Oferta para adicionar agora</span>
+    <!-- Fora de .page-card: backdrop-filter cria containing block para fixed. -->
+    <div class="promo-backdrop" id="promoBackdrop">
+        <div class="promo-sheet" role="dialog" aria-modal="true"
+          aria-label="Oferta opcional" tabindex="-1">
+          <div class="promo-content">
+            <span class="promo-kicker">Um extra para sua festa</span>
 
         <strong class="promo-title">
           ${esc(recommendationTitle(offer))}
@@ -3479,8 +3484,10 @@ function renderRecommendation(
               : ''
         }
 
-        <div class="promo-why">
-          <strong>Por que estou te sugerindo isso?</strong>
+            <details class="promo-details">
+              <summary>Veja o que está incluído</summary>
+              <div class="promo-why">
+                <strong>Por que estou te sugerindo isso?</strong>
           <p>${esc(reason)}</p>
         </div>
 
@@ -3521,7 +3528,10 @@ function renderRecommendation(
                 : ''
         }
 
-        <div class="promo-actions">
+            </details>
+          </div>
+
+          <div class="promo-actions">
           <button
             id="skipFinalOffer"
             class="btn btn-ghost"
@@ -3547,10 +3557,19 @@ function renderRecommendation(
                       : 'Adicionar'
             }
           </button>
+          </div>
         </div>
       </div>
-    </section>
   `;
+
+  // O foco fica no pop-up, não em controles da etapa ao fundo.
+  document.querySelector('.promo-sheet')?.focus({ preventScroll: true });
+  document.querySelector('.promo-sheet')?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      document.getElementById('skipFinalOffer')?.click();
+    }
+  });
 
   bindBack(
     state,

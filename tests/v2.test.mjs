@@ -77,6 +77,61 @@ test('simulation briefing uses real schema without creating orders, payments or 
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_briefing_uploads').get().n, 0);
 });
 
+test('video-only cannot sell Libri confirmation, while interactive keeps it', async () => {
+  const DB = database();
+  const initialOrders = DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n;
+  const initialPayments = DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n;
+
+  const incompatible = {
+    productCode: 'cinematic_video',
+    scenes: 3,
+    addonCodes: ['confirmation_libri'],
+    paymentMethod: 'pix',
+  };
+  await assert.rejects(
+    calculateCommercialV2Quote(DB, incompatible),
+    /Confirmação Libri só pode ser adicionada a um convite interativo/,
+  );
+  await assert.rejects(
+    startV2Checkout(request, env(DB), input({
+      event: { honoreeName: 'Vídeo com RSVP inválido', type: 'birthday', date: day(65) },
+      selection: incompatible,
+      deliveryWindow: { start: day(12), end: day(14) },
+      ...await terms(DB),
+    })),
+    /Confirmação Libri só pode ser adicionada a um convite interativo/,
+  );
+  const allowedVideo = await calculateCommercialV2Quote(DB, {
+    productCode: 'cinematic_video', scenes: 3, paymentMethod: 'pix',
+  });
+  assert.ok(!allowedVideo.addons.some(item => item.group === 'confirmation'));
+  const allowedInteractive = await calculateCommercialV2Quote(DB, {
+    productCode: 'interactive_essential',
+    addonCodes: ['confirmation_libri'],
+    paymentMethod: 'pix',
+  });
+  assert.ok(allowedInteractive.addons.some(item => item.code === 'confirmation_libri'));
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, initialOrders,
+    'rejected combinations must never create or change orders');
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n, initialPayments,
+    'rejected combinations must never create payments');
+});
+
+test('video-only storefront hides confirmation and clears incompatible saved cart', () => {
+  const store = readFileSync('public/js/client-v2-store.js', 'utf8');
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  assert.match(store, /function removeVideoConfirmation\(state\)/);
+  assert.match(store, /productFor\(state\)\?\.code !== 'cinematic_video'/);
+  assert.match(store, /addon\.group === 'confirmation'/);
+  assert.match(store, /return removedConfirmation/);
+  assert.match(store, /state\.selection\.addonCodes = compatible/);
+  assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
+  assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
+  assert.match(shell, /client-v2\.js\?v=20261012-video-rsvp-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
+});
+
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
   const product = { code: 'interactive_essential', name: 'Convite interativo' };
   const addons = [{ code: 'confirmation_libri', name: 'Confirmação de Presença Libri' }];
@@ -165,8 +220,8 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-mobile-briefing-3'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261012-video-rsvp-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
 });
 
@@ -899,9 +954,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-video-rsvp-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261009-mobile-briefing-3'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -1144,7 +1199,7 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-video-rsvp-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261009-mobile-briefing-3'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
@@ -1900,7 +1955,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261009-mobile-briefing-3'));
+    'client-v2.js?v=20261012-video-rsvp-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2714,7 +2769,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261012-video-rsvp-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -2916,7 +2971,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261009-mobile-briefing-3'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261012-video-rsvp-1'));
   assert.ok(entry.includes('client-v2-area.js?v=20261009-mobile-briefing-3'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));

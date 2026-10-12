@@ -1850,6 +1850,65 @@ async function refreshConfigurationQuote(
   }
 }
 
+function quoteSavingsHtml(quote) {
+  const couponCode = String(quote?.coupon?.code || '').trim();
+  const comboDiscount = Math.max(0, Number(quote?.comboDiscountCents || 0));
+  const couponDiscount = Math.max(0, Number(quote?.couponDiscountCents || 0));
+  const hasDiscount = comboDiscount > 0 || couponDiscount > 0;
+  const originalCents = Number(quote?.productCents || 0)
+    + Number(quote?.addonsCents || 0);
+  const urgencyCents = Math.max(0, Number(quote?.urgency?.amountCents || 0));
+  const cardFeeCents = Math.max(0, Number(quote.cardFeeCents || 0));
+
+  return `
+    ${couponCode ? `
+      <div class="coupon-applied" role="status">
+        <span aria-hidden="true">✓</span>
+        Cupom <strong>${esc(couponCode)}</strong> aplicado
+      </div>
+    ` : ''}
+    ${hasDiscount ? `
+      <div class="quote-row">
+        <span>Valor original (convite e adicionais)</span>
+        <del class="quote-original-value">${money(originalCents)}</del>
+      </div>
+      ${comboDiscount > 0 ? `
+        <div class="quote-row quote-discount">
+          <span>Desconto do combo</span>
+          <strong>− ${money(comboDiscount)}</strong>
+        </div>
+      ` : ''}
+      ${couponCode ? `
+        <div class="quote-row quote-discount">
+          <span>Desconto do cupom</span>
+          <strong>− ${money(couponDiscount)}</strong>
+        </div>
+      ` : ''}
+      <div class="quote-row">
+        <span>Valor com descontos</span>
+        <strong>${money(quote.subtotalCents)}</strong>
+      </div>
+    ` : cardFeeCents > 0 ? `
+      <div class="quote-row">
+        <span>Valor do convite e adicionais</span>
+        <strong>${money(quote.baseTotalCents)}</strong>
+      </div>
+    ` : ''}
+    ${urgencyCents > 0 ? `
+      <div class="quote-row">
+        <span>Adicional de urgência</span>
+        <strong>+ ${money(urgencyCents)}</strong>
+      </div>
+    ` : ''}
+    ${cardFeeCents > 0 ? `
+      <div class="quote-row">
+        <span>Acréscimo no cartão (taxa 4,97%)</span>
+        <strong>+ ${money(cardFeeCents)}</strong>
+      </div>
+    ` : ''}
+  `;
+}
+
 function totalOnlyHtml(
   quote,
 ) {
@@ -1859,6 +1918,7 @@ function totalOnlyHtml(
 
   return `
     <div class="quote-card">
+      ${quoteSavingsHtml(quote)}
       <div class="quote-row total">
         <span>Total</span>
         <strong>${money(quote.totalCents)}</strong>
@@ -1876,16 +1936,7 @@ function quoteHtml(
 
   return `
     <div class="quote-card">
-      ${quote.cardFeeCents > 0 ? `
-        <div class="quote-row">
-          <span>Valor do convite e adicionais</span>
-          <strong>${money(quote.baseTotalCents)}</strong>
-        </div>
-        <div class="quote-row">
-          <span>Acréscimo no cartão (taxa 4,97%)</span>
-          <strong>${money(quote.cardFeeCents)}</strong>
-        </div>
-      ` : ''}
+      ${quoteSavingsHtml(quote)}
       <div class="quote-row total">
         <span>Total</span>
         <strong>${money(quote.totalCents)}</strong>
@@ -2657,7 +2708,6 @@ function renderDetails(
       'click',
       async () => {
         capture();
-
         const requiredFields = [
           { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
           { value: state.event.honoreeName, label: 'Nome da criança, casal ou evento', id: 'honoreeName' },
@@ -3815,8 +3865,10 @@ function renderCustomer(
           id="toggleCoupon"
           class="btn btn-link"
           type="button"
+          aria-controls="couponBox"
+          aria-expanded="${state.selection.couponCode ? 'true' : 'false'}"
         >
-          Adicionar cupom
+          ${state.quote?.coupon ? 'Alterar cupom' : 'Adicionar cupom'}
         </button>
 
         <div
@@ -3828,13 +3880,26 @@ function renderCustomer(
           }"
           style="max-width:360px"
         >
-          <label for="couponCode">Cupom</label>
+          <label for="couponCode">Código do cupom</label>
           <input
             id="couponCode"
             class="input"
             value="${esc(state.selection.couponCode || '')}"
             autocomplete="off"
+            autocapitalize="characters"
+            aria-describedby="couponFeedback"
           >
+          <div class="coupon-actions">
+            <button type="button" class="btn btn-secondary btn-small" id="applyCoupon">
+              Aplicar cupom
+            </button>
+            ${state.quote?.coupon ? `
+              <button type="button" class="btn btn-ghost btn-small" id="removeCoupon">
+                Remover
+              </button>
+            ` : ''}
+          </div>
+          <small id="couponFeedback" class="coupon-feedback" aria-live="polite"></small>
         </div>
       </div>
 
@@ -3874,16 +3939,6 @@ function renderCustomer(
         .value
         .trim();
 
-    state.selection.couponCode =
-      document
-        .getElementById(
-          'couponCode',
-        )
-        ?.value
-        .trim()
-        .toUpperCase()
-      || '';
-
     persist(state);
   };
 
@@ -3919,11 +3974,97 @@ function renderCustomer(
 
         document
           .getElementById(
+            'toggleCoupon',
+          )
+          .setAttribute('aria-expanded', 'true');
+
+        document
+          .getElementById(
             'couponCode',
           )
           .focus();
       },
     );
+
+  const couponInput = document.getElementById('couponCode');
+  const couponFeedback = document.getElementById('couponFeedback');
+
+  const showCouponError = (message) => {
+    if (couponFeedback) {
+      couponFeedback.textContent = message;
+      couponFeedback.classList.add('coupon-feedback-error');
+    }
+    couponInput?.classList.add('input-error');
+    couponInput?.setAttribute('aria-invalid', 'true');
+    couponInput?.focus();
+  };
+
+  const applyCoupon = async () => {
+    capture();
+    const code = String(couponInput?.value || '').trim().toUpperCase();
+    if (!code) {
+      showCouponError('Digite o código do cupom para aplicar.');
+      return false;
+    }
+    const previousCode = state.selection.couponCode;
+    const previousQuote = state.quote;
+    const button = document.getElementById('applyCoupon');
+    if (button) button.disabled = true;
+
+    try {
+      state.selection.couponCode = code;
+      await updateQuote(state);
+      if (!state.quote?.coupon || state.quote.coupon.code.toUpperCase() !== code) {
+        throw new Error('Não foi possível validar este cupom.');
+      }
+      persist(state);
+      renderCustomer(state, render);
+      showToast('Cupom aplicado! Confira a economia no resumo.');
+      return true;
+    } catch (error) {
+      state.selection.couponCode = previousCode;
+      state.quote = previousQuote;
+      persist(state);
+      showCouponError(error.message || 'Não foi possível aplicar o cupom.');
+      return false;
+    } finally {
+      if (button) button.disabled = false;
+    }
+  };
+
+  document.getElementById('applyCoupon')?.addEventListener('click', () => {
+    void applyCoupon();
+  });
+  couponInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void applyCoupon();
+    }
+  });
+  couponInput?.addEventListener('input', () => {
+    if (couponFeedback) {
+      couponFeedback.textContent = '';
+      couponFeedback.classList.remove('coupon-feedback-error');
+    }
+  });
+
+  document.getElementById('removeCoupon')?.addEventListener('click', async () => {
+    capture();
+    const previousCode = state.selection.couponCode;
+    const previousQuote = state.quote;
+    state.selection.couponCode = '';
+    try {
+      await updateQuote(state);
+      persist(state);
+      renderCustomer(state, render);
+      showToast('Cupom removido. Total atualizado.');
+    } catch (error) {
+      state.selection.couponCode = previousCode;
+      state.quote = previousQuote;
+      persist(state);
+      showCouponError(error.message || 'Não foi possível remover o cupom.');
+    }
+  });
 
   document
     .getElementById(
@@ -3946,6 +4087,16 @@ function renderCustomer(
       'click',
       async () => {
         capture();
+        const enteredCoupon = String(couponInput?.value || '').trim().toUpperCase();
+        if (enteredCoupon !== state.selection.couponCode) {
+          if (enteredCoupon) {
+            if (!await applyCoupon()) return;
+          } else if (state.selection.couponCode) {
+            showCouponError('Toque em Remover para retirar o cupom aplicado.');
+            return;
+          }
+        }
+
 
         const requiredFields = [
           { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
@@ -4140,11 +4291,11 @@ function renderReview(
         </div>
 
         ${
-          state.selection.couponCode
+          state.quote?.coupon
             ? `
               <div class="review-line">
                 <dt>Cupom</dt>
-                <dd>${esc(state.selection.couponCode)}</dd>
+                <dd>${esc(state.quote.coupon.code)} aplicado ✓</dd>
               </div>
             `
             : ''

@@ -663,6 +663,61 @@ a {
   font-size: 18px;
 }
 
+.coupon-applied {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 750;
+  color: #246a50;
+}
+
+.coupon-applied span {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #e7f5ed;
+}
+
+.quote-original-value {
+  color: var(--muted);
+  font-weight: 550;
+}
+
+.quote-row.quote-discount strong {
+  color: #246a50;
+}
+
+.coupon-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.coupon-feedback {
+  display: block;
+  min-height: 18px;
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.coupon-feedback-error {
+  color: #9b3131;
+}
+
+@media (max-width: 420px) {
+  .quote-row { gap: 10px; }
+  .quote-row > :last-child { text-align: right; white-space: nowrap; }
+}
+
+
 .muted {
   color: var(--muted);
 }

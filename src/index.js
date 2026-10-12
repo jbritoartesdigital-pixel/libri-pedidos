@@ -43,6 +43,7 @@ import {
 } from './routes/admin-orders-v2.js';
 
 import { handleAdminDriveFolderV2Api } from './routes/admin-drive-folder-v2.js';
+import {needsDriveOAuthReturnPage,driveOAuthReturnPage} from './lib/v2-drive-oauth-return.js';
 
 import {
   handleAdminStoreConfigV2Api,
@@ -312,6 +313,10 @@ async function handleAdminV2Api(
         404,
       );
   }
+
+  // The landing page does not read or write OAuth/admin data. Its same-origin
+  // retry must pass the unchanged Passkey check immediately below.
+  if(needsDriveOAuthReturnPage(request,url))return driveOAuthReturnPage();
 
   const authFailure =
     await requireAdminPasskeyAuth(
@@ -628,4 +633,5 @@ export default {
     );
   },
 };
+
 

@@ -9,8 +9,6 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
-      # Publicação única do checkout com resumo de cupom, somente após CI verde.
-      - 'public/js/client-v2-store.js'
 
 permissions:
   contents: read

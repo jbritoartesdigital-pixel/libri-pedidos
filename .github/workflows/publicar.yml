@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Liberação pontual após CI: oferta responsiva no checkout.
+      - 'public/css/client-v2.css'
 
 permissions:
   contents: read

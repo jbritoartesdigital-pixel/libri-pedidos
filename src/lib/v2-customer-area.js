@@ -2070,6 +2070,10 @@ function validationErrors(
           'upload',
         key:
           rule.fieldKey,
+        section:
+          rule.fieldKey === 'reference_files'
+            ? 'references'
+            : 'appearance',
         message:
           `${rule.label}: envie pelo menos ${rule.min}.`,
       });
@@ -2083,6 +2087,10 @@ function validationErrors(
           'upload',
         key:
           rule.fieldKey,
+        section:
+          rule.fieldKey === 'reference_files'
+            ? 'references'
+            : 'appearance',
         message:
           `${rule.label}: máximo de ${rule.max}.`,
       });

@@ -169,6 +169,76 @@ async function capture(browser,ref,label) {
     await new Promise(ok=>instance.server.close(ok));
   }
 }
+async function checkOfferIsFullyReachable(browser) {
+  const ctx = await browser.newContext({
+    viewport:{width:390,height:640},isMobile:true,hasTouch:true,
+    deviceScaleFactor:1,locale:'pt-BR',reducedMotion:'reduce'
+  });
+  const page = await ctx.newPage();
+  try {
+    // Test the real .promo-sheet CSS, with fictional long copy only.
+    const longList=Array.from({length:15},(_,i)=>
+      '<li>Explicação fictícia '+(i+1)+' sobre a confirmação da festa.</li>').join('');
+    const html=[
+      '<!doctype html><html lang="pt-BR"><meta name="viewport" content="width=device-width,initial-scale=1">',
+      '<main class="app-shell"><section class="page-card promo-stage">',
+      '<div class="page-head"><span class="eyebrow">Pedido configurado</span>',
+      '<h1 class="page-title">Está quase pronto</h1>',
+      '<p class="page-subtitle">Uma oferta opcional antes de continuar.</p></div>',
+      '<div class="quote-card">Total do pedido R$ 100,00</div>',
+      '<div class="promo-sheet" aria-label="Oferta opcional">',
+      '<span class="promo-kicker">Oferta para adicionar agora</span>',
+      '<strong class="promo-title">Quer organizar as confirmações também?</strong>',
+      '<p class="promo-copy">Leve confirmação por mais R$ 35,00.</p>',
+      '<div class="promo-why"><strong>Por que estou sugerindo isso?</strong>',
+      '<p>Seu convite já é interativo. Organize confirmações sem depender de WhatsApp.</p></div>',
+      '<div class="addon-explanation"><strong>O que você leva</strong>',
+      '<p>Confirmação vinculada ao convite.</p><ul>'+longList+'</ul></div>',
+      '<div class="promo-actions"><button class="btn btn-ghost" id="skipFinalOffer">Agora não</button>',
+      '<button class="btn btn-primary" id="acceptFinalOffer">Adicionar por R$ 35,00</button></div>',
+      '</div></section></main></html>'
+    ].join('\n');
+    await page.setContent(html);
+    await page.addStyleTag({content:source('public/css/client-v2.css').toString('utf8')});
+
+    for(const [width,height] of [[320,520],[360,640],[390,700],[412,844],[390,390]]) {
+      await page.setViewportSize({width,height});
+      await page.evaluate(()=>window.scrollTo(0,0));
+      const m=await page.evaluate(()=>{
+        const sheet=document.querySelector('.promo-sheet');
+        const rect=sheet.getBoundingClientRect();
+        return {position:getComputedStyle(sheet).position,
+          top:rect.top,left:rect.left,right:rect.right,
+          doc:document.documentElement.scrollWidth,
+          scrollHeight:document.documentElement.scrollHeight,
+          viewportHeight:window.innerHeight};
+      });
+      assert.equal(m.position,'static','offer must never anchor to screen bottom');
+      assert.ok(m.top>=0, 'offer top clipped: '+JSON.stringify({width,height,...m}));
+      assert.ok(m.left>=-1&&m.right<=width+1,'offer outside horizontal viewport');
+      assert.ok(m.doc<=width+1,'offer causes horizontal overflow');
+      assert.ok(m.scrollHeight>m.viewportHeight,'long offer must be reachable by page scroll');
+
+      await page.locator('#acceptFinalOffer').scrollIntoViewIfNeeded();
+      const accept=await page.locator('#acceptFinalOffer').boundingBox();
+      assert.ok(accept&&accept.y>=-1&&accept.y+accept.height<=height+1,
+        'accept action unreachable at '+width+'x'+height);
+      await page.locator('#skipFinalOffer').scrollIntoViewIfNeeded();
+      const skip=await page.locator('#skipFinalOffer').boundingBox();
+      assert.ok(skip&&skip.y>=-1&&skip.y+skip.height<=height+1,
+        'decline action unreachable at '+width+'x'+height);
+      if(width===390&&height===700){
+        await page.screenshot({path:join(out,'alteracao-oferta-botoes-390.png'),
+          animations:'disabled'});
+        audit.screens.push('alteracao-oferta-botoes-390.png');
+      }
+    }
+    audit.tests.push('oferta longa: cabeçalho e dois botões acessíveis em 5 viewports, inclusive teclado');
+  } finally {
+    await ctx.close();
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -201,6 +271,7 @@ try{
   browser=await chromium.launch({headless:true,channel:'chrome'});
   if(base)await capture(browser,base,'main');
   await capture(browser,'','alteracao');
+  await checkOfferIsFullyReachable(browser);
   if(base)for(const width of [320,390]) {
     visualDiff('main-central-'+width+'.png',
       'alteracao-central-'+width+'.png','diff-central-'+width+'.png');

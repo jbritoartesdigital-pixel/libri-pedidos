@@ -2596,18 +2596,27 @@ export async function startCustomerArea(
             button.textContent =
               'Enviar dados';
 
+            // The customer-area API wraps application diagnostics in
+            // { details: { code, details: { fields } } }. Other callers
+            // may use { details: { fields } }; support both safely.
             const missing =
-              error.data?.details?.fields
+              error.data?.details?.details?.fields
+              || error.data?.details?.fields
               || [];
 
-            if (missing.length) {
-              const firstSection = missing.find(item => item.section)?.section;
+            if (Array.isArray(missing) && missing.length) {
+              // Navigate to the first incomplete section and highlight
+              // its real inputs; keep all previously saved responses and photos.
+              const sections = area.briefing.schema.sections || [];
+              const firstSection = sections.find(section =>
+                missing.some(item => item.section === section.id))?.id;
               if (firstSection && firstSection !== area.briefing.currentSection) {
                 try {
                   await saveBriefingNow(firstSection, {});
                   await render();
                 } catch {
-                  showToast('Confira os campos obrigatórios das etapas anteriores.');
+                  showToast('Não foi possível abrir a etapa pendente. Confira as respostas já preenchidas.');
+                  return;
                 }
               }
               showBriefingMissing(missing);

@@ -1850,6 +1850,65 @@ async function refreshConfigurationQuote(
   }
 }
 
+function quoteSavingsHtml(quote) {
+  const couponCode = String(quote?.coupon?.code || '').trim();
+  const comboDiscount = Math.max(0, Number(quote?.comboDiscountCents || 0));
+  const couponDiscount = Math.max(0, Number(quote?.couponDiscountCents || 0));
+  const hasDiscount = comboDiscount > 0 || couponDiscount > 0;
+  const originalCents = Number(quote?.productCents || 0)
+    + Number(quote?.addonsCents || 0);
+  const urgencyCents = Math.max(0, Number(quote?.urgency?.amountCents || 0));
+  const cardFeeCents = Math.max(0, Number(quote?.cardFeeCents || 0));
+
+  return `
+    ${couponCode ? `
+      <div class="coupon-applied" role="status">
+        <span aria-hidden="true">✓</span>
+        Cupom <strong>${esc(couponCode)}</strong> aplicado
+      </div>
+    ` : ''}
+    ${hasDiscount ? `
+      <div class="quote-row">
+        <span>Valor original (convite e adicionais)</span>
+        <del class="quote-original-value">${money(originalCents)}</del>
+      </div>
+      ${comboDiscount > 0 ? `
+        <div class="quote-row quote-discount">
+          <span>Desconto do combo</span>
+          <strong>− ${money(comboDiscount)}</strong>
+        </div>
+      ` : ''}
+      ${couponCode ? `
+        <div class="quote-row quote-discount">
+          <span>Desconto do cupom</span>
+          <strong>− ${money(couponDiscount)}</strong>
+        </div>
+      ` : ''}
+      <div class="quote-row">
+        <span>Valor com descontos</span>
+        <strong>${money(quote.subtotalCents)}</strong>
+      </div>
+    ` : cardFeeCents > 0 ? `
+      <div class="quote-row">
+        <span>Valor do convite e adicionais</span>
+        <strong>${money(quote.baseTotalCents)}</strong>
+      </div>
+    ` : ''}
+    ${urgencyCents > 0 ? `
+      <div class="quote-row">
+        <span>Adicional de urgência</span>
+        <strong>+ ${money(urgencyCents)}</strong>
+      </div>
+    ` : ''}
+    ${cardFeeCents > 0 ? `
+      <div class="quote-row">
+        <span>Acréscimo no cartão (taxa 4,97%)</span>
+        <strong>+ ${money(cardFeeCents)}</strong>
+      </div>
+    ` : ''}
+  `;
+}
+
 function totalOnlyHtml(
   quote,
 ) {
@@ -1859,6 +1918,7 @@ function totalOnlyHtml(
 
   return `
     <div class="quote-card">
+      ${quoteSavingsHtml(quote)}
       <div class="quote-row total">
         <span>Total</span>
         <strong>${money(quote.totalCents)}</strong>
@@ -1876,16 +1936,7 @@ function quoteHtml(
 
   return `
     <div class="quote-card">
-      ${quote.cardFeeCents > 0 ? `
-        <div class="quote-row">
-          <span>Valor do convite e adicionais</span>
-          <strong>${money(quote.baseTotalCents)}</strong>
-        </div>
-        <div class="quote-row">
-          <span>Acréscimo no cartão (taxa 4,97%)</span>
-          <strong>${money(quote.cardFeeCents)}</strong>
-        </div>
-      ` : ''}
+      ${quoteSavingsHtml(quote)}
       <div class="quote-row total">
         <span>Total</span>
         <strong>${money(quote.totalCents)}</strong>

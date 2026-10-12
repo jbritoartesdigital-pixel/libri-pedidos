@@ -2708,6 +2708,15 @@ function renderDetails(
       'click',
       async () => {
         capture();
+        const enteredCoupon = String(couponInput?.value || '').trim().toUpperCase();
+        if (enteredCoupon !== state.selection.couponCode) {
+          if (enteredCoupon) {
+            if (!await applyCoupon()) return;
+          } else if (state.selection.couponCode) {
+            showCouponError('Toque em Remover para retirar o cupom aplicado.');
+            return;
+          }
+        }
 
         const requiredFields = [
           { value: state.event.type, label: 'Tipo de evento', id: 'eventType' },
@@ -3975,11 +3984,97 @@ function renderCustomer(
 
         document
           .getElementById(
+            'toggleCoupon',
+          )
+          .setAttribute('aria-expanded', 'true');
+
+        document
+          .getElementById(
             'couponCode',
           )
           .focus();
       },
     );
+
+  const couponInput = document.getElementById('couponCode');
+  const couponFeedback = document.getElementById('couponFeedback');
+
+  const showCouponError = (message) => {
+    if (couponFeedback) {
+      couponFeedback.textContent = message;
+      couponFeedback.classList.add('coupon-feedback-error');
+    }
+    couponInput?.classList.add('input-error');
+    couponInput?.setAttribute('aria-invalid', 'true');
+    couponInput?.focus();
+  };
+
+  const applyCoupon = async () => {
+    capture();
+    const code = String(couponInput?.value || '').trim().toUpperCase();
+    if (!code) {
+      showCouponError('Digite o código do cupom para aplicar.');
+      return false;
+    }
+    const previousCode = state.selection.couponCode;
+    const previousQuote = state.quote;
+    const button = document.getElementById('applyCoupon');
+    if (button) button.disabled = true;
+
+    try {
+      state.selection.couponCode = code;
+      await updateQuote(state);
+      if (!state.quote?.coupon || state.quote.coupon.code.toUpperCase() !== code) {
+        throw new Error('Não foi possível validar este cupom.');
+      }
+      persist(state);
+      renderCustomer(state, render);
+      showToast('Cupom aplicado! Confira a economia no resumo.');
+      return true;
+    } catch (error) {
+      state.selection.couponCode = previousCode;
+      state.quote = previousQuote;
+      persist(state);
+      showCouponError(error.message || 'Não foi possível aplicar o cupom.');
+      return false;
+    } finally {
+      if (button) button.disabled = false;
+    }
+  };
+
+  document.getElementById('applyCoupon')?.addEventListener('click', () => {
+    void applyCoupon();
+  });
+  couponInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void applyCoupon();
+    }
+  });
+  couponInput?.addEventListener('input', () => {
+    if (couponFeedback) {
+      couponFeedback.textContent = '';
+      couponFeedback.classList.remove('coupon-feedback-error');
+    }
+  });
+
+  document.getElementById('removeCoupon')?.addEventListener('click', async () => {
+    capture();
+    const previousCode = state.selection.couponCode;
+    const previousQuote = state.quote;
+    state.selection.couponCode = '';
+    try {
+      await updateQuote(state);
+      persist(state);
+      renderCustomer(state, render);
+      showToast('Cupom removido. Total atualizado.');
+    } catch (error) {
+      state.selection.couponCode = previousCode;
+      state.quote = previousQuote;
+      persist(state);
+      showCouponError(error.message || 'Não foi possível remover o cupom.');
+    }
+  });
 
   document
     .getElementById(

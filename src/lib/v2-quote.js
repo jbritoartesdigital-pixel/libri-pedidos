@@ -110,6 +110,17 @@ export async function calculateV2Quote(
       addonCodes,
     );
 
+  // A confirmação Libri exige um convite interativo com link e botões.
+  // Recusar novos orçamentos incompatíveis, sem modificar pedidos já criados.
+  if (
+    resolved.product.code === 'cinematic_video'
+    && addons.some(addon => addon.group === 'confirmation')
+  ) {
+    throw new Error(
+      'A Confirmação Libri só pode ser adicionada a um convite interativo. Escolha um formato interativo ou retire esse adicional.',
+    );
+  }
+
   const lines = [
     moneyLine(
       'product',

@@ -293,6 +293,25 @@ function variantFor(
     || null;
 }
 
+function removeVideoConfirmation(state) {
+  if (productFor(state)?.code !== 'cinematic_video') {
+    return false;
+  }
+  const selected = state.selection.addonCodes || [];
+  const compatible = selected.filter(code =>
+    code !== 'confirmation_libri'
+    && addonByCode(state, code)?.group !== 'confirmation');
+  if (compatible.length === selected.length) {
+    return false;
+  }
+  state.selection.addonCodes = compatible;
+  state.selection.comboCode = '';
+  state.quote = null;
+  state.delivery = null;
+  state.deliveryWindow = null;
+  return true;
+}
+
 function selectProduct(
   state,
   product,
@@ -302,6 +321,8 @@ function selectProduct(
 
   state.selection.productSlug =
     product.slug;
+
+  const removedConfirmation = removeVideoConfirmation(state);
 
   const shortDefault =
     Number(
@@ -343,6 +364,8 @@ function selectProduct(
 
   state.deliveryWindow =
     null;
+
+  return removedConfirmation;
 }
 
 function actionRow(
@@ -1147,8 +1170,13 @@ function finalRecommendation(
   if (
     configuredCombos.length
   ) {
-    const entry =
-      configuredCombos[0];
+    const entry = configuredCombos.find(candidate =>
+      productFor(state)?.code !== 'cinematic_video'
+      || !candidate.missing.some(missing =>
+        (missing.type === 'group' && missing.code === 'confirmation')
+        || (missing.type === 'addon'
+          && addonByCode(state, missing.code)?.group === 'confirmation')));
+    if (!entry) return null;
 
     const missing =
       entry.missing[0];
@@ -1519,6 +1547,14 @@ function addonGroups(
       addon.group
       === 'filter'
       && hasMoments
+    ) {
+      continue;
+    }
+
+    // No vídeo puro não há botão para abrir a confirmação.
+    if (
+      productFor(state)?.code === 'cinematic_video'
+      && addon.group === 'confirmation'
     ) {
       continue;
     }
@@ -2239,10 +2275,13 @@ function renderProducts(
               return;
             }
 
-            selectProduct(
+            const removedConfirmation = selectProduct(
               state,
               product,
             );
+            if (removedConfirmation) {
+              showToast('A Confirmação Libri é exclusiva de convites interativos e foi retirada da seleção.');
+            }
 
             persist(state);
             renderProducts(
@@ -2870,6 +2909,7 @@ function renderAddons(
   state,
   render,
 ) {
+  removeVideoConfirmation(state);
   const normalizedSelection =
     new Set(
       state.selection.addonCodes
@@ -4713,6 +4753,9 @@ export async function startStore(
 
   state.terms =
     termsData.terms;
+
+  // Também corrige carrinhos em andamento salvos no navegador.
+  removeVideoConfirmation(state);
 
   if (
     productSlug

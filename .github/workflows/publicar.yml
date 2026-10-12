@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Gatilho temporário do release de compatibilidade e cupons.
+      - 'public/js/client-v2-store.js'
 
 permissions:
   contents: read

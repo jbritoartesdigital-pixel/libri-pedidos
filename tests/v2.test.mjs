@@ -193,8 +193,24 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
   assert.match(html, /client-v2\.js\?v=20261012-coupon-savings-1/);
-  assert.match(html, /client-v2\.css\?v=20261012-coupon-savings-1/);
+  assert.match(html, /client-v2\.css\?v=20261012-offer-responsive-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261012-coupon-savings-1/);
+});
+
+test('offer stage uses document flow instead of a fixed bottom sheet on any viewport', () => {
+  const css = readFileSync('public/css/client-v2.css', 'utf8');
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  const stage = css.match(/\.promo-stage\s*\{([^}]+)\}/)?.[1] || '';
+  const sheet = css.match(/\.promo-sheet\s*\{([^}]+)\}/)?.[1] || '';
+  assert.match(stage, /min-height:\s*0/);
+  assert.doesNotMatch(stage, /padding-bottom:\s*2[0-9]{2}px/);
+  assert.match(sheet, /position:\s*static/);
+  assert.match(sheet, /width:\s*min\(680px,\s*100%\)/);
+  assert.doesNotMatch(sheet, /position:\s*fixed|bottom:\s*[0-9]|transform:\s*translateX/);
+  const mobile = css.match(/@media \(max-width:\s*640px\)\s*\{([\s\S]*?)\n\}\s*\n\n\.addon-explanation/)?.[1] || '';
+  assert.match(mobile, /\.promo-actions[\s\S]*grid-template-columns:\s*1fr/);
+  assert.doesNotMatch(mobile, /\.promo-sheet\s*\{[^}]*bottom:/);
+  assert.match(shell, /client-v2\.css\?v=20261012-offer-responsive-1/);
 });
 
 test('new coupons can be registered and edited without affecting orders or payments', async () => {

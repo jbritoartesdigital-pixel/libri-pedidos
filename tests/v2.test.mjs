@@ -4231,7 +4231,7 @@ test('store client keeps the approved commercial journey and a single final reco
     source.indexOf('function renderCustomer('),
   );
   assert.match(recommendation, /promo-sheet/);
-  assert.match(recommendation, /Oferta para adicionar agora/);
+  assert.match(recommendation, /Um extra para sua festa/);
   assert.match(recommendation, /addonExplanationHtml/);
   assert.match(recommendation, /Na prática, o que seus convidados podem fazer/);
 

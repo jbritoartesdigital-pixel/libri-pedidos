@@ -176,64 +176,76 @@ async function checkOfferIsFullyReachable(browser) {
   });
   const page = await ctx.newPage();
   try {
-    // Test the real .promo-sheet CSS, with fictional long copy only.
-    const longList=Array.from({length:15},(_,i)=>
-      '<li>Explicação fictícia '+(i+1)+' sobre a confirmação da festa.</li>').join('');
+    const list=Array.from({length:16},(_,i)=>
+      '<li>Detalhe fictício '+(i+1)+' sobre a confirmação da festa.</li>').join('');
     const html=[
       '<!doctype html><html lang="pt-BR"><meta name="viewport" content="width=device-width,initial-scale=1">',
       '<main class="app-shell"><section class="page-card promo-stage">',
-      '<div class="page-head"><span class="eyebrow">Pedido configurado</span>',
-      '<h1 class="page-title">Está quase pronto</h1>',
-      '<p class="page-subtitle">Uma oferta opcional antes de continuar.</p></div>',
-      '<div class="quote-card">Total do pedido R$ 100,00</div>',
-      '<div class="promo-sheet" aria-label="Oferta opcional">',
-      '<span class="promo-kicker">Oferta para adicionar agora</span>',
-      '<strong class="promo-title">Quer organizar as confirmações também?</strong>',
-      '<p class="promo-copy">Leve confirmação por mais R$ 35,00.</p>',
+      '<div class="page-head"><h1 class="page-title">Pedido de teste</h1></div>',
+      '<div class="action-row"><button>Voltar</button><button>Continuar</button></div>',
+      '<div class="promo-backdrop" id="promoBackdrop">',
+      '<div class="promo-sheet" role="dialog" aria-modal="true" aria-label="Oferta opcional" tabindex="-1">',
+      '<div class="promo-content">',
+      '<span class="promo-kicker">Um extra para sua festa</span>',
+      '<strong class="promo-title">Confirmação de Presença Libri</strong>',
+      '<p class="promo-copy">Leve a confirmação por mais R$ 35,00 neste pedido.</p>',
+      '<details class="promo-details"><summary>Veja o que está incluído</summary>',
       '<div class="promo-why"><strong>Por que estou sugerindo isso?</strong>',
-      '<p>Seu convite já é interativo. Organize confirmações sem depender de WhatsApp.</p></div>',
-      '<div class="addon-explanation"><strong>O que você leva</strong>',
-      '<p>Confirmação vinculada ao convite.</p><ul>'+longList+'</ul></div>',
+      '<p>Confirmação vinculada ao convite.</p></div>',
+      '<div class="addon-explanation"><ul>'+list+'</ul></div>',
+      '</details></div>',
       '<div class="promo-actions"><button class="btn btn-ghost" id="skipFinalOffer">Agora não</button>',
-      '<button class="btn btn-primary" id="acceptFinalOffer">Adicionar por R$ 35,00</button></div>',
-      '</div></section></main></html>'
+      '<button class="btn btn-primary" id="acceptFinalOffer">Adicionar por R$ 35,00</button>',
+      '</div></div></div></section></main></html>'
     ].join('\n');
     await page.setContent(html);
     await page.addStyleTag({content:source('public/css/client-v2.css').toString('utf8')});
 
     for(const [width,height] of [[320,520],[360,640],[390,700],[412,844],[390,390]]) {
       await page.setViewportSize({width,height});
-      await page.evaluate(()=>window.scrollTo(0,0));
-      const m=await page.evaluate(()=>{
-        const sheet=document.querySelector('.promo-sheet');
-        const rect=sheet.getBoundingClientRect();
-        return {position:getComputedStyle(sheet).position,
-          top:rect.top,left:rect.left,right:rect.right,
-          doc:document.documentElement.scrollWidth,
-          scrollHeight:document.documentElement.scrollHeight,
-          viewportHeight:window.innerHeight};
+      await page.locator('.promo-details').evaluate(el=>el.open=false);
+      const stats=await page.evaluate(()=>{
+        const backdrop=document.querySelector('.promo-backdrop');
+        const modal=document.querySelector('.promo-sheet');
+        const content=document.querySelector('.promo-content');
+        const actions=document.querySelector('.promo-actions');
+        const rect=modal.getBoundingClientRect(),footer=actions.getBoundingClientRect();
+        return {overlay:getComputedStyle(backdrop).position,
+          modalHeight:rect.height,modalTop:rect.top,modalBottom:rect.bottom,
+          footerBottom:footer.bottom,footerTop:footer.top,
+          scrollable:getComputedStyle(content).overflowY,
+          docWidth:document.documentElement.scrollWidth};
       });
-      assert.equal(m.position,'static','offer must never anchor to screen bottom');
-      assert.ok(m.top>=0, 'offer top clipped: '+JSON.stringify({width,height,...m}));
-      assert.ok(m.left>=-1&&m.right<=width+1,'offer outside horizontal viewport');
-      assert.ok(m.doc<=width+1,'offer causes horizontal overflow');
-      assert.ok(m.scrollHeight>m.viewportHeight,'long offer must be reachable by page scroll');
-
-      await page.locator('#acceptFinalOffer').scrollIntoViewIfNeeded();
-      const accept=await page.locator('#acceptFinalOffer').boundingBox();
-      assert.ok(accept&&accept.y>=-1&&accept.y+accept.height<=height+1,
-        'accept action unreachable at '+width+'x'+height);
-      await page.locator('#skipFinalOffer').scrollIntoViewIfNeeded();
-      const skip=await page.locator('#skipFinalOffer').boundingBox();
-      assert.ok(skip&&skip.y>=-1&&skip.y+skip.height<=height+1,
-        'decline action unreachable at '+width+'x'+height);
-      if(width===390&&height===700){
-        await page.screenshot({path:join(out,'alteracao-oferta-botoes-390.png'),
+      assert.equal(stats.overlay,'fixed','upsell should be a compact popup');
+      assert.ok(stats.modalTop>=-1&&stats.modalBottom<=height+1,
+        'popup outside viewport at '+width+'x'+height+': '+JSON.stringify(stats));
+      assert.ok(stats.docWidth<=width+1,'horizontal overflow at '+width+'x'+height);
+      assert.equal(stats.scrollable,'auto');
+      for(const selector of ['#skipFinalOffer','#acceptFinalOffer']) {
+        const box=await page.locator(selector).boundingBox();
+        assert.ok(box&&box.y>=-1&&box.y+box.height<=height+1,
+          selector+' hidden before opening details at '+width+'x'+height);
+      }
+      await page.locator('.promo-details summary').click();
+      const contents=await page.locator('.promo-content').evaluate(el=>({
+        scrollHeight:el.scrollHeight,clientHeight:el.clientHeight
+      }));
+      assert.ok(contents.scrollHeight>contents.clientHeight,
+        'expanded details must scroll inside popup at '+width+'x'+height);
+      await page.locator('.promo-content').evaluate(el=>el.scrollTop=el.scrollHeight);
+      for(const selector of ['#skipFinalOffer','#acceptFinalOffer']) {
+        const box=await page.locator(selector).boundingBox();
+        assert.ok(box&&box.y>=-1&&box.y+box.height<=height+1,
+          selector+' hidden after scrolling details at '+width+'x'+height);
+      }
+      if(width===390 && height===700) {
+        await page.locator('.promo-details').evaluate(el=>el.open=false);
+        await page.screenshot({path:join(out,'alteracao-oferta-popup-390.png'),
           animations:'disabled'});
-        audit.screens.push('alteracao-oferta-botoes-390.png');
+        audit.screens.push('alteracao-oferta-popup-390.png');
       }
     }
-    audit.tests.push('oferta longa: cabeçalho e dois botões acessíveis em 5 viewports, inclusive teclado');
+    audit.tests.push('pop-up curto: botões visíveis e detalhes com scroll próprio em 5 viewports');
   } finally {
     await ctx.close();
   }

@@ -2019,6 +2019,56 @@ test('wedding gift lists still support registry link and Pix with no child sizin
   assert.ok(fields.find(f => f.key === 'gift_mode').options.some(x => x.value === 'both'));
 });
 
+test('Pix phone key accepts local DDD and is stored canonically with +55', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Chave telefone local', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(order.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, order.payment.providerOrderId);
+  const token = order.order.publicToken;
+  const save = data => saveV2Briefing(e, token, { currentSection: 'product', data });
+  await save({ interactive_resources: ['gifts'] });
+  await save({ gift_mode: 'pix' });
+
+  let state = await save({
+    pix_key_type: 'phone', pix_key: '(81) 98863-3811', pix_holder: 'Titular fictício',
+  });
+  assert.equal(state.data.pix_key, '+5581988633811');
+  assert.match(state.schema.sections.flatMap(s => s.fields)
+    .find(f => f.key === 'pix_key')?.help || '', /acrescentado automaticamente/);
+  assert.match(state.schema.sections.flatMap(s => s.fields)
+    .find(f => f.key === 'pix_confirmed')?.help || '', /\+5581988633811/);
+  state = await save({ pix_confirmed: 'yes' });
+  assert.equal(state.data.pix_confirmed, 'yes');
+
+  let incomplete = await submitV2Briefing(e, token).catch(error => error);
+  assert.equal(incomplete.code, 'briefing_incomplete');
+  assert.ok(!incomplete.details.fields.some(x => x.key === 'pix_key'),
+    'the Brazilian number is no longer rejected solely for missing +55');
+  assert.ok(!incomplete.details.fields.some(x => x.key === 'pix_confirmed'));
+
+  state = await save({ pix_key: '81988633811' });
+  assert.equal(state.data.pix_key, '+5581988633811');
+  assert.equal(state.data.pix_confirmed, undefined,
+    'editing the phone after confirming must request another confirmation');
+  state = await save({ pix_confirmed: 'yes' });
+  assert.equal(state.data.pix_confirmed, 'yes');
+
+  state = await save({ pix_key: '81988' });
+  assert.equal(state.data.pix_key, '81988',
+    'incomplete phone numbers must never be guessed or autofilled');
+  incomplete = await submitV2Briefing(e, token).catch(error => error);
+  assert.ok(incomplete.details.fields.some(x => x.key === 'pix_key' && /formato/.test(x.message)));
+  assert.ok(incomplete.details.fields.some(x => x.key === 'pix_confirmed'));
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n, 1);
+});
+
 test('gift Pix is checked for format and exact recipient and confirmation is reset on edits', async t => {
   const DB = database(); const mp = providerMock(t); const e = env(DB);
   const checkout = await startV2Checkout(request, e, input({

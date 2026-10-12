@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Um deploy do ajuste de chaves Pix por telefone após CI verde.
+      - 'src/lib/v2-customer-area.js'
 
 permissions:
   contents: read

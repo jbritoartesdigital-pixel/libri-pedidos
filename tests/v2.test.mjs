@@ -19,7 +19,7 @@ import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
 import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment, voidV2FinancePayment } from '../src/lib/v2-finance.js';
-import { getV2StoreConfig, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
+import { getV2StoreConfig, saveV2Coupon, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 import { planCustomerPhotoBatch } from '../public/js/client-v2-upload.js';
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
@@ -130,6 +130,57 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(shell, /client-v2\.js\?v=20261012-video-rsvp-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
+});
+
+test('new coupons can be registered and edited without affecting orders or payments', async () => {
+  const DB = database();
+  const e = env(DB);
+  const ordersBefore = DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n;
+  const paymentsBefore = DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n;
+
+  const created = await saveV2Coupon(DB, 'TESTE_LIBRI15', {
+    discountType: 'percent',
+    discountValue: 15,
+    minOrderCents: 0,
+    maxUses: null,
+    maxUsesPerCustomer: null,
+    validFrom: null,
+    validUntil: null,
+    active: true,
+    restrictions: { productCodes: [], eventTypes: [], addonCodes: [],
+      minScenes: null, maxScenes: null },
+  });
+  assert.equal(created.code, 'TESTE_LIBRI15');
+  let coupon = (await getV2StoreConfig(e)).coupons.find(item => item.code === 'TESTE_LIBRI15');
+  assert.ok(coupon);
+  assert.equal(coupon.discountValue, 15);
+  assert.equal(coupon.active, true);
+
+  const quoted = await calculateCommercialV2Quote(DB, {
+    productCode: 'interactive_essential', paymentMethod: 'pix', couponCode: 'TESTE_LIBRI15',
+  });
+  assert.equal(quoted.coupon?.code, 'TESTE_LIBRI15');
+  assert.equal(quoted.couponDiscountCents, Math.round(quoted.productCents * 0.15));
+
+  await saveV2Coupon(DB, 'TESTE_LIBRI15', {
+    discountType: 'percent', discountValue: 10, maxUses: 5, active: false,
+  });
+  coupon = (await getV2StoreConfig(e)).coupons.find(item => item.code === 'TESTE_LIBRI15');
+  assert.equal(coupon.discountValue, 10);
+  assert.equal(coupon.maxUses, 5);
+  assert.equal(coupon.active, false);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupons WHERE code = ?').get('TESTE_LIBRI15').n, 1,
+    'updating the coupon must not create a duplicate');
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, ordersBefore);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n, paymentsBefore);
+});
+
+test('coupon editor preserves config when editing and validates code before sending', () => {
+  const js = readFileSync('public/js/admin-v2-store-commercial.js', 'utf8');
+  assert.match(js, /couponEditor\(\s*\(config\.coupons \|\| \[\]\)[\s\S]*?config,\s*reload/);
+  assert.match(js, /\^\[A-Z0-9\]/);
+  assert.match(js, /await reload\(\);\s*close\(\);/);
+  assert.match(js, /'PUT'/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {

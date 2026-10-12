@@ -249,8 +249,10 @@ test('Pix confirmation clears visually when invalidated and can be consciously s
   await syncMercadoPagoOrder(e, order.payment.providerOrderId);
   const token = order.order.publicToken;
   const save = data => saveV2Briefing(e, token, { currentSection: 'product', data });
-  await save({ interactive_resources: ['gifts'], gift_mode: 'pix',
-    pix_key_type: 'phone', pix_key: '81988633811', pix_holder: 'Imaculada' });
+  // Conditional fields only become editable after the parent choices.
+  await save({ interactive_resources: ['gifts'] });
+  await save({ gift_mode: 'pix' });
+  await save({ pix_key_type: 'phone', pix_key: '81988633811', pix_holder: 'Imaculada' });
   let r = await save({ pix_confirmed: 'yes' });
   assert.equal(r.data.pix_confirmed, 'yes');
   r = await save({ pix_holder: 'Imaculada Maria' });

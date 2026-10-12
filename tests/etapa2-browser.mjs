@@ -183,6 +183,7 @@ async function checkOfferIsFullyReachable(browser) {
       '<main class="app-shell"><section class="page-card promo-stage">',
       '<div class="page-head"><h1 class="page-title">Pedido de teste</h1></div>',
       '<div class="action-row"><button>Voltar</button><button>Continuar</button></div>',
+      '</section>',
       '<div class="promo-backdrop" id="promoBackdrop">',
       '<div class="promo-sheet" role="dialog" aria-modal="true" aria-label="Oferta opcional" tabindex="-1">',
       '<div class="promo-content">',
@@ -196,7 +197,7 @@ async function checkOfferIsFullyReachable(browser) {
       '</details></div>',
       '<div class="promo-actions"><button class="btn btn-ghost" id="skipFinalOffer">Agora não</button>',
       '<button class="btn btn-primary" id="acceptFinalOffer">Adicionar por R$ 35,00</button>',
-      '</div></div></div></section></main></html>'
+      '</div></div></div></main></html>'
     ].join('\n');
     await page.setContent(html);
     await page.addStyleTag({content:source('public/css/client-v2.css').toString('utf8')});

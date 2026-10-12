@@ -1167,18 +1167,16 @@ function finalRecommendation(
     return null;
   }
 
-  const eligibleCombos = configuredCombos.filter(entry =>
-    productFor(state)?.code !== 'cinematic_video'
-    || !entry.missing.some(missing =>
-      (missing.type === 'group' && missing.code === 'confirmation')
-      || (missing.type === 'addon'
-        && addonByCode(state, missing.code)?.group === 'confirmation')));
-
   if (
-    eligibleCombos.length
+    configuredCombos.length
   ) {
-    const entry =
-      eligibleCombos[0];
+    const entry = configuredCombos.find(candidate =>
+      productFor(state)?.code !== 'cinematic_video'
+      || !candidate.missing.some(missing =>
+        (missing.type === 'group' && missing.code === 'confirmation')
+        || (missing.type === 'addon'
+          && addonByCode(state, missing.code)?.group === 'confirmation')));
+    if (!entry) return null;
 
     const missing =
       entry.missing[0];

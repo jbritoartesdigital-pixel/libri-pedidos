@@ -573,6 +573,11 @@ function couponEditor(
           showToast('Informe o código do cupom.');
           return;
         }
+        if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(code)) {
+          showToast('Use apenas letras, números, hífen ou underline no código do cupom.');
+          document.getElementById('couponAdminCode')?.focus();
+          return;
+        }
 
         const nullableNumber =
           (id) => {
@@ -671,9 +676,9 @@ function couponEditor(
             },
           );
 
+          await reload();
           close();
           showToast('Cupom salvo ✓');
-          await reload();
         } catch (error) {
           button.disabled =
             false;
@@ -753,6 +758,7 @@ export function renderStoreCoupons(
                     item.code
                     === button.dataset.editCoupon,
                 ),
+              config,
               reload,
             ),
         ),

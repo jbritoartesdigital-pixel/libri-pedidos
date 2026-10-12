@@ -193,24 +193,40 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
   assert.match(html, /client-v2\.js\?v=20261012-coupon-savings-1/);
-  assert.match(html, /client-v2\.css\?v=20261012-offer-responsive-1/);
+  assert.match(html, /client-v2\.css\?v=20261012-compact-offer-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261012-coupon-savings-1/);
 });
 
-test('offer stage uses document flow instead of a fixed bottom sheet on any viewport', () => {
+test('upsell uses compact accessible popup with scrollable details and visible choice buttons', () => {
   const css = readFileSync('public/css/client-v2.css', 'utf8');
+  const js = readFileSync('public/js/client-v2-store.js', 'utf8');
   const shell = readFileSync('public/client-v2.html', 'utf8');
-  const stage = css.match(/\.promo-stage\s*\{([^}]+)\}/)?.[1] || '';
+  const offer = js.slice(js.indexOf('function renderRecommendation('),
+    js.indexOf('function renderCustomer('));
+  const backdrop = css.match(/\.promo-backdrop\s*\{([^}]+)\}/)?.[1] || '';
   const sheet = css.match(/\.promo-sheet\s*\{([^}]+)\}/)?.[1] || '';
-  assert.match(stage, /min-height:\s*0/);
-  assert.doesNotMatch(stage, /padding-bottom:\s*2[0-9]{2}px/);
-  assert.match(sheet, /position:\s*static/);
-  assert.match(sheet, /width:\s*min\(680px,\s*100%\)/);
-  assert.doesNotMatch(sheet, /position:\s*fixed|bottom:\s*[0-9]|transform:\s*translateX/);
-  const mobile = css.match(/@media \(max-width:\s*640px\)\s*\{([\s\S]*?)\n\}\s*\n\n\.addon-explanation/)?.[1] || '';
-  assert.match(mobile, /\.promo-actions[\s\S]*grid-template-columns:\s*1fr/);
-  assert.doesNotMatch(mobile, /\.promo-sheet\s*\{[^}]*bottom:/);
-  assert.match(shell, /client-v2\.css\?v=20261012-offer-responsive-1/);
+  const content = css.match(/\.promo-content\s*\{([^}]+)\}/)?.[1] || '';
+  const actions = css.match(/\.promo-actions\s*\{([^}]+)\}/)?.[1] || '';
+  assert.match(offer, /class="promo-backdrop"/);
+  assert.match(offer, /role="dialog" aria-modal="true"/);
+  assert.match(offer, /class="promo-content"/);
+  assert.match(offer, /<details class="promo-details">/);
+  assert.match(offer, /<summary>Veja o que está incluído<\/summary>/);
+  assert.match(offer, /id="skipFinalOffer"/);
+  assert.match(offer, /id="acceptFinalOffer"/);
+  assert.match(offer, /\.promo-sheet'\)\?\.focus/);
+  assert.match(offer, /event\.key === 'Escape'/);
+  assert.match(backdrop, /position:\s*fixed/);
+  assert.match(backdrop, /inset:\s*0/);
+  assert.match(backdrop, /overflow-y:\s*auto/);
+  assert.match(sheet, /max-height:\s*calc\(100dvh/);
+  assert.match(sheet, /display:\s*flex/);
+  assert.match(sheet, /overflow:\s*hidden/);
+  assert.match(content, /overflow-y:\s*auto/);
+  assert.match(actions, /flex:\s*0 0 auto/);
+  assert.match(actions, /grid-template-columns:/);
+  assert.doesNotMatch(sheet, /bottom:\s*\d+px|transform:\s*translateX/);
+  assert.match(shell, /client-v2\.css\?v=20261012-compact-offer-1/);
 });
 
 test('new coupons can be registered and edited without affecting orders or payments', async () => {

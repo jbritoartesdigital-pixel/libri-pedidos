@@ -890,6 +890,19 @@ function missingBriefingItems(
   return missing;
 }
 
+// A confirmação Pix é vinculada à chave e ao titular que a cliente conferiu.
+// Se o servidor a invalidar, o rádio não pode continuar visualmente marcado.
+function clearPixConfirmationSelection() {
+  let wasChecked = false;
+  app.querySelectorAll('[data-field="pix_confirmed"]').forEach(control => {
+    if (!control.checked) return;
+    wasChecked = true;
+    control.checked = false;
+    control.closest('.choice-card')?.classList.remove('selected');
+  });
+  return wasChecked;
+}
+
 function showBriefingMissing(missing) {
   const summary = app.querySelector('#briefingErrors');
   if (!summary) return;
@@ -905,6 +918,11 @@ function showBriefingMissing(missing) {
   const visible = [];
   let first = null;
   for (const item of missing) {
+    // Um rádio que parece marcado mas não está salvo impede nova seleção.
+    // Desmarque-o para permitir que a cliente confirme conscientemente.
+    if (item.key === 'pix_confirmed') {
+      clearPixConfirmationSelection();
+    }
     const key = CSS.escape(String(item.key || ''));
     const control = item.type === 'upload'
       ? app.querySelector('[data-upload-field="' + key + '"]')
@@ -917,10 +935,13 @@ function showBriefingMissing(missing) {
     control.setAttribute('aria-invalid', 'true');
     const text = document.createElement('small');
     text.className = 'briefing-inline-error';
-    text.textContent = item.message;
+    const message = item.key === 'pix_confirmed'
+      ? 'Confira a chave Pix e o titular e toque novamente em "Sim, conferi os dados do Pix".'
+      : item.message;
+    text.textContent = message;
     box.appendChild(text);
     if (!first) first = box;
-    visible.push(item.message);
+    visible.push(message);
   }
 
   summary.classList.remove('hidden');
@@ -1884,11 +1905,28 @@ export async function startCustomerArea(
   let briefingChoiceRevision =
     0;
 
+  function invalidatePixConfirmationOnEdit(key, value) {
+    if (!['pix_key_type', 'pix_key', 'pix_holder'].includes(key)
+      || String(area.briefing.data[key] ?? '') === String(value ?? '')) {
+      return;
+    }
+    delete area.briefing.data.pix_confirmed;
+    if (clearPixConfirmationSelection()) {
+      showToast('Dados do Pix alterados. Revise e confirme novamente.');
+    }
+  }
+
   function applyBriefingSaveResult(
     result,
   ) {
+    const previouslyConfirmed = area.briefing.data.pix_confirmed === 'yes';
     area.briefing.data =
       result.data;
+    if (result.data.pix_confirmed !== 'yes'
+      && clearPixConfirmationSelection()
+      && previouslyConfirmed) {
+      showToast('Confira novamente a chave Pix e o titular antes de continuar.');
+    }
 
     area.briefing.progress =
       result.progress;
@@ -2143,6 +2181,7 @@ export async function startCustomerArea(
                   control.value;
               }
 
+              invalidatePixConfirmationOnEdit(key, value);
               area.briefing.data[key] =
                 value;
 
@@ -2205,6 +2244,7 @@ export async function startCustomerArea(
           control.addEventListener(
             'input',
             () => {
+              invalidatePixConfirmationOnEdit(control.dataset.field, control.value);
               area.briefing.data[
                 control.dataset.field
               ] =

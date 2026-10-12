@@ -128,7 +128,7 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261012-briefing-validation-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261012-video-rsvp-1/);
 });
 
@@ -232,8 +232,58 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /showBriefingMissing\(missing\)/);
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
-  assert.match(entry, /client-v2-area\.js\?v=20261012-briefing-validation-1/);
-  assert.match(shell, /client-v2\.js\?v=20261012-briefing-validation-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
+});
+
+test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
+  const DB = database();
+  const mp = providerMock(t);
+  const e = env(DB);
+  const order = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Pix revisado', type: 'birthday', date: day(65) },
+    deliveryWindow: { start: day(10), end: day(12) },
+    ...await terms(DB),
+  }));
+  mp.approve(order.payment.providerOrderId);
+  await syncMercadoPagoOrder(e, order.payment.providerOrderId);
+  const token = order.order.publicToken;
+  const save = data => saveV2Briefing(e, token, { currentSection: 'product', data });
+  // Conditional fields only become editable after the parent choices.
+  await save({ interactive_resources: ['gifts'] });
+  await save({ gift_mode: 'pix' });
+  await save({ pix_key_type: 'phone', pix_key: '81988633811', pix_holder: 'Imaculada' });
+  let r = await save({ pix_confirmed: 'yes' });
+  assert.equal(r.data.pix_confirmed, 'yes');
+  r = await save({ pix_holder: 'Imaculada Maria' });
+  assert.equal(r.data.pix_confirmed, undefined,
+    'editing the Pix holder must invalidate the old confirmation');
+  const missing = await submitV2Briefing(e, token).catch(error => error);
+  assert.ok(missing.details.fields.some(item => item.key === 'pix_confirmed'
+    && item.section === 'product'));
+  r = await save({ pix_confirmed: 'yes' });
+  assert.equal(r.data.pix_confirmed, 'yes',
+    'a fresh conscious click must restore confirmation');
+  const retry = await submitV2Briefing(e, token).catch(error => error);
+  assert.ok(!retry.details.fields.some(item => item.key === 'pix_confirmed'));
+});
+
+test('mobile Pix validation never leaves a stale selected confirmation', () => {
+  const ui = readFileSync('public/js/client-v2-area.js', 'utf8');
+  const entry = readFileSync('public/js/client-v2.js', 'utf8');
+  const shell = readFileSync('public/client-v2.html', 'utf8');
+  assert.match(ui, /function clearPixConfirmationSelection\(\)/);
+  assert.match(ui, /control\.checked = false/);
+  assert.match(ui, /control\.closest\('\.choice-card'\)\?\.classList\.remove\('selected'\)/);
+  assert.match(ui, /item\.key === 'pix_confirmed'\)[\s\S]*?clearPixConfirmationSelection\(\)/);
+  assert.match(ui, /function invalidatePixConfirmationOnEdit\(key, value\)/);
+  assert.match(ui, /\['pix_key_type', 'pix_key', 'pix_holder'\]/);
+  assert.match(ui, /delete area\.briefing\.data\.pix_confirmed/);
+  assert.match(ui, /invalidatePixConfirmationOnEdit\(control\.dataset\.field, control\.value\)/);
+  assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
+  assert.match(ui, /toque novamente em/);
+  assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
+  assert.match(shell, /client-v2\.js\?v=20261012-pix-reconfirm-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
@@ -324,9 +374,9 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261012-briefing-validation-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261012-briefing-validation-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
 });
 
 test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
@@ -1058,8 +1108,8 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261012-briefing-validation-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261012-briefing-validation-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261012-video-rsvp-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -1303,8 +1353,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261012-briefing-validation-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261012-briefing-validation-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -2059,7 +2109,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261012-briefing-validation-1'));
+    'client-v2.js?v=20261012-pix-reconfirm-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2873,7 +2923,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261010-parties-focus-3'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261012-briefing-validation-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261012-pix-reconfirm-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -3075,8 +3125,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261012-briefing-validation-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261012-briefing-validation-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261012-pix-reconfirm-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
   assert.match(area, /uploadCustomerPhoto/);

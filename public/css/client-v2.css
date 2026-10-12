@@ -1571,17 +1571,16 @@ a {
 }
 
 .promo-stage {
-  min-height: 520px;
-  padding-bottom: 210px;
+  min-height: 0;
+  padding-bottom: 24px;
 }
 
+/* A oferta é parte da página, não uma janela fixa sobre a viewport.
+   Em telas baixas, zoom e teclados abertos, todo o conteúdo pode rolar. */
 .promo-sheet {
-  position: fixed;
-  left: 50%;
-  bottom: 18px;
-  z-index: 40;
-  width: min(680px, calc(100% - 24px));
-  transform: translateX(-50%);
+  position: static;
+  width: min(680px, 100%);
+  margin: 16px auto 0;
   border: 1px solid rgba(201, 111, 131, 0.35);
   border-radius: 22px;
   background: rgba(255, 252, 250, 0.98);
@@ -1630,11 +1629,11 @@ a {
   }
 
   .promo-stage {
-    padding-bottom: 270px;
+    padding-bottom: 18px;
   }
 
   .promo-sheet {
-    bottom: 10px;
+    padding: 14px;
     border-radius: 18px;
   }
 

@@ -44,12 +44,22 @@ const CINEMATIC_PRODUCTS =
     'cinematic_interactive',
   ]);
 
+// Chaves Pix de telefone são cadastradas no DICT em formato +55 + DDD + número.
+// Aceita a digitação brasileira de 10/11 dígitos e preserva o número original.
+function normalizePixPhoneKey(rawKey) {
+  const raw = String(rawKey || '').trim();
+  const compact = raw.replace(/[\s()-]/g, '');
+  if (/^\d{10,11}$/.test(compact)) return '+55' + compact;
+  if (/^55\d{10,11}$/.test(compact)) return '+' + compact;
+  return compact;
+}
+
 function validPixKey(type, rawKey) {
   const raw = String(rawKey || '').trim();
   const digits = raw.replace(/\D/g, '');
   if (!type || !raw) return false;
   if (type === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) && raw.length <= 254;
-  if (type === 'phone') return /^\+?55\d{10,11}$/.test(raw.replace(/[\s()-]/g, ''));
+  if (type === 'phone') return /^\+55\d{10,11}$/.test(normalizePixPhoneKey(raw));
   if (type === 'random') return /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(raw);
   const size = type === 'cpf' ? 11 : type === 'cnpj' ? 14 : 0;
   if (digits.length !== size || /^([0-9])\1+$/.test(digits)) return false;
@@ -1473,6 +1483,9 @@ function buildSchema(
             {
               required:
                 true,
+              help: data.pix_key_type === 'phone'
+                ? 'Informe DDD + número. O +55 do Brasil será acrescentado automaticamente. Confirme que este telefone está cadastrado como chave Pix no seu banco.'
+                : '',
             },
           ),
 
@@ -2889,6 +2902,12 @@ export async function saveV2Briefing(
         definition,
         value,
       );
+  }
+
+  // Sem obrigar a cliente a adivinhar o DDI, salva a chave de telefone
+  // na forma canônica usada pelo Pix. Nunca deduz números incompletos.
+  if (data.pix_key_type === 'phone' && data.pix_key) {
+    data.pix_key = normalizePixPhoneKey(data.pix_key);
   }
 
   // Any modification of the actual Pix payment destination invalidates

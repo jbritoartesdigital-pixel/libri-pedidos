@@ -15,8 +15,6 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
-      # Liberação pontual após testes: correção de agenda em retomada.
-      - 'public/js/client-v2-store.js'
 
 permissions:
   contents: read

@@ -1069,7 +1069,8 @@ export async function openOrder(code, onChanged = null) {
       driveStatus.textContent=info.connected?'Google Drive autorizado. Vincule uma pasta exclusiva.':
         info.configured?'Google Drive disponível, mas falta autorizar sua conta.':
         'Integração OAuth ainda não configurada no Worker.';
-      connectDriveButton.hidden=!info.configured||info.connected;
+      connectDriveButton.hidden=!info.configured;
+      connectDriveButton.textContent=info.connected?'Reconectar Google Drive':'Conectar Google Drive';
       checkDriveButton.hidden=!info.connected;
       document.getElementById('manualDriveUpload').hidden=!info.connected;
       createFolderButton.hidden=!info.connected;

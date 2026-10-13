@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261012-coupon-savings-1';
+} from './client-v2-store.js?v=20261013-delivery-resume-1';
 
 import {
   startCustomerArea,

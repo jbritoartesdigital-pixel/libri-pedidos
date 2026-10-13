@@ -3927,8 +3927,9 @@ function renderCustomer(
       ${actionRow({
         nextLabel:
           (state.delivery?.options || []).length
+            || state.deliveryWindow
             ? 'Revisar pedido'
-            : 'Enviar para análise de encaixe',
+            : 'Conferir disponibilidade',
       })}
     </section>
   `;
@@ -4142,74 +4143,101 @@ function renderCustomer(
         }
 
         loading(
-          (state.delivery?.options || []).length
-            ? 'Atualizando seu pedido...'
-            : 'Enviando para análise...',
+          'Conferindo a disponibilidade...',
         );
 
         try {
-          await updateQuote(state);
+          // A etapa e o prazo escolhido ficam salvos no aparelho, mas
+          // a lista de janelas não. Nunca tratar uma lista vazia ou ausente
+          // no navegador como prova de que só resta urgência.
+          const hadSelectedWindow = Boolean(
+            state.deliveryWindow?.start
+            && state.deliveryWindow?.end,
+          );
 
-          if (
-            !(state.delivery?.options || [])
-              .length
-          ) {
-            if (
-              state.simulationMode
-            ) {
-              state.simulationUrgency =
-                true;
-              state.step = 8;
+          await updateQuote(state);
+          const sameWindow = await refreshDeliveryForSelection(state);
+          const regularWindows = state.delivery?.options || [];
+
+          if (regularWindows.length) {
+            if (!sameWindow) {
+              state.step = 4;
               persist(state);
               render();
+              showToast(
+                'Há janelas de entrega disponíveis. Confira o prazo para continuar.',
+              );
               return;
             }
 
-            const result =
-              await api(
-                '/api/v2/urgency/request',
-                {
-                  method:
-                    'POST',
-                  body:
-                    JSON.stringify({
-                      clientRequestId:
-                        state.clientRequestId,
-                      customer:
-                        state.customer,
-                      event:
-                        state.event,
-                      selection:
-                        state.selection,
-                    }),
-                },
-              );
-
-            localStorage.removeItem(
-              storeKeyFor(
-                state.simulationMode,
-              ),
-            );
-
-            window.location.href =
-              result.order
-                .customerAreaPath;
-
+            state.step = 8;
+            persist(state);
+            render();
             return;
           }
 
-          state.step = 8;
-          persist(state);
-          render();
-        } catch (error) {
-          showToast(
-            error.message,
+          // Se uma faixa anteriormente escolhida ficou indisponível,
+          // a cliente precisa ver e aceitar a nova condição antes de pedir encaixe.
+          if (hadSelectedWindow) {
+            state.step = 4;
+            persist(state);
+            render();
+            showToast(
+              'A disponibilidade mudou. Confira a entrega antes de continuar.',
+            );
+            return;
+          }
+
+          if (state.simulationMode) {
+            state.simulationUrgency = true;
+            state.step = 8;
+            persist(state);
+            render();
+            return;
+          }
+
+          const result = await api(
+            '/api/v2/urgency/request',
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                clientRequestId: state.clientRequestId,
+                customer: state.customer,
+                event: state.event,
+                selection: state.selection,
+              }),
+            },
           );
 
-          renderCustomer(
-            state,
-            render,
+          localStorage.removeItem(
+            storeKeyFor(state.simulationMode),
           );
+          window.location.href = result.order.customerAreaPath;
+        } catch (error) {
+          // Uma janela também pode liberar entre a consulta e a solicitação.
+          // O backend devolve a agenda correta; recuperamos o fluxo sem
+          // apagar nome, WhatsApp, email ou configurações escolhidas.
+          if (
+            error.data?.details?.code === 'regular_delivery_available'
+          ) {
+            const serverDelivery = error.data?.details?.details?.delivery;
+            if (serverDelivery?.options?.length) {
+              state.delivery = serverDelivery;
+              state.deliveryWindow =
+                serverDelivery.options.find(option => option.recommended)
+                || serverDelivery.options[0];
+              state.step = 4;
+              persist(state);
+              render();
+              showToast(
+                'Uma janela de entrega ficou disponível. Confirme o prazo para continuar.',
+              );
+              return;
+            }
+          }
+
+          showToast(error.message);
+          renderCustomer(state, render);
         }
       },
     );

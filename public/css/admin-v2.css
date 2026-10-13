@@ -1521,3 +1521,5 @@ button { -webkit-tap-highlight-color: transparent; }
 #advancedOrderSearch .order-search-more .form-grid {
   margin-top: 10px;
 }
+
+#driveFolderOptions [hidden]{display:none!important}

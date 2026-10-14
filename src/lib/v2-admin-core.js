@@ -2316,6 +2316,8 @@ export async function getV2AdminOrderDetail(
         order.id,
       code:
         order.order_code,
+      source:
+        order.source,
       publicToken:
         order.public_token,
       customerAreaPath:

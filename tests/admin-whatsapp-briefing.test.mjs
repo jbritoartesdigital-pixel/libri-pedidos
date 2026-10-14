@@ -162,7 +162,7 @@ test('WhatsApp admin workflow: payment gate, conditional fields, audit, correcti
   assert.equal(completed.orderStatus, 'ready_for_delivery');
   assert.equal((await readAdminBriefing(env, code)).status, 'completed');
   assert.deepEqual(
-    DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code),
+    { ...DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code) },
     { status: 'ready_for_delivery', next_action: 'Entregar convite' },
     'admin completion must keep the production stage and next action',
   );

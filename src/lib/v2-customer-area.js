@@ -202,6 +202,8 @@ function extensionFromMime(
       '.heic',
     'image/heif':
       '.heif',
+    'application/pdf':
+      '.pdf',
   }[type] || '';
 }
 
@@ -1911,6 +1913,25 @@ export async function getV2AdminBriefingFieldMeta(db, token) {
   };
 }
 
+// The admin reads exactly the same live conditional schema as the client,
+// without disclosing the customer's public access token in the response.
+export async function getV2AdminBriefingState(db, token) {
+  const context = await contextByToken(db, token);
+  if (!context) return null;
+  const schema = buildSchema(context, context.briefing.data);
+  return {
+    status: context.order.briefing_status,
+    orderStatus: context.order.status,
+    schema,
+    data: context.briefing.data,
+    uploads: context.uploads,
+    progress: progressFor(schema, context.briefing.data, context.uploads),
+    missing: validationErrors(schema, context.briefing.data, context.uploads),
+    updatedAt: context.briefing.updatedAt,
+    completedAt: context.briefing.completedAt,
+  };
+}
+
 function isFilled(
   value,
 ) {
@@ -2377,6 +2398,7 @@ function cleanBranches(
 
 function assertEditable(
   context,
+  administrative = false,
 ) {
   if (
     context.order.briefing_status
@@ -2397,7 +2419,7 @@ function assertEditable(
 
   if (
     context.order.briefing_status
-    === 'completed'
+    === 'completed' && !administrative
   ) {
     const error =
       new Error(
@@ -2413,8 +2435,8 @@ function assertEditable(
   }
 
   if (
-    context.order.status
-    === 'cancelled'
+    context.order.status === 'cancelled'
+    || (administrative && context.order.status === 'finalized')
   ) {
     const error =
       new Error(
@@ -2838,6 +2860,7 @@ export async function saveV2Briefing(
   env,
   token,
   body = {},
+  administrative = false,
 ) {
   const context =
     await contextByToken(
@@ -2849,7 +2872,7 @@ export async function saveV2Briefing(
     return null;
   }
 
-  assertEditable(context);
+  assertEditable(context, administrative);
 
   const data = {
     ...context.briefing.data,
@@ -2882,6 +2905,13 @@ export async function saveV2Briefing(
     )
       ? body.data
       : {};
+
+  if (administrative && Object.keys(patch).some(key =>
+    /(?:^|_)(?:confirmed|approved|accepted|consent|declaration|signature)(?:$|_)/i.test(key))) {
+    const error = new Error('Confirmações e consentimentos precisam ser registrados pela cliente.');
+    error.status = 422;
+    throw error;
+  }
 
   for (
     const [
@@ -2926,6 +2956,16 @@ export async function saveV2Briefing(
       context,
       data,
     );
+
+  if (administrative && context.order.briefing_status === 'completed') {
+    const missing = validationErrors(schema, data, context.uploads);
+    if (missing.length) {
+      const error = new Error('A correção deixaria incompletos campos obrigatórios de um briefing já concluído.');
+      error.status = 422;
+      error.details = { fields: missing };
+      throw error;
+    }
+  }
 
   const sectionIds =
     new Set(
@@ -3103,6 +3143,7 @@ export async function uploadV2BriefingFile(
   request,
   env,
   token,
+  administrative = false,
 ) {
   if (!env.FILES) {
     const error =
@@ -3126,7 +3167,7 @@ export async function uploadV2BriefingFile(
     return null;
   }
 
-  assertEditable(context);
+  assertEditable(context, administrative);
 
   const form =
     await request.formData();
@@ -3174,10 +3215,10 @@ export async function uploadV2BriefingFile(
     ).toLowerCase();
 
   if (
-    !IMAGE_TYPES.has(mime)
+    !IMAGE_TYPES.has(mime) && !(administrative && mime === 'application/pdf')
   ) {
     throw new Error(
-      'Envie JPG, PNG, WebP, HEIC ou HEIF.',
+      administrative ? 'Envie JPG, PNG, WebP, HEIC, HEIF ou PDF.' : 'Envie JPG, PNG, WebP, HEIC ou HEIF.',
     );
   }
 
@@ -3425,6 +3466,7 @@ export async function updateV2BriefingUpload(
   token,
   uploadId,
   body = {},
+  administrative = false,
 ) {
   const {
     context,
@@ -3444,7 +3486,7 @@ export async function updateV2BriefingUpload(
     return false;
   }
 
-  assertEditable(context);
+  assertEditable(context, administrative);
 
   const note =
     cleanText(
@@ -3632,6 +3674,7 @@ export async function streamV2BriefingUpload(
 export async function submitV2Briefing(
   env,
   token,
+  administrative = false,
 ) {
   const context =
     await contextByToken(
@@ -3670,7 +3713,7 @@ export async function submitV2Briefing(
     };
   }
 
-  assertEditable(context);
+  assertEditable(context, administrative);
 
   const schema =
     buildSchema(
@@ -3756,7 +3799,9 @@ export async function submitV2Briefing(
           VALUES (
             ?,
             'briefing_completed',
-            'Dados do convite preenchidos e enviados pela cliente.',
+            administrative
+               ? 'Briefing concluído pela administradora a partir de informações do WhatsApp.'
+               : 'Dados do convite preenchidos e enviados pela cliente.',
             ?,
             ?
           )

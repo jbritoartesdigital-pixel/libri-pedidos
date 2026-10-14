@@ -8,6 +8,7 @@ import {
   showToast,
   statusClass,
 } from './admin-v2-core.js';
+import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
 
 function whatsappBr(value) {
   const digits =
@@ -457,7 +458,7 @@ function briefingBlock(detail) {
   return `
     <section class="card">
       <div class="section-title">
-        <h3>Dados enviados pela cliente</h3>
+        <h3>Dados do convite</h3>
         <span class="status">${detail.briefing.completionPercent}% preenchido</span>
       </div>
       ${groups.size ? [...groups.entries()].map(([section, items]) => `
@@ -474,6 +475,14 @@ function briefingBlock(detail) {
         </div>
       `).join('') : '<div class="empty">A cliente ainda não preencheu os dados do convite.</div>'}
       ${musicPreferenceBlock(detail)}
+      <div class="admin-bf-entry">
+        <button id="editOrderBriefing" class="btn btn-secondary btn-small" type="button"
+          aria-controls="adminBriefingEditor" aria-expanded="false">
+          Preencher briefing pela cliente
+        </button>
+        <div id="adminBriefingEditor" class="admin-bf-editor hidden" role="region"
+          aria-label="Preenchimento administrativo do briefing"></div>
+      </div>
       <div class="order-quick-actions">
         <button id="copyProduction" class="btn btn-secondary" type="button">
           Copiar dados do pedido
@@ -1294,6 +1303,8 @@ export async function openOrder(code, onChanged = null) {
     }catch(error){showToast(error.message||'Não foi possível exportar Project Bible.');}
     finally{button.disabled=false;}
   });
+
+  bindAdminWhatsAppBriefing(detail.order.code, onChanged);
 
   const briefingToggle = document.getElementById('toggleOrderBriefing');
   briefingToggle?.addEventListener('click', () => {

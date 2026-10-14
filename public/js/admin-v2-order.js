@@ -30,6 +30,15 @@ function whatsappBr(value) {
   return String(value || '');
 }
 
+function todaySaoPaulo() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const date = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${date.year}-${date.month}-${date.day}`;
+}
+
 function deliveryLabel(detail) {
   const start =
     detail.order
@@ -616,6 +625,22 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const canRegisterManualPix =
+    detail.order.source === 'manual_whatsapp'
+    && detail.pricing.paymentMethod === 'pix'
+    && Number(detail.payment?.remainingBalanceCents || 0) > 0
+    && !['cancelled', 'finalized', 'awaiting_urgency_decision',
+      'urgency_rejected'].includes(detail.order.status);
+
+  const pixRemainingCents = Math.max(
+    0, Number(detail.payment?.remainingBalanceCents || 0),
+  );
+  const pixPaidCents = Math.max(0, Number(detail.payment?.paidCents || 0));
+  const suggestedPixCents = pixPaidCents > 0
+    ? pixRemainingCents
+    : Math.min(pixRemainingCents,
+      Math.max(1, Number(detail.pricing.depositCents || pixRemainingCents)));
+
   const quickMessages =
     detail.whatsappActions
     || [];
@@ -665,6 +690,12 @@ export async function openOrder(code, onChanged = null) {
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
+              ${canRegisterManualPix ? `
+                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
+                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
+                  Registrar Pix recebido
+                </button>
+              ` : ''}
               ${(detail.allowedActions || []).includes('finalize') ? `
                 <button type="button" class="btn btn-success" data-order-action="finalize">
                   Finalizar pedido

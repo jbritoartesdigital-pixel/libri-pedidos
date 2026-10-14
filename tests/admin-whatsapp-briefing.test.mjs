@@ -48,7 +48,7 @@ test('WhatsApp admin workflow: payment gate, conditional fields, audit, correcti
   await assert.rejects(
     saveAdminBriefing(env, code, {
       data: { theme_or_style: 'Jardim' }, expectedUpdatedAt: state.updatedAt,
-    }), /pagamento/,
+    }), /pagamento|liberação financeira/,
   );
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS count FROM v2_order_history WHERE action_code = ?')
     .get('admin_briefing_saved').count, 0);

@@ -1390,6 +1390,91 @@ export async function openOrder(code, onChanged = null) {
     if (image) image.removeAttribute('src');
   });
 
+  // O recebimento é lançado na mesma API usada pelo Financeiro, sem
+  // gerar cobrança nova; a confirmação do banco é obrigatória.
+  const pixToggle = document.getElementById('toggleOrderPixReceipt');
+  const pixPanel = document.getElementById('orderPixReceiptPanel');
+  const hidePixPanel = () => {
+    pixPanel?.classList.add('hidden');
+    pixToggle?.setAttribute('aria-expanded', 'false');
+  };
+  pixToggle?.addEventListener('click', () => {
+    if (!pixPanel) return;
+    const opening = pixPanel.classList.contains('hidden');
+    pixPanel.classList.toggle('hidden', !opening);
+    pixToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) document.getElementById('orderPixReceiptAmount')?.focus();
+  });
+  document.getElementById('cancelOrderPixReceipt')
+    ?.addEventListener('click', hidePixPanel);
+
+  const receiptType = document.getElementById('orderPixReceiptType');
+  receiptType?.addEventListener('change', () => {
+    const cents = receiptType.value === 'full_payment'
+      ? pixRemainingCents : suggestedPixCents;
+    const amountField = document.getElementById('orderPixReceiptAmount');
+    if (amountField) amountField.value = (cents / 100).toFixed(2);
+  });
+
+  document.getElementById('saveOrderPixReceipt')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (!canRegisterManualPix || button.disabled) return;
+      const rawAmount = document.getElementById('orderPixReceiptAmount')?.value;
+      const amount = Number(rawAmount);
+      const cents = Math.round(amount * 100);
+      const paidDate = document.getElementById('orderPixReceiptDate')?.value || '';
+      const paymentType = receiptType?.value || 'deposit';
+      const note = document.getElementById('orderPixReceiptNote')?.value.trim() || '';
+      const confirmed = document.getElementById('orderPixReceiptConfirmed')?.checked;
+      if (!rawAmount || !Number.isFinite(amount) || !Number.isSafeInteger(cents)
+        || cents <= 0 || cents > pixRemainingCents) {
+        showToast('Confira o valor: ele não pode ultrapassar o saldo aberto.');
+        document.getElementById('orderPixReceiptAmount')?.focus();
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)
+        || paidDate > todaySaoPaulo()) {
+        showToast('Informe a data real do recebimento, até hoje.');
+        document.getElementById('orderPixReceiptDate')?.focus();
+        return;
+      }
+      if (!confirmed) {
+        showToast('Confirme primeiro que o Pix entrou na sua conta.');
+        document.getElementById('orderPixReceiptConfirmed')?.focus();
+        return;
+      }
+      if (!confirm(
+        `Registrar ${money(cents)} de Pix recebido no pedido ${detail.order.code}?`
+      )) return;
+
+      button.disabled = true;
+      try {
+        await api('/api/admin/v2/finance/payments', {
+          method: 'POST',
+          body: JSON.stringify({
+            orderCode: detail.order.code,
+            amountCents: cents,
+            paidDate,
+            paymentType,
+            note,
+          }),
+        });
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+        return;
+      }
+
+      close();
+      showToast('Pix registrado ✓ Saldo atualizado no pedido.');
+      try {
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+      } catch {
+        showToast('Pix salvo. Atualize a Central para ver o novo saldo.');
+      }
+    });
   document.querySelectorAll('[data-urgency-decision]').forEach(button => {
     button.addEventListener('click', async () => {
       const buttons = [...document.querySelectorAll('[data-urgency-decision]')];

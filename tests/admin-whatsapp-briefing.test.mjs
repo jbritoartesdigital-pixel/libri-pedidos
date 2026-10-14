@@ -20,7 +20,7 @@ async function createOrder(DB, env, source = 'store') {
         email: 'fake@example.com' },
       event: { honoreeName: 'Criança Fictícia', type: 'birthday', date: day(70) },
       selection: { productCode: 'interactive_essential', paymentMethod: 'pix' },
-      deliveryWindow: { start: day(12), end: day(15) },
+      deliveryWindow: { start: day(12), end: day(14) },
       termsAccepted: true, termsVersion: terms.version, paymentMethod: 'pix',
     },
   );

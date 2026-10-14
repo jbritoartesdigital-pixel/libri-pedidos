@@ -77,7 +77,7 @@ function uploadHtml(state, section) {
         <button class="btn btn-ghost btn-small" data-admin-save-file-note="${Number(file.id)}"
           type="button">Salvar observação</button>
       </div>`).join('')}
-      ${state.status !== 'completed' && existing.length < rule.max ? `
+      ${existing.length < rule.max ? `
         <label class="btn btn-secondary btn-small admin-bf-upload-button">
           Anexar do WhatsApp
           <input type="file" multiple hidden data-admin-upload="${esc(rule.fieldKey)}"

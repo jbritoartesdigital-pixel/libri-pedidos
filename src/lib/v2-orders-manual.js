@@ -690,6 +690,28 @@ async function publicManualOrder(
       )
       .first();
 
+  // Direct Pix recorded in Financeiro is just as valid as an approved
+  // Mercado Pago payment. The public manual link must not offer to charge
+  // the customer again after her first installment has been confirmed.
+  const directPixTotals = await db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN payment_type != 'refund' THEN amount_cents ELSE 0 END), 0
+      ) AS received_cents,
+      COALESCE(SUM(CASE
+        WHEN payment_type = 'refund' THEN amount_cents ELSE 0 END), 0
+      ) AS refunded_cents
+    FROM v2_payments
+    WHERE order_id = ? AND provider = 'direct_pix' AND status = 'approved'
+  `).bind(order.id).first();
+
+  const directPixPaidCents = Math.max(0,
+    Number(directPixTotals?.received_cents || 0)
+    - Number(directPixTotals?.refunded_cents || 0));
+  const directPixConfirmed = directPixPaidCents > 0
+    && order.briefing_status !== 'locked';
+
+
   return {
     id:
       order.id,
@@ -796,9 +818,10 @@ async function publicManualOrder(
       : null,
 
     alreadyPaid:
-      payment
-        ?.status
-      === 'approved',
+      payment?.status === 'approved'
+      || directPixConfirmed,
+
+    paidDirectly: directPixConfirmed,
 
     customerAreaPath:
       `/meu-pedido/${

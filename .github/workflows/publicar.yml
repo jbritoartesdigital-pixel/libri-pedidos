@@ -15,6 +15,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
+      # Publicacao unica de reconhecimento de Pix direto em pedido manual apos CI verde.
+      - 'src/lib/v2-orders-manual.js'
 
 permissions:
   contents: read

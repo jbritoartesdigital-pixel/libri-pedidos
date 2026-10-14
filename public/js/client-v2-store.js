@@ -5255,10 +5255,11 @@ export async function startManualOrder(
             <dt>Pagamento</dt>
             <dd>
               ${
-                order.pricing.paymentMethod
-                === 'pix'
-                  ? `Pix • ${money(order.pricing.depositCents)} agora`
-                  : 'Cartão • pagamento integral'
+                order.paidDirectly
+                  ? 'Pix direto • recebimento confirmado'
+                  : order.pricing.paymentMethod === 'pix'
+                    ? `Pix • ${money(order.pricing.depositCents)} agora`
+                    : 'Cartão • pagamento integral'
               }
             </dd>
           </div>
@@ -5268,7 +5269,7 @@ export async function startManualOrder(
           order.alreadyPaid
             ? `
               <div class="notice success section-block">
-                Pagamento confirmado ✓
+                ${order.paidDirectly ? 'Pix recebido e confirmado ✓' : 'Pagamento confirmado ✓'}
               </div>
 
               <div class="action-row">
@@ -5383,6 +5384,14 @@ export async function startManualOrder(
                     }),
                 },
               );
+
+            // O Pix direto pode ter sido registrado enquanto esta página
+            // estava aberta. A API retorna o pedido, nunca outro checkout.
+            if (result.result?.alreadyPaid) {
+              window.location.href =
+                result.result.customerAreaPath;
+              return;
+            }
 
             const checkoutUrl =
               result.result

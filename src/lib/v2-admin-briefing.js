@@ -94,10 +94,10 @@ export async function saveAdminBriefing(env, code, body = {}) {
     section => section.fields.map(field => field.key),
   ));
   for (const key of Object.keys(data)) {
-    if (!valid.has(key)) blocked('Atualize o formulário para preencher este campo.');
     if (/(?:^|_)(?:confirmed|approved|accepted|consent|declaration|signature)(?:$|_)/i.test(key)) {
       blocked('Consentimentos e declarações precisam ser confirmados pela própria cliente.');
     }
+    if (!valid.has(key)) blocked('Atualize o formulário para preencher este campo.');
   }
   const saved = await saveV2Briefing(env, entry.order.public_token, {
     data,

@@ -101,12 +101,29 @@ test('WhatsApp admin workflow: payment gate, conditional fields, audit, correcti
   assert.equal(state.uploads.length, 1);
   assert.equal(state.uploads[0].note, 'Referência enviada pela cliente em conversa');
 
+  // Regression: this briefing arrived late, after production advanced.
+  // The admin must never put a delivery-ready order back into production.
+  DB.sqlite.prepare(
+    "UPDATE v2_orders SET status='ready_for_delivery', next_action='Entregar convite' WHERE order_code=?"
+  ).run(code);
+
   // Switch a conditional branch and save partial data without deleting uploads.
   await saveAdminBriefing(env, code, {
     data: { interactive_resources: [] }, expectedUpdatedAt: state.updatedAt,
   });
   state = await readAdminBriefing(env, code);
   assert.equal(state.uploads.length, 1);
+  assert.equal(state.orderStatus, 'ready_for_delivery', 'saving partial data must keep delivery status');
+  let workflow = DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code);
+  assert.equal(workflow.next_action, 'Entregar convite');
+  const secondForm = new FormData();
+  secondForm.append('fieldKey', 'reference_files');
+  secondForm.append('file', new File(['fictitious image'], 'referencia-2.webp', { type:'image/webp' }));
+  await uploadAdminBriefing(new Request('https://example.test/upload',
+    { method: 'POST', body: secondForm }), env, code);
+  workflow = DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code);
+  assert.equal(workflow.status, 'ready_for_delivery', 'upload cannot reset workflow');
+  assert.equal(workflow.next_action, 'Entregar convite');
   await assert.rejects(completeAdminBriefing(env, code), /faltam algumas informações/);
 
   // Fill synthetic required fields, respecting conditional definitions.
@@ -142,8 +159,13 @@ test('WhatsApp admin workflow: payment gate, conditional fields, audit, correcti
   state = await readAdminBriefing(env, code);
   assert.deepEqual(state.missing, [], 'all required information must be present');
   const completed = await completeAdminBriefing(env, code);
-  assert.equal(completed.orderStatus, 'ready_for_production');
+  assert.equal(completed.orderStatus, 'ready_for_delivery');
   assert.equal((await readAdminBriefing(env, code)).status, 'completed');
+  assert.deepEqual(
+    DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code),
+    { status: 'ready_for_delivery', next_action: 'Entregar convite' },
+    'admin completion must keep the production stage and next action',
+  );
   state = await readAdminBriefing(env, code);
   await saveAdminBriefing(env, code, {
     data: { theme_or_style: 'Jardim corrigido por WhatsApp' },
@@ -190,6 +212,9 @@ test('Admin UI stays inside briefing and preserves mobile boundaries', () => {
   const css = readFileSync('public/css/admin-v2.css', 'utf8');
   assert.match(order, /id="toggleOrderBriefing"/);
   assert.match(order, /id="editOrderBriefing"/);
+  assert.match(order, /data-checklist-open-briefing/);
+  assert.match(order, /await openOrder\(detail\.order\.code, onChanged\)/);
+  assert.match(order, /getElementById\('editOrderBriefing'\)\?\.click\(\)/);
   assert.match(js, /expectedUpdatedAt/);
   assert.match(js, /confirm\('Há alterações não salvas/);
   assert.match(js, /Anexar do WhatsApp/);

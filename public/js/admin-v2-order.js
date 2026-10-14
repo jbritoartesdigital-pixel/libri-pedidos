@@ -714,6 +714,63 @@ export async function openOrder(code, onChanged = null) {
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
 
+            ${canRegisterManualPix ? `
+              <section id="orderPixReceiptPanel" class="card hidden" role="region"
+                aria-label="Registrar Pix recebido no pedido"
+                style="margin-top:12px;padding:14px">
+                <h3 style="margin:0">Registrar Pix já recebido</h3>
+                <p class="muted" style="margin:6px 0 12px">
+                  Confirme no banco antes de lançar. Não cobre novamente pelo link.
+                </p>
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="orderPixReceiptCode">Pedido</label>
+                    <input id="orderPixReceiptCode" class="input"
+                      value="${esc(detail.order.code)}" readonly>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptType">Tipo</label>
+                    <select id="orderPixReceiptType" class="select">
+                      ${pixPaidCents === 0 ? `
+                        <option value="deposit">Entrada</option>
+                        <option value="full_payment">Pagamento integral</option>
+                      ` : '<option value="balance">Saldo recebido</option>'}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptAmount">Valor recebido (R$)</label>
+                    <input id="orderPixReceiptAmount" class="input" type="number"
+                      min="0.01" step="0.01" inputmode="decimal"
+                      max="${(pixRemainingCents / 100).toFixed(2)}"
+                      value="${(suggestedPixCents / 100).toFixed(2)}">
+                    <small class="field-help">Saldo aberto: ${money(pixRemainingCents)}</small>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptDate">Data em que recebeu</label>
+                    <input id="orderPixReceiptDate" class="input" type="date"
+                      value="${todaySaoPaulo()}" max="${todaySaoPaulo()}">
+                  </div>
+                  <div class="field full">
+                    <label for="orderPixReceiptNote">Observação (opcional)</label>
+                    <input id="orderPixReceiptNote" class="input"
+                      value="Pix direto, conferido no banco">
+                  </div>
+                  <label class="checkline full">
+                    <input type="checkbox" id="orderPixReceiptConfirmed">
+                    <span>Conferi no banco e confirmo que recebi este Pix.</span>
+                  </label>
+                </div>
+                <div class="order-quick-actions" style="margin-top:12px">
+                  <button id="saveOrderPixReceipt" class="btn btn-primary" type="button">
+                    Confirmar recebimento
+                  </button>
+                  <button id="cancelOrderPixReceipt" class="btn btn-ghost" type="button">
+                    Cancelar
+                  </button>
+                </div>
+              </section>
+            ` : ''}
+
             ${
               quickMessages.length
                 ? `

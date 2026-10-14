@@ -697,7 +697,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-compact-search-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261010-parties-focus-3"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261014-direct-pix-order-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -2885,7 +2885,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261010-parties-focus-3/);
+  assert.match(html, /admin-v2\.js\?v=20261014-direct-pix-order-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {

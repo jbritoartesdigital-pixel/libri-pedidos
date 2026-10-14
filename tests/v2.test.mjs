@@ -696,8 +696,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261010-compact-search-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261014-direct-pix-order-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261014-whatsapp-briefing-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261014-whatsapp-briefing-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1704,8 +1704,8 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261014-direct-pix-order-1/);
-  assert.match(entry, /admin-v2-order\.js\?v=20261014-direct-pix-order-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261014-whatsapp-briefing-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261014-whatsapp-briefing-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
     amountCents: checkout.payment.amountDueNowCents,
@@ -2400,7 +2400,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261014-direct-pix-order-1'));
+    'admin-v2.js?v=20261014-whatsapp-briefing-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261014-manual-pix-1'));
 });
@@ -2885,7 +2885,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261014-direct-pix-order-1/);
+  assert.match(html, /admin-v2\.js\?v=20261014-whatsapp-briefing-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -3214,8 +3214,8 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261014-direct-pix-order-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261014-direct-pix-order-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261014-whatsapp-briefing-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261014-whatsapp-briefing-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261014-manual-pix-1'));
 });
 
@@ -3240,9 +3240,9 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261010-compact-search-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261014-direct-pix-order-1'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261014-direct-pix-order-1"));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261014-whatsapp-briefing-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261014-whatsapp-briefing-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261014-whatsapp-briefing-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
 

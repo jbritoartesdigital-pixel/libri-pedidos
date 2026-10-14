@@ -3799,9 +3799,7 @@ export async function submitV2Briefing(
           VALUES (
             ?,
             'briefing_completed',
-            administrative
-               ? 'Briefing concluído pela administradora a partir de informações do WhatsApp.'
-               : 'Dados do convite preenchidos e enviados pela cliente.',
+            ?,
             ?,
             ?
           )
@@ -3809,11 +3807,15 @@ export async function submitV2Briefing(
       )
       .bind(
         context.order.id,
+        administrative
+          ? 'Briefing concluído pela administradora a partir de informações do WhatsApp.'
+          : 'Dados do convite preenchidos e enviados pela cliente.',
         JSON.stringify({
           completionPercent:
             100,
           uploadCount:
             context.uploads.length,
+          source: administrative ? 'admin_whatsapp' : 'customer_area',
         }),
         stamp,
       ),

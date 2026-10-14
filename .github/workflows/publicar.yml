@@ -1,6 +1,5 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
-# Publicação única da correção do briefing pendente na finalização (PR #102).
 
 on:
   workflow_dispatch:

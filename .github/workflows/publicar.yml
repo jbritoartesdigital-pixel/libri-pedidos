@@ -1,6 +1,5 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
-# Publicação única do editor WhatsApp aprovada no PR #101; manter gatilhos restritos.
 
 on:
   workflow_dispatch:

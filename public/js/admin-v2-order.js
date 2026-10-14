@@ -30,6 +30,15 @@ function whatsappBr(value) {
   return String(value || '');
 }
 
+function todaySaoPaulo() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const date = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${date.year}-${date.month}-${date.day}`;
+}
+
 function deliveryLabel(detail) {
   const start =
     detail.order
@@ -616,6 +625,22 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const canRegisterManualPix =
+    detail.order.source === 'manual_whatsapp'
+    && detail.pricing.paymentMethod === 'pix'
+    && Number(detail.payment?.remainingBalanceCents || 0) > 0
+    && !['cancelled', 'finalized', 'awaiting_urgency_decision',
+      'urgency_rejected'].includes(detail.order.status);
+
+  const pixRemainingCents = Math.max(
+    0, Number(detail.payment?.remainingBalanceCents || 0),
+  );
+  const pixPaidCents = Math.max(0, Number(detail.payment?.paidCents || 0));
+  const suggestedPixCents = pixPaidCents > 0
+    ? pixRemainingCents
+    : Math.min(pixRemainingCents,
+      Math.max(1, Number(detail.pricing.depositCents || pixRemainingCents)));
+
   const quickMessages =
     detail.whatsappActions
     || [];
@@ -665,6 +690,12 @@ export async function openOrder(code, onChanged = null) {
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
+              ${canRegisterManualPix ? `
+                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
+                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
+                  Registrar Pix recebido
+                </button>
+              ` : ''}
               ${(detail.allowedActions || []).includes('finalize') ? `
                 <button type="button" class="btn btn-success" data-order-action="finalize">
                   Finalizar pedido
@@ -682,6 +713,63 @@ export async function openOrder(code, onChanged = null) {
               <button type="button" class="btn btn-ghost"
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
+
+            ${canRegisterManualPix ? `
+              <section id="orderPixReceiptPanel" class="card hidden" role="region"
+                aria-label="Registrar Pix recebido no pedido"
+                style="margin-top:12px;padding:14px">
+                <h3 style="margin:0">Registrar Pix já recebido</h3>
+                <p class="muted" style="margin:6px 0 12px">
+                  Confirme no banco antes de lançar. Não cobre novamente pelo link.
+                </p>
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="orderPixReceiptCode">Pedido</label>
+                    <input id="orderPixReceiptCode" class="input"
+                      value="${esc(detail.order.code)}" readonly>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptType">Tipo</label>
+                    <select id="orderPixReceiptType" class="select">
+                      ${pixPaidCents === 0 ? `
+                        <option value="deposit">Entrada</option>
+                        <option value="full_payment">Pagamento integral</option>
+                      ` : '<option value="balance">Saldo recebido</option>'}
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptAmount">Valor recebido (R$)</label>
+                    <input id="orderPixReceiptAmount" class="input" type="number"
+                      min="0.01" step="0.01" inputmode="decimal"
+                      max="${(pixRemainingCents / 100).toFixed(2)}"
+                      value="${(suggestedPixCents / 100).toFixed(2)}">
+                    <small class="field-help">Saldo aberto: ${money(pixRemainingCents)}</small>
+                  </div>
+                  <div class="field">
+                    <label for="orderPixReceiptDate">Data em que recebeu</label>
+                    <input id="orderPixReceiptDate" class="input" type="date"
+                      value="${todaySaoPaulo()}" max="${todaySaoPaulo()}">
+                  </div>
+                  <div class="field full">
+                    <label for="orderPixReceiptNote">Observação (opcional)</label>
+                    <input id="orderPixReceiptNote" class="input"
+                      value="Pix direto, conferido no banco">
+                  </div>
+                  <label class="checkline full">
+                    <input type="checkbox" id="orderPixReceiptConfirmed">
+                    <span>Conferi no banco e confirmo que recebi este Pix.</span>
+                  </label>
+                </div>
+                <div class="order-quick-actions" style="margin-top:12px">
+                  <button id="saveOrderPixReceipt" class="btn btn-primary" type="button">
+                    Confirmar recebimento
+                  </button>
+                  <button id="cancelOrderPixReceipt" class="btn btn-ghost" type="button">
+                    Cancelar
+                  </button>
+                </div>
+              </section>
+            ` : ''}
 
             ${
               quickMessages.length
@@ -1302,6 +1390,91 @@ export async function openOrder(code, onChanged = null) {
     if (image) image.removeAttribute('src');
   });
 
+  // O recebimento é lançado na mesma API usada pelo Financeiro, sem
+  // gerar cobrança nova; a confirmação do banco é obrigatória.
+  const pixToggle = document.getElementById('toggleOrderPixReceipt');
+  const pixPanel = document.getElementById('orderPixReceiptPanel');
+  const hidePixPanel = () => {
+    pixPanel?.classList.add('hidden');
+    pixToggle?.setAttribute('aria-expanded', 'false');
+  };
+  pixToggle?.addEventListener('click', () => {
+    if (!pixPanel) return;
+    const opening = pixPanel.classList.contains('hidden');
+    pixPanel.classList.toggle('hidden', !opening);
+    pixToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) document.getElementById('orderPixReceiptAmount')?.focus();
+  });
+  document.getElementById('cancelOrderPixReceipt')
+    ?.addEventListener('click', hidePixPanel);
+
+  const receiptType = document.getElementById('orderPixReceiptType');
+  receiptType?.addEventListener('change', () => {
+    const cents = receiptType.value === 'full_payment'
+      ? pixRemainingCents : suggestedPixCents;
+    const amountField = document.getElementById('orderPixReceiptAmount');
+    if (amountField) amountField.value = (cents / 100).toFixed(2);
+  });
+
+  document.getElementById('saveOrderPixReceipt')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (!canRegisterManualPix || button.disabled) return;
+      const rawAmount = document.getElementById('orderPixReceiptAmount')?.value;
+      const amount = Number(rawAmount);
+      const cents = Math.round(amount * 100);
+      const paidDate = document.getElementById('orderPixReceiptDate')?.value || '';
+      const paymentType = receiptType?.value || 'deposit';
+      const note = document.getElementById('orderPixReceiptNote')?.value.trim() || '';
+      const confirmed = document.getElementById('orderPixReceiptConfirmed')?.checked;
+      if (!rawAmount || !Number.isFinite(amount) || !Number.isSafeInteger(cents)
+        || cents <= 0 || cents > pixRemainingCents) {
+        showToast('Confira o valor: ele não pode ultrapassar o saldo aberto.');
+        document.getElementById('orderPixReceiptAmount')?.focus();
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paidDate)
+        || paidDate > todaySaoPaulo()) {
+        showToast('Informe a data real do recebimento, até hoje.');
+        document.getElementById('orderPixReceiptDate')?.focus();
+        return;
+      }
+      if (!confirmed) {
+        showToast('Confirme primeiro que o Pix entrou na sua conta.');
+        document.getElementById('orderPixReceiptConfirmed')?.focus();
+        return;
+      }
+      if (!confirm(
+        `Registrar ${money(cents)} de Pix recebido no pedido ${detail.order.code}?`
+      )) return;
+
+      button.disabled = true;
+      try {
+        await api('/api/admin/v2/finance/payments', {
+          method: 'POST',
+          body: JSON.stringify({
+            orderCode: detail.order.code,
+            amountCents: cents,
+            paidDate,
+            paymentType,
+            note,
+          }),
+        });
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+        return;
+      }
+
+      close();
+      showToast('Pix registrado ✓ Saldo atualizado no pedido.');
+      try {
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+      } catch {
+        showToast('Pix salvo. Atualize a Central para ver o novo saldo.');
+      }
+    });
   document.querySelectorAll('[data-urgency-decision]').forEach(button => {
     button.addEventListener('click', async () => {
       const buttons = [...document.querySelectorAll('[data-urgency-decision]')];

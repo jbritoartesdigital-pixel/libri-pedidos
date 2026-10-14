@@ -15,8 +15,6 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publicar.yml'
-      # Liberação pontual após CI: Pix direto no pedido manual.
-      - 'public/js/admin-v2-order.js'
 
 permissions:
   contents: read

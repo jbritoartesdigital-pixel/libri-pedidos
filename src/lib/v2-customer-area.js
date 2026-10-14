@@ -2452,6 +2452,17 @@ function assertEditable(
   }
 }
 
+// Admin may receive a delayed WhatsApp briefing after production has already
+// progressed. Transcribing it must never send an order back to the queue.
+const ADMIN_PRESERVED_STAGES = new Set([
+  'ready_for_production', 'in_production', 'waiting_customer', 'adjustments',
+  'approved', 'balance_pending', 'ready_for_delivery',
+]);
+
+function retainAdminOrderStage(context, administrative) {
+  return administrative && ADMIN_PRESERVED_STAGES.has(context.order.status);
+}
+
 async function moduleAvailability(
   db,
   orderId,
@@ -2995,6 +3006,7 @@ export async function saveV2Briefing(
       context.uploads,
     );
 
+  const keepStage = retainAdminOrderStage(context, administrative);
   const stamp =
     nowIso();
 
@@ -3030,8 +3042,8 @@ export async function saveV2Briefing(
           UPDATE v2_orders
           SET
             briefing_status = 'in_progress',
-            status = 'briefing_pending',
-            next_action = 'Dados da festa em preenchimento',
+            status = ?,
+            next_action = ?,
             updated_at = ?
           WHERE
             id = ?
@@ -3042,6 +3054,8 @@ export async function saveV2Briefing(
         `,
       )
       .bind(
+        keepStage ? context.order.status : 'briefing_pending',
+        keepStage ? context.order.next_action : 'Dados da festa em preenchimento',
         stamp,
         context.order.id,
       ),
@@ -3168,6 +3182,7 @@ export async function uploadV2BriefingFile(
   }
 
   assertEditable(context, administrative);
+  const keepStage = retainAdminOrderStage(context, administrative);
 
   const form =
     await request.formData();
@@ -3363,8 +3378,8 @@ export async function uploadV2BriefingFile(
           UPDATE v2_orders
           SET
             briefing_status = 'in_progress',
-            status = 'briefing_pending',
-            next_action = 'Dados da festa em preenchimento',
+            status = ?,
+            next_action = ?,
             updated_at = ?
           WHERE
             id = ?
@@ -3375,6 +3390,8 @@ export async function uploadV2BriefingFile(
         `,
       )
       .bind(
+        keepStage ? context.order.status : 'briefing_pending',
+        keepStage ? context.order.next_action : 'Dados da festa em preenchimento',
         stamp,
         context.order.id,
       )
@@ -3748,6 +3765,9 @@ export async function submitV2Briefing(
     throw error;
   }
 
+  const keepStage = retainAdminOrderStage(context, administrative);
+  const nextOrderStatus = keepStage ? context.order.status : 'ready_for_production';
+  const nextAction = keepStage ? context.order.next_action : 'Iniciar produção';
   const stamp =
     nowIso();
 
@@ -3775,13 +3795,15 @@ export async function submitV2Briefing(
           UPDATE v2_orders
           SET
             briefing_status = 'completed',
-            status = 'ready_for_production',
-            next_action = 'Iniciar produção',
+            status = ?,
+            next_action = ?,
             updated_at = ?
           WHERE id = ?
         `,
       )
       .bind(
+        nextOrderStatus,
+        nextAction,
         stamp,
         context.order.id,
       ),
@@ -3829,9 +3851,9 @@ export async function submitV2Briefing(
       orderId:
         context.order.id,
       title:
-        'Dados da festa enviados ✓',
+        keepStage ? 'Dados da festa registrados ✓' : 'Dados da festa enviados ✓',
       body:
-        `${context.order.order_code} • ${context.order.honoree_display_name} • pronto para produção`,
+        `${context.order.order_code} • ${context.order.honoree_display_name} • ${keepStage ? 'briefing administrativo concluído' : 'pronto para produção'}`,
       actionUrl:
         `/admin-v2?order=${
           encodeURIComponent(
@@ -3856,7 +3878,7 @@ export async function submitV2Briefing(
     status:
       'completed',
     orderStatus:
-      'ready_for_production',
+      nextOrderStatus,
 
     success: {
       title:

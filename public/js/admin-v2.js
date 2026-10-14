@@ -27,7 +27,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261014-direct-pix-order-1';
+} from './admin-v2-order.js?v=20261014-whatsapp-briefing-1';
 
 import {
   renderAgenda,

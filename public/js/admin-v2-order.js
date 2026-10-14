@@ -116,6 +116,16 @@ function finalizeChecklistHtml(
             <div class="finalize-check-copy">
               <strong>${esc(item.label)}</strong>
 
+              ${!item.ok && item.code === 'briefing' ? `
+                  <small>
+                    O briefing deste pedido ainda não está concluído.
+                    Abra as perguntas, salve o que falta e conclua sem pedir um novo envio à cliente.
+                  </small>
+                  <button class="btn btn-secondary btn-small" type="button"
+                    data-checklist-open-briefing>
+                    Resolver dados do convite
+                  </button>
+                ` : ''}
               ${
                 !item.ok
                 && item.code
@@ -1930,6 +1940,21 @@ export async function openOrder(code, onChanged = null) {
                 bindChecklistActions();
               };
               const bindChecklistActions = () => {
+                document.querySelector('[data-checklist-open-briefing]')
+                  ?.addEventListener('click', async event => {
+                    const button = event.currentTarget;
+                    button.disabled = true;
+                    // This dialog replaces the order dialog in modalRoot.
+                    // Reopen the order at the real admin briefing editor.
+                    closeFinalize();
+                    try {
+                      await openOrder(detail.order.code, onChanged);
+                      document.getElementById('toggleOrderBriefing')?.click();
+                      document.getElementById('editOrderBriefing')?.click();
+                    } catch (error) {
+                      showToast(error.message);
+                    }
+                  });
                 document.querySelector('[data-checklist-preview-whatsapp]')
                   ?.addEventListener('click', async event => {
                     if (await registerWhatsappApproval(event.currentTarget)) {

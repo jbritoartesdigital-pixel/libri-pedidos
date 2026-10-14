@@ -1608,6 +1608,64 @@ test('finance edit date guard explains future dates before contacting the API', 
   assert.match(backend, /Datas futuras não são recebimentos/);
 });
 
+test('manual Pix receipt is available inside order detail with a bank-confirmed audited flow', async t => {
+  const DB = database();
+  providerMock(t);
+  const e = env(DB);
+  const checkout = await startV2Checkout(request, e, input({
+    event: { honoreeName: 'Pix direto no pedido', type: 'birthday', date: day(60) },
+    deliveryWindow: { start: day(12), end: day(14) },
+    ...await terms(DB),
+  }));
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code=?')
+    .get(checkout.order.code).id;
+  let detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(detail.order.source, 'store', 'do not show manual payment shortcut for regular checkout');
+  DB.sqlite.prepare("UPDATE v2_orders SET source='manual_whatsapp' WHERE id=?").run(id);
+  detail = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(detail.order.source, 'manual_whatsapp');
+  assert.equal(detail.pricing.paymentMethod, 'pix');
+  assert.equal(detail.payment.paidCents, 0);
+  const ui = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const shell = readFileSync('public/admin-v2.html', 'utf8');
+  const entry = readFileSync('public/js/admin-v2.js', 'utf8');
+  assert.match(ui, /detail\.order\.source === 'manual_whatsapp'/);
+  assert.match(ui, /detail\.pricing\.paymentMethod === 'pix'/);
+  assert.match(ui, /detail\.payment\?\.remainingBalanceCents \|\| 0\) > 0/);
+  assert.match(ui, /!\['cancelled', 'finalized'/);
+  assert.match(ui, /id="toggleOrderPixReceipt"/);
+  assert.match(ui, /id="orderPixReceiptPanel"/);
+  assert.match(ui, /class="card hidden"/);
+  assert.match(ui, /id="orderPixReceiptCode"/);
+  assert.match(ui, /id="orderPixReceiptAmount"/);
+  assert.match(ui, /id="orderPixReceiptConfirmed"/);
+  assert.match(ui, /id="saveOrderPixReceipt"/);
+  assert.match(ui, /id="cancelOrderPixReceipt"/);
+  assert.match(ui, /todaySaoPaulo\(\)/);
+  assert.match(ui, /if \(!confirmed\)/);
+  assert.match(ui, /cents > pixRemainingCents/);
+  assert.match(ui, /button\.disabled = true;[\s\S]*?await api\('\/api\/admin\/v2\/finance\/payments'/);
+  assert.match(ui, /amountCents: cents/);
+  assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
+  assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
+  assert.match(shell, /admin-v2\.js\?v=20261014-direct-pix-order-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261014-direct-pix-order-1/);
+  const paid = await createV2FinancePayment(DB, {
+    orderCode: checkout.order.code,
+    amountCents: checkout.payment.amountDueNowCents,
+    paidDate: day(-1), paymentType: 'deposit',
+    note: 'Recebido diretamente, após conferência no banco',
+  });
+  assert.ok(paid.id > 0);
+  const reopened = await getV2AdminOrderDetail(DB, checkout.order.code);
+  assert.equal(reopened.order.status, 'briefing_pending');
+  assert.equal(reopened.order.briefingStatus, 'available');
+  assert.equal(reopened.payment.remainingBalanceCents,
+    checkout.payment.totalCents - checkout.payment.amountDueNowCents);
+  assert.equal(DB.sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='finance_payment_added'"
+  ).get(id).n, 1);
+});
 test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending the key does not', async t => {
   const DB = database();
   providerMock(t);
@@ -2286,7 +2344,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261010-parties-focus-3'));
+    'admin-v2.js?v=20261014-direct-pix-order-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261013-delivery-resume-1'));
 });
@@ -3100,8 +3158,8 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261010-parties-focus-3'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261010-balance-wa-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261014-direct-pix-order-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261014-direct-pix-order-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261013-delivery-resume-1'));
 });
 
@@ -3127,8 +3185,8 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261010-compact-search-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261010-parties-focus-3'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261010-balance-wa-1"));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261014-direct-pix-order-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261014-direct-pix-order-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
 

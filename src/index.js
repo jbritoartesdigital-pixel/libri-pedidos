@@ -41,6 +41,7 @@ import {
 import {
   handleAdminOrdersV2Api,
 } from './routes/admin-orders-v2.js';
+import { handleAdminBriefingV2Api } from './routes/admin-briefing-v2.js';
 
 import { handleAdminDriveFolderV2Api } from './routes/admin-drive-folder-v2.js';
 import {needsDriveOAuthReturnPage,driveOAuthReturnPage} from './lib/v2-drive-oauth-return.js';
@@ -341,6 +342,7 @@ async function handleAdminV2Api(
     handleAdminOrderZipV2Api,
     handleAdminDriveFolderV2Api,
     handleAdminOrdersV2Api,
+    handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
     handleAdminContractsV2Api,
   ];

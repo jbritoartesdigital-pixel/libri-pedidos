@@ -636,7 +636,7 @@ function periodModal(blocked, openOrder) {
           <span>Preservar dias com pedidos ou pagamentos reservados</span>
         </label>
         <small class="field full" style="color:var(--muted)">
-          Datas preservadas continuarão abertas. Nenhuma reserva existente será alterada.
+          Datas preservadas ficarão como estavam. Nenhuma reserva existente será alterada.
         </small>
       ` : ''}
       <div class="field full">
@@ -698,7 +698,7 @@ function periodModal(blocked, openOrder) {
         + (result.excludedWeekendDays
           ? ` ${result.excludedWeekendDays} dia(s) de fim de semana fora do intervalo aplicado.` : '')
         + (skipped.length
-          ? ` ${skipped.length} dia(s) com reservas permaneceram abertos: ${skipped.map(dateBr).join(', ')}.` : '');
+          ? ` ${skipped.length} dia(s) com reservas permaneceram inalterados: ${skipped.map(dateBr).join(', ')}.` : '');
       close();
       await renderAgenda(openOrder, activeMonth);
       showToast(summary);

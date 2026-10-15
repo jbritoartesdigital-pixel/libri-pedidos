@@ -4030,6 +4030,7 @@ function renderCustomer(
       if (!state.quote?.coupon || state.quote.coupon.code.toUpperCase() !== code) {
         throw new Error('Não foi possível validar este cupom.');
       }
+      state.couponNotice = '';
       persist(state);
       renderCustomer(state, render);
       showToast('Cupom aplicado! Confira a economia no resumo.');
@@ -4346,6 +4347,7 @@ function renderReview(
       </dl>
 
       <div class="section-block">
+        ${state.couponNotice ? `<p class="notice info" role="status">${esc(state.couponNotice)}</p>` : ''}
         ${totalOnlyHtml(state.quote)}
       </div>
 
@@ -4393,6 +4395,8 @@ async function renderPayment(
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
+
+      ${state.couponNotice ? `<p class="notice info" role="status">${esc(state.couponNotice)}</p>` : ''}
 
       <div class="page-head">
         <span class="eyebrow">Pagamento</span>

@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
+# Publicação única para desbloquear cupom inválido no checkout (PR #104).
 
 on:
   workflow_dispatch:

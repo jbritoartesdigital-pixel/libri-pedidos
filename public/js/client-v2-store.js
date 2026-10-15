@@ -13,6 +13,7 @@ import {
 
 import { inputHtml } from './client-v2-area.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
+import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 
 const EVENT_TYPES = [
   {
@@ -1812,29 +1813,19 @@ function addonFamilySummary(
   }`;
 }
 
-async function updateQuote(
-  state,
-) {
-  const data =
-    await api(
-      '/api/v2/quote',
-      {
-        method:
-          'POST',
-        body:
-          JSON.stringify({
-            selection:
-              state.selection,
-
-            eventType:
-              state.event.type
-              || null,
-          }),
-      },
-    );
-
-  state.quote =
-    data.quote;
+async function updateQuote(state, options = {}) {
+  // Retry only explicit coupon errors from the server, never silently use
+  // old totals after an expired or exhausted coupon is removed.
+  return quoteWithCouponRecovery(state, async () => {
+    const result = await api('/api/v2/quote', {
+      method: 'POST',
+      body: JSON.stringify({
+        selection: state.selection,
+        eventType: state.event.type || null,
+      }),
+    });
+    return result.quote;
+  }, persist, options);
 }
 
 async function refreshConfigurationQuote(
@@ -3912,15 +3903,17 @@ function renderCustomer(
             <button type="button" class="btn btn-secondary btn-small" id="applyCoupon">
               Aplicar cupom
             </button>
-            ${state.quote?.coupon ? `
-              <button type="button" class="btn btn-ghost btn-small" id="removeCoupon">
-                Remover
-              </button>
-            ` : ''}
+            <button type="button" class="btn btn-ghost btn-small" id="removeCoupon">
+              Remover cupom
+            </button>
           </div>
           <small id="couponFeedback" class="coupon-feedback" aria-live="polite"></small>
         </div>
       </div>
+
+      ${state.couponNotice ? `
+        <p class="notice info" role="status" id="couponRecoveryNotice">${esc(state.couponNotice)}</p>
+      ` : ''}
 
       ${totalOnlyHtml(state.quote)}
 
@@ -4033,10 +4026,11 @@ function renderCustomer(
 
     try {
       state.selection.couponCode = code;
-      await updateQuote(state);
+      await updateQuote(state, { recoverInvalidCoupon: false });
       if (!state.quote?.coupon || state.quote.coupon.code.toUpperCase() !== code) {
         throw new Error('Não foi possível validar este cupom.');
       }
+      state.couponNotice = '';
       persist(state);
       renderCustomer(state, render);
       showToast('Cupom aplicado! Confira a economia no resumo.');
@@ -4070,19 +4064,17 @@ function renderCustomer(
 
   document.getElementById('removeCoupon')?.addEventListener('click', async () => {
     capture();
-    const previousCode = state.selection.couponCode;
-    const previousQuote = state.quote;
-    state.selection.couponCode = '';
+    // Clear the persisted state BEFORE any network call, never roll back.
+    removeCouponFromCart(state, persist);
+    renderCustomer(state, render);
     try {
       await updateQuote(state);
       persist(state);
       renderCustomer(state, render);
-      showToast('Cupom removido. Total atualizado.');
-    } catch (error) {
-      state.selection.couponCode = previousCode;
-      state.quote = previousQuote;
-      persist(state);
-      showCouponError(error.message || 'Não foi possível remover o cupom.');
+      showToast('Cupom removido. Total sem desconto atualizado.');
+    } catch {
+      state.quote = null;
+      showToast('Cupom removido. Não foi possível atualizar o total agora.');
     }
   });
 
@@ -4110,13 +4102,18 @@ function renderCustomer(
         const enteredCoupon = String(couponInput?.value || '').trim().toUpperCase();
         if (enteredCoupon !== state.selection.couponCode) {
           if (enteredCoupon) {
-            if (!await applyCoupon()) return;
+            // An invalid pasted coupon must not prevent checkout.
+            const applied = await applyCoupon();
+            if (!applied) {
+              const reason = couponFeedback?.textContent || 'Cupom não validado';
+              removeCouponFromCart(state, persist,
+                `${reason} A compra continua sem esse desconto.`);
+              showToast('Cupom não aplicado. Continuando sem desconto.');
+            }
           } else if (state.selection.couponCode) {
-            showCouponError('Toque em Remover para retirar o cupom aplicado.');
-            return;
+            removeCouponFromCart(state, persist);
           }
         }
-
 
         const requiredFields = [
           { value: state.customer.name, label: 'Seu nome', id: 'customerName' },
@@ -4350,6 +4347,7 @@ function renderReview(
       </dl>
 
       <div class="section-block">
+        ${state.couponNotice ? `<p class="notice info" role="status">${esc(state.couponNotice)}</p>` : ''}
         ${totalOnlyHtml(state.quote)}
       </div>
 
@@ -4385,13 +4383,20 @@ async function renderPayment(
 ) {
   try {
     await updateQuote(state);
-  } catch {
-    // mantém último quote válido
+  } catch (error) {
+    state.quote = null;
+    state.step = 7;
+    persist(state);
+    renderCustomer(state, render);
+    showToast(error.message || 'Não foi possível conferir o total. Tente novamente.');
+    return;
   }
 
   app.innerHTML = `
     <section class="page-card">
       ${progress(state)}
+
+      ${state.couponNotice ? `<p class="notice info" role="status">${esc(state.couponNotice)}</p>` : ''}
 
       <div class="page-head">
         <span class="eyebrow">Pagamento</span>

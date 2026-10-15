@@ -50,7 +50,7 @@ function source(path,reference) {
   sourceCache.set(key,bytes);
   return bytes;
 }
-function mockServer(reference) {
+function mockServer(reference, { couponOffline = false } = {}) {
   return createServer((req,res)=>{
     const url=new URL(req.url,'http://127.0.0.1');
     const send=(code,body,headers={})=>{
@@ -60,6 +60,36 @@ function mockServer(reference) {
     const json=(code,body,headers={})=>send(code,JSON.stringify(body),
       {'content-type':'application/json; charset=utf-8',...headers});
     if(url.pathname.startsWith('/api/')) {
+      if(url.pathname==='/api/v2/catalog') return json(200,{catalog:{
+        products:[{code:'interactive_essential',slug:'interativo',name:'Convite Interativo',
+          pricingMode:'fixed',variants:[{code:'base',label:'Padrão',isDefault:true}],
+          config:{}}],
+        addons:[],combos:[]
+      }});
+      if(url.pathname==='/api/v2/terms/current')return json(200,{
+        terms:{version:'2.0',body:'Condições fictícias do pedido'}
+      });
+      if(url.pathname==='/api/v2/delivery-options')return json(200,{
+        delivery:{options:[{start:'2026-11-02',end:'2026-11-04',recommended:true}]}
+      });
+      if(url.pathname==='/api/v2/quote') {
+        let raw='';
+        req.on('data',part=>raw+=part);
+        req.on('end',()=>{
+          let selection={};
+          try{selection=JSON.parse(raw).selection||{};}catch{
+            return json(400,{error:'JSON de teste inválido'});
+          }
+          if(selection.couponCode)return json(422,{error:'Este cupom atingiu o limite de usos.'});
+          if(couponOffline)return json(503,{error:'Falha temporária no preço'});
+          return json(200,{quote:{
+            productCents:10000,addonsCents:0,baseTotalCents:10000,totalCents:10000,
+            subtotalCents:10000,cardFeeCents:0,coupon:null,couponDiscountCents:0,
+            comboDiscountCents:0,payment:{method:'pix',depositCents:5000,balanceCents:5000}
+          }});
+        });
+        return;
+      }
       if(url.pathname==='/api/admin/v2/auth/status')
         return json(200,{auth:{authenticated:true,configured:true}});
       if(url.pathname==='/api/admin/v2/central')
@@ -88,8 +118,8 @@ function mockServer(reference) {
     catch{return send(404,'Missing mock asset: '+asset);}
   });
 }
-async function openServer(ref) {
-  const srv=mockServer(ref);
+async function openServer(ref, options = {}) {
+  const srv=mockServer(ref,options);
   await new Promise((ok,reject)=>{srv.once('error',reject);srv.listen(0,'127.0.0.1',ok);});
   return {server:srv,url:'http://127.0.0.1:'+srv.address().port};
 }
@@ -252,6 +282,74 @@ async function checkOfferIsFullyReachable(browser) {
   }
 }
 
+async function checkCouponCanBeRemovedOnAndroid(browser) {
+  const scenarios=[
+    {label:'cupom vencido salvo',couponOffline:false,remove:true},
+    {label:'cupom esgotado ao continuar',couponOffline:false,remove:false},
+    {label:'remoção sem internet',couponOffline:true,remove:true},
+  ];
+  for(const scenario of scenarios) {
+    const instance=await openServer('',{couponOffline:scenario.couponOffline});
+    const context=await browser.newContext({
+      viewport:{width:320,height:700},isMobile:true,hasTouch:true,
+      locale:'pt-BR',timezoneId:'America/Sao_Paulo',
+    });
+    const page=await context.newPage();
+    const errors=[];
+    page.on('pageerror',err=>errors.push(err.message));
+    await page.route('**/*',route=>{
+      if(!route.request().url().startsWith(instance.url+'/'))
+        return route.abort('blockedbyclient');
+      return route.continue();
+    });
+    await page.addInitScript(()=>{
+      localStorage.setItem('libriV2StoreState',JSON.stringify({
+        step:7,customer:{name:'Cliente Fictícia',whatsapp:'5511999999999',email:''},
+        event:{type:'birthday',honoreeName:'Criança Fictícia',date:'2026-12-15'},
+        selection:{productCode:'interactive_essential',productSlug:'interativo',
+          variantCode:'base',addonCodes:[],comboCode:'',couponCode:'PROMO10',
+          paymentMethod:'pix'},
+        deliveryWindow:{start:'2026-11-02',end:'2026-11-04'},
+      }));
+    });
+    try {
+      await page.goto(instance.url+'/pedido',{waitUntil:'domcontentloaded'});
+      await page.locator('#removeCoupon').waitFor({timeout:15000});
+      assert.equal(await page.locator('#removeCoupon').isVisible(),true,
+        scenario.label+': button missing for invalid stored coupon');
+      if(scenario.remove) {
+        await page.locator('#removeCoupon').click();
+        await page.waitForFunction(()=>JSON.parse(localStorage.getItem('libriV2StoreState'))
+          .selection.couponCode==='');
+      } else {
+        await page.locator('#nextBtn').click();
+        await page.getByText('Confira seu pedido').waitFor({timeout:10000});
+      }
+      const result=await page.evaluate(()=>JSON.parse(localStorage.getItem('libriV2StoreState')));
+      assert.equal(result.selection.couponCode,'',scenario.label+' coupon persisted');
+      assert.equal(result.selection.productCode,'interactive_essential');
+      assert.equal(result.customer.name,'Cliente Fictícia');
+      if(!scenario.couponOffline) {
+        if(scenario.remove) {
+          await page.locator('#nextBtn').click();
+          await page.getByText('Confira seu pedido').waitFor({timeout:10000});
+        }
+        await page.getByText('R$ 100,00').waitFor();
+      } else {
+        assert.equal(result.step,7,'offline removal should preserve checkout step');
+        assert.equal(await page.locator('#couponCode').inputValue(),'');
+      }
+      const layout=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(layout<=320+1,scenario.label+': horizontal overflow on Android');
+      assert.deepEqual(errors,[],scenario.label+': client JS exception');
+      audit.tests.push('Android checkout 320px: '+scenario.label+' sem carrinho bloqueado');
+    } finally {
+      await context.close();
+      await new Promise(ok=>instance.server.close(ok));
+    }
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -285,6 +383,7 @@ try{
   if(base)await capture(browser,base,'main');
   await capture(browser,'','alteracao');
   await checkOfferIsFullyReachable(browser);
+  await checkCouponCanBeRemovedOnAndroid(browser);
   if(base)for(const width of [320,390]) {
     visualDiff('main-central-'+width+'.png',
       'alteracao-central-'+width+'.png','diff-central-'+width+'.png');

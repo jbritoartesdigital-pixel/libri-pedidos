@@ -1,6 +1,5 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
-# Publicação única da agenda com exclusão de fins de semana (PR #105).
 
 on:
   workflow_dispatch:

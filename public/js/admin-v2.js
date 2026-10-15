@@ -31,7 +31,7 @@ import {
 
 import {
   renderAgenda,
-} from './admin-v2-agenda.js';
+} from './admin-v2-agenda.js?v=20261015-weekday-period-1';
 
 import {
   renderFinance,

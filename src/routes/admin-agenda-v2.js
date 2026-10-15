@@ -172,6 +172,12 @@ export async function handleAdminAgendaV2Api(
             internalNote:
               body.internalNote
               || '',
+
+            excludeWeekends:
+              body.excludeWeekends === true,
+
+            skipReservedDays:
+              body.skipReservedDays === true,
           },
         );
 

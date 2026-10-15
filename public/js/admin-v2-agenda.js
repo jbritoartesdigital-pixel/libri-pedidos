@@ -34,6 +34,8 @@ const STATUS_LABELS = {
 let activeMonth =
   null;
 
+let lastPeriodFeedback = null;
+
 function isoDay(
   date,
 ) {
@@ -590,94 +592,124 @@ function bindDayEditor(
     );
 }
 
-function periodModal(
-  blocked,
-  openOrder,
-) {
-  const close =
-    modal(
-      blocked
-        ? 'Bloquear período'
-        : 'Reabrir período',
-      `
-        <div class="form-grid">
-          <div class="field">
-            <label for="periodStart">Início</label>
-            <input id="periodStart" class="input" type="date">
-          </div>
+function periodSelectionPreview(start, end, excludeWeekends) {
+  if (!start || !end) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return 'Informe datas válidas.';
+  }
+  const startDate = fromIsoDay(start);
+  const endDate = fromIsoDay(end);
+  if (isoDay(startDate) !== start || isoDay(endDate) !== end || startDate > endDate) {
+    return 'A data final precisa ser igual ou posterior à inicial.';
+  }
+  const days = Math.round((endDate - startDate) / (24 * 60 * 60 * 1000)) + 1;
+  if (days > 181) return 'Selecione um intervalo de até 181 dias.';
+  let weekends = 0;
+  for (let i = 0; i < days; i++) {
+    const weekday = fromIsoDay(addDays(start, i)).getUTCDay();
+    if (weekday === 0 || weekday === 6) weekends++;
+  }
+  const eligible = days - (excludeWeekends ? weekends : 0);
+  return eligible
+    ? `${eligible} dia(s) selecionado(s)${excludeWeekends ? ` • ${weekends} sábado(s)/domingo(s) excluído(s)` : ''}.`
+    : 'Nenhum dia útil neste intervalo. Ajuste as datas ou inclua os fins de semana.';
+}
 
-          <div class="field">
-            <label for="periodEnd">Fim</label>
-            <input id="periodEnd" class="input" type="date">
-          </div>
+function periodModal(blocked, openOrder) {
+  const close = modal(blocked ? 'Bloquear período' : 'Reabrir período', `
+    <div class="form-grid">
+      <div class="field">
+        <label for="periodStart">Início</label>
+        <input id="periodStart" class="input" type="date" value="${todayIso()}">
+      </div>
+      <div class="field">
+        <label for="periodEnd">Fim</label>
+        <input id="periodEnd" class="input" type="date" value="${todayIso()}">
+      </div>
+      <label class="field full checkline">
+        <input id="periodExcludeWeekends" type="checkbox" ${blocked ? 'checked' : ''}>
+        <span>Excluir sábados e domingos deste período</span>
+      </label>
+      ${blocked ? `
+        <label class="field full checkline">
+          <input id="periodSkipReserved" type="checkbox" checked>
+          <span>Preservar dias com pedidos ou pagamentos reservados</span>
+        </label>
+        <small class="field full" style="color:var(--muted)">
+          Datas preservadas ficarão como estavam. Nenhuma reserva existente será alterada.
+        </small>
+      ` : ''}
+      <div class="field full">
+        <label for="periodNote">Observação interna (opcional)</label>
+        <input id="periodNote" class="input" maxlength="1000" placeholder="Ex.: férias, folga, agenda fechada">
+      </div>
+    </div>
+    <p id="periodPreview" role="status" style="font-size:13px;margin-top:12px"></p>
+    <p id="periodError" role="alert" class="hidden" style="font-size:13px;margin-top:10px"></p>
+    <button id="savePeriod" class="btn btn-primary" type="button" style="margin-top:12px">
+      ${blocked ? 'Bloquear dias selecionados' : 'Reabrir dias selecionados'}
+    </button>
+  `, { width: '520px' });
 
-          <div class="field full">
-            <label for="periodNote">Observação interna</label>
-            <input id="periodNote" class="input">
-          </div>
-        </div>
+  const start = document.getElementById('periodStart');
+  const end = document.getElementById('periodEnd');
+  const exclude = document.getElementById('periodExcludeWeekends');
+  const skip = document.getElementById('periodSkipReserved');
+  const note = document.getElementById('periodNote');
+  const preview = document.getElementById('periodPreview');
+  const errorBox = document.getElementById('periodError');
+  const button = document.getElementById('savePeriod');
 
-        <button
-          id="savePeriod"
-          class="btn btn-primary"
-          type="button"
-          style="margin-top:14px"
-        >
-          Salvar
-        </button>
-      `,
-      {
-        width:
-          '560px',
-      },
-    );
+  const previewSelection = () => {
+    preview.textContent = periodSelectionPreview(start.value, end.value, exclude.checked);
+    errorBox.classList.add('hidden');
+    errorBox.textContent = '';
+  };
+  [start, end, exclude, skip].filter(Boolean).forEach(input =>
+    input.addEventListener('change', previewSelection));
+  previewSelection();
 
-  document
-    .getElementById('savePeriod')
-    .addEventListener(
-      'click',
-      async () => {
-        const start =
-          document
-            .getElementById('periodStart')
-            .value;
-
-        const end =
-          document
-            .getElementById('periodEnd')
-            .value;
-
-        if (!start || !end) {
-          showToast('Informe o período.');
-          return;
-        }
-
-        await api(
-          '/api/admin/v2/agenda/period',
-          {
-            method: 'POST',
-            body:
-              JSON.stringify({
-                start,
-                end,
-                blocked,
-                internalNote:
-                  document
-                    .getElementById('periodNote')
-                    .value
-                    .trim(),
-              }),
-          },
-        );
-
-        close();
-
-        await renderAgenda(
-          openOrder,
-          activeMonth,
-        );
-      },
-    );
+  button.addEventListener('click', async () => {
+    const selectionText = periodSelectionPreview(start.value, end.value, exclude.checked);
+    if (!selectionText.includes('selecionado(s)')) {
+      errorBox.textContent = selectionText || 'Informe o período.';
+      errorBox.classList.remove('hidden');
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Salvando período…';
+    try {
+      const response = await api('/api/admin/v2/agenda/period', {
+        method: 'POST',
+        body: JSON.stringify({
+          start: start.value,
+          end: end.value,
+          blocked,
+          excludeWeekends: exclude.checked,
+          skipReservedDays: blocked && Boolean(skip?.checked),
+          internalNote: note.value.trim(),
+        }),
+      });
+      const result = response.result;
+      const skipped = result.skippedReservedDays || [];
+      const action = blocked ? 'bloqueados' : 'reabertos';
+      const summary = `${result.updatedDays} dia(s) ${action}.`;
+      lastPeriodFeedback = summary
+        + (result.excludedWeekendDays
+          ? ` ${result.excludedWeekendDays} dia(s) de fim de semana fora do intervalo aplicado.` : '')
+        + (skipped.length
+          ? ` ${skipped.length} dia(s) com reservas permaneceram inalterados: ${skipped.map(dateBr).join(', ')}.` : '');
+      close();
+      await renderAgenda(openOrder, activeMonth);
+      showToast(summary);
+    } catch (error) {
+      errorBox.textContent = error?.message || 'Não foi possível salvar o período.';
+      errorBox.classList.remove('hidden');
+    } finally {
+      button.disabled = false;
+      button.textContent = blocked ? 'Bloquear dias selecionados' : 'Reabrir dias selecionados';
+    }
+  });
 }
 
 export async function renderAgenda(
@@ -788,6 +820,12 @@ export async function renderAgenda(
         </button>
       </div>
     </div>
+
+    ${lastPeriodFeedback ? `
+      <div class="notice info" role="status" id="agendaPeriodFeedback" style="margin:12px 0">
+        ${esc(lastPeriodFeedback)}
+      </div>
+    ` : ''}
 
     <section class="card agenda-calendar-card">
       <div class="section-title">

@@ -90,6 +90,28 @@ function mockServer(reference, { couponOffline = false } = {}) {
         });
         return;
       }
+      if(url.pathname==='/api/admin/v2/agenda')return json(200,{agenda:{
+        start:url.searchParams.get('start'),end:url.searchParams.get('end'),
+        defaults:{sellableCapacityUnits:400,internalBufferUnits:100},days:[]
+      }});
+      if(url.pathname==='/api/admin/v2/agenda/cascade')return json(200,{
+        cascade:{suggestions:[],releaseable:[]}
+      });
+      if(url.pathname==='/api/admin/v2/agenda/period' && req.method==='POST') {
+        let raw='';
+        req.on('data',chunk=>raw+=chunk);
+        req.on('end',()=>{
+          let body;
+          try{body=JSON.parse(raw);}catch{return json(400,{error:'JSON inválido'});}
+          if(body.start==='2026-11-02' && body.end==='2026-11-08'
+             && body.excludeWeekends === true && body.skipReservedDays === true)
+            return json(200,{ok:true,result:{
+              updatedDays:4,excludedWeekendDays:2,skippedReservedDays:['2026-11-03']
+            }});
+          return json(422,{error:'Confira período e opções antes de salvar.'});
+        });
+        return;
+      }
       if(url.pathname==='/api/admin/v2/auth/status')
         return json(200,{auth:{authenticated:true,configured:true}});
       if(url.pathname==='/api/admin/v2/central')
@@ -350,6 +372,56 @@ async function checkCouponCanBeRemovedOnAndroid(browser) {
   }
 }
 
+async function checkAgendaPeriodMobile(browser) {
+  const instance=await openServer('');
+  const ctx=await browser.newContext({
+    viewport:{width:320,height:700},isMobile:true,hasTouch:true,
+    deviceScaleFactor:1,reducedMotion:'reduce',locale:'pt-BR',
+    timezoneId:'America/Sao_Paulo'
+  });
+  const page=await ctx.newPage();
+  const errors=[];
+  page.on('pageerror',err=>errors.push(err.message));
+  await page.route('**/*',route=>{
+    if(!route.request().url().startsWith(instance.url+'/'))
+      return route.abort('blockedbyclient');
+    return route.continue();
+  });
+  try {
+    await page.goto(instance.url+'/admin-v2/?view=agenda',{waitUntil:'domcontentloaded'});
+    await page.locator('#blockPeriod').waitFor({timeout:18000});
+    await page.locator('#blockPeriod').click();
+    await page.locator('#periodStart').fill('2026-11-02');
+    await page.locator('#periodEnd').fill('2026-11-08');
+    assert.equal(await page.locator('#periodExcludeWeekends').isChecked(),true);
+    assert.equal(await page.locator('#periodSkipReserved').isChecked(),true);
+    await page.getByText('5 dia(s) selecionado(s)').waitFor({timeout:4000});
+    for(const width of [320,390,412]){
+      await page.setViewportSize({width,height:700});
+      const box=await page.locator('#savePeriod').boundingBox();
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(box && box.x>=-1 && box.x+box.width<=width+1,
+        'save button outside Android '+width);
+      assert.ok(overflow<=width+1,'period modal overflow on Android '+width);
+    }
+    await page.locator('#savePeriod').click();
+    await page.locator('#agendaPeriodFeedback').waitFor({timeout:12000});
+    const feedback=await page.locator('#agendaPeriodFeedback').innerText();
+    assert.match(feedback,/4 dia\(s\) bloqueados/);
+    assert.match(feedback,/2 dia\(s\) de fim de semana/);
+    assert.match(feedback,/1 dia\(s\) com reservas/);
+    assert.equal(await page.locator('#modalRoot').isVisible(),false);
+    await page.locator('#openPeriod').click();
+    assert.equal(await page.locator('#periodExcludeWeekends').isChecked(),false,
+      'reopening a period must include weekends by default');
+    assert.deepEqual(errors,[],'agenda Android browser JS errors');
+    audit.tests.push('Agenda Android 320/390/412px: excluir fins de semana, preservar reservas e reabrir');
+  } finally {
+    await ctx.close();
+    await new Promise(ok=>instance.server.close(ok));
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -384,6 +456,7 @@ try{
   await capture(browser,'','alteracao');
   await checkOfferIsFullyReachable(browser);
   await checkCouponCanBeRemovedOnAndroid(browser);
+  await checkAgendaPeriodMobile(browser);
   if(base)for(const width of [320,390]) {
     visualDiff('main-central-'+width+'.png',
       'alteracao-central-'+width+'.png','diff-central-'+width+'.png');

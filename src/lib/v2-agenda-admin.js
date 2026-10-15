@@ -1523,18 +1523,76 @@ export async function setV2AgendaDay(db, day, body = {}) {
   return (await getV2AgendaRange(db, { start: day, end: day })).days[0];
 }
 
-export async function setV2AgendaPeriod(db, { start, end, blocked, internalNote = '' }) {
-  parseIsoDay(start); parseIsoDay(end);
-  if (diffDays(start, end) < 0 || diffDays(start, end) > 180) throw new Error('Período inválido.');
-  const range = await getV2AgendaRange(db, { start, end });
-  if (blocked && range.days.some(x => x.productionUnits + x.cascadeReservedUnits + x.checkoutHeldUnits > 0)) {
-    throw new Error('O período tem pedidos ou pagamentos reservados. Revise a agenda antes de bloquear.');
+// A period block is a sales-availability decision. It must never cancel or
+// reassign an existing production allocation or an active checkout hold.
+export async function setV2AgendaPeriod(db, {
+  start, end, blocked, internalNote = '',
+  excludeWeekends = false, skipReservedDays = false,
+} = {}) {
+  const first = parseIsoDay(start);
+  const last = parseIsoDay(end);
+  if (formatIsoDay(first) !== start || formatIsoDay(last) !== end
+    || diffDays(start, end) < 0 || diffDays(start, end) > 180) {
+    throw new Error('Informe um período válido de até 181 dias.');
   }
-  await db.batch(range.days.map(x => db.prepare(`INSERT INTO v2_agenda_days
-    (day, sellable_capacity_units, internal_buffer_units, blocked, internal_note, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(day) DO UPDATE SET blocked = excluded.blocked, internal_note = excluded.internal_note, updated_at = excluded.updated_at`)
-    .bind(x.day, x.sellableCapacityUnits, x.internalBufferUnits, blocked ? 1 : 0, cleanText(internalNote), nowIso())));
-  return { updatedDays: range.days.length };
+
+  const range = await getV2AgendaRange(db, { start, end });
+  const weekendDays = [];
+  const reservedDays = [];
+  const selectedDays = [];
+
+  for (const day of range.days) {
+    const weekday = parseIsoDay(day.day).getUTCDay();
+    if (excludeWeekends && (weekday === 0 || weekday === 6)) {
+      weekendDays.push(day.day);
+      continue;
+    }
+    const reservedUnits = Number(day.productionUnits || 0)
+      + Number(day.cascadeReservedUnits || 0)
+      + Number(day.checkoutHeldUnits || 0);
+    if (blocked && reservedUnits > 0) {
+      reservedDays.push(day.day);
+      if (skipReservedDays) continue;
+    }
+    selectedDays.push(day);
+  }
+
+  if (reservedDays.length && blocked && !skipReservedDays) {
+    const error = new Error(
+      'Há capacidade reservada em ' + reservedDays.slice(0, 4).join(', ')
+      + (reservedDays.length > 4 ? ' e mais datas' : '')
+      + '. Marque "Preservar dias com reservas" para bloquear apenas os demais dias.',
+    );
+    error.status = 409;
+    throw error;
+  }
+  if (!selectedDays.length) {
+    const error = new Error(excludeWeekends && weekendDays.length === range.days.length
+      ? 'O período contém apenas sábados e domingos. Desmarque a exclusão para continuar.'
+      : 'Nenhum dia disponível para alterar neste período. Ajuste as datas ou as opções.');
+    error.status = 422;
+    throw error;
+  }
+
+  const stamp = nowIso();
+  const note = cleanText(internalNote);
+  await db.batch(selectedDays.map(day => db.prepare(`
+    INSERT INTO v2_agenda_days
+      (day, sellable_capacity_units, internal_buffer_units, blocked, internal_note, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(day) DO UPDATE SET
+      blocked = excluded.blocked,
+      internal_note = excluded.internal_note,
+      updated_at = excluded.updated_at
+  `).bind(day.day, day.sellableCapacityUnits, day.internalBufferUnits,
+    blocked ? 1 : 0, note, stamp)));
+
+  return {
+    updatedDays: selectedDays.length,
+    excludedWeekendDays: weekendDays.length,
+    skippedReservedDays: reservedDays,
+    start, end, blocked: Boolean(blocked),
+  };
 }
 
 export async function getV2CascadeSuggestions(db) {

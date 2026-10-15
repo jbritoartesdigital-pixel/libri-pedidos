@@ -697,7 +697,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261014-whatsapp-briefing-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261014-finalize-shortcut-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261015-weekday-period-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1704,7 +1704,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261014-finalize-shortcut-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261015-weekday-period-1/);
   assert.match(entry, /admin-v2-order\.js\?v=20261014-finalize-shortcut-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
@@ -2400,7 +2400,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261014-finalize-shortcut-1'));
+    'admin-v2.js?v=20261015-weekday-period-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261015-coupon-recovery-1'));
 });
@@ -2885,7 +2885,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261014-finalize-shortcut-1/);
+  assert.match(html, /admin-v2\.js\?v=20261015-weekday-period-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -3214,7 +3214,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261014-finalize-shortcut-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261015-weekday-period-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261014-finalize-shortcut-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261015-coupon-recovery-1'));
 });
@@ -3241,7 +3241,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261014-whatsapp-briefing-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261014-finalize-shortcut-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261015-weekday-period-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261014-finalize-shortcut-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
@@ -4463,4 +4463,114 @@ test('briefing client serializes fast choices and validates each step', () => {
     /await saveBriefingNow\(\s*sectionId,\s*\{\}/,
     'pending briefing changes must be flushed before final validation',
   );
+});
+
+
+test('agenda blocks only weekdays, preserves reserved dates and never changes existing orders', async () => {
+  const DB = database();
+  const base = new Date(day(14) + 'T12:00:00Z');
+  base.setUTCDate(base.getUTCDate() + (8 - base.getUTCDay()) % 7);
+  const dateAt = offset => {
+    const dt = new Date(base.getTime());
+    dt.setUTCDate(dt.getUTCDate() + offset);
+    return dt.toISOString().slice(0, 10);
+  };
+  const [monday, tuesday, , thursday, , saturday, sunday] =
+    Array.from({ length: 7 }, (_, i) => dateAt(i));
+
+  // Existing allocations and active checkout holds are never cancelled or
+  // silently blocked when "preservar dias com reservas" is enabled.
+  const order = await urgency(DB);
+  const id = DB.sqlite.prepare('SELECT id FROM v2_orders WHERE order_code = ?')
+    .get(order.order.code).id;
+  await setV2AgendaDay(DB, tuesday, { sellableCapacityUnits: 400, internalBufferUnits: 100 });
+  DB.sqlite.prepare(
+    "INSERT INTO v2_agenda_allocations(order_id,day,points_units) VALUES (?,?,100)"
+  ).run(id, tuesday);
+  const hold = DB.sqlite.prepare(
+    "INSERT INTO v2_checkout_holds(token,order_id,status,expires_at) VALUES ('agenda-test',?,'active','2099-01-01T00:00:00.000Z')"
+  ).run(id);
+  DB.sqlite.prepare(
+    'INSERT INTO v2_checkout_hold_allocations(hold_id,day,points_units) VALUES (?,?,100)'
+  ).run(Number(hold.lastInsertRowid), thursday);
+  await setV2AgendaDay(DB, saturday, {
+    sellableCapacityUnits: 300, internalBufferUnits: 100, internalNote: 'Folga de sábado',
+  });
+  const orderBefore = DB.sqlite.prepare('SELECT status,briefing_status FROM v2_orders WHERE id=?').get(id);
+  await assert.rejects(setV2AgendaPeriod(DB, {
+    start: monday, end: sunday, blocked: true, excludeWeekends: true,
+    skipReservedDays: false,
+  }), /Preservar dias com reservas/);
+  assert.equal(DB.sqlite.prepare('SELECT blocked FROM v2_agenda_days WHERE day=?')
+    .get(monday), undefined, 'rejected operation must be all-or-nothing');
+
+  const result = await setV2AgendaPeriod(DB, {
+    start: monday, end: sunday, blocked: true,
+    excludeWeekends: true, skipReservedDays: true, internalNote: 'Férias da produção',
+  });
+  assert.equal(result.updatedDays, 3);
+  assert.equal(result.excludedWeekendDays, 2);
+  assert.deepEqual(result.skippedReservedDays, [tuesday, thursday]);
+  const agenda = await getV2AgendaRange(DB, { start: monday, end: sunday });
+  assert.deepEqual(agenda.days.filter(x => x.blocked).map(x => x.day),
+    [monday, dateAt(2), dateAt(4)]);
+  assert.equal(agenda.days.find(x => x.day === tuesday).productionUnits, 100);
+  assert.equal(agenda.days.find(x => x.day === thursday).checkoutHeldUnits, 100);
+  assert.equal(agenda.days.find(x => x.day === saturday).internalNote,
+    'Folga de sábado');
+  assert.equal(agenda.days.find(x => x.day === sunday).blocked, false);
+  assert.deepEqual({ ...DB.sqlite.prepare('SELECT status,briefing_status FROM v2_orders WHERE id=?').get(id) },
+    { ...orderBefore });
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations').get().n, 1);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_hold_allocations').get().n, 1);
+
+  const reopened = await setV2AgendaPeriod(DB, {
+    start: monday, end: sunday, blocked: false, excludeWeekends: true,
+  });
+  assert.equal(reopened.updatedDays, 5);
+  assert.equal(reopened.excludedWeekendDays, 2);
+  const after = await getV2AgendaRange(DB, { start: monday, end: sunday });
+  assert.ok(after.days.every(x => !x.blocked));
+  assert.equal(after.days.find(x => x.day === saturday).internalNote, 'Folga de sábado');
+});
+
+test('agenda blocks all dates by default, handles weekend-only range and rejects impossible dates', async () => {
+  const DB = database();
+  const saturday = '2026-11-07', sunday = '2026-11-08';
+  await assert.rejects(setV2AgendaPeriod(DB, {
+    start: saturday, end: sunday, blocked: true, excludeWeekends: true,
+  }), /apenas sábados e domingos/);
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_days').get().n, 0);
+  const result = await setV2AgendaPeriod(DB, {
+    start: saturday, end: sunday, blocked: true,
+  });
+  assert.equal(result.updatedDays, 2);
+  assert.equal(result.excludedWeekendDays, 0);
+  assert.deepEqual((await getV2AgendaRange(DB, {
+    start: saturday, end: sunday,
+  })).days.map(x => x.blocked), [true, true]);
+  await assert.rejects(setV2AgendaPeriod(DB, {
+    start: '2026-02-30', end: '2026-03-02', blocked: true,
+  }), /período válido/);
+  await assert.rejects(setV2AgendaPeriod(DB, {
+    start: '2026-11-10', end: '2026-11-09', blocked: true,
+  }), /período válido/);
+  await assert.rejects(setV2AgendaPeriod(DB, {
+    start: saturday, end: '2027-11-07', blocked: true,
+  }), /período válido/);
+});
+
+test('mobile agenda modal offers weekend exclusion and displays skipped reservations', () => {
+  const js = readFileSync('public/js/admin-v2-agenda.js', 'utf8');
+  const route = readFileSync('src/routes/admin-agenda-v2.js', 'utf8');
+  assert.match(js, /id="periodExcludeWeekends"/);
+  assert.match(js, /id="periodSkipReserved"/);
+  assert.match(js, /id="periodPreview"/);
+  assert.match(js, /id="periodError"/);
+  assert.match(js, /lastPeriodFeedback/);
+  assert.match(js, /button\.disabled = true/);
+  assert.match(js, /excludeWeekends: exclude\.checked/);
+  assert.match(js, /skipReservedDays: blocked && Boolean\(skip\?\.checked\)/);
+  assert.match(route, /excludeWeekends:\s+body\.excludeWeekends === true/);
+  assert.match(route, /skipReservedDays:\s+body\.skipReservedDays === true/);
 });

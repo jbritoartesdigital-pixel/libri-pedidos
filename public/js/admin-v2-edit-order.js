@@ -15,12 +15,16 @@ function renderProductVariants(form,options){
   if(!chosen){
     variant.innerHTML='<option value="">Produto atual mantido</option>';
     variant.disabled=true;
-    form.querySelector('#adminEditLegacyScenes').disabled=false;
+    const knownOriginal=options.catalog.products.some(p=>p.code===currentConfig.productCode);
+    form.querySelector('#adminEditLegacyScenes').disabled=knownOriginal;
     return;
   }
   const values=chosen.variants||[];
   const defaultValue=chosen.code===currentConfig.productCode
-    ? currentConfig.variantCode : values.find(v=>v.isDefault)?.code;
+    ? (values.find(v=>Number(v.sceneCount)===Number(currentConfig.sceneCount)
+      && Number(currentConfig.sceneCount)>0)?.code
+      || currentConfig.variantCode)
+    : values.find(v=>v.isDefault)?.code;
   variant.innerHTML=values.map(v=>`<option value="${esc(v.code)}"
     ${v.code===defaultValue?'selected':''}>${esc(v.label)} • ${money(v.priceCents)}</option>`).join('');
   variant.disabled=false;
@@ -33,7 +37,8 @@ function capture(form,options){
   const productCode=form.querySelector('#adminEditProduct').value;
   const useOriginal=productCode==='__keep__';
   const variantCode=useOriginal ? '' : form.querySelector('#adminEditVariant').value;
-  const sceneOverride=useOriginal ? form.querySelector('#adminEditLegacyScenes').value.trim() : '';
+  const sceneOverride=useOriginal && !form.querySelector('#adminEditLegacyScenes').disabled
+    ? form.querySelector('#adminEditLegacyScenes').value.trim() : '';
   return {productCode:useOriginal?'':productCode,variantCode,
     sceneCountOverride:sceneOverride||null,
     addonCodes:[...form.querySelectorAll('[data-edit-addon]:checked')].map(x=>x.value),
@@ -69,10 +74,11 @@ function cardHtml(options){
     ${current.pendingMercadoPago?'<p class="notice info">Existe cobrança pendente no Mercado Pago. Resolva-a antes de editar valores.</p>':''}
     <div class="field"><label for="adminEditProduct">Produto contratado</label>
       <select id="adminEditProduct" class="select">
-      <option value="__keep__" ${known?'':'selected'}>Manter: ${esc(original?.name||'produto atual')}</option>
+      <option value="__keep__" selected>Manter: ${esc(original?.name||'produto atual')} (sem reajuste)</option>
       ${productOptions}</select></div>
     <div class="field"><label for="adminEditVariant">Versão / quantidade de cenas do catálogo</label>
-      <select id="adminEditVariant" class="select"></select></div>
+      <select id="adminEditVariant" class="select" disabled></select>
+      <small>Para alterar cenas, selecione o produto acima e escolha a nova versão. Apenas adicionar extras mantém o valor do convite.</small></div>
     <div class="field"><label for="adminEditLegacyScenes">Cenas do modelo antigo (se não estiver no catálogo)</label>
       <input type="number" id="adminEditLegacyScenes" class="input" inputmode="numeric"
         min="1" max="30" placeholder="Ex.: 7" value="${Number(cfg.sceneCount)||''}"></div>
@@ -121,7 +127,7 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
       const original=productRow(options);
       const originalCode=original?.config?.productCode||'';
       const isKnown=options.catalog.products.some(item=>item.code===originalCode);
-      p.value=isKnown?originalCode:'__keep__';
+      p.value='__keep__';
       renderProductVariants(form,options);
       const preview=form.querySelector('#adminEditQuote');
       const save=form.querySelector('#adminEditSave');
@@ -142,7 +148,9 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
           const v=r.result;
           save.disabled=!v.changed||options.current.pendingMercadoPago;
           preview.innerHTML=`<strong>Novo total: ${money(v.newTotalCents)}</strong>
-            <span>Diferença: ${money(v.newTotalCents-v.beforeTotalCents)}</span>
+            <span>Produto / cenas: ${money(v.productDifferenceCents || 0)} de alteração</span>
+            <span>Adicionais: ${money(v.addonDifferenceCents || 0)} de alteração</span>
+            <span>Diferença total: ${money(v.newTotalCents-v.beforeTotalCents)}</span>
             <span>Já recebido: ${money(v.paidCents)}</span>
             <span>Saldo após alteração: ${money(v.remainingCents)}</span>
             <small>${esc(v.note)}</small>`;

@@ -291,6 +291,7 @@ function contractedBlock(
         Number(detail.pricing.comboDiscountCents || 0) > 0
         || Number(detail.pricing.couponDiscountCents || 0) > 0
         || Number(detail.pricing.negotiatedDiscountCents || 0) > 0
+        || Number(detail.pricing.manualDiscountCents || 0) > 0
           ? `
             <small class="contracted-discount">
               Descontos:
@@ -300,6 +301,9 @@ function contractedBlock(
                 : ''}
               ${Number(detail.pricing.negotiatedDiscountCents || 0) > 0
                 ? ` • negociado ${money(detail.pricing.negotiatedDiscountCents)}`
+                : ''}
+              ${Number(detail.pricing.manualDiscountCents || 0) > 0
+                ? ` • manual ${money(detail.pricing.manualDiscountCents)}`
                 : ''}
             </small>
           `

@@ -112,6 +112,36 @@ function mockServer(reference, { couponOffline = false } = {}) {
         });
         return;
       }
+      if(url.pathname==='/api/admin/v2/orders/LIBRI-100001/edit'){
+        if(req.method==='GET')return json(200,{ok:true,result:{
+          catalog:{products:[{code:'interactive_essential',name:'Interativo Essencial',
+            variants:[{code:'base',label:'6 cenas',priceCents:18000,isDefault:true},
+              {code:'seven',label:'7 cenas',priceCents:20000}]}],
+            addons:[{code:'rsvp',name:'Confirmação Libri',priceCents:3500}]},
+          current:{items:[{type:'product',code:'base',name:'Interativo Essencial',
+            config:{productCode:'interactive_essential',variantCode:'base',sceneCount:6}}],
+            totalCents:18000,paidCents:9000,paymentMethod:'pix',
+            revision:'revision-fake',manualDiscountCents:0,priceAdjustmentCents:0}
+        }});
+        if(req.method==='POST'){
+          let raw='';
+          req.on('data',x=>raw+=x);
+          req.on('end',()=>{
+            const reqBody=JSON.parse(raw);
+            const additional=reqBody.addonCodes.includes('rsvp')?3500:0;
+            return json(200,{ok:true,result:{
+              changed:true,beforeTotalCents:18000,
+              newTotalCents:18000+additional-reqBody.manualDiscountCents,
+              paidCents:9000,remainingCents:9000+additional-reqBody.manualDiscountCents,
+              note:'Confira o saldo antes de salvar.'
+            }});
+          });
+          return;
+        }
+        if(req.method==='PATCH')return json(200,{ok:true,result:{
+          totalCents:19500,remainingCents:10500,paidCents:9000,briefingNeedsReview:true
+        }});
+      }
       if(url.pathname==='/api/admin/v2/auth/status')
         return json(200,{auth:{authenticated:true,configured:true}});
       if(url.pathname==='/api/admin/v2/central')
@@ -422,6 +452,61 @@ async function checkAgendaPeriodMobile(browser) {
   }
 }
 
+async function checkAdminOrderEditorMobile(browser) {
+  const inst=await openServer('');
+  const ctx=await browser.newContext({
+    viewport:{width:320,height:700},isMobile:true,hasTouch:true,
+    locale:'pt-BR',timezoneId:'America/Sao_Paulo'
+  });
+  const page=await ctx.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('dialog',dialog=>dialog.accept());
+  await page.route('**/*',route=>route.request().url().startsWith(inst.url+'/')
+    ? route.continue() : route.abort('blockedbyclient'));
+  try {
+    await page.goto(inst.url+'/admin-v2/',{waitUntil:'domcontentloaded'});
+    await page.setContent(`<!doctype html><html lang="pt-BR">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <main style="padding:12px">
+        <button id="editAdminOrder" aria-expanded="false">Editar pedido e valores</button>
+        <section id="adminEditOrderPanel" class="admin-edit-order-panel hidden"></section>
+      </main></html>`);
+    await page.addStyleTag({content:source('public/css/admin-v2.css').toString('utf8')});
+    await page.evaluate(async()=>{
+      const module=await import('/js/admin-v2-edit-order.js');
+      module.bindAdminOrderEditing({order:{code:'LIBRI-100001'}},
+        async()=>{},()=>{},async()=>{});
+    });
+    await page.locator('#editAdminOrder').click();
+    await page.locator('#adminEditDiscount').waitFor();
+    assert.equal(await page.locator('#adminEditSave').isDisabled(),true);
+    await page.locator('#adminEditDiscount').fill('20');
+    await page.locator('[data-edit-addon][value="rsvp"]').check();
+    await page.locator('#adminEditNote').fill('Confirmação adicionada com desconto via WhatsApp');
+    await page.locator('#adminEditPreview').click();
+    await page.getByText('Novo total: R$ 195,00').waitFor();
+    assert.equal(await page.locator('#adminEditSave').isEnabled(),true);
+    for(const width of [320,390,412]){
+      await page.setViewportSize({width,height:700});
+      const screen=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(screen<=width+1,'Order editor horizontal overflow at '+width);
+      const rect=await page.locator('#adminEditSave').boundingBox();
+      assert.ok(rect && rect.x>=-1 && rect.x+rect.width<=width+1,
+        'Save button outside Android width '+width);
+    }
+    await page.locator('#adminEditDiscount').fill('25');
+    assert.equal(await page.locator('#adminEditSave').isDisabled(),true,
+      'Changing the agreed amount invalidates previous review');
+    await page.locator('#adminEditPreview').click();
+    assert.equal(await page.locator('#adminEditSave').isEnabled(),true);
+    assert.deepEqual(errors,[]);
+    audit.tests.push('Android 320/390/412px: editar pedido, adicionar RSVP, desconto e revisão obrigatória');
+  } finally {
+    await ctx.close();
+    await new Promise(ok=>inst.server.close(ok));
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -457,6 +542,7 @@ try{
   await checkOfferIsFullyReachable(browser);
   await checkCouponCanBeRemovedOnAndroid(browser);
   await checkAgendaPeriodMobile(browser);
+  await checkAdminOrderEditorMobile(browser);
   if(base)for(const width of [320,390]) {
     visualDiff('main-central-'+width+'.png',
       'alteracao-central-'+width+'.png','diff-central-'+width+'.png');

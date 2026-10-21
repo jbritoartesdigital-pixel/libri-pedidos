@@ -464,7 +464,9 @@ async function checkAdminOrderEditorMobile(browser) {
   await page.route('**/*',route=>route.request().url().startsWith(inst.url+'/')
     ? route.continue() : route.abort('blockedbyclient'));
   try {
-    await page.goto(inst.url+'/admin-v2/',{waitUntil:'domcontentloaded'});
+    // Use a blank same-origin document: the full admin app must not be
+    // initialized and then removed while its async startup is still running.
+    await page.goto(inst.url+'/editor-fixture',{waitUntil:'domcontentloaded'});
     await page.setContent(`<!doctype html><html lang="pt-BR">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       <main style="padding:12px">

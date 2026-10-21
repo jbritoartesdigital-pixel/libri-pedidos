@@ -1980,7 +1980,7 @@ test('admin order shows one-tap briefing/finalize, folds rarely used buttons and
   assert.match(ui,/id="orderPreviewDetails"/);
   assert.match(ui,/Outras ações e observações/);
   assert.match(ui,/Ver contratação e pagamentos/);
-  assert.match(ui,/\['finalize','balance_received'\]/);
+  assert.match(ui,/\['finalize','balance_received','start_production'\]/);
   assert.match(ui,/body.innerHTML = finalizeChecklistHtml\(detail\)/);
   assert.doesNotMatch(ui,/await reopenFinalize\(\)/);
   assert.match(styles,/\.order-briefing-panel/);

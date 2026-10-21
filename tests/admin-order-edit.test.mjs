@@ -143,6 +143,67 @@ test('forbidden state and missing audit justification cannot be edited',async()=
     manualDiscountCents:100,
   })),/encerrado/);
 });
+
+test('regression: R$155 five-scene invitation + R$35 RSVP - R$100 already received = R$90 balance',async()=>{
+  const {DB,id,catalog}=await fixture({paid:10000});
+  const cinematic=catalog.products.find(p=>p.code==='cinematic_interactive');
+  const five=cinematic.variants.find(v=>Number(v.sceneCount)===5);
+  const one=cinematic.variants.find(v=>Number(v.sceneCount)===1);
+  const rsvp=catalog.addons.find(a=>a.name.includes('Confirmação de Presença Libri'));
+  assert.ok(five&&one&&rsvp);
+  assert.equal(five.priceCents,15500);
+  assert.equal(one.priceCents,5500);
+  assert.equal(rsvp.priceCents,3500);
+  // Historically inconsistent item row: stored 1-scene unit price while
+  // product's visible configuration and the contracted total are 5 scenes.
+  DB.sqlite.prepare(`UPDATE v2_order_items SET item_code=?,name_snapshot=?,
+    unit_price_cents=?,points_units=?,configuration_json=? WHERE order_id=?`)
+    .run(one.code,'Cinematográfico Interativo • 5 cenas',one.priceCents,five.pointsUnits,
+      JSON.stringify({productCode:cinematic.code,productSlug:cinematic.slug,
+        variantCode:one.code,sceneCount:5}),id);
+  DB.sqlite.prepare(`UPDATE v2_order_pricing SET total_cents=15500,
+    subtotal_cents=15500,deposit_cents=7750,balance_cents=7750 WHERE order_id=?`).run(id);
+  const old=await getV2OrderEditOptions(DB,'LIBRI-9001');
+  const input=payload(old,{productCode:'',variantCode:'',addonCodes:[rsvp.code]});
+  const p=await previewV2AdminOrderEdit(DB,'LIBRI-9001',input);
+  assert.equal(p.beforeTotalCents,15500);
+  assert.equal(p.itemsDifferenceCents,3500);
+  assert.equal(p.productDifferenceCents,0);
+  assert.equal(p.addonDifferenceCents,3500);
+  assert.equal(p.newTotalCents,19000);
+  assert.equal(p.paidCents,10000);
+  assert.equal(p.remainingCents,9000);
+  const result=await saveV2AdminOrderEdit(DB,'LIBRI-9001',input);
+  assert.equal(result.totalCents,19000);
+  assert.equal(result.remainingCents,9000);
+  assert.equal(DB.sqlite.prepare('SELECT SUM(amount_cents) AS n FROM v2_payments WHERE order_id=?').get(id).n,10000);
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_items WHERE item_type='addon' AND order_id=?").get(id).n,1);
+});
+test('regression: changing from five to six scenes uses catalogue difference R$35, not stale unit R$55',async()=>{
+  const {DB,id,catalog}=await fixture({paid:10000});
+  const cinematic=catalog.products.find(p=>p.code==='cinematic_interactive');
+  const one=cinematic.variants.find(v=>Number(v.sceneCount)===1);
+  const five=cinematic.variants.find(v=>Number(v.sceneCount)===5);
+  const six=cinematic.variants.find(v=>Number(v.sceneCount)===6);
+  assert.equal(six.priceCents,19000);
+  DB.sqlite.prepare(`UPDATE v2_order_items SET item_code=?,name_snapshot=?,
+    unit_price_cents=?,points_units=?,configuration_json=? WHERE order_id=?`)
+    .run(one.code,'Cinematográfico Interativo • 5 cenas',one.priceCents,five.pointsUnits,
+      JSON.stringify({productCode:cinematic.code,productSlug:cinematic.slug,
+        variantCode:one.code,sceneCount:5}),id);
+  DB.sqlite.prepare(`UPDATE v2_order_pricing SET total_cents=15500,subtotal_cents=15500 WHERE order_id=?`).run(id);
+  const old=await getV2OrderEditOptions(DB,'LIBRI-9001');
+  const staying=payload(old,{productCode:cinematic.code,variantCode:five.code});
+  const same=await previewV2AdminOrderEdit(DB,'LIBRI-9001',staying);
+  assert.equal(same.changed,false,'same 5-scene model must never silently reprice');
+  assert.equal(same.newTotalCents,15500);
+  const upgrading=payload(old,{productCode:cinematic.code,variantCode:six.code});
+  const updated=await previewV2AdminOrderEdit(DB,'LIBRI-9001',upgrading);
+  assert.equal(updated.productDifferenceCents,3500);
+  assert.equal(updated.newTotalCents,19000);
+  assert.equal(updated.remainingCents,9000);
+});
+
 test('mobile admin exposes inline order editor, revision and checkout evidence',()=>{
   const ui=readFileSync('public/js/admin-v2-order.js','utf8');
   const editor=readFileSync('public/js/admin-v2-edit-order.js','utf8');

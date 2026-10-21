@@ -49,23 +49,40 @@ async function prepare(db,code,input) {
   if(!oldProduct) reject('Pedido sem produto registrado. Confira a importação da V1.',409);
   const addonRows=items.filter(x=>x.item_type==='addon');
   const oldConfig=parseJson(oldProduct.configuration_json,{});
+  const activeCatalog=await loadV2Catalog(db);
+  // Some historic orders have an item price/code from an earlier version but
+  // their saved scene count and contracted total reflect a newer agreement.
+  // Use the current product/scene as the baseline, never a stray old unit price.
+  const catalogProduct=activeCatalog.products.find(p=>p.code===oldConfig.productCode)
+    || activeCatalog.products.find(p=>p.variants.some(v=>v.code===oldProduct.item_code));
+  const originalScene=Number(oldConfig.sceneCount||0);
+  const originalVariant=catalogProduct?.variants.find(v=>originalScene>0&&Number(v.sceneCount)===originalScene)
+    || catalogProduct?.variants.find(v=>v.code===oldConfig.variantCode)
+    || catalogProduct?.variants.find(v=>v.code===oldProduct.item_code);
   const requestedProduct=String(input.productCode||'').trim();
   const requestedVariant=String(input.variantCode||'').trim();
+  if(requestedProduct && !requestedVariant)
+    reject('Escolha uma versão do produto ou mantenha o convite atual.');
   const productChange=Boolean(requestedProduct&&
-    (requestedProduct!==String(oldConfig.productCode||'')
-      || requestedVariant!==String(oldConfig.variantCode||oldProduct.item_code)));
+    (requestedProduct!==String(catalogProduct?.code||oldConfig.productCode||'')
+      || requestedVariant!==String(originalVariant?.code||oldConfig.variantCode||oldProduct.item_code)));
   const selectedAddonCodes=Array.isArray(input.addonCodes)
     ? [...new Set(input.addonCodes.map(x=>String(x||'').trim()).filter(Boolean))] : [];
   if(selectedAddonCodes.length>40) reject('Selecione até 40 adicionais.');
-  const activeCatalog=await loadV2Catalog(db);
   const activeCodes=new Set(activeCatalog.addons.map(x=>x.code));
   const invalid=selectedAddonCodes.find(code=>!activeCodes.has(code));
   if(invalid) reject('Adicional inválido ou desativado: '+invalid);
   const selectedAddons=await loadV2AddonsByCodes(db,selectedAddonCodes);
   const allItems=[];
   let product=oldProduct;
+  let productDifferenceCents=0;
   if(productChange){
     const resolved=await resolveV2ProductSelection(db,{productCode:requestedProduct,variantCode:requestedVariant});
+    // Upgrading from 5 to 6 scenes costs the catalogue *difference*
+    // (R$ 190 - R$ 155), not the difference against an old mismatched item
+    // row (e.g. R$ 55) in a partially migrated/adjusted order.
+    const baselinePrice=Number(originalVariant?.priceCents ?? oldProduct.unit_price_cents);
+    productDifferenceCents=Number(resolved.variant.priceCents)-baselinePrice;
     product={...oldProduct,item_code:resolved.variant.code,
       name_snapshot:resolved.product.pricingMode==='scene_count'
         ? `${resolved.product.name} • ${resolved.variant.label}` : resolved.product.name,
@@ -73,7 +90,6 @@ async function prepare(db,code,input) {
       configuration_json:JSON.stringify({productCode:resolved.product.code,productSlug:resolved.product.slug,
         variantCode:resolved.variant.code,sceneCount:resolved.variant.sceneCount})};
   }
-  const originalScene=Number(oldConfig.sceneCount||0);
   const sceneOverride=input.sceneCountOverride==null||input.sceneCountOverride===''
     ? 0 : moneyInt(input.sceneCountOverride,'Número de cenas',1,30);
   if(sceneOverride&&productChange) reject('Escolha as cenas pela variante, sem substituir a contagem manualmente.');
@@ -98,7 +114,11 @@ async function prepare(db,code,input) {
   const priorAdjustment=Number(snapshot.adminEdit?.priceAdjustmentCents||0);
   const manualDiscount=moneyInt(input.manualDiscountCents??priorDiscount,'Desconto',0,100000000);
   const adjustment=moneyInt(input.priceAdjustmentCents??priorAdjustment,'Ajuste adicional',-10000000,10000000);
-  const itemsDelta=sumPrice(allItems)-sumPrice(items);
+  const addonDifferenceCents=sumPrice(allItems.filter(x=>x.item_type!=='product'))
+    -sumPrice(items.filter(x=>x.item_type!=='product'));
+  // The existing contracted total is authoritative: only explicit changes
+  // can modify it. Retaining the same scenes may never silently reprice them.
+  const itemsDelta=productDifferenceCents+addonDifferenceCents;
   const total=Number(order.total_cents)+itemsDelta+(adjustment-priorAdjustment)-(manualDiscount-priorDiscount);
   if(!Number.isSafeInteger(total)||total<1||total>100000000) reject('O novo total precisa ser positivo.');
   if(total<paid) reject('O total negociado ficou abaixo do valor já recebido. Registre um estorno real antes de reduzir o pedido.',409);
@@ -110,6 +130,7 @@ async function prepare(db,code,input) {
     || selectedAddonCodes.slice().sort().join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
     || manualDiscount!==priorDiscount||adjustment!==priorAdjustment;
   return {order,items,allItems,paid,itemsDelta,pointsDelta,total,manualDiscount,adjustment,
+    productDifferenceCents,addonDifferenceCents,
     priorDiscount,priorAdjustment,snapshot,changed,selectionChanged:productChange||
       sceneOverride>0&&sceneOverride!==originalScene || itemsDelta!==0||pointsDelta!==0,
     before:compact(items),after:compact(allItems)};
@@ -118,6 +139,8 @@ export async function previewV2AdminOrderEdit(db,code,input){
   const p=await prepare(db,code,input);
   return {beforeTotalCents:p.order.total_cents,newTotalCents:p.total,
     paidCents:p.paid,remainingCents:p.total-p.paid,itemsDifferenceCents:p.itemsDelta,
+    productDifferenceCents:p.productDifferenceCents,
+    addonDifferenceCents:p.addonDifferenceCents,
     manualDiscountCents:p.manualDiscount,priceAdjustmentCents:p.adjustment,
     pointsDifference:p.pointsDelta,changed:p.changed,items:p.after,
     note:'Cobranças do Mercado Pago não são alteradas; confirme o novo saldo diretamente com a cliente.'};
@@ -182,6 +205,8 @@ export async function saveV2AdminOrderEdit(db,code,input){
   const history=JSON.stringify({source:'admin_whatsapp',reason:note,
     beforeTotalCents:p.order.total_cents,afterTotalCents:p.total,paidCents:p.paid,
     before:p.before,after:p.after,itemsDifferenceCents:p.itemsDelta,
+    productDifferenceCents:p.productDifferenceCents,
+    addonDifferenceCents:p.addonDifferenceCents,
     manualDiscountCents:p.manualDiscount,priceAdjustmentCents:p.adjustment,
     oldBriefingStatus:p.order.briefing_status,newBriefingStatus,
     agendaNeedsReview:false,agendaAllocationsAdjusted:agenda});

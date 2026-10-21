@@ -482,6 +482,10 @@ async function checkAdminOrderEditorMobile(browser) {
     });
     await page.locator('#editAdminOrder').click();
     await page.locator('#adminEditDiscount').waitFor();
+    assert.equal(await page.locator('#adminEditProduct').inputValue(),'__keep__',
+      'default editing must preserve the current paid-for product');
+    assert.equal(await page.locator('#adminEditVariant').isDisabled(),true);
+    assert.equal(await page.locator('#adminEditLegacyScenes').isDisabled(),true);
     assert.equal(await page.locator('#adminEditSave').isDisabled(),true);
     await page.locator('#adminEditDiscount').fill('20');
     await page.locator('.admin-edit-order details summary').click();

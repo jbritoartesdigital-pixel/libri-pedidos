@@ -289,12 +289,16 @@ function contractedBlock(
       ${
         Number(detail.pricing.comboDiscountCents || 0) > 0
         || Number(detail.pricing.couponDiscountCents || 0) > 0
+        || Number(detail.pricing.negotiatedDiscountCents || 0) > 0
           ? `
             <small class="contracted-discount">
               Descontos:
               combo ${money(detail.pricing.comboDiscountCents || 0)}
               ${Number(detail.pricing.couponDiscountCents || 0) > 0
                 ? ` • cupom ${money(detail.pricing.couponDiscountCents)}`
+                : ''}
+              ${Number(detail.pricing.negotiatedDiscountCents || 0) > 0
+                ? ` • negociado ${money(detail.pricing.negotiatedDiscountCents)}`
                 : ''}
             </small>
           `
@@ -644,8 +648,12 @@ export async function openOrder(code, onChanged = null) {
       detail.order.status,
     );
 
+  const legacyV1Pix = detail.order.eventSubtype === 'legacy_v1'
+    && detail.pricing.paymentMethod === 'pix';
+  const canAdjustLegacyPrice = legacyV1Pix
+    && !['cancelled', 'finalized'].includes(detail.order.status);
   const canRegisterManualPix =
-    detail.order.source === 'manual_whatsapp'
+    (detail.order.source === 'manual_whatsapp' || legacyV1Pix)
     && detail.pricing.paymentMethod === 'pix'
     && Number(detail.payment?.remainingBalanceCents || 0) > 0
     && !['cancelled', 'finalized', 'awaiting_urgency_decision',
@@ -709,6 +717,12 @@ export async function openOrder(code, onChanged = null) {
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
+              ${canAdjustLegacyPrice ? `
+                <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
+                  aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
+                  Ajustar valor combinado
+                </button>
+              ` : ''}
               ${canRegisterManualPix ? `
                 <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
                   aria-controls="orderPixReceiptPanel" aria-expanded="false">
@@ -732,6 +746,50 @@ export async function openOrder(code, onChanged = null) {
               <button type="button" class="btn btn-ghost"
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
+
+            ${canAdjustLegacyPrice ? `
+              <section id="legacyNegotiatedPricePanel" class="card hidden" role="region"
+                aria-label="Ajuste do total negociado para pedido da versão antiga"
+                style="margin-top:12px;padding:14px">
+                <h3 style="margin:0">Valor combinado com a cliente</h3>
+                <p class="muted" style="font-size:12px;margin:8px 0 12px">
+                  Altere somente o total acertado do pedido antigo. Isso não registra pagamento:
+                  primeiro ajuste o valor e depois lance apenas o Pix que realmente entrou.
+                </p>
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="legacyOriginalTotal">Valor original</label>
+                    <input id="legacyOriginalTotal" class="input" readonly
+                      value="${money(detail.pricing.originalNegotiatedTotalCents || detail.pricing.totalCents)}">
+                  </div>
+                  <div class="field">
+                    <label for="legacyNegotiatedTotal">Novo total combinado (R$)</label>
+                    <input id="legacyNegotiatedTotal" class="input"
+                      type="number" min="0.01" step="0.01" inputmode="decimal"
+                      max="${((detail.pricing.originalNegotiatedTotalCents || detail.pricing.totalCents)/100).toFixed(2)}"
+                      value="${(detail.pricing.totalCents / 100).toFixed(2)}">
+                  </div>
+                  <p id="legacyNegotiatedPreview" class="field full" role="status"
+                    style="font-size:13px;margin:0"></p>
+                  <div class="field full">
+                    <label for="legacyNegotiatedReason">Motivo do desconto</label>
+                    <input id="legacyNegotiatedReason" class="input" maxlength="500"
+                      placeholder="Ex.: desconto de R$ 15 combinado pelo WhatsApp">
+                  </div>
+                </div>
+                <small class="field-help" style="display:block;margin-top:10px">
+                  Pago registrado: ${money(pixPaidCents)}. Nenhum recebimento existente será apagado.
+                </small>
+                <div class="order-quick-actions" style="margin-top:12px">
+                  <button id="saveLegacyNegotiatedPrice" class="btn btn-primary" type="button">
+                    Salvar valor combinado
+                  </button>
+                  <button id="cancelLegacyNegotiatedPrice" class="btn btn-ghost" type="button">
+                    Cancelar
+                  </button>
+                </div>
+              </section>
+            ` : ''}
 
             ${canRegisterManualPix ? `
               <section id="orderPixReceiptPanel" class="card hidden" role="region"
@@ -1410,6 +1468,72 @@ export async function openOrder(code, onChanged = null) {
     setZoom(false);
     if (image) image.removeAttribute('src');
   });
+
+  const legacyToggle = document.getElementById('toggleLegacyNegotiatedPrice');
+  const legacyPanel = document.getElementById('legacyNegotiatedPricePanel');
+  const hideLegacy = () => {
+    legacyPanel?.classList.add('hidden');
+    legacyToggle?.setAttribute('aria-expanded', 'false');
+  };
+  legacyToggle?.addEventListener('click', () => {
+    if (!legacyPanel) return;
+    const opening = legacyPanel.classList.contains('hidden');
+    legacyPanel.classList.toggle('hidden', !opening);
+    legacyToggle.setAttribute('aria-expanded', String(opening));
+    if (opening) document.getElementById('legacyNegotiatedTotal')?.focus();
+  });
+  document.getElementById('cancelLegacyNegotiatedPrice')
+    ?.addEventListener('click', hideLegacy);
+  const legacyInput = document.getElementById('legacyNegotiatedTotal');
+  const updateLegacyPreview = () => {
+    const preview = document.getElementById('legacyNegotiatedPreview');
+    if (!preview) return;
+    const cents = Math.round(Number(legacyInput?.value || 0) * 100);
+    const original = Number(detail.pricing.originalNegotiatedTotalCents || detail.pricing.totalCents);
+    preview.textContent = Number.isSafeInteger(cents) && cents > 0 && cents <= original
+      ? `Desconto negociado: ${money(original - cents)} • Saldo após ajuste: ${money(Math.max(0, cents - pixPaidCents))}`
+      : 'Informe um total positivo, sem ultrapassar o valor original.';
+  };
+  legacyInput?.addEventListener('input', updateLegacyPreview);
+  updateLegacyPreview();
+  document.getElementById('saveLegacyNegotiatedPrice')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (!canAdjustLegacyPrice || button.disabled) return;
+      const amount = Number(legacyInput?.value);
+      const cents = Math.round(amount * 100);
+      const original = Number(detail.pricing.originalNegotiatedTotalCents || detail.pricing.totalCents);
+      const reason = document.getElementById('legacyNegotiatedReason')?.value.trim() || '';
+      if (!Number.isFinite(amount) || !Number.isSafeInteger(cents)
+        || cents <= 0 || cents > original || cents < pixPaidCents) {
+        showToast('O total deve ser positivo, até o valor original, e não inferior ao Pix já lançado.');
+        return;
+      }
+      if (reason.length < 5) {
+        showToast('Explique o desconto combinado com a cliente.');
+        return;
+      }
+      if (!confirm(`Alterar o total do pedido ${detail.order.code} de
+${money(detail.pricing.totalCents)} para ${money(cents)}?
+O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
+      button.disabled = true;
+      try {
+        await api(`/api/admin/v2/orders/${detail.order.code}/legacy-price`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedTotalCents: detail.pricing.totalCents,
+            agreedTotalCents: cents, reason,
+          }),
+        });
+        close();
+        showToast('Valor negociado salvo ✓ Confira o saldo antes de registrar Pix.');
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    });
 
   // O recebimento é lançado na mesma API usada pelo Financeiro, sem
   // gerar cobrança nova; a confirmação do banco é obrigatória.

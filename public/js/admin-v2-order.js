@@ -710,13 +710,25 @@ export async function openOrder(code, onChanged = null) {
               Festa: ${dateBr(detail.order.eventDate)}<br>
               Entrega: ${esc(deliveryLabel(detail))}<br>
               Próximo: ${esc(detail.order.nextAction || 'A definir')}
+              ${detail.order.isLegacyV1 ? `<br>Pix registrado: ${money(pixPaidCents)}
+                • Saldo em aberto: ${money(pixRemainingCents)}` : ''}
             </div>
+            ${detail.order.canReconcileManualPix ? `
+              <p class="notice info" style="margin:10px 0;font-size:13px">
+                Já existe Pix aprovado, mas o andamento ainda aparece como pagamento pendente.
+                Use "Atualizar situação do Pix" sem lançar outro recebimento.
+              </p>` : ''}
 
             <div class="order-quick-actions">
               <button id="toggleOrderBriefing" class="btn btn-primary" type="button"
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
+              ${detail.order.canReconcileManualPix ? `
+                <button id="reconcileLegacyPixStatus" class="btn btn-secondary" type="button">
+                  Atualizar situação do Pix
+                </button>
+              ` : ''}
               ${canAdjustLegacyPrice ? `
                 <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
                   aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
@@ -1468,6 +1480,29 @@ export async function openOrder(code, onChanged = null) {
     setZoom(false);
     if (image) image.removeAttribute('src');
   });
+
+  document.getElementById('reconcileLegacyPixStatus')
+    ?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      if (!confirm('Atualizar o andamento conforme o Pix já registrado? Nenhum pagamento novo será lançado.')) return;
+      button.disabled = true;
+      try {
+        const result = await api(
+          `/api/admin/v2/orders/${detail.order.code}/reconcile-payment`,
+          { method: 'POST', body: '{}' },
+        );
+        close();
+        showToast(result.result?.changed
+          ? 'Situação financeira atualizada sem duplicar o Pix ✓'
+          : 'O status já estava atualizado.');
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    });
 
   const legacyToggle = document.getElementById('toggleLegacyNegotiatedPrice');
   const legacyPanel = document.getElementById('legacyNegotiatedPricePanel');

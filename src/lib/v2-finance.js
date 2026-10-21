@@ -1,3 +1,6 @@
+import { isV2LegacyImport } from './v2-legacy-order-marker.js';
+import { reconcileV2LegacyPixStatus } from './v2-legacy-payment-reconcile.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -1581,7 +1584,13 @@ export async function createV2FinancePayment(
             o.event_subtype,
             o.briefing_status,
             pr.total_cents,
-            pr.payment_method
+            pr.payment_method,
+            pr.pricing_snapshot_json,
+            EXISTS (
+              SELECT 1 FROM v2_order_items i
+              WHERE i.order_id=o.id AND i.item_type='product'
+                AND i.item_code GLOB 'legacy_*'
+            ) AS legacy_product
           FROM v2_orders o
           INNER JOIN v2_order_pricing pr
             ON pr.order_id = o.id
@@ -1759,34 +1768,15 @@ export async function createV2FinancePayment(
       - netPaidAfter,
     );
 
-  // A manual WhatsApp order starts as 'awaiting_payment'. When the admin
-  // actually records a received Pix installment, it must no longer appear
-  // as if the first payment had never arrived. This does NOT infer payment
-  // from merely sending a key, and never modifies Mercado Pago records.
-  if (
-    type !== 'refund'
-    && netPaidAfter > 0
-    && order.payment_method === 'pix'
-    && (order.source === 'manual_whatsapp' || order.event_subtype === 'legacy_v1')
-    && order.briefing_status === 'locked'
-    && order.status === 'awaiting_payment'
-  ) {
-    await db.prepare(`
-      UPDATE v2_orders
-      SET status='briefing_pending',
-          next_action='Aguardar dados da festa',
-          briefing_status='available',
-          updated_at=?
-      WHERE id=? AND (source='manual_whatsapp' OR event_subtype='legacy_v1')
-        AND status='awaiting_payment' AND briefing_status='locked'
-        AND EXISTS (
-          SELECT 1 FROM v2_payments pay
-          WHERE pay.order_id=v2_orders.id
-            AND pay.provider='direct_pix'
-            AND pay.status='approved'
-            AND pay.payment_type!='refund'
-        )
-    `).bind(stamp, order.id).run();
+  const isLegacyOrder = isV2LegacyImport(order, order.legacy_product
+    ? [{ item_type: 'product', item_code: 'legacy_import' }] : []);
+  // A newly approved Pix must advance legacy/manual orders regardless of
+  // whether their briefing was already completed before migration.
+  // This also leaves all existing production and delivery stages untouched.
+  if (type !== 'refund' && netPaidAfter > 0
+    && order.payment_method === 'pix' && order.status === 'awaiting_payment'
+    && (order.source === 'manual_whatsapp' || isLegacyOrder)) {
+    await reconcileV2LegacyPixStatus(db, code);
   }
 
   if (

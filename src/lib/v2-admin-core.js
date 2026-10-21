@@ -22,6 +22,7 @@ import {
 } from './v2-whatsapp-templates.js';
 
 import { getV2AdminBriefingFieldMeta } from './v2-customer-area.js';
+import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 
 const SAO_PAULO =
   'America/Sao_Paulo';
@@ -2315,6 +2316,14 @@ export async function getV2AdminOrderDetail(
   } catch {
     negotiatedSnapshot = {};
   }
+  const isLegacyV1 = isV2LegacyImport(order, items);
+  const canReconcileManualPix =
+    (isLegacyV1 || order.source === 'manual_whatsapp')
+    && order.status === 'awaiting_payment'
+    && order.payment_method === 'pix'
+    && payments.paidCents > 0
+    && (payments.payments || []).some(p => p.provider === 'direct_pix'
+      && p.status === 'approved' && p.payment_type !== 'refund');
   const legacyOriginalCents = Number(negotiatedSnapshot.adminNegotiatedOriginalTotalCents || 0);
   const legacyNegotiatedDiscountCents = Number(negotiatedSnapshot.adminNegotiatedDiscountCents || 0);
 
@@ -2341,6 +2350,8 @@ export async function getV2AdminOrderDetail(
         order.event_type,
       eventSubtype:
         order.event_subtype,
+      isLegacyV1,
+      canReconcileManualPix,
       honoreeName:
         order.honoree_display_name,
       eventDate:
@@ -2408,9 +2419,9 @@ export async function getV2AdminOrderDetail(
           order.coupon_discount_cents
           || 0,
         ),
-      negotiatedDiscountCents: order.event_subtype === 'legacy_v1'
+      negotiatedDiscountCents: isLegacyV1
         ? Math.max(0, legacyNegotiatedDiscountCents) : 0,
-      originalNegotiatedTotalCents: order.event_subtype === 'legacy_v1'
+      originalNegotiatedTotalCents: isLegacyV1
         ? Math.max(Number(order.total_cents || 0), legacyOriginalCents) : 0,
       urgencyPercent:
         Number(
@@ -3370,8 +3381,19 @@ async function upcomingDeliveries(
             o.honoree_display_name,
             o.status,
             o.delivery_start,
-            o.delivery_end
+            o.delivery_end,
+            pr.total_cents,
+            COALESCE((
+              SELECT SUM(CASE
+                WHEN pay.status = 'approved' AND pay.payment_type != 'refund'
+                  THEN pay.amount_cents
+                WHEN pay.status = 'approved' AND pay.payment_type = 'refund'
+                  THEN -pay.amount_cents
+                ELSE 0 END)
+              FROM v2_payments pay WHERE pay.order_id = o.id
+            ), 0) AS paid_cents
           FROM v2_orders o
+          JOIN v2_order_pricing pr ON pr.order_id = o.id
           WHERE
             o.archived_at IS NULL
             AND o.status NOT IN (
@@ -3404,9 +3426,7 @@ async function upcomingDeliveries(
         status:
           row.status,
         statusLabel:
-          statusLabel(
-            row.status,
-          ),
+          statusLabel(row.status, row.paid_cents, row.total_cents),
         start:
           row.delivery_start,
         end:

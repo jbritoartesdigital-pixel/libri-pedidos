@@ -1,4 +1,5 @@
 import { nowIso } from './http.js';
+import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 
 function problem(message, status = 422) {
   const error = new Error(message);
@@ -31,12 +32,19 @@ export async function setV2LegacyNegotiatedTotal(db, orderCode, body = {}) {
   const row = await db.prepare(`
     SELECT o.id, o.status, o.event_subtype, o.source,
            pr.total_cents, pr.deposit_cents, pr.balance_cents,
-           pr.payment_method, pr.pricing_snapshot_json
+           pr.payment_method, pr.pricing_snapshot_json,
+           EXISTS (
+             SELECT 1 FROM v2_order_items i
+             WHERE i.order_id=o.id AND i.item_type='product'
+               AND i.item_code GLOB 'legacy_*'
+           ) AS legacy_product
     FROM v2_orders o JOIN v2_order_pricing pr ON pr.order_id=o.id
     WHERE o.order_code=? LIMIT 1
   `).bind(orderCode).first();
   if (!row) problem('Pedido não encontrado.', 404);
-  if (row.event_subtype !== 'legacy_v1' || row.payment_method !== 'pix') {
+  if (!isV2LegacyImport(row, row.legacy_product
+    ? [{ item_type: 'product', item_code: 'legacy_import' }] : [])
+    || row.payment_method !== 'pix') {
     problem('O ajuste de preço negociado só está disponível para pedidos Pix importados da V1.', 403);
   }
   if (['cancelled', 'finalized'].includes(row.status)) {

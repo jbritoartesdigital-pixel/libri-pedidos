@@ -481,6 +481,7 @@ async function checkAdminOrderEditorMobile(browser) {
     await page.locator('#adminEditDiscount').waitFor();
     assert.equal(await page.locator('#adminEditSave').isDisabled(),true);
     await page.locator('#adminEditDiscount').fill('20');
+    await page.locator('.admin-edit-order details summary').click();
     await page.locator('[data-edit-addon][value="rsvp"]').check();
     await page.locator('#adminEditNote').fill('Confirmação adicionada com desconto via WhatsApp');
     await page.locator('#adminEditPreview').click();

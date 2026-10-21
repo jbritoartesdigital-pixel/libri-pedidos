@@ -1231,11 +1231,30 @@ function nextActionFromStatus(
   || 'Abrir pedido';
 }
 
+// V1 records may have an already-approved Pix but remain in a financial
+// or briefing status inherited from migration. Only that narrowly verified
+// case may advance without pretending that the briefing was completed.
+function confirmedV1PixForWorkflow(row, summary) {
+  const legacy = isV2LegacyImport(row, row.legacy_product
+    ? [{ item_type: 'product', item_code: 'legacy_import' }] : []);
+  if (!legacy || row.payment_method !== 'pix') return false;
+  const approved = (summary.payments || []);
+  const received = approved.reduce((sum, p) =>
+    p.status === 'approved'
+      ? sum + (p.payment_type === 'refund' ? -Number(p.amount_cents || 0)
+        : Number(p.amount_cents || 0))
+      : sum, 0);
+  return received > 0 && approved.some(p => p.provider === 'direct_pix'
+    && p.status === 'approved' && p.payment_type !== 'refund');
+}
+
 function allowedActions(
   row,
   paymentSummary,
 ) {
   const actions = [];
+  const legacyPaidPending = ['awaiting_payment', 'briefing_pending'].includes(row.status)
+    && confirmedV1PixForWorkflow(row, paymentSummary);
 
   if (
     row.archived_at
@@ -1263,6 +1282,7 @@ function allowedActions(
   if (
     row.status
     === 'ready_for_production'
+    || legacyPaidPending
     || row.status
       === 'waiting_customer'
     || row.status
@@ -1316,7 +1336,7 @@ function allowedActions(
   if ([
     'ready_for_production', 'in_production', 'waiting_customer',
     'adjustments', 'approved', 'balance_pending', 'ready_for_delivery',
-  ].includes(row.status)) {
+  ].includes(row.status) || legacyPaidPending) {
     actions.push('finalize');
   }
 
@@ -1386,7 +1406,12 @@ async function orderByCode(
           p.deposit_cents,
           p.balance_cents,
           p.currency,
-          p.pricing_snapshot_json
+          p.pricing_snapshot_json,
+          EXISTS (
+            SELECT 1 FROM v2_order_items li
+            WHERE li.order_id=o.id AND li.item_type='product'
+              AND li.item_code GLOB 'legacy_*'
+          ) AS legacy_product
         FROM v2_orders o
         INNER JOIN v2_customers c
           ON c.id = o.customer_id

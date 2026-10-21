@@ -486,7 +486,9 @@ async function checkAdminOrderEditorMobile(browser) {
     await page.locator('#adminEditNote').fill('Confirmação adicionada com desconto via WhatsApp');
     await page.locator('#adminEditPreview').click();
     await page.getByText('Novo total: R$ 195,00').waitFor();
-    assert.equal(await page.locator('#adminEditSave').isEnabled(),true);
+    await page.waitForFunction(()=>!document.getElementById('adminEditSave').disabled);
+    assert.equal(await page.locator('#adminEditSave').isEnabled(),true,
+      'Saving must unlock after the updated price has been reviewed');
     for(const width of [320,390,412]){
       await page.setViewportSize({width,height:700});
       const screen=await page.evaluate(()=>document.documentElement.scrollWidth);
@@ -499,7 +501,9 @@ async function checkAdminOrderEditorMobile(browser) {
     assert.equal(await page.locator('#adminEditSave').isDisabled(),true,
       'Changing the agreed amount invalidates previous review');
     await page.locator('#adminEditPreview').click();
-    assert.equal(await page.locator('#adminEditSave').isEnabled(),true);
+    await page.waitForFunction(()=>!document.getElementById('adminEditSave').disabled);
+    assert.equal(await page.locator('#adminEditSave').isEnabled(),true,
+      'Saving must unlock after the updated price has been reviewed');
     assert.deepEqual(errors,[]);
     audit.tests.push('Android 320/390/412px: editar pedido, adicionar RSVP, desconto e revisão obrigatória');
   } finally {

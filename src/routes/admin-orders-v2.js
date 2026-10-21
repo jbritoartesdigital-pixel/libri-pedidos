@@ -6,6 +6,7 @@ import {
 import { decideV2Urgency } from '../lib/v2-urgency-admin.js';
 import { setV2LegacyNegotiatedTotal } from '../lib/v2-legacy-negotiated-pricing.js';
 import { reconcileV2LegacyPixStatus } from '../lib/v2-legacy-payment-reconcile.js';
+import { getV2OrderEditOptions, previewV2AdminOrderEdit, saveV2AdminOrderEdit } from '../lib/v2-admin-order-edit.js';
 
 import {
   createV2Preview,
@@ -66,6 +67,20 @@ export async function handleAdminOrdersV2Api(
 
   const path =
     url.pathname;
+
+  const editMatch = path.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/edit$/);
+  if (editMatch && ['GET','POST','PATCH'].includes(method)) {
+    try {
+      const code=editMatch[1];
+      if (method==='GET') return json({ok:true,result:await getV2OrderEditOptions(env.DB,code)});
+      const data=await readJson(request);
+      return json({ok:true,result:method==='POST'
+        ? await previewV2AdminOrderEdit(env.DB,code,data)
+        : await saveV2AdminOrderEdit(env.DB,code,data)});
+    } catch (error) {
+      return routeError(error,Number(error?.status)||422);
+    }
+  }
 
   const reconcileMatch = path.match(
     /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/reconcile-payment$/,

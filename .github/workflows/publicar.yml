@@ -1,6 +1,5 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
-# Publicação única da correção V1: iniciar produção e finalizar com checklist (PR #108).
 
 on:
   workflow_dispatch:

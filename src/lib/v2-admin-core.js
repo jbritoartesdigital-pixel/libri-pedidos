@@ -2351,6 +2351,8 @@ export async function getV2AdminOrderDetail(
       && p.status === 'approved' && p.payment_type !== 'refund');
   const legacyOriginalCents = Number(negotiatedSnapshot.adminNegotiatedOriginalTotalCents || 0);
   const legacyNegotiatedDiscountCents = Number(negotiatedSnapshot.adminNegotiatedDiscountCents || 0);
+  const manualOrderDiscountCents = Number(negotiatedSnapshot.adminEdit?.manualDiscountCents || 0);
+  const adminPriceAdjustmentCents = Number(negotiatedSnapshot.adminEdit?.priceAdjustmentCents || 0);
 
 
   return {
@@ -2444,6 +2446,8 @@ export async function getV2AdminOrderDetail(
           order.coupon_discount_cents
           || 0,
         ),
+      manualDiscountCents: Math.max(0,manualOrderDiscountCents),
+      adminPriceAdjustmentCents,
       negotiatedDiscountCents: isLegacyV1
         ? Math.max(0, legacyNegotiatedDiscountCents) : 0,
       originalNegotiatedTotalCents: isLegacyV1

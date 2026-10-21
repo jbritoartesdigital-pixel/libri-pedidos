@@ -9,6 +9,7 @@ import {
   statusClass,
 } from './admin-v2-core.js';
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
+import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261021-order-editor-1';
 
 function whatsappBr(value) {
   const digits =
@@ -290,6 +291,7 @@ function contractedBlock(
         Number(detail.pricing.comboDiscountCents || 0) > 0
         || Number(detail.pricing.couponDiscountCents || 0) > 0
         || Number(detail.pricing.negotiatedDiscountCents || 0) > 0
+        || Number(detail.pricing.manualDiscountCents || 0) > 0
           ? `
             <small class="contracted-discount">
               Descontos:
@@ -299,6 +301,9 @@ function contractedBlock(
                 : ''}
               ${Number(detail.pricing.negotiatedDiscountCents || 0) > 0
                 ? ` • negociado ${money(detail.pricing.negotiatedDiscountCents)}`
+                : ''}
+              ${Number(detail.pricing.manualDiscountCents || 0) > 0
+                ? ` • manual ${money(detail.pricing.manualDiscountCents)}`
                 : ''}
             </small>
           `
@@ -720,6 +725,11 @@ export async function openOrder(code, onChanged = null) {
               </p>` : ''}
 
             <div class="order-quick-actions">
+              ${!['cancelled','finalized'].includes(detail.order.status) ? `
+                <button id="editAdminOrder" class="btn btn-secondary" type="button"
+                  aria-controls="adminEditOrderPanel" aria-expanded="false">
+                  Editar pedido e valores
+                </button>` : ''}
               <button id="toggleOrderBriefing" class="btn btn-primary" type="button"
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
@@ -763,6 +773,9 @@ export async function openOrder(code, onChanged = null) {
               <button type="button" class="btn btn-ghost"
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
+
+            <section id="adminEditOrderPanel" class="admin-edit-order-panel hidden"
+              role="region" aria-label="Editar cenas, adicionais e valores"></section>
 
             ${canAdjustLegacyPrice ? `
               <section id="legacyNegotiatedPricePanel" class="card hidden" role="region"
@@ -1389,6 +1402,7 @@ export async function openOrder(code, onChanged = null) {
     finally{button.disabled=false;}
   });
 
+  bindAdminOrderEditing(detail,onChanged,close,openOrder);
   bindAdminWhatsAppBriefing(detail.order.code, onChanged);
 
   const briefingToggle = document.getElementById('toggleOrderBriefing');

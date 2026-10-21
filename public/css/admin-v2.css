@@ -1573,3 +1573,44 @@ button { -webkit-tap-highlight-color: transparent; }
   .admin-bf-editor { padding:12px; }
   .admin-bf-actions .btn { width:100%; }
 }
+
+/* Contract revisions stay inside the order; no full-screen mobile wizard. */
+.admin-edit-order-panel { margin: 12px 0; min-width: 0; }
+.admin-edit-order-panel.hidden { display: none !important; }
+.admin-edit-order { border: 1px solid var(--line); background: var(--surface);
+  border-radius: 14px; padding: clamp(12px,2vw,18px); min-width:0;
+  display:grid; gap:13px; overflow-wrap:anywhere; }
+.admin-edit-order .field { min-width:0; margin:0; }
+.admin-edit-order .field .input, .admin-edit-order .field .select,
+.admin-edit-order .field .textarea { width:100%; max-width:100%; }
+.admin-edit-intro { display:grid; gap:4px; font-size:15px; }
+.admin-edit-intro small, .admin-edit-order > small { color:var(--muted);
+  font-size:12px; line-height:1.5; }
+.admin-edit-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px; font-size:12px; }
+.admin-edit-totals span { background:var(--surface-alt,var(--surface));
+  border:1px solid var(--line); border-radius:10px; padding:9px 10px;
+  display:grid; gap:4px; }
+.admin-edit-totals b { font-size:15px; color:var(--ink); }
+.admin-edit-order details { border:1px solid var(--line);
+  border-radius:10px; padding:12px; min-width:0; }
+.admin-edit-order details summary { font-size:13px; font-weight:700; cursor:pointer; }
+.admin-edit-addons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px; margin-top:10px; max-height:260px; overflow-y:auto; }
+.admin-edit-addon { display:flex; align-items:flex-start; gap:8px; font-size:12px;
+  border:1px solid var(--line); border-radius:8px; padding:9px; cursor:pointer;
+  min-width:0; overflow-wrap:anywhere; }
+.admin-edit-addon input { flex:0 0 auto; }
+.admin-edit-addon small { color:var(--muted); display:block; }
+.admin-edit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+.admin-edit-quote { border:1px solid var(--line); border-radius:10px;
+  padding:11px; margin:0; font-size:13px; display:grid; gap:5px; }
+.admin-edit-buttons { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+@media (max-width:620px) {
+  .admin-edit-order { padding:12px; }
+  .admin-edit-totals { grid-template-columns:minmax(0,1fr); }
+  .admin-edit-grid { grid-template-columns:minmax(0,1fr); }
+  .admin-edit-addons { grid-template-columns:minmax(0,1fr); }
+  .admin-edit-buttons { display:grid; grid-template-columns:minmax(0,1fr); }
+  .admin-edit-buttons .btn { width:100%; }
+}

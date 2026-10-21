@@ -363,6 +363,10 @@ async function summaryForRange(
                 ELSE 0 END),
               0
             ) AS negotiated_discount_cents,
+            COALESCE(SUM(CASE WHEN json_valid(pr.pricing_snapshot_json)
+              THEN COALESCE(CAST(json_extract(pr.pricing_snapshot_json,
+                '$.adminEdit.manualDiscountCents') AS INTEGER),0)
+              ELSE 0 END),0) AS manual_discount_cents,
 
             COALESCE(
               SUM(pr.urgency_amount_cents),
@@ -654,6 +658,7 @@ async function summaryForRange(
       ),
 
     negotiatedDiscountCents: numberValue(sales?.negotiated_discount_cents),
+    manualDiscountCents: numberValue(sales?.manual_discount_cents),
 
     discountsCents:
       numberValue(
@@ -664,7 +669,8 @@ async function summaryForRange(
         sales
           ?.coupon_discount_cents,
       )
-      + numberValue(sales?.negotiated_discount_cents),
+      + numberValue(sales?.negotiated_discount_cents)
+      + numberValue(sales?.manual_discount_cents),
 
     urgencyAmountCents:
       numberValue(

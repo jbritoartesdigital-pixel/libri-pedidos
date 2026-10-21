@@ -1,5 +1,6 @@
 import { nowIso, parseJson } from './http.js';
 import { loadV2Catalog, resolveV2ProductSelection, loadV2AddonsByCodes } from './v2-catalog.js';
+import { getV2AgendaRange } from './v2-agenda-admin.js';
 
 function reject(message, status = 422) { const err = new Error(message); err.status = status; throw err; }
 function moneyInt(value, label, min = 0, max = 100000000) {
@@ -106,7 +107,7 @@ async function prepare(db,code,input) {
   if((sceneOverride&&sceneOverride!==originalScene)&&adjustment===priorAdjustment&&!productChange)
     reject('Para alterar cenas de um modelo antigo, informe também o acréscimo ou desconto de preço combinado.');
   const changed=productChange || (sceneOverride>0&&sceneOverride!==originalScene)
-    || selectedAddonCodes.join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
+    || selectedAddonCodes.slice().sort().join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
     || manualDiscount!==priorDiscount||adjustment!==priorAdjustment;
   return {order,items,allItems,paid,itemsDelta,pointsDelta,total,manualDiscount,adjustment,
     priorDiscount,priorAdjustment,snapshot,changed,selectionChanged:productChange||
@@ -121,6 +122,45 @@ export async function previewV2AdminOrderEdit(db,code,input){
     pointsDifference:p.pointsDelta,changed:p.changed,items:p.after,
     note:'Cobranças do Mercado Pago não são alteradas; confirme o novo saldo diretamente com a cliente.'};
 }
+async function agendaChanges(db, order, pointsDelta) {
+  if (!pointsDelta) return [];
+  const rows=(await db.prepare('SELECT id,day,points_units FROM v2_agenda_allocations WHERE order_id=? ORDER BY day DESC,id DESC')
+    .bind(order.id).all()).results||[];
+  const changes=[];
+  if (pointsDelta < 0) {
+    let remaining=-pointsDelta;
+    for (const row of rows) {
+      if (!remaining) break;
+      const take=Math.min(remaining,Number(row.points_units));
+      const next=Number(row.points_units)-take;
+      changes.push({id:row.id,day:row.day,points:next});
+      remaining-=take;
+    }
+    if(remaining) reject('Não há alocações suficientes para reduzir esta carga. Revise a Agenda.',409);
+    return changes;
+  }
+  if (!order.delivery_start || !order.delivery_end)
+    reject('Defina a faixa de entrega na Agenda antes de acrescentar cenas ou adicionais.',409);
+  const first=order.delivery_start, last=order.delivery_end;
+  const dates=(Date.parse(last+'T12:00:00Z')-Date.parse(first+'T12:00:00Z'))/86400000;
+  if (!Number.isFinite(dates)||dates<0||dates>180)
+    reject('A faixa de entrega deve ter até 181 dias para reservar capacidade.',409);
+  const available=await getV2AgendaRange(db,{start:first,end:last});
+  let remaining=pointsDelta;
+  for (const day of available.days.slice().reverse()) {
+    if (!remaining) break;
+    if(day.blocked) continue;
+    const free=Math.max(0,Number(day.publicFreeUnits||0));
+    const take=Math.min(remaining,free);
+    if(take<=0)continue;
+    const same=rows.find(a=>a.day===day.day);
+    changes.push({id:same?.id||null,day:day.day,points:(same?Number(same.points_units):0)+take});
+    remaining-=take;
+  }
+  if(remaining)reject('A Agenda não tem capacidade livre suficiente para as cenas/adicionais extras. Ajuste a agenda antes de salvar.',409);
+  return changes;
+}
+
 export async function saveV2AdminOrderEdit(db,code,input){
   const p=await prepare(db,code,input);
   const note=String(input.note||'').trim();
@@ -129,12 +169,7 @@ export async function saveV2AdminOrderEdit(db,code,input){
   if(Number(input.expectedTotalCents)!==Number(p.order.total_cents)
     || String(input.expectedRevision||'')!==String(p.order.pricing_updated_at||''))
     reject('O pedido mudou desde que você abriu a edição. Atualize antes de salvar.',409);
-  // Allocation points are never silently undercounted. Existing production
-  // reservations require capacity reallocation before changing workload.
-  if(p.pointsDelta!==0){
-    const alloc=await db.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id=?').bind(p.order.id).first();
-    if(Number(alloc?.n||0)>0) reject('A mudança altera a carga de cenas/adicionais e exige revisão da capacidade da Agenda. Não salvei preços nem itens.');
-  }
+  const agenda=await agendaChanges(db,p.order,p.pointsDelta);
   const stamp=nowIso();
   const revision=crypto.randomUUID();
   const pricingSnapshot=JSON.stringify({...p.snapshot,adminEdit:{
@@ -149,7 +184,7 @@ export async function saveV2AdminOrderEdit(db,code,input){
     before:p.before,after:p.after,itemsDifferenceCents:p.itemsDelta,
     manualDiscountCents:p.manualDiscount,priceAdjustmentCents:p.adjustment,
     oldBriefingStatus:p.order.briefing_status,newBriefingStatus,
-    agendaNeedsReview:p.pointsDelta!==0});
+    agendaNeedsReview:false,agendaAllocationsAdjusted:agenda});
   const isCurrent=`EXISTS(SELECT 1 FROM v2_order_pricing q WHERE q.order_id=?
     AND q.pricing_snapshot_json=?)`;
   const operations=[
@@ -177,6 +212,21 @@ export async function saveV2AdminOrderEdit(db,code,input){
       .bind(p.order.id,item.item_type,item.item_code,item.name_snapshot,
         item.quantity||1,item.unit_price_cents,item.points_units||0,
         item.configuration_json||'{}',item.created_at||stamp,p.order.id,pricingSnapshot));
+  }
+  for(const change of agenda){
+    if(change.id){
+      if(change.points>0) operations.push(db.prepare(`UPDATE v2_agenda_allocations
+        SET points_units=? WHERE id=? AND ${isCurrent}`)
+        .bind(change.points,change.id,p.order.id,pricingSnapshot));
+      else operations.push(db.prepare(`DELETE FROM v2_agenda_allocations
+        WHERE id=? AND ${isCurrent}`).bind(change.id,p.order.id,pricingSnapshot));
+    } else {
+      operations.push(db.prepare(`INSERT OR IGNORE INTO v2_agenda_days(day) VALUES(?)`).bind(change.day));
+      operations.push(db.prepare(`INSERT INTO v2_agenda_allocations
+        (order_id,day,points_units,allocation_type)
+        SELECT ?,?,?,'confirmed' WHERE ${isCurrent}`)
+        .bind(p.order.id,change.day,change.points,p.order.id,pricingSnapshot));
+    }
   }
   operations.push(db.prepare(`INSERT INTO v2_order_history
     (order_id,action_code,description,metadata_json,created_at)

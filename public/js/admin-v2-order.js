@@ -741,6 +741,11 @@ export async function openOrder(code, onChanged = null) {
                   Registrar Pix recebido
                 </button>
               ` : ''}
+              ${(detail.allowedActions || []).includes('start_production') ? `
+                <button type="button" class="btn btn-primary" data-order-action="start_production">
+                  Iniciar produção
+                </button>
+              ` : ''}
               ${(detail.allowedActions || []).includes('finalize') ? `
                 <button type="button" class="btn btn-success" data-order-action="finalize">
                   Finalizar pedido
@@ -936,7 +941,7 @@ export async function openOrder(code, onChanged = null) {
 
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               ${(detail.allowedActions || [])
-                .filter(action => !['finalize','balance_received'].includes(action))
+                .filter(action => !['finalize','balance_received','start_production'].includes(action))
                 .map(
                 (action) => `
                   <button
@@ -2169,6 +2174,17 @@ O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
               };
               bindChecklistActions();
               return;
+            }
+
+            if (action === 'start_production' && detail.order.isLegacyV1
+                && ['awaiting_payment', 'briefing_pending'].includes(detail.order.status)) {
+              const briefingDone = (detail.finalizeChecklist?.items || [])
+                .find(item => item.code === 'briefing')?.ok === true;
+              if (!confirm(briefingDone
+                ? 'Iniciar produção deste pedido importado da V1 com o Pix já registrado?'
+                : 'Há dados do briefing ainda pendentes. Iniciar a produção agora sem marcar o briefing como concluído? Para finalizar será necessário resolver as pendências.')) {
+                return;
+              }
             }
 
             if (

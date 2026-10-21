@@ -354,6 +354,14 @@ async function summaryForRange(
             ) AS coupon_discount_cents,
 
             COALESCE(
+              SUM(CASE WHEN json_valid(pr.pricing_snapshot_json)
+                THEN COALESCE(CAST(json_extract(pr.pricing_snapshot_json,
+                  '$.adminNegotiatedDiscountCents') AS INTEGER), 0)
+                ELSE 0 END),
+              0
+            ) AS negotiated_discount_cents,
+
+            COALESCE(
               SUM(pr.urgency_amount_cents),
               0
             ) AS urgency_amount_cents,
@@ -642,6 +650,8 @@ async function summaryForRange(
           ?.coupon_discount_cents,
       ),
 
+    negotiatedDiscountCents: numberValue(sales?.negotiated_discount_cents),
+
     discountsCents:
       numberValue(
         sales
@@ -650,7 +660,8 @@ async function summaryForRange(
       + numberValue(
         sales
           ?.coupon_discount_cents,
-      ),
+      )
+      + numberValue(sales?.negotiated_discount_cents),
 
     urgencyAmountCents:
       numberValue(
@@ -1567,6 +1578,7 @@ export async function createV2FinancePayment(
             o.order_code,
             o.status,
             o.source,
+            o.event_subtype,
             o.briefing_status,
             pr.total_cents,
             pr.payment_method
@@ -1755,7 +1767,7 @@ export async function createV2FinancePayment(
     type !== 'refund'
     && netPaidAfter > 0
     && order.payment_method === 'pix'
-    && order.source === 'manual_whatsapp'
+    && (order.source === 'manual_whatsapp' || order.event_subtype === 'legacy_v1')
     && order.briefing_status === 'locked'
     && order.status === 'awaiting_payment'
   ) {
@@ -1765,7 +1777,7 @@ export async function createV2FinancePayment(
           next_action='Aguardar dados da festa',
           briefing_status='available',
           updated_at=?
-      WHERE id=? AND source='manual_whatsapp'
+      WHERE id=? AND (source='manual_whatsapp' OR event_subtype='legacy_v1')
         AND status='awaiting_payment' AND briefing_status='locked'
         AND EXISTS (
           SELECT 1 FROM v2_payments pay

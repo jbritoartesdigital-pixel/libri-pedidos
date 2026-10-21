@@ -470,6 +470,7 @@ async function checkAdminOrderEditorMobile(browser) {
       <main style="padding:12px">
         <button id="editAdminOrder" aria-expanded="false">Editar pedido e valores</button>
         <section id="adminEditOrderPanel" class="admin-edit-order-panel hidden"></section>
+        <div id="toast" class="toast hidden" role="status"></div>
       </main></html>`);
     await page.addStyleTag({content:source('public/css/admin-v2.css').toString('utf8')});
     await page.evaluate(async()=>{

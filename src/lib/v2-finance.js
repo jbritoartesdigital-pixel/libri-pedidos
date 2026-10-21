@@ -1788,14 +1788,6 @@ export async function createV2FinancePayment(
           briefing_status='available',
           updated_at=?
       WHERE id=? AND status='awaiting_payment' AND briefing_status='locked'
-        AND (source='manual_whatsapp' OR event_subtype='legacy_v1'
-          OR (json_valid((SELECT pricing_snapshot_json
-              FROM v2_order_pricing WHERE order_id=v2_orders.id))
-            AND json_extract((SELECT pricing_snapshot_json
-              FROM v2_order_pricing WHERE order_id=v2_orders.id), '$.legacyV1') = 1)
-          OR EXISTS (SELECT 1 FROM v2_order_items i
-              WHERE i.order_id=v2_orders.id AND i.item_type='product'
-                AND i.item_code GLOB 'legacy_*'))
         AND EXISTS (
           SELECT 1 FROM v2_payments pay
           WHERE pay.order_id=v2_orders.id

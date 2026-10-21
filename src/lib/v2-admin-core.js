@@ -2317,6 +2317,13 @@ export async function getV2AdminOrderDetail(
     negotiatedSnapshot = {};
   }
   const isLegacyV1 = isV2LegacyImport(order, items);
+  const canReconcileManualPix =
+    (isLegacyV1 || order.source === 'manual_whatsapp')
+    && order.status === 'awaiting_payment'
+    && order.payment_method === 'pix'
+    && payments.paidCents > 0
+    && (payments.payments || []).some(p => p.provider === 'direct_pix'
+      && p.status === 'approved' && p.payment_type !== 'refund');
   const legacyOriginalCents = Number(negotiatedSnapshot.adminNegotiatedOriginalTotalCents || 0);
   const legacyNegotiatedDiscountCents = Number(negotiatedSnapshot.adminNegotiatedDiscountCents || 0);
 
@@ -2344,6 +2351,7 @@ export async function getV2AdminOrderDetail(
       eventSubtype:
         order.event_subtype,
       isLegacyV1,
+      canReconcileManualPix,
       honoreeName:
         order.honoree_display_name,
       eventDate:
@@ -3373,8 +3381,19 @@ async function upcomingDeliveries(
             o.honoree_display_name,
             o.status,
             o.delivery_start,
-            o.delivery_end
+            o.delivery_end,
+            pr.total_cents,
+            COALESCE((
+              SELECT SUM(CASE
+                WHEN pay.status = 'approved' AND pay.payment_type != 'refund'
+                  THEN pay.amount_cents
+                WHEN pay.status = 'approved' AND pay.payment_type = 'refund'
+                  THEN -pay.amount_cents
+                ELSE 0 END)
+              FROM v2_payments pay WHERE pay.order_id = o.id
+            ), 0) AS paid_cents
           FROM v2_orders o
+          JOIN v2_order_pricing pr ON pr.order_id = o.id
           WHERE
             o.archived_at IS NULL
             AND o.status NOT IN (
@@ -3407,9 +3426,7 @@ async function upcomingDeliveries(
         status:
           row.status,
         statusLabel:
-          statusLabel(
-            row.status,
-          ),
+          statusLabel(row.status, row.paid_cents, row.total_cents),
         start:
           row.delivery_start,
         end:

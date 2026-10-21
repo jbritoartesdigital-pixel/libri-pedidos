@@ -5,6 +5,7 @@ import {
 } from '../lib/http.js';
 import { decideV2Urgency } from '../lib/v2-urgency-admin.js';
 import { setV2LegacyNegotiatedTotal } from '../lib/v2-legacy-negotiated-pricing.js';
+import { reconcileV2LegacyPixStatus } from '../lib/v2-legacy-payment-reconcile.js';
 
 import {
   createV2Preview,
@@ -65,6 +66,20 @@ export async function handleAdminOrdersV2Api(
 
   const path =
     url.pathname;
+
+  const reconcileMatch = path.match(
+    /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/reconcile-payment$/,
+  );
+  if (reconcileMatch && method === 'POST') {
+    try {
+      return json({
+        ok: true,
+        result: await reconcileV2LegacyPixStatus(env.DB, reconcileMatch[1]),
+      });
+    } catch (error) {
+      return routeError(error, Number(error?.status) || 422);
+    }
+  }
 
   const legacyPriceMatch = path.match(
     /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/legacy-price$/,

@@ -27,7 +27,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261014-finalize-shortcut-1';
+} from './admin-v2-order.js?v=20261021-legacy-discount-pix-1';
 
 import {
   renderAgenda,

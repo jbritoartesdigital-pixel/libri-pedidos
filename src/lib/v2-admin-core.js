@@ -2309,6 +2309,15 @@ export async function getV2AdminOrderDetail(
       order,
       items,
     );
+  let negotiatedSnapshot = {};
+  try {
+    negotiatedSnapshot = JSON.parse(order.pricing_snapshot_json || '{}') || {};
+  } catch {
+    negotiatedSnapshot = {};
+  }
+  const legacyOriginalCents = Number(negotiatedSnapshot.adminNegotiatedOriginalTotalCents || 0);
+  const legacyNegotiatedDiscountCents = Number(negotiatedSnapshot.adminNegotiatedDiscountCents || 0);
+
 
   return {
     order: {
@@ -2399,6 +2408,10 @@ export async function getV2AdminOrderDetail(
           order.coupon_discount_cents
           || 0,
         ),
+      negotiatedDiscountCents: order.event_subtype === 'legacy_v1'
+        ? Math.max(0, legacyNegotiatedDiscountCents) : 0,
+      originalNegotiatedTotalCents: order.event_subtype === 'legacy_v1'
+        ? Math.max(Number(order.total_cents || 0), legacyOriginalCents) : 0,
       urgencyPercent:
         Number(
           order.urgency_percent

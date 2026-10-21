@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
+# Publicação única: reconciliação Pix V1 e status no LIBRI-0064 (PR #107).
 
 on:
   workflow_dispatch:

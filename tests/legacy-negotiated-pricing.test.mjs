@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { database, day } from './helpers.mjs';
 import { setV2LegacyNegotiatedTotal } from '../src/lib/v2-legacy-negotiated-pricing.js';
 import { createV2FinancePayment } from '../src/lib/v2-finance.js';
-import { getV2AdminOrderDetail } from '../src/lib/v2-admin-core.js';
+import { getV2AdminOrderDetail, applyV2AdminAction } from '../src/lib/v2-admin-core.js';
 import { reconcileV2LegacyPixStatus } from '../src/lib/v2-legacy-payment-reconcile.js';
 
 function seeded(orderCode = 'LIBRI-1064', { legacy = true } = {}) {
@@ -250,4 +250,101 @@ test('visible admin card offers already-approved Pix repair without another fina
   assert.match(core,/canReconcileManualPix/);
   assert.match(core,/statusLabel\(row.status, row.paid_cents, row.total_cents\)/);
   assert.match(finance,/await reconcileV2LegacyPixStatus\(db, code\)/);
+});
+
+test('V1 paid order can begin production even when migrated briefing remains pending',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0068');
+  DB.sqlite.prepare("UPDATE v2_orders SET briefing_status='in_progress', status='briefing_pending' WHERE id=?").run(id);
+  const before=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(before.allowedActions.includes('start_production'),false,
+    'no approved Pix must not open production');
+  assert.equal(before.allowedActions.includes('finalize'),false);
+  await assert.rejects(applyV2AdminAction(DB,orderCode,'start_production'),/não está disponível/);
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','deposit','pix','approved',9000)
+  `).run(id);
+  const eligible=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(eligible.order.isLegacyV1,true);
+  assert.ok(eligible.allowedActions.includes('start_production'));
+  assert.ok(eligible.allowedActions.includes('finalize'),
+    'operator should see checklist of finalization conditions');
+  assert.equal(eligible.finalizeChecklist.ready,false);
+  assert.equal(eligible.finalizeChecklist.items.find(x=>x.code==='briefing').ok,false);
+  await assert.rejects(applyV2AdminAction(DB,orderCode,'finalize',{finalDeliveryConfirmed:true}),
+    /Antes de finalizar/);
+  const action=await applyV2AdminAction(DB,orderCode,'start_production');
+  assert.equal(action.status,'in_production');
+  const order={...DB.sqlite.prepare('SELECT status,briefing_status FROM v2_orders WHERE id=?').get(id)};
+  assert.deepEqual(order,{status:'in_production',briefing_status:'in_progress'},
+    'starting production never approves or changes incomplete briefing');
+  assert.equal(payments(DB,id).length,1,'no duplicated financial entry');
+});
+test('V1 with approved Pix but stale awaiting-payment state can start without additional Pix',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0069');
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','full_payment','pix','approved',18000)
+  `).run(id);
+  const eligible=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(eligible.order.status,'awaiting_payment');
+  assert.ok(eligible.allowedActions.includes('start_production'));
+  await applyV2AdminAction(DB,orderCode,'start_production');
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(id).status,'in_production');
+  assert.equal(payments(DB,id).length,1);
+});
+test('V1 full paid can finalize after genuine data and customer approval evidence',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0070');
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','full_payment','pix','approved',18000)
+  `).run(id);
+  DB.sqlite.prepare("UPDATE v2_orders SET status='briefing_pending', briefing_status='completed', delivery_start=?, delivery_end=? WHERE id=?").run(day(7),day(9),id);
+  let before=await getV2AdminOrderDetail(DB,orderCode);
+  assert.ok(before.allowedActions.includes('finalize'));
+  assert.equal(before.finalizeChecklist.items.find(x=>x.code==='preview').ok,false,
+    'never fabricate client preview approval');
+  await assert.rejects(applyV2AdminAction(DB,orderCode,'finalize',{finalDeliveryConfirmed:true}),
+    /Prévia aprovada pela cliente/);
+  DB.sqlite.prepare(`
+    INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
+    VALUES (?,'preview_approved_external','Aprovação fictícia recebida por WhatsApp','{}',datetime('now'))
+  `).run(id);
+  before=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(before.finalizeChecklist.ready,true);
+  await assert.rejects(applyV2AdminAction(DB,orderCode,'finalize'),
+    /Confirme que o arquivo ou link final/);
+  const finished=await applyV2AdminAction(DB,orderCode,'finalize',{finalDeliveryConfirmed:true});
+  assert.equal(finished.status,'finalized');
+  assert.equal(payments(DB,id).length,1);
+  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(id).status,'finalized');
+});
+test('nonlegacy, pending and refunded Pix cannot bypass start gate',async()=>{
+  const cases=[
+    {code:'LIBRI-0071',legacy:false,payment:'approved'},
+    {code:'LIBRI-0072',legacy:true,payment:'pending'},
+    {code:'LIBRI-0073',legacy:true,payment:'approved',refund:true},
+  ];
+  for (const item of cases) {
+    const {DB,id,orderCode}=seeded(item.code,{legacy:item.legacy});
+    DB.sqlite.prepare("UPDATE v2_orders SET status='briefing_pending' WHERE id=?").run(id);
+    DB.sqlite.prepare(`
+      INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+      VALUES (?,'direct_pix','deposit','pix',?,9000)
+    `).run(id,item.payment);
+    if (item.refund) DB.sqlite.prepare(`
+      INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+      VALUES (?,'direct_pix','refund','pix','approved',9000)
+    `).run(id);
+    assert.ok(!(await getV2AdminOrderDetail(DB,orderCode)).allowedActions.includes('start_production'),item.code);
+    await assert.rejects(applyV2AdminAction(DB,orderCode,'start_production'),/não está disponível/);
+  }
+});
+test('mobile order keeps start/finalize actions discoverable without changing billing',()=>{
+  const js=readFileSync('public/js/admin-v2-order.js','utf8');
+  assert.match(js,/Iniciar produção/);
+  assert.match(js,/detail\.allowedActions \|\| \[\]\)\.includes\('start_production'\)/);
+  assert.match(js,/Há dados do briefing ainda pendentes/);
+  assert.match(js,/data-order-action="finalize"/);
+  assert.match(js,/Resolver dados do convite/);
 });

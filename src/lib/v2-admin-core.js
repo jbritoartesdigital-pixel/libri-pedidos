@@ -22,6 +22,7 @@ import {
 } from './v2-whatsapp-templates.js';
 
 import { getV2AdminBriefingFieldMeta } from './v2-customer-area.js';
+import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 
 const SAO_PAULO =
   'America/Sao_Paulo';
@@ -2315,6 +2316,7 @@ export async function getV2AdminOrderDetail(
   } catch {
     negotiatedSnapshot = {};
   }
+  const isLegacyV1 = isV2LegacyImport(order, items);
   const legacyOriginalCents = Number(negotiatedSnapshot.adminNegotiatedOriginalTotalCents || 0);
   const legacyNegotiatedDiscountCents = Number(negotiatedSnapshot.adminNegotiatedDiscountCents || 0);
 
@@ -2341,6 +2343,7 @@ export async function getV2AdminOrderDetail(
         order.event_type,
       eventSubtype:
         order.event_subtype,
+      isLegacyV1,
       honoreeName:
         order.honoree_display_name,
       eventDate:
@@ -2408,9 +2411,9 @@ export async function getV2AdminOrderDetail(
           order.coupon_discount_cents
           || 0,
         ),
-      negotiatedDiscountCents: order.event_subtype === 'legacy_v1'
+      negotiatedDiscountCents: isLegacyV1
         ? Math.max(0, legacyNegotiatedDiscountCents) : 0,
-      originalNegotiatedTotalCents: order.event_subtype === 'legacy_v1'
+      originalNegotiatedTotalCents: isLegacyV1
         ? Math.max(Number(order.total_cents || 0), legacyOriginalCents) : 0,
       urgencyPercent:
         Number(

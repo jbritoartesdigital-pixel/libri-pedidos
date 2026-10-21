@@ -164,11 +164,11 @@ async function agendaChanges(db, order, pointsDelta) {
 export async function saveV2AdminOrderEdit(db,code,input){
   const p=await prepare(db,code,input);
   const note=String(input.note||'').trim();
-  if(!p.changed) reject('Nenhuma alteração foi selecionada.');
-  if(note.length<5||note.length>800) reject('Informe o que a cliente pediu no WhatsApp (mínimo 5 caracteres).');
   if(Number(input.expectedTotalCents)!==Number(p.order.total_cents)
     || String(input.expectedRevision||'')!==String(p.order.pricing_updated_at||''))
     reject('O pedido mudou desde que você abriu a edição. Atualize antes de salvar.',409);
+  if(!p.changed) reject('Nenhuma alteração foi selecionada.');
+  if(note.length<5||note.length>800) reject('Informe o que a cliente pediu no WhatsApp (mínimo 5 caracteres).');
   const agenda=await agendaChanges(db,p.order,p.pointsDelta);
   const stamp=nowIso();
   const revision=crypto.randomUUID();

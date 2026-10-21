@@ -5,6 +5,7 @@ import { database, day } from './helpers.mjs';
 import { setV2LegacyNegotiatedTotal } from '../src/lib/v2-legacy-negotiated-pricing.js';
 import { createV2FinancePayment } from '../src/lib/v2-finance.js';
 import { getV2AdminOrderDetail } from '../src/lib/v2-admin-core.js';
+import { reconcileV2LegacyPixStatus } from '../src/lib/v2-legacy-payment-reconcile.js';
 
 function seeded(orderCode = 'LIBRI-1064', { legacy = true } = {}) {
   const DB = database();
@@ -23,8 +24,8 @@ function seeded(orderCode = 'LIBRI-1064', { legacy = true } = {}) {
   DB.sqlite.prepare(`
     INSERT INTO v2_order_pricing(order_id,subtotal_cents,total_cents,
       payment_method,deposit_percent,deposit_cents,balance_cents,pricing_snapshot_json)
-    VALUES (?,18000,18000,'pix',50,9000,9000,'{"legacyV1":1}')
-  `).run(id);
+    VALUES (?,18000,18000,'pix',50,9000,9000,?)
+  `).run(id, JSON.stringify(legacy ? { legacyV1: 1 } : {}));
   return { DB, id, orderCode };
 }
 function price(DB,id) {
@@ -164,4 +165,89 @@ test('order detail includes price and receipt controls only for legacy V1 or man
   assert.match(js,/Confirme primeiro que o Pix entrou na sua conta/);
   assert.match(route,/setV2LegacyNegotiatedTotal/);
   assert.match(route,/legacy-price/);
+});
+
+test('already recorded legacy V1 Pix repairs stale awaiting-payment state without duplicating receipt',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0064');
+  DB.sqlite.prepare("UPDATE v2_orders SET briefing_status='completed' WHERE id=?").run(id);
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','full_payment','pix','approved',16500)
+  `).run(id);
+  const countBefore=payments(DB,id).length;
+  const changed=await reconcileV2LegacyPixStatus(DB,orderCode);
+  assert.equal(changed.changed,true);
+  assert.equal(changed.status,'ready_for_production');
+  assert.equal(changed.briefingStatus,'completed');
+  assert.equal(changed.paidCents,16500);
+  assert.equal(payments(DB,id).length,countBefore);
+  const row={...DB.sqlite.prepare('SELECT status,briefing_status FROM v2_orders WHERE id=?').get(id)};
+  assert.deepEqual(row,{status:'ready_for_production',briefing_status:'completed'});
+  const again=await reconcileV2LegacyPixStatus(DB,orderCode);
+  assert.equal(again.changed,false);
+  assert.equal(payments(DB,id).length,1);
+  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE action_code='finance_manual_receipt_reconciled'").get().n,1);
+});
+
+test('late imported Pix unlocks pending briefing but preserves existing fields',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0065');
+  DB.sqlite.prepare("UPDATE v2_orders SET briefing_status='in_progress' WHERE id=?").run(id);
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','deposit','pix','approved',9000)
+  `).run(id);
+  const x=await reconcileV2LegacyPixStatus(DB,orderCode);
+  assert.equal(x.status,'briefing_pending');
+  assert.equal(x.briefingStatus,'in_progress');
+  assert.equal(x.remainingCents,9000);
+  DB.sqlite.prepare("UPDATE v2_orders SET status='ready_for_delivery' WHERE id=?").run(id);
+  const unchanged=await reconcileV2LegacyPixStatus(DB,orderCode);
+  assert.equal(unchanged.changed,false);
+  assert.equal(unchanged.status,'ready_for_delivery');
+});
+
+test('reconciliation refuses missing evidence or nonlegacy orders',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0066');
+  await assert.rejects(reconcileV2LegacyPixStatus(DB,orderCode),
+    /Não há Pix manual aprovado/);
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','full_payment','pix','pending',16500)
+  `).run(id);
+  await assert.rejects(reconcileV2LegacyPixStatus(DB,orderCode),
+    /Não há Pix manual aprovado/);
+  assert.equal(DB.sqlite.prepare("SELECT status FROM v2_orders WHERE id=?").get(id).status,'awaiting_payment');
+  const other=seeded('LIBRI-2002',{legacy:false});
+  await assert.rejects(reconcileV2LegacyPixStatus(other.DB,other.orderCode),
+    /importados da V1/);
+});
+
+test('legacy snapshot marker enables pricing and Pix action even if subtype is missing',async()=>{
+  const {DB,id,orderCode}=seeded('LIBRI-0067',{legacy:false});
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET pricing_snapshot_json='{\"legacyV1\":1}' WHERE order_id=?").run(id);
+  const detail=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(detail.order.isLegacyV1,true);
+  await setV2LegacyNegotiatedTotal(DB,orderCode,{
+    expectedTotalCents:18000,agreedTotalCents:16500,reason:'Desconto especial combinado',
+  });
+  DB.sqlite.prepare(`
+    INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
+    VALUES (?,'direct_pix','full_payment','pix','approved',16500)
+  `).run(id);
+  const later=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(later.order.canReconcileManualPix,true);
+  await reconcileV2LegacyPixStatus(DB,orderCode);
+  assert.equal((await getV2AdminOrderDetail(DB,orderCode)).order.canReconcileManualPix,false);
+});
+
+test('visible admin card offers already-approved Pix repair without another financial launch',()=>{
+  const js=readFileSync('public/js/admin-v2-order.js','utf8');
+  const core=readFileSync('src/lib/v2-admin-core.js','utf8');
+  const finance=readFileSync('src/lib/v2-finance.js','utf8');
+  assert.match(js,/id="reconcileLegacyPixStatus"/);
+  assert.match(js,/Pix registrado:/);
+  assert.match(js,/Nenhum pagamento novo será lançado/);
+  assert.match(core,/canReconcileManualPix/);
+  assert.match(core,/statusLabel\(row.status, row.paid_cents, row.total_cents\)/);
+  assert.match(finance,/await reconcileV2LegacyPixStatus\(db, code\)/);
 });

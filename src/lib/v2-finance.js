@@ -1,3 +1,5 @@
+import { isV2LegacyImport } from './v2-legacy-order-marker.js';
+
 const SAO_PAULO =
   'America/Sao_Paulo';
 
@@ -1581,7 +1583,13 @@ export async function createV2FinancePayment(
             o.event_subtype,
             o.briefing_status,
             pr.total_cents,
-            pr.payment_method
+            pr.payment_method,
+            pr.pricing_snapshot_json,
+            EXISTS (
+              SELECT 1 FROM v2_order_items i
+              WHERE i.order_id=o.id AND i.item_type='product'
+                AND i.item_code GLOB 'legacy_*'
+            ) AS legacy_product
           FROM v2_orders o
           INNER JOIN v2_order_pricing pr
             ON pr.order_id = o.id
@@ -1759,6 +1767,8 @@ export async function createV2FinancePayment(
       - netPaidAfter,
     );
 
+  const isLegacyOrder = isV2LegacyImport(order, order.legacy_product
+    ? [{ item_type: 'product', item_code: 'legacy_import' }] : []);
   // A manual WhatsApp order starts as 'awaiting_payment'. When the admin
   // actually records a received Pix installment, it must no longer appear
   // as if the first payment had never arrived. This does NOT infer payment
@@ -1767,7 +1777,7 @@ export async function createV2FinancePayment(
     type !== 'refund'
     && netPaidAfter > 0
     && order.payment_method === 'pix'
-    && (order.source === 'manual_whatsapp' || order.event_subtype === 'legacy_v1')
+    && (order.source === 'manual_whatsapp' || isLegacyOrder)
     && order.briefing_status === 'locked'
     && order.status === 'awaiting_payment'
   ) {
@@ -1777,8 +1787,15 @@ export async function createV2FinancePayment(
           next_action='Aguardar dados da festa',
           briefing_status='available',
           updated_at=?
-      WHERE id=? AND (source='manual_whatsapp' OR event_subtype='legacy_v1')
-        AND status='awaiting_payment' AND briefing_status='locked'
+      WHERE id=? AND status='awaiting_payment' AND briefing_status='locked'
+        AND (source='manual_whatsapp' OR event_subtype='legacy_v1'
+          OR (json_valid((SELECT pricing_snapshot_json
+              FROM v2_order_pricing WHERE order_id=v2_orders.id))
+            AND json_extract((SELECT pricing_snapshot_json
+              FROM v2_order_pricing WHERE order_id=v2_orders.id), '$.legacyV1') = 1)
+          OR EXISTS (SELECT 1 FROM v2_order_items i
+              WHERE i.order_id=v2_orders.id AND i.item_type='product'
+                AND i.item_code GLOB 'legacy_*'))
         AND EXISTS (
           SELECT 1 FROM v2_payments pay
           WHERE pay.order_id=v2_orders.id

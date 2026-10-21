@@ -4,6 +4,7 @@ import {
   readJson,
 } from '../lib/http.js';
 import { decideV2Urgency } from '../lib/v2-urgency-admin.js';
+import { setV2LegacyNegotiatedTotal } from '../lib/v2-legacy-negotiated-pricing.js';
 
 import {
   createV2Preview,
@@ -64,6 +65,20 @@ export async function handleAdminOrdersV2Api(
 
   const path =
     url.pathname;
+
+  const legacyPriceMatch = path.match(
+    /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/legacy-price$/,
+  );
+  if (legacyPriceMatch && method === 'PATCH') {
+    try {
+      const result = await setV2LegacyNegotiatedTotal(
+        env.DB, legacyPriceMatch[1], await readJson(request),
+      );
+      return json({ ok: true, result });
+    } catch (error) {
+      return routeError(error, Number(error?.status) || 422);
+    }
+  }
 
   const previewOrderMatch =
     path.match(

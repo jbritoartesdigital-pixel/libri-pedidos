@@ -5,6 +5,31 @@ import {
   modal,
   showToast,
 } from './admin-v2-core.js';
+import { sceneLinkUrl } from './v2-scene-links.js?v=20261026-scene-links-1';
+
+async function copyProductUrl(url, successMessage) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(url);
+  } catch {
+    // Android browsers without clipboard permission keep the copy fallback.
+    const area = document.createElement('textarea');
+    area.value = url;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const copied = document.execCommand('copy');
+    area.remove();
+    if (!copied) {
+      showToast('Não foi possível copiar. Verifique as permissões do navegador.');
+      return;
+    }
+  }
+  showToast(successMessage);
+}
+
 
 function productCard(
   product,
@@ -39,6 +64,20 @@ function productCard(
                 ${variant.sceneCount ? ` • ${variant.sceneCount} cena(s)` : ''}
               </small>
 
+              ${product.active && product.slug
+                && product.pricingMode === 'scene_count'
+                && variant.active && Number(variant.sceneCount) > 0 ? `
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  data-copy-scene-link="${esc(product.slug)}"
+                  data-scene-count="${Number(variant.sceneCount)}"
+                  aria-label="Copiar link do ${esc(product.name)} com ${Number(variant.sceneCount)} cenas"
+                >
+                  Copiar link de ${Number(variant.sceneCount)} cena${Number(variant.sceneCount) === 1 ? '' : 's'}
+                </button>
+              ` : ''}
+
               <button
                 class="btn btn-ghost"
                 type="button"
@@ -67,53 +106,24 @@ export function renderStoreProducts(
     </div>
   `;
 
-  panel
-    .querySelectorAll(
-      '[data-copy-product-link]',
-    )
-    .forEach(
-      (button) =>
-        button.addEventListener(
-          'click',
-          async () => {
-            const url =
-              `${window.location.origin}/pedido/${button.dataset.copyProductLink}`;
+  panel.querySelectorAll('[data-copy-product-link]').forEach(button => {
+    button.addEventListener('click', () => {
+      const url = new URL(
+        `/pedido/${button.dataset.copyProductLink}`, window.location.origin
+      ).toString();
+      copyProductUrl(url, 'Link do formato copiado ✓');
+    });
+  });
 
-            try {
-              await navigator
-                .clipboard
-                .writeText(
-                  url,
-                );
-
-              showToast('Link do formato copiado ✓');
-            } catch {
-              const area =
-                document.createElement('textarea');
-
-              area.value =
-                url;
-
-              area.style.position =
-                'fixed';
-
-              area.style.opacity =
-                '0';
-
-              document.body
-                .appendChild(
-                  area,
-                );
-
-              area.select();
-              document.execCommand('copy');
-              area.remove();
-
-              showToast('Link do formato copiado ✓');
-            }
-          },
-        ),
-    );
+  panel.querySelectorAll('[data-copy-scene-link]').forEach(button => {
+    button.addEventListener('click', () => {
+      const scenes = Number(button.dataset.sceneCount);
+      const url = sceneLinkUrl(
+        window.location.origin, button.dataset.copySceneLink, scenes
+      );
+      copyProductUrl(url, `Link de ${scenes} cena${scenes === 1 ? '' : 's'} copiado ✓`);
+    });
+  });
 
   panel
     .querySelectorAll(

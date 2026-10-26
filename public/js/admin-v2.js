@@ -43,7 +43,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261008-growth-1';
+} from './admin-v2-config.js?v=20261026-scene-links-1';
 
 import {
   refreshBell,

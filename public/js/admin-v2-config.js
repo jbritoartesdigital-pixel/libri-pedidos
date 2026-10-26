@@ -7,7 +7,7 @@ import {
 import {
   renderStoreProducts,
   renderStoreAddons,
-} from './admin-v2-store-products.js';
+} from './admin-v2-store-products.js?v=20261026-scene-links-1';
 
 import {
   renderStoreSettings,

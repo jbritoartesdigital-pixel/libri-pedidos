@@ -167,7 +167,8 @@ function mockServer(reference, { couponOffline = false, sceneLinks = false } = {
     }
     let asset=url.pathname;
     if(asset==='/admin-v2'||asset==='/admin-v2/')asset='/admin-v2.html';
-    if(asset==='/pedido'||asset==='/pedido/')asset='/client-v2.html';
+    if(asset==='/pedido'||asset==='/pedido/'
+      ||/^\/pedido\/[a-z0-9-]+\/?$/.test(asset))asset='/client-v2.html';
     if(!/^\/(?:admin-v2\.html|client-v2\.html|(?:css|js|images)\/[a-z0-9_./-]+)$/i.test(asset)
       ||asset.includes('..'))return send(404,'Not found');
     const path=join('public',asset.slice(1));

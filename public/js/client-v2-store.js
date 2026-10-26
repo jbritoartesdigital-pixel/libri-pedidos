@@ -14,6 +14,7 @@ import {
 import { inputHtml } from './client-v2-area.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
+import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 
 const EVENT_TYPES = [
   {
@@ -4981,6 +4982,22 @@ export async function startStore(
       state,
       product,
     );
+
+    // Share links choose a specific scene count from the current active
+    // catalogue. They never override the catalogue price or invent a variant.
+    const linkedScenes = sceneLinkSelection(product, window.location.search);
+    if (linkedScenes.variant) {
+      state.selection.variantCode = linkedScenes.variant.code;
+      // A previously saved checkout must show the linked scene count before
+      // it can proceed. Keep customer/event fields, but recalculate pricing.
+      state.step = 2;
+      state.quote = null;
+      state.delivery = null;
+      state.deliveryWindow = null;
+      state.selection.comboCode = '';
+    } else if (linkedScenes.requested) {
+      showToast('Esta quantidade de cenas não está disponível. Escolha uma opção do catálogo.');
+    }
 
     await refreshConfigurationQuote(
       state,

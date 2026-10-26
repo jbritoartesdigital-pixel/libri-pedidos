@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
+# Publicação única: links de cena pré-selecionada na loja (PR #111).
 
 on:
   workflow_dispatch:

@@ -50,7 +50,7 @@ function source(path,reference) {
   sourceCache.set(key,bytes);
   return bytes;
 }
-function mockServer(reference, { couponOffline = false } = {}) {
+function mockServer(reference, { couponOffline = false, sceneLinks = false } = {}) {
   return createServer((req,res)=>{
     const url=new URL(req.url,'http://127.0.0.1');
     const send=(code,body,headers={})=>{
@@ -63,7 +63,15 @@ function mockServer(reference, { couponOffline = false } = {}) {
       if(url.pathname==='/api/v2/catalog') return json(200,{catalog:{
         products:[{code:'interactive_essential',slug:'interativo',name:'Convite Interativo',
           pricingMode:'fixed',variants:[{code:'base',label:'Padrão',isDefault:true}],
-          config:{}}],
+          config:{}},
+          ...(sceneLinks ? [{code:'cinematic_interactive',
+            slug:'cinematografico-interativo',name:'Cinematográfico Interativo',
+            pricingMode:'scene_count',config:{recommendedShortScenes:3},
+            variants:[
+              {code:'cinematic_interactive_2',label:'2 cenas',sceneCount:2,priceCents:7500,isDefault:false,active:true},
+              {code:'cinematic_interactive_3',label:'3 cenas',sceneCount:3,priceCents:10000,isDefault:false,active:true},
+              {code:'cinematic_interactive_4',label:'4 cenas',sceneCount:4,priceCents:12500,isDefault:false,active:true}
+            ]}] : [])],
         addons:[],combos:[]
       }});
       if(url.pathname==='/api/v2/terms/current')return json(200,{
@@ -519,6 +527,89 @@ async function checkAdminOrderEditorMobile(browser) {
   }
 }
 
+async function checkSceneDeepLinkAndroid(browser) {
+  const inst=await openServer('',{sceneLinks:true});
+  const ctx=await browser.newContext({
+    viewport:{width:320,height:700},isMobile:true,hasTouch:true,
+    locale:'pt-BR',timezoneId:'America/Sao_Paulo'
+  });
+  const page=await ctx.newPage(),errors=[];
+  page.on('pageerror',err=>errors.push(err.message));
+  await page.route('**/*',route=>route.request().url().startsWith(inst.url+'/')
+    ? route.continue() : route.abort('blockedbyclient'));
+  try {
+    // Old saved checkout may have another number of scenes. The exact link
+    // must return to configuration without clearing contact information.
+    await page.addInitScript(()=>{
+      localStorage.setItem('libriV2StoreState',JSON.stringify({
+        step:7,deepProductSlug:'cinematografico-interativo',
+        event:{type:'birthday',honoreeName:'Criança Teste',date:'2026-12-15'},
+        customer:{name:'Cliente Fictícia',whatsapp:'5511999999999',email:''},
+        selection:{productSlug:'cinematografico-interativo',
+          productCode:'cinematic_interactive',variantCode:'cinematic_interactive_4',
+          addonCodes:[],comboCode:'',couponCode:'',paymentMethod:'pix'}
+      }));
+    });
+    await page.goto(inst.url+'/pedido/cinematografico-interativo?cenas=3',
+      {waitUntil:'domcontentloaded'});
+    const third=page.locator('[name="variant"][value="cinematic_interactive_3"]');
+    await third.waitFor({timeout:12000});
+    assert.equal(await third.isChecked(),true,'shared link must select three scenes');
+    assert.equal(await page.getByText('R$ 100,00').count()>0,true);
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('libriV2StoreState')));
+    assert.equal(saved.selection.variantCode,'cinematic_interactive_3');
+    assert.equal(saved.step,2,'resumed checkout returns to scene selection safely');
+    assert.equal(saved.customer.name,'Cliente Fictícia');
+    const second=page.locator('[name="variant"][value="cinematic_interactive_2"]');
+    await second.check();
+    await page.waitForFunction(()=>
+      JSON.parse(localStorage.getItem('libriV2StoreState')).selection.variantCode
+      === 'cinematic_interactive_2');
+    assert.equal(await second.isChecked(),true,'customer may change scenes');
+    const scrollWidth=await page.evaluate(()=>document.documentElement.scrollWidth);
+    assert.ok(scrollWidth<=321,'no horizontal overflow at 320px');
+
+    // Admin side: exact variant button must copy a shareable URL; do not
+    // present one for a disabled variant.
+    await page.goto(inst.url+'/editor-fixture',{waitUntil:'domcontentloaded'});
+    await page.setContent(`<!doctype html><html lang="pt-BR">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <main><section id="sceneLinksPanel"></section>
+        <div id="toast" class="toast hidden" role="status"></div></main></html>`);
+    const copied=await page.evaluate(async()=>{
+      let value='';
+      Object.defineProperty(navigator,'clipboard',{configurable:true,
+        value:{writeText:async text=>{value=text;}}});
+      const admin=await import('/js/admin-v2-store-products.js');
+      const config={products:[{name:'Cinematográfico Interativo',
+        code:'cinematic_interactive',active:true,
+        slug:'cinematografico-interativo',pricingMode:'scene_count',
+        variants:[
+          {code:'cinematic_interactive_2',label:'2 cenas',sceneCount:2,
+            priceCents:7500,pointsUnits:200,active:true},
+          {code:'cinematic_interactive_3',label:'3 cenas',sceneCount:3,
+            priceCents:10000,pointsUnits:300,active:true},
+          {code:'cinematic_interactive_4',label:'4 cenas',sceneCount:4,
+            priceCents:12500,pointsUnits:400,active:false}
+        ]}]};
+      admin.renderStoreProducts(document.querySelector('#sceneLinksPanel'),config,()=>{});
+      const button=document.querySelector('[data-copy-scene-link][data-scene-count="3"]');
+      if(!button)throw Error('3 scene link button missing');
+      button.click();
+      await Promise.resolve();
+      return {value,activeButtons:document.querySelectorAll('[data-copy-scene-link]').length};
+    });
+    assert.equal(copied.activeButtons,2,'never copy disabled-variant links');
+    assert.equal(new URL(copied.value).pathname,'/pedido/cinematografico-interativo');
+    assert.equal(new URL(copied.value).searchParams.get('cenas'),'3');
+    assert.deepEqual(errors,[],'scene links should not throw on Android');
+    audit.tests.push('Android: link de 3 cenas copia, preseleciona preço e permite alterar cenas');
+  } finally {
+    await ctx.close();
+    await new Promise(resolve=>inst.server.close(resolve));
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -555,6 +646,7 @@ try{
   await checkCouponCanBeRemovedOnAndroid(browser);
   await checkAgendaPeriodMobile(browser);
   await checkAdminOrderEditorMobile(browser);
+  await checkSceneDeepLinkAndroid(browser);
   if(base)for(const width of [320,390]) {
     visualDiff('main-central-'+width+'.png',
       'alteracao-central-'+width+'.png','diff-central-'+width+'.png');

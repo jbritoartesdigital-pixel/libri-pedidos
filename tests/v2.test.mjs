@@ -129,8 +129,8 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261015-coupon-recovery-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
 });
 
 test('resumed customer order rechecks live delivery before urgency and preserves contact data', () => {
@@ -161,8 +161,8 @@ test('resumed customer order rechecks live delivery before urgency and preserves
   assert.match(customer, /state\.delivery = serverDelivery/);
   assert.match(customer, /state\.step = 4/);
   assert.match(customer, /customer: state\.customer/);
-  assert.match(shell, /client-v2\.js\?v=20261015-coupon-recovery-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
 });
 
 test('applied coupons show verified savings immediately and retain payment transparency', async () => {
@@ -225,9 +225,9 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(store, /state\.quote\?\.coupon[\s\S]*?aplicado ✓/);
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
-  assert.match(html, /client-v2\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(html, /client-v2\.js\?v=20261026-scene-links-1/);
   assert.match(html, /client-v2\.css\?v=20261012-compact-offer-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
 });
 
 test('upsell uses compact accessible popup with scrollable details and visible choice buttons', () => {
@@ -363,7 +363,7 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
 });
 
 test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
@@ -413,7 +413,7 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
@@ -504,8 +504,8 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261015-coupon-recovery-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261015-coupon-recovery-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261026-scene-links-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
 });
 
@@ -1238,9 +1238,9 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261015-coupon-recovery-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261015-coupon-recovery-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261026-scene-links-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
@@ -1483,7 +1483,7 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261015-coupon-recovery-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
@@ -1660,8 +1660,8 @@ test('manual order link recognizes direct Pix and opens briefing without another
   assert.match(manual, /window\.location\.href =\s*result\.result\.customerAreaPath/);
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
-  assert.match(shell, /client-v2\.js\?v=20261015-coupon-recovery-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261015-coupon-recovery-1/);
+  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
 });
 
 test('manual Pix receipt is available inside order detail with a bank-confirmed audited flow', async t => {
@@ -2402,7 +2402,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
     'admin-v2.js?v=20261021-order-editor-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261015-coupon-recovery-1'));
+    'client-v2.js?v=20261026-scene-links-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -3216,7 +3216,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.doesNotMatch(customer, /'Briefing'/);
   assert.ok(shell.includes('admin-v2.js?v=20261021-order-editor-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261021-order-editor-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261015-coupon-recovery-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261026-scene-links-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -3418,7 +3418,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261015-coupon-recovery-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261026-scene-links-1'));
   assert.ok(entry.includes('client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));

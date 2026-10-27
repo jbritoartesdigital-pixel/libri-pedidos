@@ -1772,6 +1772,12 @@ export async function startCustomerArea(
         if (result.alreadyPaid) {
           closeMercadoPagoTab(checkoutTab);
           area = await loadArea();
+          if (!area.briefing.locked && !area.briefing.completed) {
+            activeTab = 'briefing';
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', 'briefing');
+            history.replaceState(null, '', url);
+          }
           await render();
           showToast(result.capacityReview
             ? 'Pagamento recebido. A Libri está revisando sua janela.'

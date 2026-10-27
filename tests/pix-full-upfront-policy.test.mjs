@@ -27,7 +27,7 @@ test('Pix quote always collects 100% by default, including untrusted client 50% 
   assert.equal(q.payment.balanceCents,0);
   assert.equal(q.payment.adminDepositException,false);
   const config=await getV2StoreConfig({DB});
-  assert.equal(config.checkout.pixDepositPercent,100);
+  assert.equal(config.settings.checkout.pixDepositPercent,100);
   const card=await calculateCommercialV2Quote(DB,{...selection,paymentMethod:'card'},{adminDepositPercent:50});
   assert.equal(card.payment.depositPercent,100);
   assert.equal(card.payment.balanceCents,0);

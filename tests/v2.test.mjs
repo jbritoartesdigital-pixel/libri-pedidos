@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 26);
+  const DB = database(); assert.equal(DB.migrationCount, 27);
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='v2_flow_device_grants'").get().n, 1);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
@@ -3079,7 +3079,7 @@ test('manual finance entries are audited and bounded by real order values', asyn
   await assert.rejects(
     createV2FinancePayment(DB, {
       orderCode: order.order_code,
-      amountCents: order.total_cents + 1,
+      amountCents: order.total_cents + Math.min(500, remaining) + 1,
       paidDate: day(-1),
       paymentType: 'refund',
     }),

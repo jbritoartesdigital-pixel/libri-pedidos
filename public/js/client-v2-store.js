@@ -11,7 +11,8 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { inputHtml } from './client-v2-area.js?v=20261009-mobile-briefing-3';
+import { inputHtml } from './client-v2-area.js?v=20261027-mp-return-1';
+import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261027-mp-return-1';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
@@ -4678,6 +4679,8 @@ function renderTerms(
           return;
         }
 
+        const checkoutTab = prepareMercadoPagoTab();
+
         const button =
           document
             .getElementById(
@@ -4722,6 +4725,7 @@ function renderTerms(
               ?.checkoutUrl
           ) {
             if (result.order?.customerAreaPath) {
+              closeMercadoPagoTab(checkoutTab);
               localStorage.removeItem(
                 storeKeyFor(
                   state.simulationMode,
@@ -4741,10 +4745,13 @@ function renderTerms(
             ),
           );
 
-          window.location.href =
-            result.payment
-              .checkoutUrl;
+          const waitingPath = waitingCustomerAreaPath(
+            result.order?.customerAreaPath,
+          );
+          sendToMercadoPago(checkoutTab, result.payment.checkoutUrl);
+          window.location.href = waitingPath;
         } catch (error) {
+          closeMercadoPagoTab(checkoutTab);
           button.disabled =
             false;
 
@@ -5330,6 +5337,9 @@ export async function startManualOrder(
                   <a
                     class="btn btn-primary btn-large"
                     href="${esc(order.payment.checkoutUrl)}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    id="manualPendingPay"
                   >
                     Continuar pagamento
                   </a>
@@ -5353,6 +5363,19 @@ export async function startManualOrder(
         }
       </section>
     `;
+
+    document.getElementById('manualPendingPay')?.addEventListener('click', event => {
+      event.preventDefault();
+      const checkoutTab = prepareMercadoPagoTab();
+      try {
+        const waitingPath = waitingCustomerAreaPath(order.customerAreaPath);
+        sendToMercadoPago(checkoutTab, order.payment.checkoutUrl);
+        window.location.href = waitingPath;
+      } catch (error) {
+        closeMercadoPagoTab(checkoutTab);
+        showToast(error.message);
+      }
+    });
 
     document
       .getElementById(
@@ -5389,6 +5412,8 @@ export async function startManualOrder(
             return;
           }
 
+          const checkoutTab = prepareMercadoPagoTab();
+
           const button =
             document
               .getElementById(
@@ -5423,6 +5448,7 @@ export async function startManualOrder(
             // O Pix direto pode ter sido registrado enquanto esta página
             // estava aberta. A API retorna o pedido, nunca outro checkout.
             if (result.result?.alreadyPaid) {
+              closeMercadoPagoTab(checkoutTab);
               window.location.href =
                 result.result.customerAreaPath;
               return;
@@ -5443,9 +5469,11 @@ export async function startManualOrder(
               );
             }
 
-            window.location.href =
-              checkoutUrl;
+            const waitingPath = waitingCustomerAreaPath(order.customerAreaPath);
+            sendToMercadoPago(checkoutTab, checkoutUrl);
+            window.location.href = waitingPath;
           } catch (error) {
+            closeMercadoPagoTab(checkoutTab);
             button.disabled =
               false;
 

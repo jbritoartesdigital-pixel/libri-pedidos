@@ -409,7 +409,7 @@ export async function createMercadoPagoCheckout(
     config: {
       online: {
         success_url:
-          `${customerArea}?payment=success`,
+          `${customerArea}?payment=success&tab=briefing`,
 
         pending_url:
           `${customerArea}?payment=pending`,

@@ -168,14 +168,17 @@ jobs:
                       f"esperados 7 produtos, encontrados {products}."
                   )
 
+              # Política financeira 100% Pix publica uma nova versão
+              # imutável; o gate confere uma versão ativa válida, sem
+              # exigir que a antiga 2.0 permaneça ativa para sempre.
               terms = db.execute(
                   "SELECT COUNT(*) FROM v2_terms_versions "
-                  "WHERE version = '2.0' AND active = 1"
+                  "WHERE active = 1 AND length(trim(body)) > 0"
               ).fetchone()[0]
 
               if terms != 1:
                   raise SystemExit(
-                      "Termos 2.0 ativos não encontrados."
+                      "Esperada exatamente uma versão ativa de termos."
                   )
 
               print("✓ Migrations e núcleo V2 validados.")

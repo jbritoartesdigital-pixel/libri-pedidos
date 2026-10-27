@@ -80,8 +80,8 @@ const INTEGER_SETTINGS =
     [
       'pix_deposit_percent',
       {
-        min: 50,
-        max: 50,
+        min: 100,
+        max: 100,
       },
     ],
 
@@ -1217,7 +1217,7 @@ export async function getV2StoreConfig(
 
       checkout: {
         pixDepositPercent:
-          50,
+          100,
       },
 
       whatsappTemplates: {

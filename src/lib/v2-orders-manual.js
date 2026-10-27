@@ -282,6 +282,36 @@ function orderItemRows(
   ];
 }
 
+// This policy override is accessible exclusively through authenticated
+// admin manual-order routes, not through the public store selection.
+function authorizedManualPaymentQuote(quote, body) {
+  const requested = body.pixDepositPercent == null
+    ? 100 : Number(body.pixDepositPercent);
+  if (![50, 100].includes(requested)) {
+    throw new Error('Entrada inválida. Selecione 100% ou 50%.');
+  }
+  if (quote.payment.method !== 'pix' && requested !== 100) {
+    throw new Error('Entrada de 50% só pode ser liberada no Pix.');
+  }
+  const reason = String(body.pixSplitReason || '').trim();
+  if (requested === 50 && (reason.length < 5 || reason.length > 500)) {
+    throw new Error('Explique por que autorizou a entrada de 50% para esta cliente.');
+  }
+  const amount = Math.round(quote.totalCents * requested / 100);
+  return {
+    ...quote,
+    adminManualPixException: requested === 50
+      ? { approved: true, reason } : null,
+    pixDepositPercent: quote.payment.method === 'pix' ? requested : 100,
+    payment: {
+      ...quote.payment,
+      depositPercent: requested,
+      depositCents: amount,
+      balanceCents: Math.max(0, quote.totalCents - amount),
+    },
+  };
+}
+
 async function createManualOrderRecords(
   db,
   {
@@ -561,6 +591,8 @@ async function createManualOrderRecords(
             || null,
 
           urgencyApproved,
+          pixDepositPercent: quote.payment.depositPercent,
+          manualPixException: quote.adminManualPixException,
         }),
         stamp,
       ),
@@ -1143,7 +1175,7 @@ export async function previewV2ManualOrder(
       )
       : null;
 
-  const quote =
+  const baseQuote =
     await calculateCommercialV2Quote(
       db,
       body.selection
@@ -1166,6 +1198,7 @@ export async function previewV2ManualOrder(
           === true,
       },
     );
+  const quote = authorizedManualPaymentQuote(baseQuote, body);
 
   const delivery =
     await findV2DeliveryOptions(
@@ -1338,7 +1371,7 @@ export async function createV2ManualOrder(
       },
     );
 
-  const quote =
+  const baseQuote =
     await calculateCommercialV2Quote(
       env.DB,
       body.selection
@@ -1352,6 +1385,7 @@ export async function createV2ManualOrder(
         urgencyApproved,
       },
     );
+  const quote = authorizedManualPaymentQuote(baseQuote, body);
 
   const plan =
     await planV2AllocationForWindow(

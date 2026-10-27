@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261027-hide-zero-balance-1';
+} from './client-v2-store.js?v=20261027-delivery-chronological-1';
 
 import {
   startCustomerArea,

@@ -4445,8 +4445,8 @@ async function renderPayment(
           <span class="choice-main">
             <strong>Pix</strong>
             <small>
-              50% para confirmar o pedido.
-              O saldo é pago diretamente à Libri após a aprovação.
+              Pagamento integral antecipado para confirmar o pedido.
+              Você paga 100% com segurança pelo Mercado Pago.
             </small>
           </span>
         </label>

@@ -399,7 +399,7 @@ export async function renderManualOrder() {
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         <label class="checkline">
           <input type="radio" name="manualPayment" value="pix" checked>
-          <span>Pix • 50% agora</span>
+          <span>Pix • 100% antecipado (padrão)</span>
         </label>
 
         <label class="checkline">
@@ -411,6 +411,17 @@ export async function renderManualOrder() {
           <input id="manualUrgency" type="checkbox">
           <span>Encaixe urgente já aprovado por mim</span>
         </label>
+      </div>
+
+      <div id="manualPixSplitPanel" class="field full" style="margin-top:12px">
+        <label class="checkline">
+          <input id="manualPixHalfException" type="checkbox">
+          <span><strong>Exceção autorizada por mim: receber 50% agora</strong></span>
+        </label>
+        <small class="field-help">Use apenas quando combinar com a cliente pelo WhatsApp. O restante será cobrado por Pix diretamente à Libri após a aprovação.</small>
+        <label for="manualPixSplitReason">Motivo da exceção (obrigatório se marcar)</label>
+        <input id="manualPixSplitReason" class="input" maxlength="500"
+          placeholder="Ex.: cliente solicitou entrada de 50% pelo WhatsApp">
       </div>
 
       <button
@@ -456,6 +467,17 @@ export async function renderManualOrder() {
   renderVariants(
     config,
   );
+
+  const manualPixSplitPanel = document.getElementById('manualPixSplitPanel');
+  const manualPixHalfException = document.getElementById('manualPixHalfException');
+  const syncManualPixPolicy = () => {
+    const pix = document.querySelector('[name="manualPayment"]:checked')?.value === 'pix';
+    manualPixSplitPanel?.classList.toggle('hidden', !pix);
+    if (!pix) manualPixHalfException.checked = false;
+  };
+  document.querySelectorAll('[name="manualPayment"]').forEach(radio =>
+    radio.addEventListener('change', syncManualPixPolicy));
+  syncManualPixPolicy();
 
   document
     .getElementById('manualProduct')
@@ -513,6 +535,8 @@ export async function renderManualOrder() {
                       document
                         .getElementById('manualUrgency')
                         .checked,
+                    pixDepositPercent: document.getElementById('manualPixHalfException').checked ? 50 : 100,
+                    pixSplitReason: document.getElementById('manualPixSplitReason').value.trim(),
                   }),
               },
             );
@@ -586,6 +610,8 @@ export async function renderManualOrder() {
                               document
                                 .getElementById('manualUrgency')
                                 .checked,
+                            pixDepositPercent: document.getElementById('manualPixHalfException').checked ? 50 : 100,
+                            pixSplitReason: document.getElementById('manualPixSplitReason').value.trim(),
                             deliveryWindow: {
                               start,
                               end,

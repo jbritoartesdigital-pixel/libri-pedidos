@@ -2091,6 +2091,9 @@ async function repriceV2PaymentMethod(
           SELECT
             total_cents,
             payment_method,
+            deposit_percent,
+            deposit_cents,
+            balance_cents,
             pricing_snapshot_json
           FROM v2_order_pricing
           WHERE order_id = ?
@@ -2134,17 +2137,18 @@ async function repriceV2PaymentMethod(
     : priceWithCardProcessingFee(baseTotalCents, method);
   const { totalCents, cardFeeCents, cardFeePercent } = pricing;
 
-  const depositPercent =
-    method === 'card'
-      ? 100
-      : 50;
-
-  const depositCents =
-    Math.round(
-      totalCents
-      * depositPercent
-      / 100,
-    );
+  // Honor the terms of unpaid orders opened BEFORE this policy changed,
+  // including a 50% Pix concession. New card -> Pix conversions default
+  // to 100%, unless an existing Pix split was already on record.
+  const savedPixPercent = Number(snapshot.pixDepositPercent);
+  const contractedPixPercent = [50, 100].includes(savedPixPercent)
+    ? savedPixPercent
+    : (previousMethod === 'pix' && Number(row.deposit_percent) === 50 ? 50 : 100);
+  const depositPercent = method === 'pix' ? contractedPixPercent : 100;
+  const depositCents = method === previousMethod && method === 'pix'
+    && Number(row.deposit_cents) > 0 && Number(row.deposit_cents) <= totalCents
+    ? Number(row.deposit_cents)
+    : Math.round(totalCents * depositPercent / 100);
 
   const balanceCents =
     Math.max(
@@ -2159,6 +2163,7 @@ async function repriceV2PaymentMethod(
     cardFeeCents,
     cardFeePercent,
     totalCents,
+    pixDepositPercent: contractedPixPercent,
     payment: {
       ...(snapshot.payment || {}),
       method,
@@ -2336,7 +2341,7 @@ async function createUrgencyRequestOrderRecords(
   const projectedBaseTotalCents = Number(quote.subtotalCents || 0) + urgencyAmountCents;
   const { totalCents: projectedTotalCents, cardFeeCents: projectedCardFeeCents, cardFeePercent: projectedCardFeePercent } =
     priceWithCardProcessingFee(projectedBaseTotalCents, quote.payment.method);
-  const projectedDepositPercent = quote.payment.method === 'card' ? 100 : 50;
+  const projectedDepositPercent = 100;
   const projectedDepositCents = Math.round(projectedTotalCents * projectedDepositPercent / 100);
   const projectedBalanceCents = Math.max(0, projectedTotalCents - projectedDepositCents);
   const projectedQuote = {
@@ -3215,6 +3220,7 @@ export async function repriceApprovedV2Urgency(
             combo_discount_cents,
             coupon_discount_cents,
             payment_method,
+            p.deposit_percent,
             pricing_snapshot_json,
             u.urgency_percent AS requested_urgency_percent
           FROM v2_order_pricing p
@@ -3275,11 +3281,11 @@ export async function repriceApprovedV2Urgency(
   const { totalCents, cardFeeCents, cardFeePercent } =
     priceWithCardProcessingFee(baseTotalCents, method);
 
-  const depositPercent =
-    method
-    === 'card'
-      ? 100
-      : 50;
+  const oldPixPercent = Number(snapshot.pixDepositPercent);
+  const contractedPixPercent = [50, 100].includes(oldPixPercent)
+    ? oldPixPercent
+    : (row.payment_method === 'pix' && Number(row.deposit_percent) === 50 ? 50 : 100);
+  const depositPercent = method === 'pix' ? contractedPixPercent : 100;
 
   const depositCents =
     Math.round(
@@ -3313,6 +3319,7 @@ export async function repriceApprovedV2Urgency(
     cardFeeCents,
     cardFeePercent,
     totalCents,
+    pixDepositPercent: contractedPixPercent,
 
     payment: {
       ...(

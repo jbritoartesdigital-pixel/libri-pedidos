@@ -1939,14 +1939,15 @@ function quoteHtml(
         === 'pix'
           ? `
             <div class="quote-row">
-              <span>Entrada agora</span>
+              <span>${quote.payment.balanceCents > 0 ? 'Entrada agora' : 'Pagamento integral agora'}</span>
               <strong>${money(quote.payment.depositCents)}</strong>
             </div>
 
-            <div class="quote-row">
-              <span>Saldo depois da aprovação</span>
-              <strong>${money(quote.payment.balanceCents)}</strong>
-            </div>
+            ${quote.payment.balanceCents > 0 ? `
+              <div class="quote-row">
+                <span>Saldo depois da aprovação</span>
+                <strong>${money(quote.payment.balanceCents)}</strong>
+              </div>` : ''}
           `
           : `
             <div class="quote-row">
@@ -4435,8 +4436,8 @@ async function renderPayment(
           <span class="choice-main">
             <strong>Pix</strong>
             <small>
-              50% para confirmar o pedido.
-              O saldo é pago diretamente à Libri após a aprovação.
+              Pagamento integral antecipado pelo Mercado Pago.
+              O pedido é confirmado após a aprovação do Pix.
             </small>
           </span>
         </label>

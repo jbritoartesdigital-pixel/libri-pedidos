@@ -849,11 +849,10 @@ export async function calculateCommercialV2Quote(
   const { totalCents, cardFeeCents, cardFeePercent } =
     priceWithCardProcessingFee(baseTotalCents, paymentMethod);
 
-  const depositPercent =
-    paymentMethod
-    === 'card'
-      ? 100
-      : 50;
+  // New self-service checkouts are paid in full. A 50% Pix exception is
+  // granted only in the authenticated admin manual-order workflow, never
+  // through a public selection field or query parameter.
+  const depositPercent = 100;
 
   const depositCents =
     Math.round(

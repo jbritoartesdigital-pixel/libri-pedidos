@@ -1042,7 +1042,7 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   mp.approve(payment.payment.providerOrderId);
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
   const area = await getV2CustomerArea(e, token); assert.equal(area.briefing.locked, false);
-  assert.equal(area.payment.paidCents, 4551); assert.equal(area.payment.remainingCents, 4550);
+  assert.equal(area.payment.paidCents, 9101); assert.equal(area.payment.remainingCents, 0);
   DB.sqlite.prepare("UPDATE v2_settings SET value='pix-teste' WHERE key='balance_pix_key'").run();
   DB.sqlite.prepare("UPDATE v2_settings SET value='Libri Teste' WHERE key='balance_pix_recipient_name'").run();
   DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending'").run();
@@ -1743,7 +1743,7 @@ test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending t
     .run(order.id);
   const deposit = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
-    amountCents: checkout.payment.amountDueNowCents,
+    amountCents: Math.round(checkout.payment.totalCents / 2),
     paidDate: day(-1),
     paymentType: 'deposit',
     note: 'Primeira parcela de Pix recebida fora do sistema',
@@ -1754,7 +1754,7 @@ test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending t
   ).get(order.id);
   assert.equal(first.status, 'briefing_pending');
   assert.equal(first.briefing_status, 'available');
-  assert.equal(deposit.remainingCents, checkout.payment.totalCents - checkout.payment.amountDueNowCents);
+  assert.equal(deposit.remainingCents, checkout.payment.totalCents - Math.round(checkout.payment.totalCents / 2));
   const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
   assert.equal(detail.payment.remainingBalanceCents, deposit.remainingCents);
 
@@ -1820,7 +1820,11 @@ test('manual duplicated Pix can be annulled with audit while Mercado Pago remain
   const order = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE order_code=?')
     .get(checkout.order.code);
   const paid = await getV2AdminOrderDetail(DB, order.order_code);
-  const remaining = paid.payment.remainingBalanceCents;
+  // A paid original order can acquire an extra contracted service later.
+  // This gives the accounting/void test a genuine receivable without pretending
+  // that a *new* Pix checkout still collects only 50%.
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
+  const remaining = (await getV2AdminOrderDetail(DB, order.order_code)).payment.remainingBalanceCents;
   assert.ok(remaining > 0);
   DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending' WHERE id=?").run(order.id);
   const recorded = await applyV2AdminAction(DB, order.order_code, 'balance_received');
@@ -1884,6 +1888,7 @@ test('a mistaken manual Pix entry can be annulled even after an order is finaliz
     await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
     const order = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE order_code=?')
       .get(checkout.order.code);
+    DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
     const previous = await getV2AdminOrderDetail(DB, order.order_code);
     const manual = await createV2FinancePayment(DB, {
       orderCode: order.order_code,
@@ -3032,7 +3037,9 @@ test('manual finance entries are audited and bounded by real order values', asyn
     FROM v2_payments WHERE order_id=?
   `).get(order.id).n;
 
-  const remaining = order.total_cents - paidBefore;
+  // A separate authorized extra can create a receivable after full Pix.
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
+  const remaining = order.total_cents + 1000 - paidBefore;
   assert.ok(remaining > 0);
 
   const added = await createV2FinancePayment(DB, {
@@ -3459,15 +3466,16 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     false,
   );
 
-  const remaining = incomplete.payment.remainingBalanceCents;
-  assert.ok(remaining > 0);
-
+  // New public Pix has no balance by default. An additional contracted item
+  // introduced after payment is handled through the existing manual balance.
+  assert.equal(incomplete.payment.remainingBalanceCents, 0);
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
   await createV2FinancePayment(DB, {
     orderCode: order.order_code,
-    amountCents: remaining,
+    amountCents: 1000,
     paidDate: day(-1),
     paymentType: 'balance',
-    note: 'Saldo para teste do checklist',
+    note: 'Saldo de serviço adicional após o pagamento integral',
   });
 
   DB.sqlite.prepare(`

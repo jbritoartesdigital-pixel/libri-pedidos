@@ -574,8 +574,12 @@ function summaryHtml(
   const pixTotalCents = Number(area.payment.baseTotalCents ?? totalCents);
   const cardTotalCents = Number(area.payment.cardTotalCents ?? totalCents);
   const cardExtraCents = Math.max(0, cardTotalCents - pixTotalCents);
-  const pixDueCents = Math.round(pixTotalCents * 0.5);
+  const pixPercent = Number(area.payment.pixDepositPercent) === 50 ? 50 : 100;
+  const pixDueCents = isPix ? Number(area.payment.depositCents)
+    : Math.round(pixTotalCents * pixPercent / 100);
   const pixBalanceCents = Math.max(0, pixTotalCents - pixDueCents);
+  const pixLabel = pixBalanceCents > 0
+    ? `Pix • entrada de ${pixPercent}%` : 'Pix • pagamento integral';
   const dueNowCents = isPix
     ? pixDueCents
     : totalCents;
@@ -658,7 +662,7 @@ function summaryHtml(
                 data-card="${cardTotalCents}"
               >${money(dueNowCents)}</strong>
             </div>
-            <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
+            <small id="paymentDueLabel">${isPix ? pixLabel : 'Cartão • pagamento integral'}</small>
           </div>
 
           <p
@@ -669,7 +673,9 @@ function summaryHtml(
             data-card-total="${cardTotalCents}"
             data-card-extra="${cardExtraCents}"
           >${isPix
-            ? `Total do pedido: ${money(pixTotalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+            ? (pixBalanceCents > 0
+                ? `Total do pedido: ${money(pixTotalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+                : `Total do pedido: ${money(pixTotalCents)} • pagamento integral`)
             : `Total do pedido: ${money(cardTotalCents)}${cardExtraCents > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardExtraCents)}` : ''}`}</p>
 
           <p class="muted"><strong>Escolha como deseja pagar.</strong> Se não conseguiu com um meio, pode trocar sem refazer o pedido.</p>
@@ -677,7 +683,7 @@ function summaryHtml(
             id="paymentMethodChooser"
             class="payment-methods"
           >
-            <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
+            <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> ${pixLabel}</label>
             <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • ${money(cardTotalCents)}${cardExtraCents > 0 ? ' (inclui acréscimo para taxa 4,97%)' : ''}</label>
           </div>
 
@@ -763,7 +769,9 @@ function summaryHtml(
               isPix
                 ? (hasPaid
                     ? `Pix • pago ${money(paidCents)} • saldo ${money(remainingCents)}`
-                    : `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`)
+                    : (pixBalanceCents > 0
+                      ? `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`
+                      : `Pix • pagamento integral ${money(pixDueCents)}`))
                 : (hasPaid
                     ? `Cartão • pago ${money(paidCents)}`
                     : `Cartão • ${money(totalCents)}`)
@@ -1734,7 +1742,9 @@ export async function startCustomerArea(
 
               label.textContent =
                 method === 'pix'
-                  ? 'Pix • entrada de 50%'
+                  ? (Number(total.dataset.pix) < Number(breakdown?.dataset.total)
+                      ? `Pix • entrada de ${Math.round(100 * Number(total.dataset.pix) / Number(breakdown?.dataset.total))}%`
+                      : 'Pix • pagamento integral')
                   : 'Cartão • pagamento integral';
 
               if (breakdown) {
@@ -1756,14 +1766,18 @@ export async function startCustomerArea(
                 const cardFee = Number(breakdown.dataset.cardExtra || 0);
                 breakdown.textContent =
                   method === 'pix'
-                    ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
+                    ? (Number(breakdown.dataset.balance) > 0
+                        ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
+                        : `Total do pedido: ${orderTotal} • pagamento integral`)
                     : `Total do pedido: ${cardTotal}${cardFee > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardFee)}` : ''}`;
               }
 
               if (reviewLine) {
                 reviewLine.textContent =
                   method === 'pix'
-                    ? `Pix • entrada ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
+                    ? (Number(breakdown?.dataset.balance || 0) > 0
+                        ? `Pix • entrada ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
+                        : `Pix • pagamento integral ${money(Number(total.dataset.pix))}`)
                     : `Cartão • ${money(Number(total.dataset.card))}`;
               }
             },

@@ -693,6 +693,9 @@ export async function calculateCommercialV2Quote(
     customerId = null,
     eventType = null,
     urgencyApproved = false,
+    // Only authenticated admin manual-order calls may set this. Never read
+    // a deposit override from the public selection payload.
+    adminDepositPercent = 100,
   } = {},
 ) {
   /*
@@ -850,10 +853,7 @@ export async function calculateCommercialV2Quote(
     priceWithCardProcessingFee(baseTotalCents, paymentMethod);
 
   const depositPercent =
-    paymentMethod
-    === 'card'
-      ? 100
-      : 50;
+    paymentMethod === 'pix' && adminDepositPercent === 50 ? 50 : 100;
 
   const depositCents =
     Math.round(
@@ -938,6 +938,10 @@ export async function calculateCommercialV2Quote(
         paymentMethod,
 
       depositPercent,
+
+      // Used only to preserve an administrator-authorized exception on
+      // later resumes/repricing, not exposed as a customer-selectable option.
+      adminDepositException: paymentMethod === 'pix' && depositPercent === 50,
 
       depositCents,
 

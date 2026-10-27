@@ -7,11 +7,11 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261027-pix-full-upfront-1';
+} from './client-v2-store.js?v=20261027-hide-zero-balance-1';
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261012-pix-reconfirm-1';
+} from './client-v2-area.js?v=20261027-hide-zero-balance-1';
 
 async function bootstrap() {
   const route =

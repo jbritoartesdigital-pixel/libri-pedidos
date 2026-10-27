@@ -362,7 +362,7 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /showBriefingMissing\(missing\)/);
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
-  assert.match(entry, /client-v2-area\.js\?v=20261027-delivery-chronological-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261027-hide-zero-balance-1/);
   assert.match(shell, /client-v2\.js\?v=20261027-delivery-chronological-1/);
 });
 
@@ -412,7 +412,7 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /invalidatePixConfirmationOnEdit\(control\.dataset\.field, control\.value\)/);
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
-  assert.match(entry, /client-v2-area\.js\?v=20261027-delivery-chronological-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261027-hide-zero-balance-1/);
   assert.match(shell, /client-v2\.js\?v=20261027-delivery-chronological-1/);
 });
 
@@ -506,7 +506,7 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(area, /export function inputHtml/);
   assert.ok(appShell.includes('/js/client-v2.js?v=20261027-delivery-chronological-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261027-delivery-chronological-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261027-delivery-chronological-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261027-hide-zero-balance-1'));
 });
 
 test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
@@ -1239,7 +1239,7 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
   assert.ok(shell.includes('/js/client-v2.js?v=20261027-delivery-chronological-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261027-delivery-chronological-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261027-hide-zero-balance-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261027-delivery-chronological-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -1484,7 +1484,7 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
   assert.ok(shell.includes('/js/client-v2.js?v=20261027-delivery-chronological-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261027-delivery-chronological-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261027-hide-zero-balance-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -3426,7 +3426,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   assert.ok(html.includes('/js/client-v2.js?v=20261027-delivery-chronological-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261027-delivery-chronological-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261027-hide-zero-balance-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261027-delivery-chronological-1'));
   assert.match(area, /uploadCustomerPhoto/);

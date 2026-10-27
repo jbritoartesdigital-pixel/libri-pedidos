@@ -775,12 +775,21 @@ export async function findV2DeliveryOptions(
     };
   }
 
+  // Keep the closest viable window highlighted, but present all choices
+  // in calendar order so earlier deliveries remain easy to choose.
+  const recommendedCandidate = selected[0];
+
   const options =
     selected
+      .slice()
+      .sort(
+        (a, b) =>
+          a.start - b.start
+          || a.end - b.end,
+      )
       .map(
         (
           candidate,
-          index,
         ) => ({
           start:
             formatIsoDay(
@@ -793,7 +802,7 @@ export async function findV2DeliveryOptions(
             ),
 
           recommended:
-            index === 0,
+            candidate === recommendedCandidate,
         }),
       );
 

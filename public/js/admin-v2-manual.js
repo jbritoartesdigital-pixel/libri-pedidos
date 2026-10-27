@@ -458,6 +458,23 @@ export async function renderManualOrder() {
     }, 400);
   });
 
+  // If the administrator changes the payment arrangement after a quote,
+  // require a fresh review instead of creating a differently priced order.
+  const halfDepositControl = document.getElementById('manualHalfDeposit');
+  const clearManualQuote = () => {
+    const area = document.getElementById('manualQuoteArea');
+    if (area) area.innerHTML = '';
+  };
+  halfDepositControl?.addEventListener('change', clearManualQuote);
+  document.querySelectorAll('[name="manualPayment"]').forEach(input => {
+    input.addEventListener('change', () => {
+      const pix = document.querySelector('[name="manualPayment"]:checked')?.value === 'pix';
+      halfDepositControl.disabled = !pix;
+      if (!pix) halfDepositControl.checked = false;
+      clearManualQuote();
+    });
+  });
+
   renderVariants(
     config,
   );

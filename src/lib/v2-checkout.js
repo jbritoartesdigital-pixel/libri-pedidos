@@ -2138,9 +2138,12 @@ async function repriceV2PaymentMethod(
   // Orders created before this policy change retain their recorded 50%
   // arrangement on a resumed Pix attempt. A new public order is always 100%.
   const originalPercent = Number(snapshot.payment?.depositPercent ?? row.deposit_percent);
-  const depositPercent = method === 'card' ? 100
-    : snapshot.payment?.adminDepositException === true
-      || (method === previousMethod && originalPercent === 50) ? 50 : 100;
+  // Keep the agreement made before the policy change even if the client
+  // checks card first and then returns to Pix on an unpaid old order.
+  const legacyPixHalf = snapshot.legacyPixDepositPercent === 50
+    || (previousMethod === 'pix' && originalPercent === 50);
+  const depositPercent = method === 'pix'
+    && (snapshot.payment?.adminDepositException === true || legacyPixHalf) ? 50 : 100;
 
   const depositCents =
     Math.round(
@@ -2158,6 +2161,7 @@ async function repriceV2PaymentMethod(
 
   const nextSnapshot = {
     ...snapshot,
+    ...(legacyPixHalf ? { legacyPixDepositPercent: 50 } : {}),
     baseTotalCents,
     cardFeeCents,
     cardFeePercent,
@@ -3281,8 +3285,10 @@ export async function repriceApprovedV2Urgency(
     priceWithCardProcessingFee(baseTotalCents, method);
 
   const originalPercent = Number(snapshot.payment?.depositPercent ?? row.deposit_percent);
+  const legacyPixHalf = snapshot.legacyPixDepositPercent === 50
+    || (row.payment_method === 'pix' && originalPercent === 50);
   const depositPercent = method === 'pix'
-    && (snapshot.payment?.adminDepositException === true || originalPercent === 50)
+    && (snapshot.payment?.adminDepositException === true || legacyPixHalf)
       ? 50 : 100;
 
   const depositCents =
@@ -3301,6 +3307,7 @@ export async function repriceApprovedV2Urgency(
 
   const nextSnapshot = {
     ...snapshot,
+    ...(legacyPixHalf ? { legacyPixDepositPercent: 50 } : {}),
 
     urgency: {
       approved:

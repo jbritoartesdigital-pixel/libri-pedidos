@@ -1,6 +1,5 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
-# Release pontual: checkout Mercado Pago em aba separada e retorno ao briefing (PR #119).
 
 on:
   workflow_dispatch:

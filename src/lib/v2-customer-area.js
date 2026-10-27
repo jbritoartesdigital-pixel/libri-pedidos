@@ -2750,6 +2750,13 @@ export async function getV2CustomerArea(
         context.order.payment_method,
       baseTotalCents,
       cardTotalCents,
+      // For historical/admin 50% Pix, keep the signed-off payment split
+      // visible even if a customer is comparing with the card method.
+      pixDepositPercent: [50, 100].includes(Number(pricingSnapshot.pixDepositPercent))
+        ? Number(pricingSnapshot.pixDepositPercent)
+        : context.order.payment_method === 'pix'
+          && Number(context.order.deposit_cents) < Number(context.order.total_cents)
+          ? 50 : 100,
       cardFeeCents,
       cardFeePercent: cardFeeCents > 0 ? 4.97 : 0,
       deadlineAt: (() => {

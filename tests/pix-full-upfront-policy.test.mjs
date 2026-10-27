@@ -103,6 +103,17 @@ test('existing 50% Pix orders are not repriced on resume while new orders remain
   assert.equal(provider.bodies.at(-1).total_amount,(resumed.payment.amountDueNowCents/100).toFixed(2));
   const saved=DB.sqlite.prepare('SELECT deposit_percent FROM v2_order_pricing WHERE order_id=?').get(id);
   assert.equal(saved.deposit_percent,50);
+  const card=await resumeV2Payment(request,env(DB),initial.order.publicToken,{
+    paymentMethod:'card',...await acceptedTerms(DB)
+  });
+  assert.equal(card.payment.amountDueNowCents,card.payment.totalCents);
+  const backToPix=await resumeV2Payment(request,env(DB),initial.order.publicToken,{
+    paymentMethod:'pix',...await acceptedTerms(DB)
+  });
+  assert.equal(backToPix.payment.amountDueNowCents,
+    Math.round(backToPix.payment.totalCents*.5),'older 50% deal must survive checking another method');
+  const snapshotAfter=JSON.parse(DB.sqlite.prepare('SELECT pricing_snapshot_json FROM v2_order_pricing WHERE order_id=?').get(id).pricing_snapshot_json);
+  assert.equal(snapshotAfter.legacyPixDepositPercent,50);
 });
 test('payment wording and admin exception are visible with cache refreshed',()=>{
   const client=readFileSync('public/js/client-v2-store.js','utf8');

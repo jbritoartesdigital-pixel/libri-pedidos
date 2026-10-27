@@ -2790,8 +2790,13 @@ function renderDelivery(
   render,
 ) {
   const options =
-    state.delivery?.options
-    || [];
+    (state.delivery?.options || [])
+      .slice()
+      .sort(
+        (a, b) =>
+          a.start.localeCompare(b.start)
+          || a.end.localeCompare(b.end),
+      );
 
   const urgencyPercent = Math.max(1, Math.min(100,
     Number(state.catalog?.rules?.urgencyPercent || 30)));
@@ -2811,6 +2816,8 @@ function renderDelivery(
         <p class="page-subtitle">
           Escolha uma faixa de 3 dias para o prazo de entrega.
           A produção pode ser concluída em menos dias dentro dessa faixa.
+          A recomendação é apenas uma sugestão: você pode escolher
+          qualquer faixa disponível, inclusive anterior à recomendada.
         </p>
       </div>
 

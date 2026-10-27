@@ -135,3 +135,15 @@ test('client/admin screens show integral Pix by default with a manual exception 
   assert.match(admin,/paymentDepositPercent:/);
   assert.match(commercial,/adminDepositPercent = 100/);
 });
+
+test('published default terms describe 100% Pix and retain immutable previous terms',()=>{
+  const DB=database();
+  const current=DB.sqlite.prepare('SELECT version,body FROM v2_terms_versions WHERE active=1').get();
+  assert.equal(current.version,'2.0-pix-full-20261027');
+  assert.match(current.body,/pagamento integral \(100%\)/);
+  assert.match(current.body,/entrada de 50%/);
+  assert.doesNotMatch(current.body,/é necessário o pagamento de 50% do valor total/);
+  const old=DB.sqlite.prepare("SELECT active,body FROM v2_terms_versions WHERE version='2.0'").get();
+  assert.equal(old.active,0);
+  assert.match(old.body,/é necessário o pagamento de 50% do valor total/);
+});

@@ -550,6 +550,14 @@ async function createManualOrderRecords(
             quote.payment
               .method,
 
+          depositPercent:
+            quote.payment
+              .depositPercent,
+
+          adminDepositException:
+            quote.payment
+              .adminDepositException === true,
+
           comboCode:
             quote.combo
               ?.code
@@ -1107,6 +1115,17 @@ async function createManualHold(
   };
 }
 
+function adminApprovedPixDepositPercent(body) {
+  const percent = body.paymentDepositPercent ?? 100;
+  if (percent !== 100 && percent !== 50) {
+    throw new Error('Condição de pagamento inválida. Use 100% ou 50%.');
+  }
+  if (percent === 50 && body.selection?.paymentMethod !== 'pix') {
+    throw new Error('Entrada de 50% é uma exceção disponível somente no Pix.');
+  }
+  return percent;
+}
+
 export async function previewV2ManualOrder(
   db,
   body = {},
@@ -1164,6 +1183,8 @@ export async function previewV2ManualOrder(
         urgencyApproved:
           body.urgencyApproved
           === true,
+        adminDepositPercent:
+          adminApprovedPixDepositPercent(body),
       },
     );
 
@@ -1350,6 +1371,8 @@ export async function createV2ManualOrder(
           event.type,
 
         urgencyApproved,
+        adminDepositPercent:
+          adminApprovedPixDepositPercent(body),
       },
     );
 

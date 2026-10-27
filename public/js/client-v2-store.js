@@ -1952,10 +1952,6 @@ function quoteHtml(
                 <span>Pagamento integral antecipado no Pix</span>
                 <strong>${money(quote.payment.depositCents)}</strong>
               </div>
-              <div class="quote-row">
-                <span>Saldo após o pagamento</span>
-                <strong>R$ 0,00</strong>
-              </div>
             `}
           `
           : `

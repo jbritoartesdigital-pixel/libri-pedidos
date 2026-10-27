@@ -105,18 +105,18 @@ test('existing old 50% Pix agreement is preserved when retrying a payment, witho
     deliveryWindow:{start:day(15),end:day(17)},...await terms(DB),
   });
   // Synthetic historical order created before the new default.
-  const oldRow=DB.sqlite.prepare('SELECT id,total_cents,pricing_snapshot_json FROM v2_order_pricing WHERE order_id=(SELECT id FROM v2_orders WHERE order_code=?)').get(order.order.code);
+  const oldRow=DB.sqlite.prepare('SELECT order_id,total_cents,pricing_snapshot_json FROM v2_order_pricing WHERE order_id=(SELECT id FROM v2_orders WHERE order_code=?)').get(order.order.code);
   const original=JSON.parse(oldRow.pricing_snapshot_json);
   const half=Math.round(oldRow.total_cents/2);
   original.payment.depositPercent=50;
   original.payment.depositCents=half;
   original.payment.balanceCents=oldRow.total_cents-half;
   original.payment.adminDepositException=false;
-  DB.sqlite.prepare('UPDATE v2_order_pricing SET deposit_percent=50,deposit_cents=?,balance_cents=?,pricing_snapshot_json=? WHERE id=?')
-    .run(half,oldRow.total_cents-half,JSON.stringify(original),oldRow.id);
+  DB.sqlite.prepare('UPDATE v2_order_pricing SET deposit_percent=50,deposit_cents=?,balance_cents=?,pricing_snapshot_json=? WHERE order_id=?')
+    .run(half,oldRow.total_cents-half,JSON.stringify(original),oldRow.order_id);
   // A deliberate method switch to card and back should follow current full
   // policy; a resumed Pix on an unchanged historic order remains 50%.
-  const dbrow=DB.sqlite.prepare('SELECT deposit_percent,deposit_cents,balance_cents FROM v2_order_pricing WHERE id=?').get(oldRow.id);
+  const dbrow=DB.sqlite.prepare('SELECT deposit_percent,deposit_cents,balance_cents FROM v2_order_pricing WHERE order_id=?').get(oldRow.order_id);
   assert.equal(dbrow.deposit_percent,50);
   const area=await getV2CustomerArea(env(DB),order.order.publicToken);
   assert.equal(area.payment.pixDepositPercent,50);

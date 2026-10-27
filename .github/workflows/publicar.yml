@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
+# Liberação pontual de interface: PR #117, ocultar saldo zero do Pix integral.
 
 on:
   workflow_dispatch:

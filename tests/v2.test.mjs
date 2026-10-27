@@ -1024,10 +1024,10 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   DB.sqlite.prepare('UPDATE v2_order_pricing SET subtotal_cents = 7001, combo_discount_cents = 1000, coupon_discount_cents = 500').run();
   const approved = await decideV2Urgency(DB, result.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });
   assert.equal(approved.pricing.totalCents, 9101); assert.equal(approved.pricing.urgencyAmountCents, 2100);
-  assert.equal(approved.pricing.payment.depositCents, 4551); assert.equal(approved.pricing.payment.balanceCents, 4550);
+  assert.equal(approved.pricing.payment.depositCents, 9101); assert.equal(approved.pricing.payment.balanceCents, 0);
   await assert.rejects(decideV2Urgency(DB, result.order.code, { decision: 'reject', note: 'Duplicada' }));
   const payment = await resumeV2Payment(request, e, token, await terms(DB));
-  assert.equal(mp.bodies[0].total_amount, '45.51');
+  assert.equal(mp.bodies[0].total_amount, '91.01');
   assert.equal(mp.bodies[0].capture_mode, undefined);
   assert.equal(mp.bodies[0].expiration_time, undefined);
   assert.equal(mp.bodies[0].description, undefined);
@@ -1245,7 +1245,7 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
   assert.match(area, /cardTotalCents/);
-  assert.match(area, /Pix • entrada de 50%/);
+  assert.match(area, /Pix • pagamento integral/);
 });
 
 test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', async () => {
@@ -1255,8 +1255,8 @@ test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', a
   const card = await calculateCommercialV2Quote(DB, { productCode: 'interactive_essential', paymentMethod: 'card' });
   assert.equal(pix.totalCents, 7000);
   assert.equal(pix.cardFeeCents, 0);
-  assert.equal(pix.payment.depositCents, 3500);
-  assert.equal(pix.payment.balanceCents, 3500);
+  assert.equal(pix.payment.depositCents, 7000);
+  assert.equal(pix.payment.balanceCents, 0);
   assert.equal(card.baseTotalCents, 7000);
   assert.equal(card.cardFeeCents, 366);
   assert.equal(card.cardFeePercent, 4.97);
@@ -1292,8 +1292,8 @@ test('card fee is the exact Mercado Pago checkout total, and switching back to P
   });
   assert.equal(pix.order.code, card.order.code);
   assert.equal(pix.payment.totalCents, 7000);
-  assert.equal(pix.payment.amountDueNowCents, 3500);
-  assert.equal(mp.bodies[1].total_amount, '35.00');
+  assert.equal(pix.payment.amountDueNowCents, 7000);
+  assert.equal(mp.bodies[1].total_amount, '70.00');
   assert.equal((await getV2CustomerArea(e, card.order.publicToken)).payment.cardTotalCents, 7366);
 
   const cardAgain = await resumeV2Payment(request, e, card.order.publicToken, {
@@ -1355,7 +1355,7 @@ test('customer can switch an unpaid regular order from card to Pix without creat
 
   assert.equal(switched.order.code, first.order.code);
   assert.equal(switched.payment.method, 'pix');
-  assert.equal(switched.payment.amountDueNowCents, Math.round(switched.payment.totalCents * 0.5));
+  assert.equal(switched.payment.amountDueNowCents, switched.payment.totalCents);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
   assert.equal(DB.sqlite.prepare('SELECT payment_method FROM v2_order_pricing').get().payment_method, 'pix');
   assert.equal(mp.posts, 2);
@@ -1398,7 +1398,7 @@ test('late payment retry proposes next delivery dates in a popup without changin
   assert.equal(agreed.order.code, originalCode);
   assert.equal(agreed.payment.method, 'pix');
   assert.deepEqual(agreed.deliveryRescheduled, first.details);
-  assert.equal(agreed.payment.amountDueNowCents, Math.round(agreed.payment.totalCents * 0.5));
+  assert.equal(agreed.payment.amountDueNowCents, agreed.payment.totalCents);
   assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE order_code=?')
     .get(originalCode).delivery_start, day(1));
   assert.equal(DB.sqlite.prepare('SELECT delivery_end FROM v2_orders WHERE order_code=?')
@@ -3846,7 +3846,7 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
   );
 });
 
-test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
+test('commercial quote applies configured urgency and full Pix after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
     INSERT INTO v2_coupons(code,discount_type,discount_value) VALUES ('TEST','percent',10);
@@ -3855,7 +3855,7 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.subtotalCents, Math.round((quote.productCents - 100) * 0.9));
   assert.equal(quote.urgency.percent, 99);
   assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.99));
-  assert.equal(quote.payment.depositPercent, 50);
+  assert.equal(quote.payment.depositPercent, 100);
 });
 
 test('Moments +100 fotos is ignored unless a base Moments plan is selected', async () => {

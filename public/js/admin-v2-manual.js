@@ -190,6 +190,11 @@ function quoteHtml(
   const delivery =
     result.delivery;
 
+  const preferredWindow =
+    (delivery.options || []).find(option => option.recommended)
+    || delivery.options?.[0]
+    || null;
+
   return `
     <section class="card" style="margin-top:14px">
       <div class="section-title">
@@ -224,13 +229,13 @@ function quoteHtml(
 
       <div class="list">
         ${(delivery.options || []).map(
-          (option, index) => `
+          (option) => `
             <label class="row-card" style="cursor:pointer">
               <input
                 type="radio"
                 name="manualDelivery"
                 value="${esc(option.start)}|${esc(option.end)}"
-                ${index === 0 ? 'checked' : ''}
+                ${option.start === preferredWindow?.start && option.end === preferredWindow?.end ? 'checked' : ''}
               >
               <strong>
                 ${dateBr(option.start)}

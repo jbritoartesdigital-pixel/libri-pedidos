@@ -11,7 +11,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { inputHtml } from './client-v2-area.js?v=20261009-mobile-briefing-3';
+import { inputHtml } from './client-v2-area.js?v=20261027-mp-return-1';
 import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261027-mp-return-1';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
@@ -5364,10 +5364,17 @@ export async function startManualOrder(
       </section>
     `;
 
-    document.getElementById('manualPendingPay')?.addEventListener('click', () => {
-      // The link opens the existing provider checkout in a new tab.
-      // The Libri tab remains available for confirmation and briefing.
-      window.location.href = waitingCustomerAreaPath(order.customerAreaPath);
+    document.getElementById('manualPendingPay')?.addEventListener('click', event => {
+      event.preventDefault();
+      const checkoutTab = prepareMercadoPagoTab();
+      try {
+        const waitingPath = waitingCustomerAreaPath(order.customerAreaPath);
+        sendToMercadoPago(checkoutTab, order.payment.checkoutUrl);
+        window.location.href = waitingPath;
+      } catch (error) {
+        closeMercadoPagoTab(checkoutTab);
+        showToast(error.message);
+      }
     });
 
     document

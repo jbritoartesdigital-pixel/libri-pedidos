@@ -14,6 +14,7 @@ import {
 
 import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
+import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261027-mp-return-1';
 
 const HELPFUL_EXAMPLES = {
   theme_or_style: 'Exemplo: Jardim Encantado, cores lavanda e verde, estilo delicado.',
@@ -642,6 +643,7 @@ function summaryHtml(
 
       ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
       ${capacityReview || area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo. Não é necessário pagar novamente.</div>' : ''}
+      ${area.payment?.returnState === 'waiting' ? '<div class="notice info"><strong>Seu pagamento está em outra aba.</strong> Assim que o Mercado Pago confirmar, abriremos automaticamente os dados do convite aqui. Se a página de pagamento não abriu, toque em "Continuar para pagamento" abaixo.</div>' : ''}
       ${area.payment?.returnState === 'checking' ? '<div class="notice info">Pagamento enviado. Estamos confirmando com o Mercado Pago.</div>' : ''}
       ${area.payment?.returnState === 'pending' ? '<div class="notice info">Pagamento ainda pendente no Mercado Pago. Você pode atualizar o status em alguns instantes.</div>' : ''}
       ${area.payment?.returnState === 'failure' ? '<div class="notice info">O pagamento não foi concluído. Você pode tentar novamente sem criar outro pedido.</div>' : ''}
@@ -1447,79 +1449,31 @@ export async function startCustomerArea(
       'payment',
     );
 
-  if (
-    [
-      'success',
-      'pending',
-      'failure',
-    ].includes(
-      paymentReturn,
-    )
-  ) {
-    if (
-      paymentReturn
-      === 'failure'
-    ) {
-      area.payment.returnState =
-        'failure';
-    } else if (
-      area.briefing.locked
-    ) {
-      try {
-        const result =
-          await api(
-            `/api/v2/customer-area/${token}/payment`,
-            {
-              method:
-                'POST',
-              body:
-                JSON.stringify({
-                  clientRequestId:
-                    randomId(),
-                  paymentMethod:
-                    area.payment.method,
-                }),
-            },
-          );
-
-        if (
-          result.alreadyPaid
-        ) {
-          area =
-            await loadArea();
-
-          area.payment.returnState =
-            result.capacityReview
-              ? 'capacity_review'
-              : 'confirmed';
-        } else {
-          area.payment.returnState =
-            paymentReturn
-            === 'success'
-              ? 'checking'
-              : 'pending';
-        }
-      } catch {
-        area.payment.returnState =
-          paymentReturn
-          === 'success'
-            ? 'checking'
-            : 'pending';
+  if (['success', 'pending', 'failure', 'waiting'].includes(paymentReturn)) {
+    // Reading the customer area already reconciles the existing provider order.
+    // Returning from Mercado Pago must never create a second checkout.
+    if (area.payment?.capacityReview === true) {
+      area.payment.returnState = 'capacity_review';
+    } else if (!area.briefing.locked) {
+      area.payment.returnState = 'confirmed';
+      if (!area.briefing.completed && paymentReturn !== 'failure') {
+        activeTab = 'briefing';
+        returnUrl.searchParams.set('tab', 'briefing');
       }
+    } else if (paymentReturn === 'failure') {
+      area.payment.returnState = 'failure';
     } else {
       area.payment.returnState =
-        'confirmed';
+        paymentReturn === 'waiting' ? 'waiting'
+          : paymentReturn === 'success' ? 'checking'
+          : 'pending';
     }
 
-    returnUrl.searchParams.delete(
-      'payment',
-    );
-
-    history.replaceState(
-      null,
-      '',
-      returnUrl,
-    );
+    if (paymentReturn !== 'waiting' || !area.briefing.locked
+      || area.payment?.capacityReview === true) {
+      returnUrl.searchParams.delete('payment');
+    }
+    history.replaceState(null, '', returnUrl);
   }
 
   setHelp(
@@ -1797,6 +1751,7 @@ export async function startCustomerArea(
         showToast('Leia e aceite as condições.');
         return;
       }
+      const checkoutTab = prepareMercadoPagoTab();
       const button = document.getElementById('resumePayment');
       if (button) button.disabled = true;
       try {
@@ -1815,17 +1770,23 @@ export async function startCustomerArea(
           body: JSON.stringify(payload),
         });
         if (result.alreadyPaid) {
+          closeMercadoPagoTab(checkoutTab);
           area = await loadArea();
           await render();
           showToast(result.capacityReview
             ? 'Pagamento recebido. A Libri está revisando sua janela.'
             : 'Pagamento confirmado.');
         } else if (result.payment?.checkoutUrl) {
-          window.location.href = result.payment.checkoutUrl;
+          const waitingPath = waitingCustomerAreaPath(
+            `/meu-pedido/${encodeURIComponent(token)}`,
+          );
+          sendToMercadoPago(checkoutTab, result.payment.checkoutUrl);
+          window.location.href = waitingPath;
         } else {
           throw new Error('Pagamento indisponível. Atualize o pedido.');
         }
       } catch (error) {
+        closeMercadoPagoTab(checkoutTab);
         if (button) button.disabled = false;
         const info = error.data?.details;
         const windowChange = info?.code === 'delivery_window_shifted'
@@ -2844,5 +2805,50 @@ export async function startCustomerArea(
   }
 
   await render();
+
+  // GET reconciles an existing checkout; polling never issues a new charge.
+  // Mobile browsers suspend background tabs, so refresh again on focus.
+  let checkingPayment = false;
+  const pollUntil = Date.now() + 5 * 60 * 1000;
+  const checkExistingPayment = async () => {
+    if (checkingPayment || document.hidden || !area.briefing.locked
+      || area.payment?.capacityReview === true
+      || !['awaiting_payment', 'urgency_approved'].includes(area.order.status)) {
+      return;
+    }
+    checkingPayment = true;
+    try {
+      const latest = await loadArea();
+      if (!latest.briefing.locked || latest.payment?.capacityReview === true) {
+        area = latest;
+        activeTab = !latest.briefing.locked && !latest.briefing.completed
+          ? 'briefing' : 'summary';
+        const url = new URL(window.location.href);
+        url.searchParams.delete('payment');
+        url.searchParams.set('tab', activeTab);
+        history.replaceState(null, '', url);
+        await render();
+        showToast(latest.payment?.capacityReview
+          ? 'Pagamento confirmado. A Libri está revisando a data de entrega.'
+          : 'Pagamento confirmado! Preencha agora os dados do convite.');
+      }
+    } catch {
+      // Network errors cannot start another payment or erase customer drafts.
+    } finally {
+      checkingPayment = false;
+    }
+  };
+  const paymentTimer = setInterval(() => {
+    if (Date.now() >= pollUntil || !area.briefing.locked) {
+      clearInterval(paymentTimer);
+      return;
+    }
+    void checkExistingPayment();
+  }, 10000);
+  window.addEventListener('focus', () => { void checkExistingPayment(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void checkExistingPayment();
+  });
+  window.addEventListener('pagehide', () => clearInterval(paymentTimer), { once: true });
 }
 

@@ -2091,6 +2091,7 @@ async function repriceV2PaymentMethod(
           SELECT
             total_cents,
             payment_method,
+            deposit_percent,
             pricing_snapshot_json
           FROM v2_order_pricing
           WHERE order_id = ?
@@ -2134,10 +2135,12 @@ async function repriceV2PaymentMethod(
     : priceWithCardProcessingFee(baseTotalCents, method);
   const { totalCents, cardFeeCents, cardFeePercent } = pricing;
 
-  const depositPercent =
-    method === 'card'
-      ? 100
-      : 50;
+  // Orders created before this policy change retain their recorded 50%
+  // arrangement on a resumed Pix attempt. A new public order is always 100%.
+  const originalPercent = Number(snapshot.payment?.depositPercent ?? row.deposit_percent);
+  const depositPercent = method === 'card' ? 100
+    : snapshot.payment?.adminDepositException === true
+      || (method === previousMethod && originalPercent === 50) ? 50 : 100;
 
   const depositCents =
     Math.round(
@@ -2336,7 +2339,8 @@ async function createUrgencyRequestOrderRecords(
   const projectedBaseTotalCents = Number(quote.subtotalCents || 0) + urgencyAmountCents;
   const { totalCents: projectedTotalCents, cardFeeCents: projectedCardFeeCents, cardFeePercent: projectedCardFeePercent } =
     priceWithCardProcessingFee(projectedBaseTotalCents, quote.payment.method);
-  const projectedDepositPercent = quote.payment.method === 'card' ? 100 : 50;
+  const projectedDepositPercent = quote.payment.method === 'pix'
+    && quote.payment.adminDepositException === true ? 50 : 100;
   const projectedDepositCents = Math.round(projectedTotalCents * projectedDepositPercent / 100);
   const projectedBalanceCents = Math.max(0, projectedTotalCents - projectedDepositCents);
   const projectedQuote = {
@@ -3215,6 +3219,7 @@ export async function repriceApprovedV2Urgency(
             combo_discount_cents,
             coupon_discount_cents,
             payment_method,
+            deposit_percent,
             pricing_snapshot_json,
             u.urgency_percent AS requested_urgency_percent
           FROM v2_order_pricing p
@@ -3275,11 +3280,10 @@ export async function repriceApprovedV2Urgency(
   const { totalCents, cardFeeCents, cardFeePercent } =
     priceWithCardProcessingFee(baseTotalCents, method);
 
-  const depositPercent =
-    method
-    === 'card'
-      ? 100
-      : 50;
+  const originalPercent = Number(snapshot.payment?.depositPercent ?? row.deposit_percent);
+  const depositPercent = method === 'pix'
+    && (snapshot.payment?.adminDepositException === true || originalPercent === 50)
+      ? 50 : 100;
 
   const depositCents =
     Math.round(

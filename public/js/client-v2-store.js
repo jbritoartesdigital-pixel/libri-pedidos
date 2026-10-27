@@ -1938,15 +1938,25 @@ function quoteHtml(
         quote.payment?.method
         === 'pix'
           ? `
-            <div class="quote-row">
-              <span>Entrada agora</span>
-              <strong>${money(quote.payment.depositCents)}</strong>
-            </div>
-
-            <div class="quote-row">
-              <span>Saldo depois da aprovação</span>
-              <strong>${money(quote.payment.balanceCents)}</strong>
-            </div>
+            ${quote.payment.depositPercent === 50 ? `
+              <div class="quote-row">
+                <span>Entrada excepcional autorizada pela Libri (50%)</span>
+                <strong>${money(quote.payment.depositCents)}</strong>
+              </div>
+              <div class="quote-row">
+                <span>Saldo restante após a entrada</span>
+                <strong>${money(quote.payment.balanceCents)}</strong>
+              </div>
+            ` : `
+              <div class="quote-row">
+                <span>Pagamento integral antecipado no Pix</span>
+                <strong>${money(quote.payment.depositCents)}</strong>
+              </div>
+              <div class="quote-row">
+                <span>Saldo após o pagamento</span>
+                <strong>R$ 0,00</strong>
+              </div>
+            `}
           `
           : `
             <div class="quote-row">
@@ -4435,8 +4445,8 @@ async function renderPayment(
           <span class="choice-main">
             <strong>Pix</strong>
             <small>
-              50% para confirmar o pedido.
-              O saldo é pago diretamente à Libri após a aprovação.
+              Pagamento integral antecipado para confirmar o pedido.
+              Você paga 100% com segurança pelo Mercado Pago.
             </small>
           </span>
         </label>
@@ -5280,7 +5290,7 @@ export async function startManualOrder(
                 order.paidDirectly
                   ? 'Pix direto • recebimento confirmado'
                   : order.pricing.paymentMethod === 'pix'
-                    ? `Pix • ${money(order.pricing.depositCents)} agora`
+                    ? `Pix • ${order.pricing.depositCents < order.pricing.totalCents ? 'entrada de ' : 'integral de '}${money(order.pricing.depositCents)}`
                     : 'Cartão • pagamento integral'
               }
             </dd>

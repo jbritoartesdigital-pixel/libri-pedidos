@@ -23,7 +23,7 @@ import {
 
 import {
   renderManualOrder,
-} from './admin-v2-manual.js?v=20261008-growth-1';
+} from './admin-v2-manual.js?v=20261027-pix-full-upfront-1';
 
 import {
   openOrder,

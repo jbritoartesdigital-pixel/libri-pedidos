@@ -129,8 +129,8 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('resumed customer order rechecks live delivery before urgency and preserves contact data', () => {
@@ -161,8 +161,8 @@ test('resumed customer order rechecks live delivery before urgency and preserves
   assert.match(customer, /state\.delivery = serverDelivery/);
   assert.match(customer, /state\.step = 4/);
   assert.match(customer, /customer: state\.customer/);
-  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('applied coupons show verified savings immediately and retain payment transparency', async () => {
@@ -225,9 +225,9 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(store, /state\.quote\?\.coupon[\s\S]*?aplicado ✓/);
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
-  assert.match(html, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(html, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
   assert.match(html, /client-v2\.css\?v=20261012-compact-offer-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('upsell uses compact accessible popup with scrollable details and visible choice buttons', () => {
@@ -363,7 +363,7 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
@@ -413,7 +413,7 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
   assert.match(entry, /client-v2-area\.js\?v=20261012-pix-reconfirm-1/);
-  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
@@ -504,8 +504,8 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261026-scene-links-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261027-pix-full-upfront-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261027-pix-full-upfront-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
 });
 
@@ -697,11 +697,11 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261021-order-editor-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261026-scene-links-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261027-pix-full-upfront-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 26);
+  const DB = database(); assert.equal(DB.migrationCount, 27);
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='v2_flow_device_grants'").get().n, 1);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
@@ -1024,10 +1024,10 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   DB.sqlite.prepare('UPDATE v2_order_pricing SET subtotal_cents = 7001, combo_discount_cents = 1000, coupon_discount_cents = 500').run();
   const approved = await decideV2Urgency(DB, result.order.code, { decision: 'approve', deliveryStart: day(0), deliveryEnd: day(1) });
   assert.equal(approved.pricing.totalCents, 9101); assert.equal(approved.pricing.urgencyAmountCents, 2100);
-  assert.equal(approved.pricing.payment.depositCents, 4551); assert.equal(approved.pricing.payment.balanceCents, 4550);
+  assert.equal(approved.pricing.payment.depositCents, 9101); assert.equal(approved.pricing.payment.balanceCents, 0);
   await assert.rejects(decideV2Urgency(DB, result.order.code, { decision: 'reject', note: 'Duplicada' }));
   const payment = await resumeV2Payment(request, e, token, await terms(DB));
-  assert.equal(mp.bodies[0].total_amount, '45.51');
+  assert.equal(mp.bodies[0].total_amount, '91.01');
   assert.equal(mp.bodies[0].capture_mode, undefined);
   assert.equal(mp.bodies[0].expiration_time, undefined);
   assert.equal(mp.bodies[0].description, undefined);
@@ -1042,7 +1042,7 @@ test('urgency: request, approval, exact discounted price, Pix, repeated webhook 
   mp.approve(payment.payment.providerOrderId);
   await syncMercadoPagoOrder(e, payment.payment.providerOrderId);
   const area = await getV2CustomerArea(e, token); assert.equal(area.briefing.locked, false);
-  assert.equal(area.payment.paidCents, 4551); assert.equal(area.payment.remainingCents, 4550);
+  assert.equal(area.payment.paidCents, 9101); assert.equal(area.payment.remainingCents, 0);
   DB.sqlite.prepare("UPDATE v2_settings SET value='pix-teste' WHERE key='balance_pix_key'").run();
   DB.sqlite.prepare("UPDATE v2_settings SET value='Libri Teste' WHERE key='balance_pix_recipient_name'").run();
   DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending'").run();
@@ -1238,14 +1238,14 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
-  assert.ok(entry.includes('./client-v2-store.js?v=20261026-scene-links-1'));
+  assert.ok(entry.includes('./client-v2-store.js?v=20261027-pix-full-upfront-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
   assert.match(area, /data-card-extra/);
   assert.match(area, /cardTotalCents/);
-  assert.match(area, /Pix • entrada de 50%/);
+  assert.match(area, /Pix • pagamento integral/);
 });
 
 test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', async () => {
@@ -1255,8 +1255,8 @@ test('4.97% card fee preserves a 70 BRL net target while Pix keeps its price', a
   const card = await calculateCommercialV2Quote(DB, { productCode: 'interactive_essential', paymentMethod: 'card' });
   assert.equal(pix.totalCents, 7000);
   assert.equal(pix.cardFeeCents, 0);
-  assert.equal(pix.payment.depositCents, 3500);
-  assert.equal(pix.payment.balanceCents, 3500);
+  assert.equal(pix.payment.depositCents, 7000);
+  assert.equal(pix.payment.balanceCents, 0);
   assert.equal(card.baseTotalCents, 7000);
   assert.equal(card.cardFeeCents, 366);
   assert.equal(card.cardFeePercent, 4.97);
@@ -1292,8 +1292,8 @@ test('card fee is the exact Mercado Pago checkout total, and switching back to P
   });
   assert.equal(pix.order.code, card.order.code);
   assert.equal(pix.payment.totalCents, 7000);
-  assert.equal(pix.payment.amountDueNowCents, 3500);
-  assert.equal(mp.bodies[1].total_amount, '35.00');
+  assert.equal(pix.payment.amountDueNowCents, 7000);
+  assert.equal(mp.bodies[1].total_amount, '70.00');
   assert.equal((await getV2CustomerArea(e, card.order.publicToken)).payment.cardTotalCents, 7366);
 
   const cardAgain = await resumeV2Payment(request, e, card.order.publicToken, {
@@ -1355,7 +1355,7 @@ test('customer can switch an unpaid regular order from card to Pix without creat
 
   assert.equal(switched.order.code, first.order.code);
   assert.equal(switched.payment.method, 'pix');
-  assert.equal(switched.payment.amountDueNowCents, Math.round(switched.payment.totalCents * 0.5));
+  assert.equal(switched.payment.amountDueNowCents, switched.payment.totalCents);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n, 1);
   assert.equal(DB.sqlite.prepare('SELECT payment_method FROM v2_order_pricing').get().payment_method, 'pix');
   assert.equal(mp.posts, 2);
@@ -1398,7 +1398,7 @@ test('late payment retry proposes next delivery dates in a popup without changin
   assert.equal(agreed.order.code, originalCode);
   assert.equal(agreed.payment.method, 'pix');
   assert.deepEqual(agreed.deliveryRescheduled, first.details);
-  assert.equal(agreed.payment.amountDueNowCents, Math.round(agreed.payment.totalCents * 0.5));
+  assert.equal(agreed.payment.amountDueNowCents, agreed.payment.totalCents);
   assert.equal(DB.sqlite.prepare('SELECT delivery_start FROM v2_orders WHERE order_code=?')
     .get(originalCode).delivery_start, day(1));
   assert.equal(DB.sqlite.prepare('SELECT delivery_end FROM v2_orders WHERE order_code=?')
@@ -1483,7 +1483,7 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261026-scene-links-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(entry.includes('./client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
@@ -1660,8 +1660,8 @@ test('manual order link recognizes direct Pix and opens briefing without another
   assert.match(manual, /window\.location\.href =\s*result\.result\.customerAreaPath/);
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
-  assert.match(shell, /client-v2\.js\?v=20261026-scene-links-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /client-v2\.js\?v=20261027-pix-full-upfront-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('manual Pix receipt is available inside order detail with a bank-confirmed audited flow', async t => {
@@ -1704,7 +1704,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261027-pix-full-upfront-1/);
   assert.match(entry, /admin-v2-order\.js\?v=20261021-order-editor-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
@@ -1743,7 +1743,7 @@ test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending t
     .run(order.id);
   const deposit = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
-    amountCents: checkout.payment.amountDueNowCents,
+    amountCents: Math.round(checkout.payment.totalCents / 2),
     paidDate: day(-1),
     paymentType: 'deposit',
     note: 'Primeira parcela de Pix recebida fora do sistema',
@@ -1754,7 +1754,7 @@ test('Pix manually confirmed from WhatsApp unlocks a manual order, but sending t
   ).get(order.id);
   assert.equal(first.status, 'briefing_pending');
   assert.equal(first.briefing_status, 'available');
-  assert.equal(deposit.remainingCents, checkout.payment.totalCents - checkout.payment.amountDueNowCents);
+  assert.equal(deposit.remainingCents, checkout.payment.totalCents - Math.round(checkout.payment.totalCents / 2));
   const detail = await getV2AdminOrderDetail(DB, checkout.order.code);
   assert.equal(detail.payment.remainingBalanceCents, deposit.remainingCents);
 
@@ -1820,7 +1820,11 @@ test('manual duplicated Pix can be annulled with audit while Mercado Pago remain
   const order = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE order_code=?')
     .get(checkout.order.code);
   const paid = await getV2AdminOrderDetail(DB, order.order_code);
-  const remaining = paid.payment.remainingBalanceCents;
+  // A paid original order can acquire an extra contracted service later.
+  // This gives the accounting/void test a genuine receivable without pretending
+  // that a *new* Pix checkout still collects only 50%.
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
+  const remaining = (await getV2AdminOrderDetail(DB, order.order_code)).payment.remainingBalanceCents;
   assert.ok(remaining > 0);
   DB.sqlite.prepare("UPDATE v2_orders SET status='balance_pending' WHERE id=?").run(order.id);
   const recorded = await applyV2AdminAction(DB, order.order_code, 'balance_received');
@@ -1884,6 +1888,7 @@ test('a mistaken manual Pix entry can be annulled even after an order is finaliz
     await syncMercadoPagoOrder(e, checkout.payment.providerOrderId);
     const order = DB.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE order_code=?')
       .get(checkout.order.code);
+    DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
     const previous = await getV2AdminOrderDetail(DB, order.order_code);
     const manual = await createV2FinancePayment(DB, {
       orderCode: order.order_code,
@@ -2400,9 +2405,9 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261026-scene-links-1'));
+    'admin-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261026-scene-links-1'));
+    'client-v2.js?v=20261027-pix-full-upfront-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2885,7 +2890,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261026-scene-links-1/);
+  assert.match(html, /admin-v2\.js\?v=20261027-pix-full-upfront-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -3032,7 +3037,9 @@ test('manual finance entries are audited and bounded by real order values', asyn
     FROM v2_payments WHERE order_id=?
   `).get(order.id).n;
 
-  const remaining = order.total_cents - paidBefore;
+  // A separate authorized extra can create a receivable after full Pix.
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
+  const remaining = order.total_cents + 1000 - paidBefore;
   assert.ok(remaining > 0);
 
   const added = await createV2FinancePayment(DB, {
@@ -3072,7 +3079,7 @@ test('manual finance entries are audited and bounded by real order values', asyn
   await assert.rejects(
     createV2FinancePayment(DB, {
       orderCode: order.order_code,
-      amountCents: order.total_cents + 1,
+      amountCents: order.total_cents + Math.min(500, remaining) + 1,
       paidDate: day(-1),
       paymentType: 'refund',
     }),
@@ -3214,9 +3221,9 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261026-scene-links-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261021-order-editor-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261026-scene-links-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261027-pix-full-upfront-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -3241,7 +3248,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261021-order-editor-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261026-scene-links-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261021-order-editor-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
@@ -3418,10 +3425,10 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261026-scene-links-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261027-pix-full-upfront-1'));
   assert.ok(entry.includes('client-v2-area.js?v=20261012-pix-reconfirm-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
-  assert.ok(admin.includes('admin-v2-manual.js?v=20261008-growth-1'));
+  assert.ok(admin.includes('admin-v2-manual.js?v=20261027-pix-full-upfront-1'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);
   assert.match(area, /const seen = new Set/);
@@ -3459,15 +3466,16 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     false,
   );
 
-  const remaining = incomplete.payment.remainingBalanceCents;
-  assert.ok(remaining > 0);
-
+  // New public Pix has no balance by default. An additional contracted item
+  // introduced after payment is handled through the existing manual balance.
+  assert.equal(incomplete.payment.remainingBalanceCents, 0);
+  DB.sqlite.prepare("UPDATE v2_order_pricing SET total_cents=total_cents+1000, balance_cents=balance_cents+1000 WHERE order_id=?").run(order.id);
   await createV2FinancePayment(DB, {
     orderCode: order.order_code,
-    amountCents: remaining,
+    amountCents: 1000,
     paidDate: day(-1),
     paymentType: 'balance',
-    note: 'Saldo para teste do checklist',
+    note: 'Saldo de serviço adicional após o pagamento integral',
   });
 
   DB.sqlite.prepare(`
@@ -3846,7 +3854,7 @@ test('public store does not expose a fixed combo chooser or auto-add combo items
   );
 });
 
-test('commercial quote applies configured urgency and fixed Pix 50% after combo and coupon discounts', async () => {
+test('commercial quote applies configured urgency and full Pix after combo and coupon discounts', async () => {
   const DB = database();
   DB.sqlite.exec(`INSERT INTO v2_combos(code,name,discount_type,discount_value) VALUES ('test','Test','fixed',100);
     INSERT INTO v2_coupons(code,discount_type,discount_value) VALUES ('TEST','percent',10);
@@ -3855,7 +3863,7 @@ test('commercial quote applies configured urgency and fixed Pix 50% after combo 
   assert.equal(quote.subtotalCents, Math.round((quote.productCents - 100) * 0.9));
   assert.equal(quote.urgency.percent, 99);
   assert.equal(quote.urgency.amountCents, Math.round(quote.subtotalCents * 0.99));
-  assert.equal(quote.payment.depositPercent, 50);
+  assert.equal(quote.payment.depositPercent, 100);
 });
 
 test('Moments +100 fotos is ignored unless a base Moments plan is selected', async () => {

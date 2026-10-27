@@ -399,12 +399,17 @@ export async function renderManualOrder() {
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         <label class="checkline">
           <input type="radio" name="manualPayment" value="pix" checked>
-          <span>Pix • 50% agora</span>
+          <span>Pix • 100% antecipado</span>
         </label>
 
         <label class="checkline">
           <input type="radio" name="manualPayment" value="card">
           <span>Cartão • 100%</span>
+        </label>
+
+        <label class="checkline">
+          <input id="manualHalfDeposit" type="checkbox">
+          <span>Exceção autorizada: cobrar somente 50% de entrada no Pix</span>
         </label>
 
         <label class="checkline">
@@ -451,6 +456,23 @@ export async function renderManualOrder() {
         });
       } catch { notice.classList.add('hidden'); }
     }, 400);
+  });
+
+  // If the administrator changes the payment arrangement after a quote,
+  // require a fresh review instead of creating a differently priced order.
+  const halfDepositControl = document.getElementById('manualHalfDeposit');
+  const clearManualQuote = () => {
+    const area = document.getElementById('manualQuoteArea');
+    if (area) area.innerHTML = '';
+  };
+  halfDepositControl?.addEventListener('change', clearManualQuote);
+  document.querySelectorAll('[name="manualPayment"]').forEach(input => {
+    input.addEventListener('change', () => {
+      const pix = document.querySelector('[name="manualPayment"]:checked')?.value === 'pix';
+      halfDepositControl.disabled = !pix;
+      if (!pix) halfDepositControl.checked = false;
+      clearManualQuote();
+    });
   });
 
   renderVariants(
@@ -509,6 +531,8 @@ export async function renderManualOrder() {
                       currentSelection(
                         config,
                       ),
+                    paymentDepositPercent:
+                      document.getElementById('manualHalfDeposit').checked ? 50 : 100,
                     urgencyApproved:
                       document
                         .getElementById('manualUrgency')
@@ -582,6 +606,8 @@ export async function renderManualOrder() {
                               currentSelection(
                                 config,
                               ),
+                            paymentDepositPercent:
+                              document.getElementById('manualHalfDeposit').checked ? 50 : 100,
                             urgencyApproved:
                               document
                                 .getElementById('manualUrgency')

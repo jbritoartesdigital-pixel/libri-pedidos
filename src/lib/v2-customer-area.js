@@ -302,6 +302,7 @@ async function contextByToken(
             p.total_cents,
             p.pricing_snapshot_json,
             p.payment_method,
+            p.deposit_percent,
             p.deposit_cents,
             p.balance_cents
           FROM v2_orders o
@@ -2749,6 +2750,11 @@ export async function getV2CustomerArea(
       method:
         context.order.payment_method,
       baseTotalCents,
+      // For existing orders, honor the original Pix arrangement. Never
+      // display a new 50% offer for an order created at 100%.
+      pixDepositPercent: currentMethod === 'pix'
+        ? (Number(context.order.deposit_percent) === 50 ? 50 : 100)
+        : (pricingSnapshot.payment?.adminDepositException === true ? 50 : 100),
       cardTotalCents,
       cardFeeCents,
       cardFeePercent: cardFeeCents > 0 ? 4.97 : 0,

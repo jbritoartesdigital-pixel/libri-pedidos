@@ -574,8 +574,13 @@ function summaryHtml(
   const pixTotalCents = Number(area.payment.baseTotalCents ?? totalCents);
   const cardTotalCents = Number(area.payment.cardTotalCents ?? totalCents);
   const cardExtraCents = Math.max(0, cardTotalCents - pixTotalCents);
-  const pixDueCents = Math.round(pixTotalCents * 0.5);
+  const pixDepositPercent = area.payment.pixDepositPercent === 50 ? 50 : 100;
+  const pixDueCents = isPix
+    ? Number(area.payment.depositCents ?? Math.round(pixTotalCents * pixDepositPercent / 100))
+    : Math.round(pixTotalCents * pixDepositPercent / 100);
   const pixBalanceCents = Math.max(0, pixTotalCents - pixDueCents);
+  const pixLabel = pixDepositPercent === 50
+    ? 'Pix • entrada autorizada de 50%' : 'Pix • pagamento integral';
   const dueNowCents = isPix
     ? pixDueCents
     : totalCents;
@@ -658,7 +663,7 @@ function summaryHtml(
                 data-card="${cardTotalCents}"
               >${money(dueNowCents)}</strong>
             </div>
-            <small id="paymentDueLabel">${isPix ? 'Pix • entrada de 50%' : 'Cartão • pagamento integral'}</small>
+            <small id="paymentDueLabel">${isPix ? pixLabel : 'Cartão • pagamento integral'}</small>
           </div>
 
           <p
@@ -669,7 +674,7 @@ function summaryHtml(
             data-card-total="${cardTotalCents}"
             data-card-extra="${cardExtraCents}"
           >${isPix
-            ? `Total do pedido: ${money(pixTotalCents)} • saldo após a entrada: ${money(pixBalanceCents)}`
+            ? `Total do pedido: ${money(pixTotalCents)} • ${pixDepositPercent === 50 ? 'saldo após a entrada' : 'saldo após o pagamento'}: ${money(pixBalanceCents)}`
             : `Total do pedido: ${money(cardTotalCents)}${cardExtraCents > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardExtraCents)}` : ''}`}</p>
 
           <p class="muted"><strong>Escolha como deseja pagar.</strong> Se não conseguiu com um meio, pode trocar sem refazer o pedido.</p>
@@ -677,7 +682,7 @@ function summaryHtml(
             id="paymentMethodChooser"
             class="payment-methods"
           >
-            <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> Pix • entrada de 50%</label>
+            <label><input type="radio" name="resumeMethod" value="pix" ${isPix ? 'checked' : ''}> ${pixLabel}</label>
             <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • ${money(cardTotalCents)}${cardExtraCents > 0 ? ' (inclui acréscimo para taxa 4,97%)' : ''}</label>
           </div>
 
@@ -763,7 +768,7 @@ function summaryHtml(
               isPix
                 ? (hasPaid
                     ? `Pix • pago ${money(paidCents)} • saldo ${money(remainingCents)}`
-                    : `Pix • entrada ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`)
+                    : `Pix • ${pixDepositPercent === 50 ? 'entrada' : 'integral'} ${money(pixDueCents)} • saldo ${money(pixBalanceCents)}`)
                 : (hasPaid
                     ? `Cartão • pago ${money(paidCents)}`
                     : `Cartão • ${money(totalCents)}`)
@@ -1734,7 +1739,7 @@ export async function startCustomerArea(
 
               label.textContent =
                 method === 'pix'
-                  ? 'Pix • entrada de 50%'
+                  ? pixLabel
                   : 'Cartão • pagamento integral';
 
               if (breakdown) {
@@ -1756,14 +1761,14 @@ export async function startCustomerArea(
                 const cardFee = Number(breakdown.dataset.cardExtra || 0);
                 breakdown.textContent =
                   method === 'pix'
-                    ? `Total do pedido: ${orderTotal} • saldo após a entrada: ${balance}`
+                    ? `Total do pedido: ${orderTotal} • ${pixDepositPercent === 50 ? 'saldo após a entrada' : 'saldo após o pagamento'}: ${balance}`
                     : `Total do pedido: ${cardTotal}${cardFee > 0 ? ` • acréscimo do cartão (taxa 4,97%): ${money(cardFee)}` : ''}`;
               }
 
               if (reviewLine) {
                 reviewLine.textContent =
                   method === 'pix'
-                    ? `Pix • entrada ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
+                    ? `Pix • ${pixDepositPercent === 50 ? 'entrada' : 'integral'} ${money(Number(total.dataset.pix))} • saldo ${money(Number(breakdown?.dataset.balance || 0))}`
                     : `Cartão • ${money(Number(total.dataset.card))}`;
               }
             },

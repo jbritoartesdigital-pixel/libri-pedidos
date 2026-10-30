@@ -64,7 +64,7 @@ test('payment retry UI has user initiated Safari link, method switch and visible
   assert.match(source, /id="openExistingCheckout"/);
   assert.match(source, /target="_blank"/);
   assert.match(source, /rel="noopener noreferrer"/);
-  assert.match(source, /area\.payment\.activeCheckoutMethod/);
+  assert.match(source, /area\.payment\?\.activeCheckoutMethod/);
   assert.match(source, /syncExistingCheckoutAction/);
   assert.match(source, /paymentRetryNotice/);
   assert.match(source, /Não foi possível continuar o pagamento:/);

@@ -64,7 +64,7 @@ test('Mercado Pago returns directly to briefing after approval without a second 
   assert.match(store, /sendToMercadoPago\(checkoutTab, result\.payment\.checkoutUrl\)/);
   assert.match(store, /sendToMercadoPago\(checkoutTab, checkoutUrl\)/);
   assert.match(store, /manualPendingPay/);
-  assert.match(html, /client-v2\.js\?v=20261027-mp-return-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261027-mp-return-1/);
-  assert.match(entry, /client-v2-area\.js\?v=20261027-mp-return-1/);
+  assert.match(html, /client-v2\.js\?v=20261030-ios-recovery-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261030-ios-recovery-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261030-ios-recovery-1/);
 });

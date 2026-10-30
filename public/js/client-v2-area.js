@@ -14,7 +14,7 @@ import {
 
 import { uploadCustomerPhoto, planCustomerPhotoBatch } from './client-v2-upload.js?v=20261009-mobile-briefing-3';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
-import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261027-mp-return-1';
+import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261030-ios-recovery-1';
 
 const HELPFUL_EXAMPLES = {
   theme_or_style: 'Exemplo: Jardim Encantado, cores lavanda e verde, estilo delicado.',

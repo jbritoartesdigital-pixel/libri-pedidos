@@ -602,6 +602,8 @@ function summaryHtml(
     && !capacityReview
     && !unpaidArchived;
   const awaitingBalance = area.order.status === 'balance_pending';
+  const activeCheckoutUrl = /^https:\/\//i.test(area.payment?.checkoutUrl || '')
+    ? area.payment.checkoutUrl : null;
   const deliveryStart = area.order.deliveryWindow.start || '';
   const deliveryEnd = area.order.deliveryWindow.end || '';
   const deliveryLabel =
@@ -690,13 +692,24 @@ function summaryHtml(
             <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • ${money(cardTotalCents)}${cardExtraCents > 0 ? ' (inclui acréscimo para taxa 4,97%)' : ''}</label>
           </div>
 
-          <div class="notice info compact-notice hidden" id="paymentRetryNotice">Não foi possível concluir essa tentativa. Escolha outra forma acima ou tente novamente. Seu pedido permanece salvo.</div>
+          <div class="notice info compact-notice hidden" id="paymentRetryNotice" role="alert">Não foi possível iniciar o pagamento. Seu pedido permanece salvo.</div>
+          ${activeCheckoutUrl ? `
+            <a
+              id="openExistingCheckout"
+              class="btn btn-primary payment-main-cta"
+              href="${esc(activeCheckoutUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >Abrir Mercado Pago para pagar</a>
+            <p class="muted">O pagamento já está preparado. Abra o Mercado Pago e depois volte a esta aba para preencher os dados do convite.</p>
+          ` : ''}
+
           ${deadlineLabel ? `<p class="muted">Prazo para pagar: até ${esc(deadlineLabel)}. A reserva da agenda é temporária e será conferida novamente antes de um novo pagamento.</p>` : ''}
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
 
           ${termsAlreadyAccepted ? '<div class="notice success compact-notice">Condições já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
 
-          <button class="btn btn-primary payment-main-cta" id="resumePayment">Continuar para pagamento</button>
+          <button class="btn ${activeCheckoutUrl ? 'btn-ghost' : 'btn-primary'} payment-main-cta" id="resumePayment">${activeCheckoutUrl ? 'Trocar forma de pagamento ou tentar novamente' : 'Continuar para pagamento'}</button>
         </section>` : ''}
 
       ${area.order.status === 'balance_pending' && isPix && remainingCents > 0 ? `
@@ -1686,6 +1699,13 @@ export async function startCustomerArea(
               const method =
                 control.value;
 
+              // Existing provider checkout uses the original method.
+              // Hide its direct link when the customer selects a different one.
+              const existingCheckout = document.getElementById('openExistingCheckout');
+              if (existingCheckout) {
+                existingCheckout.classList.toggle('hidden', method !== area.payment.method);
+              }
+
               total.textContent =
                 money(
                   Number(
@@ -1816,7 +1836,11 @@ export async function startCustomerArea(
           return;
         }
         showToast(error.message);
-        document.getElementById('paymentRetryNotice')?.classList.remove('hidden');
+        const retryNotice = document.getElementById('paymentRetryNotice');
+        if (retryNotice) {
+          retryNotice.textContent = `${error.message || 'Pagamento indisponível no momento.'} Seu pedido permanece salvo. Confira a tentativa existente acima antes de tentar novamente.`;
+          retryNotice.classList.remove('hidden');
+        }
         if (info?.code === 'terms_changed' || error.data?.code === 'terms_changed') {
           paymentTerms = null;
           if (termsControl) termsControl.checked = false;

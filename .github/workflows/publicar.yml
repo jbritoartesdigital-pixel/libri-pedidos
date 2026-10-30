@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Release coordenada: vínculo seguro dos projetos e entrega Drive do Libri Flow.
+# Release pontual: recuperação de checkout pendente no Safari PR #120.
 
 on:
   workflow_dispatch:

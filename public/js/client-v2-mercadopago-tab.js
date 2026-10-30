@@ -1,6 +1,11 @@
 // Open the provider tab synchronously from a customer click. Opening it
 // only after awaiting the checkout API is blocked by many mobile browsers.
 export function prepareMercadoPagoTab(browser = window) {
+  // On iPhone/iPad, opening an empty foreground tab before the async
+  // checkout request can suspend Safari and abort that request. Instead,
+  // the waiting screen offers an explicit checkout link after creation.
+  const userAgent = String(browser.navigator?.userAgent || '');
+  if (/iPhone|iPad|iPod/i.test(userAgent)) return null;
   let tab = null;
   try {
     tab = browser.open('about:blank', '_blank');
@@ -24,8 +29,13 @@ export function sendToMercadoPago(tab, checkoutUrl) {
     throw new Error('O link de pagamento deve ser seguro (HTTPS).');
   }
   if (!tab || tab.closed) return false;
-  tab.location.replace(url.href);
-  return true;
+  try {
+    tab.location.replace(url.href);
+    return true;
+  } catch {
+    // The waiting page still provides a user-initiated direct link.
+    return false;
+  }
 }
 
 export function closeMercadoPagoTab(tab) {

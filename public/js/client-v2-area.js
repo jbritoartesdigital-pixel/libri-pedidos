@@ -690,13 +690,22 @@ function summaryHtml(
             <label><input type="radio" name="resumeMethod" value="card" ${!isPix ? 'checked' : ''}> Cartão • ${money(cardTotalCents)}${cardExtraCents > 0 ? ' (inclui acréscimo para taxa 4,97%)' : ''}</label>
           </div>
 
-          <div class="notice info compact-notice hidden" id="paymentRetryNotice">Não foi possível concluir essa tentativa. Escolha outra forma acima ou tente novamente. Seu pedido permanece salvo.</div>
+          <div class="notice info compact-notice hidden" role="alert" id="paymentRetryNotice">Não foi possível abrir o pagamento. Seu pedido permanece salvo.</div>
           ${deadlineLabel ? `<p class="muted">Prazo para pagar: até ${esc(deadlineLabel)}. A reserva da agenda é temporária e será conferida novamente antes de um novo pagamento.</p>` : ''}
           ${area.urgency ? `<p class="muted">O adicional de ${urgencyPercent}% já está incluído no total.</p>` : ''}
 
           ${termsAlreadyAccepted ? '<div class="notice success compact-notice">Condições já aceitas ✓</div>' : `<label class="checkline"><input type="checkbox" id="resumeTerms"> Li e aceito as condições do pedido.</label><button class="btn btn-ghost" id="resumeReadTerms">Ler condições</button>`}
 
-          <button class="btn btn-primary payment-main-cta" id="resumePayment">Continuar para pagamento</button>
+          ${area.payment?.activeCheckoutUrl ? `
+            <a
+              class="btn btn-primary payment-main-cta"
+              id="openExistingCheckout"
+              href="${esc(area.payment.activeCheckoutUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >Abrir pagamento no Mercado Pago</a>
+          ` : ''}
+          <button class="btn btn-primary payment-main-cta${area.payment?.activeCheckoutUrl && area.payment?.activeCheckoutMethod === area.payment?.method ? ' hidden' : ''}" id="resumePayment">Continuar para pagamento</button>
         </section>` : ''}
 
       ${area.order.status === 'balance_pending' && isPix && remainingCents > 0 ? `
@@ -1738,6 +1747,27 @@ export async function startCustomerArea(
         },
       );
 
+    const syncExistingCheckoutAction = () => {
+      const method = document.querySelector('[name="resumeMethod"]:checked')?.value || area.payment.method;
+      const directLink = document.getElementById('openExistingCheckout');
+      const createButton = document.getElementById('resumePayment');
+      const reusable = Boolean(directLink && method === area.payment?.activeCheckoutMethod);
+      directLink?.classList.toggle('hidden', !reusable);
+      createButton?.classList.toggle('hidden', reusable);
+    };
+    document.querySelectorAll('[name="resumeMethod"]').forEach(radio => {
+      radio.addEventListener('change', syncExistingCheckoutAction);
+    });
+    document.getElementById('openExistingCheckout')?.addEventListener('click', () => {
+      // An ordinary user-initiated link is more reliable than a scripted
+      // popup on iPhone Safari. The original page continues polling.
+      area.payment.returnState = 'waiting';
+      const url = new URL(window.location.href);
+      url.searchParams.set('payment', 'waiting');
+      history.replaceState(null, '', url);
+    });
+    syncExistingCheckoutAction();
+
     let paymentTerms = null;
     const loadTerms = async () => paymentTerms || (paymentTerms = (await api('/api/v2/terms/current')).terms);
     document.getElementById('resumeReadTerms')?.addEventListener('click', async () => {
@@ -1786,6 +1816,8 @@ export async function startCustomerArea(
           const waitingPath = waitingCustomerAreaPath(
             `/meu-pedido/${encodeURIComponent(token)}`,
           );
+          // Even if Safari blocks this new tab, the waiting page will
+          // expose an ordinary link to the existing checkout.
           sendToMercadoPago(checkoutTab, result.payment.checkoutUrl);
           window.location.href = waitingPath;
         } else {
@@ -1816,7 +1848,11 @@ export async function startCustomerArea(
           return;
         }
         showToast(error.message);
-        document.getElementById('paymentRetryNotice')?.classList.remove('hidden');
+        const notice = document.getElementById('paymentRetryNotice');
+        if (notice) {
+          notice.textContent = `Não foi possível continuar o pagamento: ${error.message || 'erro temporário'}. Seu pedido permanece salvo. Você pode tentar novamente ou abrir um pagamento pendente já existente.`;
+          notice.classList.remove('hidden');
+        }
         if (info?.code === 'terms_changed' || error.data?.code === 'terms_changed') {
           paymentTerms = null;
           if (termsControl) termsControl.checked = false;

@@ -2591,6 +2591,7 @@ export async function getV2CustomerArea(
     modules,
     paymentTotals,
     balanceSettings,
+    activeCheckout,
   ] =
     await Promise.all([
       libriWhatsapp(env.DB),
@@ -2658,6 +2659,19 @@ export async function getV2CustomerArea(
           `,
         )
         .first(),
+      env.DB.prepare(`
+        SELECT p.checkout_url AS url, p.method
+        FROM v2_payments p
+        JOIN v2_checkout_holds h ON h.order_id = p.order_id
+        WHERE p.order_id = ?
+          AND p.provider = 'mercado_pago'
+          AND p.status = 'pending'
+          AND p.checkout_url IS NOT NULL
+          AND h.status = 'active'
+          AND h.expires_at > ?
+        ORDER BY p.id DESC
+        LIMIT 1
+      `).bind(context.order.id, new Date().toISOString()).first(),
     ]);
 
   const paidCents =
@@ -2756,6 +2770,13 @@ export async function getV2CustomerArea(
         ? (Number(context.order.deposit_percent) === 50 ? 50 : 100)
         : (pricingSnapshot.payment?.adminDepositException === true ? 50 : 100),
       cardTotalCents,
+      activeCheckoutUrl:
+        ['awaiting_payment', 'urgency_approved'].includes(context.order.status)
+        && paidCents === 0
+        && /^https:\/\//i.test(String(activeCheckout?.url || ''))
+          ? activeCheckout.url : null,
+      activeCheckoutMethod:
+        activeCheckout?.method || null,
       cardFeeCents,
       cardFeePercent: cardFeeCents > 0 ? 4.97 : 0,
       deadlineAt: (() => {

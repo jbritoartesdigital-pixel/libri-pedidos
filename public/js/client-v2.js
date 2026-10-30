@@ -7,11 +7,11 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261027-mp-return-1';
+} from './client-v2-store.js?v=20261030-safari-retry-1';
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261027-mp-return-1';
+} from './client-v2-area.js?v=20261030-safari-retry-1';
 
 async function bootstrap() {
   const route =

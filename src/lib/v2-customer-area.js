@@ -2591,6 +2591,7 @@ export async function getV2CustomerArea(
     modules,
     paymentTotals,
     balanceSettings,
+    pendingCheckout,
   ] =
     await Promise.all([
       libriWhatsapp(env.DB),
@@ -2658,6 +2659,23 @@ export async function getV2CustomerArea(
           `,
         )
         .first(),
+      // Reuse a pending Mercado Pago checkout while its capacity hold is
+      // still active. Do not offer stale or already-approved payment links.
+      env.DB.prepare(`
+        SELECT p.checkout_url
+        FROM v2_payments p
+        WHERE p.order_id = ?
+          AND p.provider = 'mercado_pago'
+          AND p.status = 'pending'
+          AND p.checkout_url IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM v2_checkout_holds h
+            WHERE h.order_id = p.order_id
+              AND h.status = 'active'
+              AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          )
+        ORDER BY p.id DESC LIMIT 1
+      `).bind(context.order.id).first(),
     ]);
 
   const paidCents =
@@ -2747,6 +2765,13 @@ export async function getV2CustomerArea(
     },
 
     payment: {
+      // The customer may reopen this existing checkout via a direct,
+      // user-initiated link. No new charge or provider order is created.
+      checkoutUrl: ['awaiting_payment', 'urgency_approved']
+        .includes(context.order.status)
+        && context.order.briefing_status === 'locked'
+        ? (pendingCheckout?.checkout_url || null)
+        : null,
       method:
         context.order.payment_method,
       baseTotalCents,

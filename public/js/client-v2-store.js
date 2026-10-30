@@ -11,7 +11,7 @@ import {
   showToast,
 } from './client-v2-core.js';
 
-import { inputHtml } from './client-v2-area.js?v=20261027-mp-return-1';
+import { inputHtml } from './client-v2-area.js?v=20261030-safari-retry-1';
 import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingCustomerAreaPath } from './client-v2-mercadopago-tab.js?v=20261027-mp-return-1';
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';

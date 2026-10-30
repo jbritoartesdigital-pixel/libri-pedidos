@@ -2770,6 +2770,7 @@ export async function getV2CustomerArea(
       checkoutUrl: ['awaiting_payment', 'urgency_approved']
         .includes(context.order.status)
         && context.order.briefing_status === 'locked'
+        && paidCents === 0
         ? (pendingCheckout?.checkout_url || null)
         : null,
       method:

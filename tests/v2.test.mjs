@@ -696,8 +696,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261021-order-editor-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261027-delivery-chronological-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-admin-organizado-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261030-admin-organizado-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {

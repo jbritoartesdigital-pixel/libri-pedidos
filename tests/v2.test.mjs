@@ -18,7 +18,7 @@ import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWin
 import { getV2ManualOrderForCustomer, startV2ManualOrderPayment } from '../src/lib/v2-orders-manual.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
-import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
+import { handleAdminOrdersV2Api } from '../src/routes/admin-orders-v2.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment, voidV2FinancePayment } from '../src/lib/v2-finance.js';
 import { getV2StoreConfig, saveV2Coupon, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 import { planCustomerPhotoBatch } from '../public/js/client-v2-upload.js';
@@ -1542,44 +1542,22 @@ test('V2 cancellation keeps the order record, releases capacity and cancels pend
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(checkout.order.code).n, 1);
 });
 
-test('Admin preview publication and revocation follow the production workflow', async t => {
-  const DB = database(); providerMock(t);
-  const e = env(DB);
-  const body = input({
-    event: { honoreeName: 'Prévia', type: 'birthday', date: day(50) },
-    deliveryWindow: { start: day(10), end: day(12) },
-    ...await terms(DB),
-  });
-  const checkout = await startV2Checkout(request, e, body);
-  DB.sqlite.prepare("UPDATE v2_orders SET status='in_production', briefing_status='completed' WHERE order_code = ?")
-    .run(checkout.order.code);
-
-  const stored = [];
-  e.FILES = {
-    async put(key) { stored.push(key); },
-    async delete() {},
-  };
-
-  const form = new FormData();
-  form.append('file', new Blob(['preview'], { type: 'image/jpeg' }), 'preview.jpg');
-  form.append('watermarkConfirmed', 'true');
-  form.append('watermarkLabel', 'PRÉVIA • TESTE');
-
-  const previewRequest = new Request(
-    'https://pedidos.libriconvites.com.br/api/admin/v2/orders/' + checkout.order.code + '/previews',
-    { method: 'POST', body: form },
-  );
-  const createdResponse = await createV2Preview(previewRequest, e, checkout.order.code);
-  assert.equal(createdResponse.status, 201);
-  const created = await createdResponse.json();
-  assert.equal(created.preview.status, 'active');
-  assert.equal(stored.length, 1);
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'waiting_customer');
-
-  const revokedResponse = await revokeV2Preview(e, created.preview.id);
-  assert.equal(revokedResponse.status, 200);
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_previews WHERE id = ?').get(created.preview.id).status, 'revoked');
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'in_production');
+test('retired Admin preview endpoints cannot publish, reactivate or change stored data', async () => {
+  const DB=database(),e=env(DB);
+  const urls=[
+    '/api/admin/v2/orders/LIBRI-123456/previews',
+    '/api/admin/v2/previews/12/reactivate',
+    '/api/admin/v2/previews/12/revoke'
+  ];
+  for(const url of urls){
+    for(const method of ['GET','POST']){
+      const u=new URL('https://pedidos.libriconvites.com.br'+url);
+      const req=new Request(u,{method});
+      assert.equal(await handleAdminOrdersV2Api(req,e,u),null,
+        method+' '+url+' should have no active handler');
+    }
+  }
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) n FROM v2_previews').get().n,0);
 });
 
 test('production search finds theme and exposes the planned card data', async t => {
@@ -1989,7 +1967,9 @@ test('admin order shows one-tap briefing/finalize, folds rarely used buttons and
   const route=readFileSync('src/routes/admin-finance-v2.js','utf8');
   assert.match(ui,/id="toggleOrderBriefing"/);
   assert.match(ui,/id="orderBriefingPanel"/);
-  assert.match(ui,/id="orderPreviewDetails"/);
+  assert.doesNotMatch(ui,/id="orderPreviewDetails"|id="toggleOrderPreview"|id="publishPreview"/);
+  assert.match(ui,/class="order-main-actions"/);
+  assert.match(ui,/class="order-support-actions"/);
   assert.match(ui,/Outras ações e observações/);
   assert.match(ui,/id="orderPaymentDetails"/);
   assert.match(ui,/id="orderContractedDetails"/);
@@ -3472,10 +3452,7 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     incomplete.finalizeChecklist.items.find(item => item.code === 'briefing').ok,
     false,
   );
-  assert.equal(
-    incomplete.finalizeChecklist.items.find(item => item.code === 'preview').ok,
-    false,
-  );
+  assert.equal(incomplete.finalizeChecklist.items.some(item => item.code === 'preview'),false);
 
   // New public Pix has no balance by default. An additional contracted item
   // introduced after payment is handled through the existing manual balance.
@@ -3494,19 +3471,6 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     SET completion_percent=100, completed_at=datetime('now'), updated_at=datetime('now')
     WHERE order_id=?
   `).run(order.id);
-
-  const preview = DB.sqlite.prepare(`
-    INSERT INTO v2_previews(
-      order_id, version_number, media_type, preview_r2_key,
-      watermark_label, status, expires_at, created_at
-    )
-    VALUES (?,1,'image',?,'PRÉVIA','approved',datetime('now','+1 day'),datetime('now'))
-  `).run(order.id, `test/checklist-${order.id}.webp`);
-
-  DB.sqlite.prepare(`
-    INSERT INTO v2_preview_approvals(preview_id, order_id, approved_at, evidence_json)
-    VALUES (?, ?, datetime('now'), '{}')
-  `).run(Number(preview.lastInsertRowid), order.id);
 
   DB.sqlite.prepare(`
     UPDATE v2_orders
@@ -3709,7 +3673,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
 
   assert.match(storeSettings, /Mensagens rápidas do WhatsApp/);
   assert.match(storeSettings, /whatsappBriefingTemplate/);
-  assert.match(storeSettings, /whatsappPreviewTemplate/);
+  assert.doesNotMatch(storeSettings, /whatsappPreviewTemplate|previewHours/);
   assert.match(storeSettings, /whatsappBalanceTemplate/);
   assert.match(storeSettings, /whatsappFinalizedTemplate/);
   assert.match(storeSettings, /\{cliente\}/);

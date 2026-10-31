@@ -12,7 +12,7 @@ export const ADMIN_FEATURES = Object.freeze([
   { title: 'Produtos e preços', section: 'Loja', view: 'store', tab: 'products', detail: 'Catálogo, variações por cenas e valores' },
   { title: 'Adicionais', section: 'Loja', view: 'store', tab: 'addons', detail: 'Itens opcionais de cada produto' },
   { title: 'Combos', section: 'Loja', view: 'store', tab: 'combos', detail: 'Pacotes e ofertas combinadas' },
-  { title: 'Cupons', section: 'Loja', view: 'store', tab: 'coupons', detail: 'Criar e administrar descontos promocionais' },
+  { title: 'Cupons', section: 'Loja', view: 'store', tab: 'coupons', keywords: 'cupom desconto promoção', detail: 'Criar e administrar descontos promocionais' },
   { title: 'Configurações da loja', section: 'Loja', view: 'store', tab: 'settings', detail: 'Dados, pagamento, mensagens, metas e experiência' },
   { title: 'Termos de contratação', section: 'Loja', view: 'store', tab: 'terms', detail: 'Versões dos termos' },
   { title: 'Modelos de contrato', section: 'Loja', view: 'store', tab: 'contracts', detail: 'Texto padrão do contrato' },

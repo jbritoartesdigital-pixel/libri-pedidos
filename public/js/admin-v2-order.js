@@ -938,12 +938,13 @@ export async function openOrder(code, onChanged = null) {
 
           ${productionQuickBlock(detail)}
 
-          <details class="order-optional card">
-            <summary>Ver contratação e pagamentos</summary>
-            <div class="section-grid">
-              ${contractedBlock(detail)}
-              ${paymentBlock(detail)}
-            </div>
+          <details class="order-optional card" id="orderPaymentDetails">
+            <summary>Pagamento e saldo</summary>
+            ${paymentBlock(detail)}
+          </details>
+          <details class="order-optional card" id="orderContractedDetails">
+            <summary>O que foi contratado e arquivos</summary>
+            ${contractedBlock(detail)}
             <div class="order-quick-actions">
               <a class="btn btn-ghost"
                 href="/api/admin/v2/orders/${esc(detail.order.code)}/download-folder">
@@ -976,8 +977,8 @@ export async function openOrder(code, onChanged = null) {
 
         <div class="section-grid">
           <section class="card">
-            <details class="order-optional">
-              <summary>Outras ações e observações</summary>
+            <details class="order-optional" id="orderMoreActions">
+              <summary>Observações, cancelar e outras ações</summary>
             <div class="section-title">
               <h3>Ações</h3>
             </div>
@@ -1091,8 +1092,8 @@ export async function openOrder(code, onChanged = null) {
         </div>
 
         <details class="order-optional card" id="orderPreviewDetails">
-          <summary>Prévia, contratos e histórico</summary>
-          <div class="section-grid">
+          <summary>Prévia e aprovação da cliente</summary>
+          <div class="order-detail-content">
           <section class="card">
             <div class="section-title">
               <h3>Prévia</h3>
@@ -1212,7 +1213,11 @@ export async function openOrder(code, onChanged = null) {
               ).join('') || '<div class="empty">Nenhuma prévia publicada.</div>'}
             </div>
           </section>
-
+          </div>
+        </details>
+        <details class="order-optional card" id="orderContractDetails">
+          <summary>Contrato do pedido</summary>
+          <div class="order-detail-content">
           <section class="card">
             <div class="section-title">
               <h3>Contratos</h3>
@@ -1229,11 +1234,11 @@ export async function openOrder(code, onChanged = null) {
               Gerar contrato
             </button>
           </section>
-        </div>
-
-        <div style="margin-top:14px">
+          </div>
+        </details>
+        <details class="order-optional card" id="orderHistoryDetails">
+          <summary>Histórico e movimentações</summary>
           ${historyBlock(detail)}
-        </div>
         </details>
       `,
       {

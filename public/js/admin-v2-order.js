@@ -681,8 +681,20 @@ export async function openOrder(code, onChanged = null) {
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
       `
-        <div class="section-grid">
-          <section class="card">
+        <nav class="order-section-nav" aria-label="Ir para uma seção do pedido">
+          <span class="order-section-nav-label">Ir direto para</span>
+          <div class="order-section-nav-links">
+            <button type="button" data-order-jump="summary">Resumo</button>
+            <button type="button" data-order-jump="briefing">Dados e fotos</button>
+            <button type="button" data-order-jump="payment">Pagamentos</button>
+            <button type="button" data-order-jump="preview">Prévias</button>
+            <button type="button" data-order-jump="contract">Contrato</button>
+            <button type="button" data-order-jump="history">Histórico</button>
+            <button type="button" data-order-jump="actions">Outras ações</button>
+          </div>
+        </nav>
+        <div class="section-grid order-overview-grid">
+          <section class="card order-overview-card" id="orderSummary">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <span class="status ${statusClass(detail.order.status)}">
                 ${esc(detail.order.statusLabel)}
@@ -718,13 +730,23 @@ export async function openOrder(code, onChanged = null) {
               ${detail.order.isLegacyV1 ? `<br>Pix registrado: ${money(pixPaidCents)}
                 • Saldo em aberto: ${money(pixRemainingCents)}` : ''}
             </div>
+            <div class="order-payment-snapshot" aria-label="Resumo financeiro do pedido">
+              <div><small>Valor do pedido</small><strong>${money(detail.pricing.totalCents)}</strong></div>
+              <div><small>Recebido</small><strong>${money(pixPaidCents)}</strong></div>
+              <div><small>${pixRemainingCents > 0 ? 'A receber' : 'Saldo'}</small>
+                <strong>${pixRemainingCents > 0 ? money(pixRemainingCents) : 'Quitado'}</strong></div>
+            </div>
             ${detail.order.canReconcileManualPix ? `
               <p class="notice info" style="margin:10px 0;font-size:13px">
                 Já existe Pix aprovado, mas o andamento ainda aparece como pagamento pendente.
                 Use "Atualizar situação do Pix" sem lançar outro recebimento.
               </p>` : ''}
 
-            <div class="order-quick-actions">
+            <div class="order-action-head">
+              <strong>Ações do pedido</strong>
+              <small>As opções mudam conforme o andamento.</small>
+            </div>
+            <div class="order-quick-actions order-primary-actions">
               ${!['cancelled','finalized'].includes(detail.order.status) ? `
                 <button id="editAdminOrder" class="btn btn-secondary" type="button"
                   aria-controls="adminEditOrderPanel" aria-expanded="false">
@@ -734,23 +756,6 @@ export async function openOrder(code, onChanged = null) {
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
-              ${detail.order.canReconcileManualPix ? `
-                <button id="reconcileLegacyPixStatus" class="btn btn-secondary" type="button">
-                  Atualizar situação do Pix
-                </button>
-              ` : ''}
-              ${canAdjustLegacyPrice ? `
-                <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
-                  aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
-                  Ajustar valor combinado
-                </button>
-              ` : ''}
-              ${canRegisterManualPix ? `
-                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
-                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
-                  Registrar Pix recebido
-                </button>
-              ` : ''}
               ${(detail.allowedActions || []).includes('start_production') ? `
                 <button type="button" class="btn btn-primary" data-order-action="start_production">
                   Iniciar produção
@@ -773,6 +778,31 @@ export async function openOrder(code, onChanged = null) {
               <button type="button" class="btn btn-ghost"
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
+
+            ${(detail.order.canReconcileManualPix || canAdjustLegacyPrice || canRegisterManualPix) ? `
+              <div class="order-finance-action-group">
+                <strong>Recebimentos e correções financeiras</strong>
+                <div class="order-quick-actions order-finance-actions">
+              ${detail.order.canReconcileManualPix ? `
+                <button id="reconcileLegacyPixStatus" class="btn btn-secondary" type="button">
+                  Atualizar situação do Pix
+                </button>
+              ` : ''}
+              ${canAdjustLegacyPrice ? `
+                <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
+                  aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
+                  Ajustar valor combinado
+                </button>
+              ` : ''}
+              ${canRegisterManualPix ? `
+                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
+                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
+                  Registrar Pix recebido
+                </button>
+              ` : ''}
+                </div>
+              </div>
+            ` : ''}
 
             <section id="adminEditOrderPanel" class="admin-edit-order-panel hidden"
               role="region" aria-label="Editar cenas, adicionais e valores"></section>

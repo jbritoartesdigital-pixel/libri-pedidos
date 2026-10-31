@@ -40,7 +40,6 @@ import {
 } from './routes/admin-orders-v2.js';
 import { handleAdminBriefingV2Api } from './routes/admin-briefing-v2.js';
 
-import {handleAdminProjectBibleV2Api} from './routes/admin-project-bible-v2.js';
 
 import {
   handleAdminStoreConfigV2Api,
@@ -328,7 +327,6 @@ async function handleAdminV2Api(
     handleAdminFinanceV2Api,
     handleAdminNotificationsV2Api,
     handleAdminOrderZipV2Api,
-    handleAdminProjectBibleV2Api,
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,

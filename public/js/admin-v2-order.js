@@ -130,25 +130,6 @@ function finalizeChecklistHtml(
               ${
                 !item.ok
                 && item.code
-                  === 'preview'
-                  ? `
-                    <small>
-                      Se ela aprovou fora da área da cliente, registre a aprovação aqui.
-                    </small>
-                    <button
-                      class="btn btn-secondary btn-small"
-                      type="button"
-                      data-checklist-preview-whatsapp
-                    >
-                      Marcar aprovada no WhatsApp
-                    </button>
-                  `
-                  : ''
-              }
-
-              ${
-                !item.ok
-                && item.code
                   === 'payment'
                 && canReceiveBalance
                   ? `
@@ -185,7 +166,7 @@ function finalizeChecklistHtml(
           </label>
 
           <div class="notice info" style="margin-top:12px">
-            O sistema confirma automaticamente briefing, aprovação, saldo e prazo.
+            O sistema confere briefing, pagamentos e prazo.
             Como o arquivo/link final não é armazenado como um item separado, esta última conferência é manual.
           </div>
         `
@@ -687,7 +668,6 @@ export async function openOrder(code, onChanged = null) {
             <button type="button" data-order-jump="summary">Resumo</button>
             <button type="button" data-order-jump="briefing">Dados e fotos</button>
             <button type="button" data-order-jump="payment">Pagamentos</button>
-            <button type="button" data-order-jump="preview">Prévias</button>
             <button type="button" data-order-jump="contract">Contrato</button>
             <button type="button" data-order-jump="history">Histórico</button>
             <button type="button" data-order-jump="actions">Outras ações</button>
@@ -743,40 +723,27 @@ export async function openOrder(code, onChanged = null) {
               </p>` : ''}
 
             <div class="order-action-head">
-              <strong>Ações do pedido</strong>
-              <small>As opções mudam conforme o andamento.</small>
+              <strong>Produção e andamento</strong>
+              <small>As ações disponíveis acompanham a situação do pedido.</small>
             </div>
-            <div class="order-quick-actions order-primary-actions">
-              ${!['cancelled','finalized'].includes(detail.order.status) ? `
-                <button id="editAdminOrder" class="btn btn-secondary" type="button"
-                  aria-controls="adminEditOrderPanel" aria-expanded="false">
-                  Editar pedido e valores
-                </button>` : ''}
-              <button id="toggleOrderBriefing" class="btn btn-primary" type="button"
-                aria-controls="orderBriefingPanel" aria-expanded="false">
-                Abrir briefing
-              </button>
+            <div class="order-main-actions">
+              <button id="toggleOrderBriefing" class="btn btn-primary ${!(detail.allowedActions || []).includes('start_production') ? 'order-briefing-solo' : ''}" type="button"
+                aria-controls="orderBriefingPanel" aria-expanded="false">Abrir briefing</button>
               ${(detail.allowedActions || []).includes('start_production') ? `
-                <button type="button" class="btn btn-primary" data-order-action="start_production">
-                  Iniciar produção
-                </button>
+                <button type="button" class="btn btn-primary" data-order-action="start_production">Iniciar produção</button>
               ` : ''}
               ${(detail.allowedActions || []).includes('finalize') ? `
-                <button type="button" class="btn btn-success" data-order-action="finalize">
-                  Finalizar pedido
-                </button>
+                <button type="button" class="btn btn-success order-finalize-action" data-order-action="finalize">Finalizar pedido</button>
               ` : ''}
-              <a
-                class="btn btn-secondary"
-                href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\D/g,''))}"
-                target="_blank"
-                rel="noopener"
-              >
-                WhatsApp
-              </a>
-
-              <button type="button" class="btn btn-ghost"
-                id="toggleOrderPreview">Ver prévia</button>
+            </div>
+            <div class="order-support-actions">
+              ${!['cancelled','finalized'].includes(detail.order.status) ? `
+                <button id="editAdminOrder" class="btn btn-secondary" type="button"
+                  aria-controls="adminEditOrderPanel" aria-expanded="false">Editar pedido e valores</button>
+              ` : ''}
+              <a class="btn btn-secondary"
+                href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\\D/g,''))}"
+                target="_blank" rel="noopener">WhatsApp</a>
             </div>
 
             ${(detail.order.canReconcileManualPix || canAdjustLegacyPrice || canRegisterManualPix) ? `
@@ -1089,130 +1056,6 @@ export async function openOrder(code, onChanged = null) {
           </section>
         </div>
 
-        <details class="order-optional card" id="orderPreviewDetails">
-          <summary>Prévia e aprovação da cliente</summary>
-          <div class="order-detail-content">
-          <section class="card">
-            <div class="section-title">
-              <h3>Prévia</h3>
-              <span class="status">${(detail.previews || []).length}</span>
-              <button type="button" class="btn btn-ghost btn-small" id="downloadProjectBible" title="Baixar histórico das prévias aprovadas">Project Bible</button>
-
-            </div>
-
-
-            ${['in_production','adjustments','waiting_customer'].includes(detail.order.status) ? `
-            <div class="field">
-              <label for="previewFile">Arquivo da prévia</label>
-              <input
-                id="previewFile"
-                class="input"
-                type="file"
-                accept="video/mp4,video/webm,image/jpeg,image/png,image/webp"
-              >
-            </div>
-
-            <div class="field" style="margin-top:10px">
-              <label for="previewWatermark">Texto da marca d'água</label>
-              <input
-                id="previewWatermark"
-                class="input"
-                value="PRÉVIA • ${esc(detail.order.code)}"
-              >
-            </div>
-
-            <label class="checkline" style="margin-top:10px">
-              <input id="previewProtected" type="checkbox">
-              <span>Confirmei que este arquivo é a cópia de prévia, já comprimida e com marca d'água.</span>
-            </label>
-
-            <button
-              id="publishPreview"
-              class="btn btn-primary"
-              type="button"
-              style="margin-top:10px"
-            >
-              Publicar prévia
-            </button>
-            ` : `
-              <div class="notice info">
-                A publicação de prévia é liberada quando o pedido estiver em produção ou ajustes.
-              </div>
-            `}
-
-            ${
-              !detail.finalizeChecklist
-                ?.items
-                ?.find(
-                  item =>
-                    item.code
-                    === 'preview',
-                )
-                ?.ok
-                ? `
-                  <div class="notice info" style="margin-top:12px">
-                    A cliente aprovou pelo WhatsApp?
-                    <button
-                      class="btn btn-secondary btn-small"
-                      type="button"
-                      data-preview-approve-whatsapp
-                      style="margin-top:8px"
-                    >
-                      Registrar aprovação no WhatsApp
-                    </button>
-                  </div>
-                `
-                : ''
-            }
-
-            <div class="list" style="margin-top:14px">
-              ${(detail.previews || []).map(
-                (preview) => `
-                  <div class="row-card">
-                    <strong>
-                      v${preview.version} • ${esc({
-                        active: 'Ativa',
-                        approved: 'Aprovada',
-                        expired: 'Expirada',
-                        replaced: 'Substituída',
-                        revoked: 'Revogada',
-                      }[preview.status] || preview.status)}
-                    </strong>
-
-                    <small>
-                      ${esc(preview.mediaType)}
-                      ${preview.expiresAt ? ` • expira ${dateTimeBr(preview.expiresAt)}` : ''}
-                      ${preview.approvedAt ? ` • aprovada ${dateTimeBr(preview.approvedAt)}` : ''}
-                    </small>
-
-                    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
-                      ${preview.status === 'expired' ? `
-                        <button
-                          class="btn btn-secondary"
-                          type="button"
-                          data-preview-reactivate="${preview.id}"
-                        >
-                          Reativar
-                        </button>
-                      ` : ''}
-
-                      ${['active','expired'].includes(preview.status) ? `
-                        <button
-                          class="btn btn-ghost"
-                          type="button"
-                          data-preview-revoke="${preview.id}"
-                        >
-                          Retirar prévia
-                        </button>
-                      ` : ''}
-                    </div>
-                  </div>
-                `,
-              ).join('') || '<div class="empty">Nenhuma prévia publicada.</div>'}
-            </div>
-          </section>
-          </div>
-        </details>
         <details class="order-optional card" id="orderContractDetails">
           <summary>Contrato do pedido</summary>
           <div class="order-detail-content">
@@ -1247,7 +1090,7 @@ export async function openOrder(code, onChanged = null) {
   // Atalhos só abrem os painéis existentes. Não fazem ações financeiras.
   const jumpSections = Object.freeze({
     summary:'orderSummary', briefing:'orderBriefingPanel',
-    payment:'orderPaymentDetails', preview:'orderPreviewDetails',
+    payment:'orderPaymentDetails',
     contract:'orderContractDetails', history:'orderHistoryDetails',
     actions:'orderMoreActions'
   });
@@ -1263,27 +1106,6 @@ export async function openOrder(code, onChanged = null) {
     });
   });
 
-  document.getElementById('downloadProjectBible')?.addEventListener('click',async event=>{
-    const button=event.currentTarget;
-    button.disabled=true;
-    try{
-      const result=await api('/api/admin/v2/orders/'+encodeURIComponent(detail.order.code)+'/project-bible');
-      const data=result?.projectBible;
-      if(!data)throw Error('Histórico ainda não disponível.');
-      const blob=new Blob([JSON.stringify(data,null,2)+'\n'],{type:'application/json'});
-      const url=URL.createObjectURL(blob);
-      const link=document.createElement('a');
-      link.href=url;
-      link.download='Project_Bible_'+detail.order.code+'.json';
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),3000);
-      showToast('Project Bible exportado com as prévias aprovadas.');
-    }catch(error){showToast(error.message||'Não foi possível exportar Project Bible.');}
-    finally{button.disabled=false;}
-  });
-
   bindAdminOrderEditing(detail,onChanged,close,openOrder);
   bindAdminWhatsAppBriefing(detail.order.code, onChanged);
 
@@ -1297,13 +1119,6 @@ export async function openOrder(code, onChanged = null) {
     briefingToggle.textContent = opening ? 'Fechar briefing' : 'Abrir briefing';
     if (opening) panel.scrollIntoView({behavior: 'smooth', block: 'start'});
   });
-  document.getElementById('toggleOrderPreview')?.addEventListener('click', () => {
-    const panel = document.getElementById('orderPreviewDetails');
-    if (!panel) return;
-    panel.open = true;
-    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
-  });
-
   const photos = detail.uploads?.uploads || [];
   const photoViewer = document.getElementById('orderPhotoViewer');
   const displayable = file => ['image/jpeg', 'image/png', 'image/webp'].includes(file?.mimeType);
@@ -1575,262 +1390,6 @@ O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
     });
   });
 
-  document
-    .getElementById('publishPreview')
-    ?.addEventListener(
-      'click',
-      async (event) => {
-        const file =
-          document
-            .getElementById('previewFile')
-            ?.files
-            ?.[0];
-
-        if (!file) {
-          showToast('Selecione a prévia.');
-          return;
-        }
-
-        if (
-          !document
-            .getElementById('previewProtected')
-            ?.checked
-        ) {
-          showToast('Confirme a cópia com marca d’água.');
-          return;
-        }
-
-        const button =
-          event.currentTarget;
-
-        button.disabled = true;
-        button.textContent = 'Publicando...';
-
-        try {
-          const form =
-            new FormData();
-
-          form.append(
-            'file',
-            file,
-          );
-
-          form.append(
-            'watermarkConfirmed',
-            'true',
-          );
-
-          form.append(
-            'watermarkLabel',
-            document
-              .getElementById('previewWatermark')
-              .value
-              .trim(),
-          );
-
-          const result =
-            await api(
-              `/api/admin/v2/orders/${detail.order.code}/previews`,
-              {
-                method: 'POST',
-                body: form,
-              },
-            );
-
-          showToast('Prévia publicada ✓');
-
-          if (
-            result.client
-              ?.whatsappUrl
-            && confirm(
-              'Prévia publicada. Abrir o WhatsApp para enviar o link à cliente?',
-            )
-          ) {
-            window.open(
-              result.client.whatsappUrl,
-              '_blank',
-              'noopener',
-            );
-          }
-
-          close();
-
-          if (onChanged) {
-            await onChanged();
-          }
-
-          await openOrder(
-            detail.order.code,
-            onChanged,
-          );
-        } catch (error) {
-          button.disabled = false;
-          button.textContent = 'Publicar prévia';
-          showToast(error.message);
-        }
-      },
-    );
-
-  document
-    .querySelectorAll('[data-preview-reactivate]')
-    .forEach(
-      (button) =>
-        button.addEventListener(
-          'click',
-          async () => {
-            button.disabled = true;
-
-            try {
-              await api(
-                `/api/admin/v2/previews/${button.dataset.previewReactivate}/reactivate`,
-                {
-                  method: 'POST',
-                  body: '{}',
-                },
-              );
-
-              close();
-
-              if (onChanged) {
-                await onChanged();
-              }
-
-              await openOrder(
-                detail.order.code,
-                onChanged,
-              );
-
-              showToast('Prévia reativada ✓');
-            } catch (error) {
-              button.disabled = false;
-              showToast(error.message);
-            }
-          },
-        ),
-    );
-
-  document
-    .querySelectorAll('[data-preview-revoke]')
-    .forEach(
-      (button) =>
-        button.addEventListener(
-          'click',
-          async () => {
-            if (
-              !confirm(
-                'Retirar esta prévia da área da cliente?',
-              )
-            ) {
-              return;
-            }
-
-            button.disabled = true;
-
-            try {
-              await api(
-                `/api/admin/v2/previews/${button.dataset.previewRevoke}/revoke`,
-                {
-                  method: 'POST',
-                  body: '{}',
-                },
-              );
-
-              close();
-
-              if (onChanged) {
-                await onChanged();
-              }
-
-              await openOrder(
-                detail.order.code,
-                onChanged,
-              );
-
-              showToast('Prévia retirada.');
-            } catch (error) {
-              button.disabled = false;
-              showToast(error.message);
-            }
-          },
-        ),
-    );
-
-  const registerWhatsappApproval =
-    async (
-      button,
-    ) => {
-      if (
-        !confirm(
-          'Confirmar que a cliente aprovou a prévia pelo WhatsApp?',
-        )
-      ) {
-        return false;
-      }
-
-      button.disabled =
-        true;
-
-      try {
-        await api(
-          `/api/admin/v2/orders/${detail.order.code}/preview-approval`,
-          {
-            method:
-              'POST',
-            body:
-              JSON.stringify({
-                channel:
-                  'whatsapp',
-              }),
-          },
-        );
-
-        showToast(
-          'Aprovação pelo WhatsApp registrada ✓',
-        );
-
-        return true;
-      } catch (error) {
-        button.disabled =
-          false;
-        showToast(
-          error.message,
-        );
-
-        return false;
-      }
-    };
-
-  document
-    .querySelectorAll(
-      '[data-preview-approve-whatsapp]',
-    )
-    .forEach(
-      (button) =>
-        button.addEventListener(
-          'click',
-          async () => {
-            if (
-              !await registerWhatsappApproval(
-                button,
-              )
-            ) {
-              return;
-            }
-
-            close();
-
-            if (onChanged) {
-              await onChanged();
-            }
-
-            await openOrder(
-              detail.order.code,
-              onChanged,
-            );
-          },
-        ),
-    );
-
   const refreshContracts =
     async () => {
       const area =
@@ -2013,13 +1572,6 @@ O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
                       document.getElementById('editOrderBriefing')?.click();
                     } catch (error) {
                       showToast(error.message);
-                    }
-                  });
-                document.querySelector('[data-checklist-preview-whatsapp]')
-                  ?.addEventListener('click', async event => {
-                    if (await registerWhatsappApproval(event.currentTarget)) {
-                      try { await refreshChecklist(); }
-                      catch (error) { showToast(error.message); }
                     }
                   });
                 document.querySelector('[data-checklist-balance-received]')

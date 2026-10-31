@@ -9,8 +9,8 @@ test('Flow integration is detached from the Pedidos application entrypoint', () 
   assert.doesNotMatch(source, /handleAdminFlowGrantsV2Api|handleInternalFlowGrantRedeem/);
   assert.doesNotMatch(source, /serveStaticShell\(request, env, '\/flow-connect\.html'\)/);
   assert.match(source, /handleAdminOrdersV2Api/);
-  assert.match(source, /handleAdminDriveFolderV2Api/);
-  assert.match(source, /runV2DriveSync/);
+  assert.doesNotMatch(source, /handleAdminDriveFolderV2Api|runV2DriveSync|driveOAuthReturnPage/);
+  assert.match(source, /handleAdminProjectBibleV2Api/);
 });
 
 test('Flow internal grant redemption no longer has an active route', async () => {
@@ -23,10 +23,11 @@ test('Flow internal grant redemption no longer has an active route', async () =>
   assert.equal(response.status, 404);
 });
 
-test('legacy Flow pairing page is not part of assets shipped by Pedidos', () => {
-  assert.equal(exists(), false);
-  function exists() {
-    try { readFileSync('public/flow-connect.html'); return true; }
+test('legacy Flow and Drive pages are not shipped by Pedidos', () => {
+  assert.equal(exists('public/flow-connect.html'), false);
+  assert.equal(exists('public/drive-privacy.html'), false);
+  function exists(path) {
+    try { readFileSync(path); return true; }
     catch (e) { if (e?.code === 'ENOENT') return false; throw e; }
   }
 });

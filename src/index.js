@@ -40,8 +40,7 @@ import {
 } from './routes/admin-orders-v2.js';
 import { handleAdminBriefingV2Api } from './routes/admin-briefing-v2.js';
 
-import { handleAdminDriveFolderV2Api } from './routes/admin-drive-folder-v2.js';
-import {needsDriveOAuthReturnPage,driveOAuthReturnPage} from './lib/v2-drive-oauth-return.js';
+import {handleAdminProjectBibleV2Api} from './routes/admin-project-bible-v2.js';
 
 import {
   handleAdminStoreConfigV2Api,
@@ -76,7 +75,6 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
-import {runV2DriveSync} from './lib/v2-drive-auto-sync.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -312,10 +310,6 @@ async function handleAdminV2Api(
       );
   }
 
-  // The landing page does not read or write OAuth/admin data. Its same-origin
-  // retry must pass the unchanged Passkey check immediately below.
-  if(needsDriveOAuthReturnPage(request,url))return driveOAuthReturnPage();
-
   const authFailure =
     await requireAdminPasskeyAuth(
       request,
@@ -334,7 +328,7 @@ async function handleAdminV2Api(
     handleAdminFinanceV2Api,
     handleAdminNotificationsV2Api,
     handleAdminOrderZipV2Api,
-    handleAdminDriveFolderV2Api,
+    handleAdminProjectBibleV2Api,
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
@@ -410,12 +404,6 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runV2Scheduler(env).then(result => {
       console.log('V2 scheduler', JSON.stringify(result));
-    }));
-    // Cron de Drive opt-in. Sem OAuth ou consentimento, não faz nada.
-    ctx.waitUntil(runV2DriveSync(env).then(result=>{
-      console.log('V2 Drive sync',JSON.stringify(result));
-    }).catch(()=>{
-      console.error('V2 Drive sync: erro no ciclo; operação não confirmada.');
     }));
   },
   async fetch(

@@ -26,7 +26,6 @@ test('renderizar Reels, Stories e capa 9:16 sem mídia real, dados privados ou u
   assert.equal(fake.status,0,fake.stderr?.slice(-500)||'Não gerou vídeo sintético');
   const bible=buildProjectBible({
     projectId:'projeto_99990',orderCode:'pedido_99990',format:'video',
-    driveFolderId:'1fakeFolderId9876543210ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     approvals:[{id:'aprov_vid00001',type:'final_video',version:1,
       approved:true,approvedAt:'2026-10-10T11:00:00Z',
       sha256:'d'.repeat(64),mimeType:'video/mp4',sourceRef:'asset_99990'}]

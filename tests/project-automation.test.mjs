@@ -6,7 +6,7 @@ import {buildProjectBible,buildSocialDraft,renderSocialDraft}
 const hash='a'.repeat(64);
 const valid={
   projectId:'proj_TesteLibri0001',orderCode:'ord_123456789000',
-  format:'interativo',driveFolderId:'1abcDEF0123456789012345678XY',
+  format:'interativo',
   decisions:[{topic:'Estilo',decision:'Fundo delicado com jardim',
     updatedAt:'2026-10-10T11:00:00Z'}],
   approvals:[
@@ -24,22 +24,20 @@ const valid={
       sha256:'d'.repeat(64),sourceRef:'media_004'}
   ]
 };
-test('Project Bible exige identificador exato da pasta, sem adivinhar pelo nome',()=>{
-  assert.throws(()=>buildProjectBible({...valid,driveFolderId:null}),/Vínculo seguro/);
-  assert.throws(()=>buildProjectBible({...valid,driveFolderId:'Aurora'}),/Vínculo seguro/);
+test('Project Bible exige código de pedido válido, sem dependências externas',()=>{
   assert.throws(()=>buildProjectBible({...valid,orderCode:''}),/Pedido/);
 });
 test('cada cena aprovada vira nome simples e histórico é preservado',()=>{
   const b=buildProjectBible(valid);
   assert.equal(b.format,'interativo');
-  assert.equal(b.uploadPlan.length,4);
+  assert.equal(b.assetPlan.length,4);
   assert.equal(b.approvals.find(x=>x.id==='aprov_cena001v2').targetName,'Cena 1.png');
   assert.equal(b.approvals.find(x=>x.id==='aprov_cena001v1').primary,false);
   assert.match(b.approvals.find(x=>x.id==='aprov_cena001v1').targetName,/Historico\/Cena 1_v01/);
   assert.equal(b.approvals.find(x=>x.id==='aprov_preview0001').targetName,'Preview.mp4');
   assert.equal(b.approvals.find(x=>x.id==='aprov_final0001').targetName,'Video Final.mp4');
-  assert.ok(b.uploadPlan.every(x=>x.driveFolderId===valid.driveFolderId));
-  assert.ok(b.uploadPlan.every(x=>x.rule==='create-only-after-checking-existing-file-and-hash'));
+  assert.ok(b.assetPlan.every(x=>x.projectId===valid.projectId));
+  assert.ok(b.assetPlan.every(x=>x.rule==='manual-export-only-after-approval-and-integrity-check'));
 });
 test('proíbe misturar pedidos e anexos inseguros ou não aprovados',()=>{
   assert.throws(()=>buildProjectBible({...valid,approvals:[{...valid.approvals[0],approved:false}]}),/aprovações confirmadas/i);
@@ -67,6 +65,6 @@ test('outros formatos mantêm prefixos diferentes para evitar confusão',()=>{
   for(const fmt of ['video','loop','save_the_date','casamento','outro']){
     const b=buildProjectBible({...valid,format:fmt,approvals:[
       {...valid.approvals[0],type:'loop',sceneNumber:undefined}]});
-    assert.equal(b.uploadPlan[0].targetName,'Loop.png');
+    assert.equal(b.assetPlan[0].targetName,'Loop.png');
   }
 });

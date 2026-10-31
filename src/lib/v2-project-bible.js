@@ -1,7 +1,7 @@
 /**
  * Project Bible read model (server side), always sourced from approved previews.
  * Avoid exporting order PII, private links, signed URLs and R2 key internals.
- * Folder links are metadata only. No upload is claimed or attempted.
+ * This report is local approval history; no external export or upload.
  */
 const CODE=/^LIBRI-\d{1,15}$/;
 function fileExtension(key,type){
@@ -15,9 +15,6 @@ export async function getApprovedProjectBible(DB,orderCode){
     'SELECT id,order_code,event_type,event_date FROM v2_orders WHERE order_code=? LIMIT 1'
   ).bind(orderCode).first();
   if(!order)return null;
-  const drives=await DB.prepare(
-    'SELECT folder_id,sync_status FROM v2_order_drive_folders WHERE order_code=? LIMIT 1'
-  ).bind(orderCode).first();
   const rows=(await DB.prepare(
     `SELECT p.id,p.version_number,p.media_type,p.original_r2_key,p.preview_r2_key,
       a.approved_at,a.evidence_json
@@ -39,23 +36,18 @@ export async function getApprovedProjectBible(DB,orderCode){
         fileExtension(p.original_r2_key||p.preview_r2_key,p.media_type),
       approvedAt:p.approved_at,
       approvalSource:channel,
-      originalAvailable:Boolean(p.original_r2_key),
-      driveStatus:drives?.folder_id?'pending_connection':'folder_not_linked'
+      originalAvailable:Boolean(p.original_r2_key)
     };
   });
   return{
     schema:'libri_project_bible_v1',projectId:order.order_code,
     orderCode:order.order_code,eventType:order.event_type,
-    eventDate:order.event_date,drive:{
-      linked:Boolean(drives?.folder_id),
-      syncStatus:drives?.sync_status||'not_linked',
-      uploadEnabled:false
-    },
+    eventDate:order.event_date,
     approvedPreviews:previews,
     notes:[
       'Prévia aprovada não comprova que cada cena ou vídeo final foi aprovado separadamente.',
       'Sem URLs privadas, dados de cliente, fotos, credenciais ou tokens.',
-      'O arquivo é um retrato atual; sincronização Google Drive ainda não está ativada.'
+      'O arquivo é um retrato local do histórico de aprovações; nenhum envio externo é realizado.'
     ]
   };
 }

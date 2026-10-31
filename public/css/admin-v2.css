@@ -1522,7 +1522,7 @@ button { -webkit-tap-highlight-color: transparent; }
   margin-top: 10px;
 }
 
-#driveFolderOptions [hidden]{display:none!important}
+
 
 /* WhatsApp briefing transcription: one inline, narrow-screen-safe form. */
 .admin-bf-entry { margin: 15px 0 10px; min-width: 0; }

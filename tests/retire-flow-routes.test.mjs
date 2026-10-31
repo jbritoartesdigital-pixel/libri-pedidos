@@ -10,7 +10,7 @@ test('Flow integration is detached from the Pedidos application entrypoint', () 
   assert.doesNotMatch(source, /serveStaticShell\(request, env, '\/flow-connect\.html'\)/);
   assert.match(source, /handleAdminOrdersV2Api/);
   assert.doesNotMatch(source, /handleAdminDriveFolderV2Api|runV2DriveSync|driveOAuthReturnPage/);
-  assert.match(source, /handleAdminProjectBibleV2Api/);
+  assert.doesNotMatch(source, /handleAdminProjectBibleV2Api/);
 });
 
 test('Flow internal grant redemption no longer has an active route', async () => {

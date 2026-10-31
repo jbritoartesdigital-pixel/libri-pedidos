@@ -833,8 +833,6 @@ function finalizeChecklistFrom(
   order,
   payments,
   briefing,
-  previews,
-  history = [],
 ) {
   const items = [
     {
@@ -850,36 +848,6 @@ function finalizeChecklistFrom(
             ?.completionPercent
           || 0,
         ) >= 100,
-    },
-    {
-      code:
-        'preview',
-      label:
-        'Prévia aprovada pela cliente',
-      ok:
-        (
-          (
-            previews
-            || []
-          )
-            .some(
-              (preview) =>
-                Boolean(
-                  preview.approvedAt,
-                )
-                || preview.status
-                  === 'approved',
-            )
-          || (
-            history
-            || []
-          )
-            .some(
-              (item) =>
-                item.actionCode
-                === 'preview_approved_external',
-            )
-        ),
     },
     {
       code:
@@ -921,7 +889,6 @@ function finalizeChecklistFrom(
 function orderWhatsappActions(
   order,
   briefing,
-  previews,
   payments,
   templates,
   uploads = [],
@@ -983,37 +950,6 @@ function orderWhatsappActions(
         'briefing',
       label:
         'Pedir dados da festa',
-      message,
-      url:
-        whatsappUrl(
-          order.whatsapp,
-          message,
-        ),
-    });
-  }
-
-  if (
-    isLive && (
-      previews
-      || []
-    )
-      .some(
-        (preview) =>
-          preview.status
-          === 'active',
-      )
-  ) {
-    const message =
-      renderV2WhatsappTemplate(
-        templates.preview,
-        values,
-      );
-
-    actions.push({
-      code:
-        'preview',
-      label:
-        'Prévia disponível',
       message,
       url:
         whatsappUrl(
@@ -2326,8 +2262,6 @@ export async function getV2AdminOrderDetail(
       order,
       payments,
       briefing,
-      previews,
-      history,
     );
 
   const contractedSummary =
@@ -2510,7 +2444,6 @@ export async function getV2AdminOrderDetail(
       orderWhatsappActions(
         order,
         briefing,
-        previews,
         payments,
         whatsappTemplates,
         uploads.uploads,
@@ -2958,17 +2891,6 @@ async function centralAttention(
         ) {
           reason =
             'Aguardando dados da cliente';
-        } else if (
-          (
-            row.status
-            === 'waiting_customer'
-            || row.status
-              === 'adjustments'
-          )
-          && row.has_active_preview
-        ) {
-          reason =
-            'Prévia aguardando retorno da cliente';
         } else if (
           row.status
           === 'balance_pending'
@@ -4044,303 +3966,6 @@ export async function addV2InternalNote(
   };
 }
 
-export async function markV2ExternalPreviewApproval(
-  db,
-  orderCode,
-  {
-    channel = 'whatsapp',
-    note = '',
-  } = {},
-) {
-  const order =
-    await orderByCode(
-      db,
-      orderCode,
-    );
-
-  if (!order) {
-    return null;
-  }
-
-  if (
-    [
-      'cancelled',
-      'finalized',
-    ].includes(
-      order.status,
-    )
-  ) {
-    throw new Error(
-      'Este pedido já está encerrado.',
-    );
-  }
-
-  const cleanChannel =
-    cleanText(
-      channel,
-      40,
-    )
-      .toLowerCase()
-    || 'whatsapp';
-
-  const cleanNote =
-    cleanText(
-      note,
-      600,
-    );
-
-  const existing =
-    await db
-      .prepare(
-        `
-          SELECT id
-          FROM v2_order_history
-          WHERE
-            order_id = ?
-            AND action_code = 'preview_approved_external'
-          ORDER BY id DESC
-          LIMIT 1
-        `,
-      )
-      .bind(
-        order.id,
-      )
-      .first();
-
-  if (existing) {
-    return {
-      ok:
-        true,
-      alreadyMarked:
-        true,
-    };
-  }
-
-  const payments =
-    await paymentSummary(
-      db,
-      order,
-    );
-
-  const latestPreview =
-    await db
-      .prepare(
-        `
-          SELECT
-            id,
-            version_number,
-            status
-          FROM v2_previews
-          WHERE order_id = ?
-          ORDER BY
-            version_number DESC,
-            id DESC
-          LIMIT 1
-        `,
-      )
-      .bind(
-        order.id,
-      )
-      .first();
-
-  const stamp =
-    nowIso();
-
-  const nextStatus =
-    payments
-      .remainingBalanceCents
-      > 0
-        ? 'balance_pending'
-        : 'ready_for_delivery';
-
-  const nextAction =
-    payments
-      .remainingBalanceCents
-      > 0
-        ? 'Cobrar saldo'
-        : 'Liberar entrega';
-
-  const statements = [];
-
-  if (
-    latestPreview
-    && ![
-      'replaced',
-      'revoked',
-    ].includes(
-      latestPreview.status,
-    )
-  ) {
-    statements.push(
-      db
-        .prepare(
-          `
-            INSERT OR IGNORE INTO v2_preview_approvals(
-              preview_id,
-              order_id,
-              approved_at,
-              evidence_json
-            )
-            VALUES (?, ?, ?, ?)
-          `,
-        )
-        .bind(
-          latestPreview.id,
-          order.id,
-          stamp,
-          JSON.stringify({
-            source:
-              'admin_external',
-            channel:
-              cleanChannel,
-            note:
-              cleanNote,
-          }),
-        ),
-    );
-
-    statements.push(
-      db
-        .prepare(
-          `
-            UPDATE v2_previews
-            SET status = 'approved'
-            WHERE id = ?
-          `,
-        )
-        .bind(
-          latestPreview.id,
-        ),
-    );
-  }
-
-  statements.push(
-    db
-      .prepare(
-        `
-          UPDATE v2_orders
-          SET
-            status = ?,
-            next_action = ?,
-            updated_at = ?
-          WHERE id = ?
-        `,
-      )
-      .bind(
-        nextStatus,
-        nextAction,
-        stamp,
-        order.id,
-      ),
-  );
-
-  statements.push(
-    db
-      .prepare(
-        `
-          INSERT INTO v2_order_history(
-            order_id,
-            action_code,
-            description,
-            metadata_json,
-            created_at
-          )
-          VALUES (?, ?, ?, ?, ?)
-        `,
-      )
-      .bind(
-        order.id,
-        'preview_approved_external',
-        cleanChannel
-          === 'whatsapp'
-            ? 'Aprovação da prévia registrada pelo Admin após confirmação no WhatsApp.'
-            : 'Aprovação externa da prévia registrada pelo Admin.',
-        JSON.stringify({
-          channel:
-            cleanChannel,
-          note:
-            cleanNote,
-          previewId:
-            latestPreview
-              ?.id
-            || null,
-          version:
-            latestPreview
-              ?.version_number
-            || null,
-        }),
-        stamp,
-      ),
-  );
-
-  await db.batch(
-    statements,
-  );
-
-  return {
-    ok:
-      true,
-    approvedAt:
-      stamp,
-    channel:
-      cleanChannel,
-    order: {
-      status:
-        nextStatus,
-      nextAction,
-    },
-  };
-}
-
-export async function markV2CongratulationsSent(
-  db,
-  orderCode,
-) {
-  const order =
-    await orderByCode(
-      db,
-      orderCode,
-    );
-
-  if (!order) {
-    return null;
-  }
-
-  const existing =
-    await db
-      .prepare(
-        `
-          SELECT id
-          FROM v2_order_history
-          WHERE
-            order_id = ?
-            AND action_code = 'congratulations_sent'
-          LIMIT 1
-        `,
-      )
-      .bind(
-        order.id,
-      )
-      .first();
-
-  if (!existing) {
-    await insertHistory(
-      db,
-      order.id,
-      'congratulations_sent',
-      'Parabéns do dia marcado como enviado.',
-    );
-  }
-
-  return {
-    ok: true,
-    alreadyMarked:
-      Boolean(
-        existing,
-      ),
-  };
-}
-
 export async function applyV2AdminAction(
   db,
   orderCode,
@@ -4689,34 +4314,8 @@ export async function applyV2AdminAction(
     action
     === 'finalize'
   ) {
-    const [
-      briefing,
-      previews,
-      history,
-    ] =
-      await Promise.all([
-        orderBriefing(
-          db,
-          order.id,
-        ),
-        orderPreviews(
-          db,
-          order.id,
-        ),
-        orderHistory(
-          db,
-          order.id,
-        ),
-      ]);
-
-    const checklist =
-      finalizeChecklistFrom(
-        order,
-        payments,
-        briefing,
-        previews,
-        history,
-      );
+    const briefing = await orderBriefing(db, order.id);
+    const checklist = finalizeChecklistFrom(order, payments, briefing);
 
     const missing =
       checklist.items

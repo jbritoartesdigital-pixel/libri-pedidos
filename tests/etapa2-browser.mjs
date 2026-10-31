@@ -135,7 +135,7 @@ function mockServer(reference, { couponOffline = false, sceneLinks = false } = {
           uploads:{uploads:[]},previews:[],notes:[],history:[],
           whatsappActions:[{label:'Enviar mensagem padrão',
             url:'https://wa.me/5511999999999?text=teste'}],
-          allowedActions:['start_production'],
+          allowedActions:['start_production','finalize'],
           copy:{production:'Teste de produção',full:'Ficha do pedido'}
         }});
       }
@@ -659,22 +659,44 @@ async function checkAdminOrderDetailAndroid(browser) {
     await page.locator('#advOrderQuery').fill('Cliente Fictícia');
     await page.locator('[data-searched-order="LIBRI-100001"]').click();
     await page.locator('#orderSummary').waitFor();
-    assert.equal(await page.locator('.order-section-nav [data-order-jump]').count(),7,
-      'Todas as categorias do pedido precisam aparecer');
+    assert.equal(await page.locator('.order-section-nav [data-order-jump]').count(),6,
+      'Todas as categorias atuais do pedido precisam aparecer');
     const labels=await page.locator('.order-section-nav-links button').allTextContents();
-    assert.deepEqual(labels,['Resumo','Dados e fotos','Pagamentos','Prévias',
+    assert.deepEqual(labels,['Resumo','Dados e fotos','Pagamentos',
       'Contrato','Histórico','Outras ações']);
     assert.equal(await page.locator('#toggleOrderPixReceipt').isVisible(),true,
       'Registrar Pix deve continuar visível quando o pedido permite');
     assert.equal(await page.locator('#editAdminOrder').isVisible(),true);
     assert.equal(await page.locator('#orderPixReceiptPanel').isVisible(),false);
+    assert.equal(await page.locator('#orderPreviewDetails').count(),0);
+    assert.equal(await page.locator('#toggleOrderPreview').count(),0);
+    assert.equal(await page.locator('#publishPreview').count(),0);
+    assert.equal(await page.locator('.order-main-actions .btn').count(),3);
+    assert.equal(await page.locator('.order-support-actions .btn').count(),2);
+    const actionGeometry=await page.evaluate(()=>{
+      const ids=['toggleOrderBriefing','editAdminOrder'];
+      const brief=document.getElementById(ids[0]).getBoundingClientRect();
+      const start=document.querySelector('[data-order-action="start_production"]').getBoundingClientRect();
+      const finalize=document.querySelector('[data-order-action="finalize"]').getBoundingClientRect();
+      const edit=document.getElementById(ids[1]).getBoundingClientRect();
+      const whatsapp=document.querySelector('.order-support-actions a').getBoundingClientRect();
+      return {brief:{x:brief.x,y:brief.y,w:brief.width,h:brief.height},
+        start:{x:start.x,y:start.y,w:start.width,h:start.height},
+        finalize:{x:finalize.x,y:finalize.y,w:finalize.width},
+        edit:{x:edit.x,y:edit.y,w:edit.width,h:edit.height},
+        whatsapp:{x:whatsapp.x,y:whatsapp.y,w:whatsapp.width,h:whatsapp.height}};
+    });
+    assert.ok(Math.abs(actionGeometry.brief.y-actionGeometry.start.y)<2);
+    assert.ok(Math.abs(actionGeometry.brief.w-actionGeometry.start.w)<2);
+    assert.ok(actionGeometry.finalize.y>actionGeometry.start.y);
+    assert.ok(actionGeometry.finalize.w>actionGeometry.start.w*1.9);
+    assert.ok(Math.abs(actionGeometry.edit.y-actionGeometry.whatsapp.y)<2);
+    assert.ok(Math.abs(actionGeometry.edit.w-actionGeometry.whatsapp.w)<2);
     await page.locator('[data-order-jump="payment"]').click();
     assert.equal(await page.locator('#orderPaymentDetails').getAttribute('open'),'',
       'Ir para pagamento abre o painel');
     await page.locator('[data-order-jump="briefing"]').click();
     assert.equal(await page.locator('#orderBriefingPanel').isVisible(),true);
-    await page.locator('[data-order-jump="preview"]').click();
-    assert.equal(await page.locator('#orderPreviewDetails').getAttribute('open'),'');
     await page.locator('[data-order-jump="contract"]').click();
     assert.equal(await page.locator('#orderContractDetails').getAttribute('open'),'');
     await page.locator('[data-order-jump="history"]').click();
@@ -691,7 +713,7 @@ async function checkAdminOrderDetailAndroid(browser) {
     await page.screenshot({path:join(out,snap),fullPage:false,animations:'disabled'});
     audit.screens.push(snap);
     assert.deepEqual(errors,[],'Modal do pedido não deve gerar erro JavaScript');
-    audit.tests.push('Android: detalhe do pedido com 7 atalhos, Pix e edição preservados');
+    audit.tests.push('Android: detalhe do pedido com 6 atalhos, botões alinhados, Pix e edição preservados');
   } finally {
     await ctx.close();
     await new Promise(resolve=>inst.server.close(resolve));

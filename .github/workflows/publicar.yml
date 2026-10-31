@@ -1,7 +1,7 @@
 name: Publicar Portal de Pedidos
 # Publicações de manutenção com o marcador [sem-migracoes] não aplicam migrations D1.
 # Limpeza de tabelas legadas exige bookmark Time Travel e contagens previamente auditadas.
-# Release de interface 30/10: menu organizado e localizador de funções, sem alterações D1.
+# Release de interface: detalhe interno dos pedidos reorganizado; sem alterações D1.
 
 on:
   workflow_dispatch:

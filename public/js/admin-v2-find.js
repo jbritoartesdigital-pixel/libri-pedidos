@@ -27,7 +27,7 @@ export function normalizeFeatureSearch(value) {
 export function searchAdminFeatures(term) {
   const q = normalizeFeatureSearch(term);
   return ADMIN_FEATURES.filter(item => !q || normalizeFeatureSearch(
-    item.title + ' ' + item.section + ' ' + item.detail
+    item.title + ' ' + item.section + ' ' + item.detail + ' ' + (item.keywords || '')
   ).includes(q));
 }
 

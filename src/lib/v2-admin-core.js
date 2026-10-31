@@ -3966,6 +3966,55 @@ export async function addV2InternalNote(
   };
 }
 
+export async function markV2CongratulationsSent(
+  db,
+  orderCode,
+) {
+  const order =
+    await orderByCode(
+      db,
+      orderCode,
+    );
+
+  if (!order) {
+    return null;
+  }
+
+  const existing =
+    await db
+      .prepare(
+        `
+          SELECT id
+          FROM v2_order_history
+          WHERE
+            order_id = ?
+            AND action_code = 'congratulations_sent'
+          LIMIT 1
+        `,
+      )
+      .bind(
+        order.id,
+      )
+      .first();
+
+  if (!existing) {
+    await insertHistory(
+      db,
+      order.id,
+      'congratulations_sent',
+      'Parabéns do dia marcado como enviado.',
+    );
+  }
+
+  return {
+    ok: true,
+    alreadyMarked:
+      Boolean(
+        existing,
+      ),
+  };
+}
+
 export async function applyV2AdminAction(
   db,
   orderCode,

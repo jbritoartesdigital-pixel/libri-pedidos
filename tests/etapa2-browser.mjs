@@ -120,6 +120,27 @@ function mockServer(reference, { couponOffline = false, sceneLinks = false } = {
         });
         return;
       }
+      if(url.pathname==='/api/admin/v2/orders/LIBRI-100001' && req.method==='GET') {
+        return json(200,{detail:{
+          order:{code:'LIBRI-100001',honoreeName:'Criança Exemplo',
+            customerName:'Cliente Fictícia',whatsapp:'5511999999999',
+            eventDate:'2026-11-15',deliveryWindow:{start:'2026-11-01',end:'2026-11-03'},
+            status:'ready_for_production',statusLabel:'Pronto para produção',
+            source:'manual_whatsapp',nextAction:'Iniciar produção'},
+          pricing:{totalCents:18000,depositCents:9000,paymentMethod:'pix'},
+          payment:{paidCents:9000,remainingBalanceCents:9000,payments:[]},
+          contractedSummary:{product:{name:'Convite Interativo',sceneCount:6,priceCents:18000},
+            addons:[],paymentMethod:'pix'},
+          briefing:{fields:[],data:{},completionPercent:0},
+          uploads:{uploads:[]},previews:[],notes:[],history:[],
+          whatsappActions:[{label:'Enviar mensagem padrão',
+            url:'https://wa.me/5511999999999?text=teste'}],
+          allowedActions:['start_production'],
+          copy:{production:'Teste de produção',full:'Ficha do pedido'}
+        }});
+      }
+      if(url.pathname==='/api/admin/v2/orders/LIBRI-100001/contracts'
+        && req.method==='GET')return json(200,{result:{contracts:[]}});
       if(url.pathname==='/api/admin/v2/orders/LIBRI-100001/edit'){
         if(req.method==='GET')return json(200,{ok:true,result:{
           catalog:{products:[{code:'interactive_essential',name:'Interativo Essencial',
@@ -627,6 +648,56 @@ async function checkSceneDeepLinkAndroid(browser) {
   }
 }
 
+async function checkAdminOrderDetailAndroid(browser) {
+  const inst=await openServer('');
+  const ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,
+    hasTouch:true,deviceScaleFactor:1,locale:'pt-BR'});
+  const page=await ctx.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.name||'JavaScriptError'));
+  try {
+    await page.goto(inst.url+'/admin-v2/',{waitUntil:'domcontentloaded'});
+    await page.locator('#advOrderQuery').fill('Cliente Fictícia');
+    await page.locator('[data-searched-order="LIBRI-100001"]').click();
+    await page.locator('#orderSummary').waitFor();
+    assert.equal(await page.locator('.order-section-nav [data-order-jump]').count(),7,
+      'Todas as categorias do pedido precisam aparecer');
+    const labels=await page.locator('.order-section-nav-links button').allTextContents();
+    assert.deepEqual(labels,['Resumo','Dados e fotos','Pagamentos','Prévias',
+      'Contrato','Histórico','Outras ações']);
+    assert.equal(await page.locator('#toggleOrderPixReceipt').isVisible(),true,
+      'Registrar Pix deve continuar visível quando o pedido permite');
+    assert.equal(await page.locator('#editAdminOrder').isVisible(),true);
+    assert.equal(await page.locator('#orderPixReceiptPanel').isVisible(),false);
+    await page.locator('[data-order-jump="payment"]').click();
+    assert.equal(await page.locator('#orderPaymentDetails').getAttribute('open'),'',
+      'Ir para pagamento abre o painel');
+    await page.locator('[data-order-jump="briefing"]').click();
+    assert.equal(await page.locator('#orderBriefingPanel').isVisible(),true);
+    await page.locator('[data-order-jump="preview"]').click();
+    assert.equal(await page.locator('#orderPreviewDetails').getAttribute('open'),'');
+    await page.locator('[data-order-jump="contract"]').click();
+    assert.equal(await page.locator('#orderContractDetails').getAttribute('open'),'');
+    await page.locator('[data-order-jump="history"]').click();
+    assert.equal(await page.locator('#orderHistoryDetails').getAttribute('open'),'');
+    await page.locator('[data-order-jump="actions"]').click();
+    assert.equal(await page.locator('#orderMoreActions').getAttribute('open'),'');
+    for(const width of [320,390,412]){
+      await page.setViewportSize({width,height:844});
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(overflow<=width+1,'Order details overflow on mobile '+width+'px');
+    }
+    await page.setViewportSize({width:390,height:844});
+    const snap='alteracao-detalhe-pedido-390.png';
+    await page.screenshot({path:join(out,snap),fullPage:false,animations:'disabled'});
+    audit.screens.push(snap);
+    assert.deepEqual(errors,[],'Modal do pedido não deve gerar erro JavaScript');
+    audit.tests.push('Android: detalhe do pedido com 7 atalhos, Pix e edição preservados');
+  } finally {
+    await ctx.close();
+    await new Promise(resolve=>inst.server.close(resolve));
+  }
+}
+
 function visualDiff(previous,current,output) {
   const before=PNG.sync.read(readFileSync(join(out,previous)));
   const after=PNG.sync.read(readFileSync(join(out,current)));
@@ -659,6 +730,7 @@ try{
   browser=await chromium.launch({headless:true,channel:'chrome'});
   if(base)await capture(browser,base,'main');
   await capture(browser,'','alteracao');
+  await checkAdminOrderDetailAndroid(browser);
   await checkOfferIsFullyReachable(browser);
   await checkCouponCanBeRemovedOnAndroid(browser);
   await checkAgendaPeriodMobile(browser);

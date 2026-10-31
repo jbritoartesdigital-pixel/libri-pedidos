@@ -2,15 +2,14 @@
  * Libri Project Bible + social export plan (Etapas 3 e 4).
  *
  * Pure, offline and opt-in. NO Google APIs, Cloudflare requests, client data
- * search, publication, checkout, or automatic upload. Authenticated app
- * integration will own the approval events and per-project Drive folder IDs.
+ * search, publication, checkout, or automatic upload. All output is local,
+ * subject to approved assets and optional marketing consent.
  */
 import {readFileSync,mkdirSync,writeFileSync,statSync} from 'node:fs';
 import {resolve,join,extname} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
 const PROJECT_ID=/^[a-zA-Z0-9][a-zA-Z0-9_-]{3,95}$/;
-const DRIVE_ID=/^[a-zA-Z0-9_-]{15,128}$/;
 const HASH=/^[a-f0-9]{64}$/i;
 const TYPES=new Set(['character_reference','opening','scene','preview','final_card',
   'popup_location','popup_rsvp','popup_gifts','popup_dress_code','loop','final_video',
@@ -62,8 +61,6 @@ export function buildProjectBible(record){
   if(!PROJECT_ID.test(String(record.projectId||'')))throw Error('Projeto sem ID estável');
   if(!PROJECT_ID.test(String(record.orderCode||'')))throw Error('Pedido sem ID estável');
   if(!FORMATS.has(record.format))throw Error('Formato desconhecido');
-  if(!DRIVE_ID.test(String(record.driveFolderId||'')))
-    throw Error('Vínculo seguro da pasta Drive obrigatório; nunca deduzir pelo nome');
   if(!Array.isArray(record.approvals)||record.approvals.length>300)
     throw Error('Lista de aprovações inválida');
   const entries=record.approvals.map(validateAsset);
@@ -99,13 +96,13 @@ export function buildProjectBible(record){
       updatedAt:required(validDate(v.updatedAt),'Data de decisão inválida')&&v.updatedAt}));
   return {
     schemaVersion:1,projectId:record.projectId,orderCode:record.orderCode,
-    format:record.format,driveFolderId:record.driveFolderId,
+    format:record.format,
     updatedAt:approvals.at(-1)?.approvedAt||null,
     decisions,approvals,
-    uploadPlan:approvals.map(a=>({
-      approvalId:a.id,projectId:record.projectId,driveFolderId:record.driveFolderId,
+    assetPlan:approvals.map(a=>({
+      approvalId:a.id,projectId:record.projectId,
       sourceRef:a.sourceRef,sha256:a.sha256,targetName:a.targetName,
-      rule:'create-only-after-checking-existing-file-and-hash'
+      rule:'manual-export-only-after-approval-and-integrity-check'
     }))
   };
 }
@@ -170,9 +167,9 @@ if(process.argv[1]&&resolve(process.argv[1])===resolve(new URL(import.meta.url).
     const social=buildSocialDraft(bible,{hasMarketingPermission:process.argv.includes('--consent')});
     mkdirSync(dir,{recursive:true});
     writeFileSync(join(dir,'Project_Bible.json'),JSON.stringify(bible,null,2)+'\n');
-    writeFileSync(join(dir,'Plano_Envio_Drive.json'),JSON.stringify(bible.uploadPlan,null,2)+'\n');
+    writeFileSync(join(dir,'Plano_Arquivos_Locais.json'),JSON.stringify(bible.assetPlan,null,2)+'\n');
     writeFileSync(join(dir,'Pacote_Divulgacao_Rascunho.json'),JSON.stringify(social,null,2)+'\n');
     if(process.argv.includes('--render'))renderSocialDraft(social,required(flag('--video'),'Use --video'),join(dir,'DIVULGACAO'));
-    console.log('Plano de aprovação, Project Bible e rascunho social criados localmente. Nenhum upload/publicação.');
+    console.log('Inventário local de arquivos aprovados, Project Bible e rascunho social gerados. Nenhum upload/publicação.');
   }catch(e){console.error('Etapas 3/4: '+e.message);process.exitCode=1;}
 }

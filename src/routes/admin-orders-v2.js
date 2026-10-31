@@ -9,13 +9,6 @@ import { reconcileV2LegacyPixStatus } from '../lib/v2-legacy-payment-reconcile.j
 import { getV2OrderEditOptions, previewV2AdminOrderEdit, saveV2AdminOrderEdit } from '../lib/v2-admin-order-edit.js';
 
 import {
-  createV2Preview,
-  listV2PreviewsForAdmin,
-  reactivateV2Preview,
-  revokeV2Preview,
-} from '../lib/v2-preview.js';
-
-import {
   createV2ManualOrder,
   listV2Orders,
   previewV2ManualOrder,
@@ -108,52 +101,6 @@ export async function handleAdminOrdersV2Api(
     } catch (error) {
       return routeError(error, Number(error?.status) || 422);
     }
-  }
-
-  const previewOrderMatch =
-    path.match(
-      /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/previews$/,
-    );
-
-  if (
-    previewOrderMatch
-    && method === 'GET'
-  ) {
-    return listV2PreviewsForAdmin(
-      env,
-      previewOrderMatch[1],
-    );
-  }
-
-  if (
-    previewOrderMatch
-    && method === 'POST'
-  ) {
-    return createV2Preview(
-      request,
-      env,
-      previewOrderMatch[1],
-    );
-  }
-
-  const previewActionMatch =
-    path.match(
-      /^\/api\/admin\/v2\/previews\/(\d+)\/(reactivate|revoke)$/,
-    );
-
-  if (
-    previewActionMatch
-    && method === 'POST'
-  ) {
-    return previewActionMatch[2] === 'reactivate'
-      ? reactivateV2Preview(
-          env,
-          previewActionMatch[1],
-        )
-      : revokeV2Preview(
-          env,
-          previewActionMatch[1],
-        );
   }
 
   const urgencyMatch = path.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/urgency$/);

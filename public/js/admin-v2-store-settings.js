@@ -101,11 +101,6 @@ export function renderStoreSettings(
         </div>
 
         <div class="field">
-          <label for="previewHours">Validade da prévia em horas</label>
-          <input id="previewHours" class="input" type="number" value="${esc(s.experience.previewExpiryHours)}">
-        </div>
-
-        <div class="field">
           <label for="holdMinutes">Reserva do checkout em minutos</label>
           <input id="holdMinutes" class="input" type="number" value="${esc(s.agenda.checkoutHoldMinutes)}">
         </div>
@@ -124,11 +119,6 @@ export function renderStoreSettings(
         <div class="field full">
           <label for="whatsappBriefingTemplate">Pedir dados do convite</label>
           <textarea id="whatsappBriefingTemplate" class="textarea">${esc(s.whatsappTemplates.briefing)}</textarea>
-        </div>
-
-        <div class="field full">
-          <label for="whatsappPreviewTemplate">Prévia disponível</label>
-          <textarea id="whatsappPreviewTemplate" class="textarea">${esc(s.whatsappTemplates.preview)}</textarea>
         </div>
 
         <div class="field full">
@@ -319,10 +309,6 @@ export function renderStoreSettings(
                     document
                       .getElementById('urgencyPercent')
                       .value,
-                  preview_expiry_hours:
-                    document
-                      .getElementById('previewHours')
-                      .value,
                   checkout_hold_minutes:
                     document
                       .getElementById('holdMinutes')
@@ -330,11 +316,6 @@ export function renderStoreSettings(
                   whatsapp_template_briefing:
                     document
                       .getElementById('whatsappBriefingTemplate')
-                      .value
-                      .trim(),
-                  whatsapp_template_preview:
-                    document
-                      .getElementById('whatsappPreviewTemplate')
                       .value
                       .trim(),
                   whatsapp_template_balance:

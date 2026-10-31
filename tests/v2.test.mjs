@@ -18,7 +18,7 @@ import { findV2DeliveryOptions, planV2AllocationForWindow, validateV2DeliveryWin
 import { getV2ManualOrderForCustomer, startV2ManualOrderPayment } from '../src/lib/v2-orders-manual.js';
 import worker from '../src/index.js';
 import { createMercadoPagoCheckout } from '../src/lib/v2-mercadopago.js';
-import { createV2Preview, revokeV2Preview } from '../src/lib/v2-preview.js';
+import { handleAdminOrdersV2Api } from '../src/routes/admin-orders-v2.js';
 import { createV2FinancePayment, getV2FinanceDashboard, updateV2FinancePayment, voidV2FinancePayment } from '../src/lib/v2-finance.js';
 import { getV2StoreConfig, saveV2Coupon, updateV2GalleryItem, updateV2Settings } from '../src/lib/v2-store-config.js';
 import { planCustomerPhotoBatch } from '../public/js/client-v2-upload.js';
@@ -129,7 +129,7 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(shell, /client-v2\.js\?v=20261030-area-limpa-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261030-safari-retry-1/);
 });
 
@@ -161,7 +161,7 @@ test('resumed customer order rechecks live delivery before urgency and preserves
   assert.match(customer, /state\.delivery = serverDelivery/);
   assert.match(customer, /state\.step = 4/);
   assert.match(customer, /customer: state\.customer/);
-  assert.match(shell, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(shell, /client-v2\.js\?v=20261030-area-limpa-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261030-safari-retry-1/);
 });
 
@@ -225,7 +225,7 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(store, /state\.quote\?\.coupon[\s\S]*?aplicado ✓/);
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
-  assert.match(html, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(html, /client-v2\.js\?v=20261030-area-limpa-1/);
   assert.match(html, /client-v2\.css\?v=20261012-compact-offer-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261030-safari-retry-1/);
 });
@@ -362,8 +362,8 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /showBriefingMissing\(missing\)/);
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
-  assert.match(entry, /client-v2-area\.js\?v=20261030-safari-retry-1/);
-  assert.match(shell, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261030-area-limpa-1/);
+  assert.match(shell, /client-v2\.js\?v=20261030-area-limpa-1/);
 });
 
 test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
@@ -412,8 +412,8 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /invalidatePixConfirmationOnEdit\(control\.dataset\.field, control\.value\)/);
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
-  assert.match(entry, /client-v2-area\.js\?v=20261030-safari-retry-1/);
-  assert.match(shell, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261030-area-limpa-1/);
+  assert.match(shell, /client-v2\.js\?v=20261030-area-limpa-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
@@ -504,9 +504,9 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261030-safari-retry-1'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261030-area-limpa-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261030-safari-retry-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261030-safari-retry-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261030-area-limpa-1'));
 });
 
 test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
@@ -696,8 +696,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-pedido-organizado-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261030-pedido-organizado-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-pedido-sem-previa-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261030-pedido-sem-previa-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1245,8 +1245,8 @@ test('checkout price breakdown stays visible in mobile frontend even after deplo
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261030-safari-retry-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261030-safari-retry-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261030-area-limpa-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261030-area-limpa-1'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261030-safari-retry-1'));
   assert.match(store, /Acréscimo no cartão/);
   assert.match(store, /quote.cardFeeCents/);
@@ -1490,8 +1490,8 @@ test('customer-area API exposes a typed delivery-change response consumed by pop
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
   const area = readFileSync('public/js/client-v2-area.js', 'utf8');
-  assert.ok(shell.includes('/js/client-v2.js?v=20261030-safari-retry-1'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261030-safari-retry-1'));
+  assert.ok(shell.includes('/js/client-v2.js?v=20261030-area-limpa-1'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261030-area-limpa-1'));
   assert.match(area, /delivery_window_shifted/);
   assert.match(area, /confirmNewDeliveryWindow/);
 });
@@ -1542,44 +1542,22 @@ test('V2 cancellation keeps the order record, releases capacity and cancels pend
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE order_code = ?').get(checkout.order.code).n, 1);
 });
 
-test('Admin preview publication and revocation follow the production workflow', async t => {
-  const DB = database(); providerMock(t);
-  const e = env(DB);
-  const body = input({
-    event: { honoreeName: 'Prévia', type: 'birthday', date: day(50) },
-    deliveryWindow: { start: day(10), end: day(12) },
-    ...await terms(DB),
-  });
-  const checkout = await startV2Checkout(request, e, body);
-  DB.sqlite.prepare("UPDATE v2_orders SET status='in_production', briefing_status='completed' WHERE order_code = ?")
-    .run(checkout.order.code);
-
-  const stored = [];
-  e.FILES = {
-    async put(key) { stored.push(key); },
-    async delete() {},
-  };
-
-  const form = new FormData();
-  form.append('file', new Blob(['preview'], { type: 'image/jpeg' }), 'preview.jpg');
-  form.append('watermarkConfirmed', 'true');
-  form.append('watermarkLabel', 'PRÉVIA • TESTE');
-
-  const previewRequest = new Request(
-    'https://pedidos.libriconvites.com.br/api/admin/v2/orders/' + checkout.order.code + '/previews',
-    { method: 'POST', body: form },
-  );
-  const createdResponse = await createV2Preview(previewRequest, e, checkout.order.code);
-  assert.equal(createdResponse.status, 201);
-  const created = await createdResponse.json();
-  assert.equal(created.preview.status, 'active');
-  assert.equal(stored.length, 1);
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'waiting_customer');
-
-  const revokedResponse = await revokeV2Preview(e, created.preview.id);
-  assert.equal(revokedResponse.status, 200);
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_previews WHERE id = ?').get(created.preview.id).status, 'revoked');
-  assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE order_code = ?').get(checkout.order.code).status, 'in_production');
+test('retired Admin preview endpoints cannot publish, reactivate or change stored data', async () => {
+  const DB=database(),e=env(DB);
+  const urls=[
+    '/api/admin/v2/orders/LIBRI-123456/previews',
+    '/api/admin/v2/previews/12/reactivate',
+    '/api/admin/v2/previews/12/revoke'
+  ];
+  for(const url of urls){
+    for(const method of ['GET','POST']){
+      const u=new URL('https://pedidos.libriconvites.com.br'+url);
+      const req=new Request(u,{method});
+      assert.equal(await handleAdminOrdersV2Api(req,e,u),null,
+        method+' '+url+' should have no active handler');
+    }
+  }
+  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) n FROM v2_previews').get().n,0);
 });
 
 test('production search finds theme and exposes the planned card data', async t => {
@@ -1667,7 +1645,7 @@ test('manual order link recognizes direct Pix and opens briefing without another
   assert.match(manual, /window\.location\.href =\s*result\.result\.customerAreaPath/);
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
-  assert.match(shell, /client-v2\.js\?v=20261030-safari-retry-1/);
+  assert.match(shell, /client-v2\.js\?v=20261030-area-limpa-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261030-safari-retry-1/);
 });
 
@@ -1711,8 +1689,8 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261030-pedido-organizado-1/);
-  assert.match(entry, /admin-v2-order\.js\?v=20261030-pedido-organizado-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261030-pedido-sem-previa-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261030-pedido-sem-previa-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
     amountCents: checkout.payment.amountDueNowCents,
@@ -1989,7 +1967,9 @@ test('admin order shows one-tap briefing/finalize, folds rarely used buttons and
   const route=readFileSync('src/routes/admin-finance-v2.js','utf8');
   assert.match(ui,/id="toggleOrderBriefing"/);
   assert.match(ui,/id="orderBriefingPanel"/);
-  assert.match(ui,/id="orderPreviewDetails"/);
+  assert.doesNotMatch(ui,/id="orderPreviewDetails"|id="toggleOrderPreview"|id="publishPreview"/);
+  assert.match(ui,/class="order-main-actions"/);
+  assert.match(ui,/class="order-support-actions"/);
   assert.match(ui,/Outras ações e observações/);
   assert.match(ui,/id="orderPaymentDetails"/);
   assert.match(ui,/id="orderContractedDetails"/);
@@ -2416,9 +2396,9 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261030-pedido-organizado-1'));
+    'admin-v2.js?v=20261030-pedido-sem-previa-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
-    'client-v2.js?v=20261030-safari-retry-1'));
+    'client-v2.js?v=20261030-area-limpa-1'));
 });
 
 test('exported invitation zip includes readable category, size and gift Pix labels', () => {
@@ -2901,7 +2881,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261030-pedido-organizado-1/);
+  assert.match(html, /admin-v2\.js\?v=20261030-pedido-sem-previa-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -3232,9 +3212,9 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261030-pedido-organizado-1'));
-  assert.ok(entry.includes('admin-v2-order.js?v=20261030-pedido-organizado-1'));
-  assert.ok(publicShell.includes('client-v2.js?v=20261030-safari-retry-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261030-pedido-sem-previa-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261030-pedido-sem-previa-1'));
+  assert.ok(publicShell.includes('client-v2.js?v=20261030-area-limpa-1'));
 });
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
@@ -3258,9 +3238,9 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261030-pedido-organizado-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261030-pedido-organizado-1'));
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261030-pedido-organizado-1"));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261030-pedido-sem-previa-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261030-pedido-sem-previa-1'));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261030-pedido-sem-previa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
 
@@ -3436,8 +3416,8 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const upload = readFileSync('public/js/client-v2-upload.js', 'utf8');
   const clientCss = readFileSync('public/css/client-v2.css', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
-  assert.ok(html.includes('/js/client-v2.js?v=20261030-safari-retry-1'));
-  assert.ok(entry.includes('client-v2-area.js?v=20261030-safari-retry-1'));
+  assert.ok(html.includes('/js/client-v2.js?v=20261030-area-limpa-1'));
+  assert.ok(entry.includes('client-v2-area.js?v=20261030-area-limpa-1'));
   assert.ok(admin.includes('admin-v2-central.js?v=20261010-parties-focus-3'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261027-delivery-chronological-1'));
   assert.match(area, /uploadCustomerPhoto/);
@@ -3472,10 +3452,7 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     incomplete.finalizeChecklist.items.find(item => item.code === 'briefing').ok,
     false,
   );
-  assert.equal(
-    incomplete.finalizeChecklist.items.find(item => item.code === 'preview').ok,
-    false,
-  );
+  assert.equal(incomplete.finalizeChecklist.items.some(item => item.code === 'preview'),false);
 
   // New public Pix has no balance by default. An additional contracted item
   // introduced after payment is handled through the existing manual balance.
@@ -3494,19 +3471,6 @@ test('admin final checklist blocks incomplete delivery and requires manual final
     SET completion_percent=100, completed_at=datetime('now'), updated_at=datetime('now')
     WHERE order_id=?
   `).run(order.id);
-
-  const preview = DB.sqlite.prepare(`
-    INSERT INTO v2_previews(
-      order_id, version_number, media_type, preview_r2_key,
-      watermark_label, status, expires_at, created_at
-    )
-    VALUES (?,1,'image',?,'PRÉVIA','approved',datetime('now','+1 day'),datetime('now'))
-  `).run(order.id, `test/checklist-${order.id}.webp`);
-
-  DB.sqlite.prepare(`
-    INSERT INTO v2_preview_approvals(preview_id, order_id, approved_at, evidence_json)
-    VALUES (?, ?, datetime('now'), '{}')
-  `).run(Number(preview.lastInsertRowid), order.id);
 
   DB.sqlite.prepare(`
     UPDATE v2_orders
@@ -3709,7 +3673,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
 
   assert.match(storeSettings, /Mensagens rápidas do WhatsApp/);
   assert.match(storeSettings, /whatsappBriefingTemplate/);
-  assert.match(storeSettings, /whatsappPreviewTemplate/);
+  assert.doesNotMatch(storeSettings, /whatsappPreviewTemplate|previewHours/);
   assert.match(storeSettings, /whatsappBalanceTemplate/);
   assert.match(storeSettings, /whatsappFinalizedTemplate/);
   assert.match(storeSettings, /\{cliente\}/);

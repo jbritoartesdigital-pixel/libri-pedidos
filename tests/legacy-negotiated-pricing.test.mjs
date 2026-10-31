@@ -293,7 +293,7 @@ test('V1 with approved Pix but stale awaiting-payment state can start without ad
   assert.equal(DB.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(id).status,'in_production');
   assert.equal(payments(DB,id).length,1);
 });
-test('V1 full paid can finalize after genuine data and customer approval evidence',async()=>{
+test('V1 fully paid can finalize without retired preview feature when data are complete',async()=>{
   const {DB,id,orderCode}=seeded('LIBRI-0070');
   DB.sqlite.prepare(`
     INSERT INTO v2_payments(order_id,provider,payment_type,method,status,amount_cents)
@@ -302,15 +302,7 @@ test('V1 full paid can finalize after genuine data and customer approval evidenc
   DB.sqlite.prepare("UPDATE v2_orders SET status='briefing_pending', briefing_status='completed', delivery_start=?, delivery_end=? WHERE id=?").run(day(7),day(9),id);
   let before=await getV2AdminOrderDetail(DB,orderCode);
   assert.ok(before.allowedActions.includes('finalize'));
-  assert.equal(before.finalizeChecklist.items.find(x=>x.code==='preview').ok,false,
-    'never fabricate client preview approval');
-  await assert.rejects(applyV2AdminAction(DB,orderCode,'finalize',{finalDeliveryConfirmed:true}),
-    /Prévia aprovada pela cliente/);
-  DB.sqlite.prepare(`
-    INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
-    VALUES (?,'preview_approved_external','Aprovação fictícia recebida por WhatsApp','{}',datetime('now'))
-  `).run(id);
-  before=await getV2AdminOrderDetail(DB,orderCode);
+  assert.equal(before.finalizeChecklist.items.some(x=>x.code==='preview'),false);
   assert.equal(before.finalizeChecklist.ready,true);
   await assert.rejects(applyV2AdminAction(DB,orderCode,'finalize'),
     /Confirme que o arquivo ou link final/);

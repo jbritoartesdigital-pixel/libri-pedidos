@@ -636,8 +636,8 @@ function summaryHtml(
             : awaitingInitialPayment
               ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
               : awaitingBalance
-                ? 'Sua prévia foi aprovada. Falta apenas o saldo final para liberar a entrega.'
-                : 'Aqui você acompanha seus dados, prévias e documentos.'}
+                ? 'Há um saldo pendente para liberar a entrega. Confira o valor antes de pagar.'
+                : 'Aqui você acompanha os dados, o pagamento e os documentos do seu pedido.'}
         </p>
       </div>
 

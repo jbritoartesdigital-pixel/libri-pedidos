@@ -912,7 +912,7 @@ export async function openOrder(code, onChanged = null) {
               quickMessages.length
                 ? `
                   <details class="order-messages-optional">
-                    <summary>Mensagens prontas para WhatsApp (${quickMessages.length})</summary>
+                    <summary>Mensagens rápidas de WhatsApp (${quickMessages.length})</summary>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       ${quickMessages.map(
@@ -976,7 +976,7 @@ export async function openOrder(code, onChanged = null) {
         <div class="section-grid">
           <section class="card">
             <details class="order-optional" id="orderMoreActions">
-              <summary>Observações, cancelar e outras ações</summary>
+              <summary>Outras ações e observações (inclui cancelar)</summary>
             <div class="section-title">
               <h3>Ações</h3>
             </div>

@@ -23,26 +23,28 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
-      - name: Verificar esquema antigo do D1 sem dados pessoais
+      - name: Contar registros de tabelas antigas do D1 sem dados pessoais
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set +e
-          pnpm exec wrangler d1 execute libri-pedidos-db --remote --json --command "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'v2_%drive%' OR name LIKE 'v2_%flow%') ORDER BY name" > /tmp/schema.json 2> /tmp/wrangler-error.txt
+          pnpm exec wrangler d1 execute libri-pedidos-db --remote --json --command "SELECT (SELECT COUNT(*) FROM v2_order_drive_folders) AS n0, (SELECT COUNT(*) FROM v2_drive_oauth_state) AS n1, (SELECT COUNT(*) FROM v2_drive_oauth_connection) AS n2, (SELECT COUNT(*) FROM v2_drive_uploaded_previews) AS n3, (SELECT COUNT(*) FROM v2_drive_sync_settings) AS n4, (SELECT COUNT(*) FROM v2_drive_sync_attempts) AS n5, (SELECT COUNT(*) FROM v2_flow_device_grants) AS n6, (SELECT COUNT(*) FROM v2_flow_publication_links) AS n7, (SELECT COUNT(*) FROM v2_flow_drive_uploads) AS n8" > /tmp/contagens.json 2> /tmp/wrangler-error.txt
           code=$?
           if [ "$code" -ne 0 ]; then
-            echo 'A consulta somente leitura falhou. Informações técnicas do Wrangler:'
-            sed -n '1,22p' /tmp/wrangler-error.txt
+            echo 'Consulta não executada:'
+            sed -n '1,12p' /tmp/wrangler-error.txt
             exit "$code"
           fi
           node --input-type=module <<'NODE'
           import {readFileSync} from 'node:fs';
-          const raw=JSON.parse(readFileSync('/tmp/schema.json','utf8'));
-          const rows=raw?.[0]?.results;
-          if(!Array.isArray(rows))throw Error('Estrutura de retorno inesperada');
-          for(const x of rows){
-            if(!/^v2_[a-z0-9_]+$/.test(x.name))throw Error('Nome de tabela inesperado');
-            console.log('Tabela antiga: '+x.name);
-          }
+          const raw=JSON.parse(readFileSync('/tmp/contagens.json','utf8'));
+          const row=raw?.[0]?.results?.[0];
+          if(!row||Object.keys(row).length!==9)throw Error('Retorno inesperado');
+          const tables=["v2_order_drive_folders","v2_drive_oauth_state","v2_drive_oauth_connection","v2_drive_uploaded_previews","v2_drive_sync_settings","v2_drive_sync_attempts","v2_flow_device_grants","v2_flow_publication_links","v2_flow_drive_uploads"];
+          tables.forEach((name,i)=>{
+            const count=row['n'+i];
+            if(!Number.isSafeInteger(count))throw Error('Contagem inválida');
+            console.log(name+': '+count);
+          });
           NODE

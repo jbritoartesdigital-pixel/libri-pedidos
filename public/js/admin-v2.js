@@ -7,6 +7,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
+import { initAdminFeatureFinder } from './admin-v2-find.js';
 
 import {
   ensureAuth,
@@ -68,6 +69,12 @@ const ADMIN_VIEWS =
   ]);
 
 function syncNavActive() {
+  const more = document.getElementById('adminMoreMenu');
+  const secondary = ['archived', 'notifications', 'security'].includes(state.view);
+  if (more) {
+    more.classList.toggle('has-active', secondary);
+    if (secondary) more.open = true;
+  }
   document
     .querySelectorAll('[data-view]')
     .forEach(
@@ -125,6 +132,8 @@ function syncViewQuery() {
         'view',
       );
   }
+
+  if (state.view !== 'store') url.searchParams.delete('storeTab');
 
   history.replaceState(
     {},
@@ -188,11 +197,26 @@ async function renderCurrent() {
   await refreshBell();
 }
 
+async function navigateTo(view, storeTab) {
+  if (!ADMIN_VIEWS.has(view)) return;
+  state.view = view;
+  const more = document.getElementById('adminMoreMenu');
+  if (more && !['archived', 'notifications', 'security'].includes(view)) more.open = false;
+  const url = new URL(window.location.href);
+  if (view === 'store' && storeTab) url.searchParams.set('storeTab', storeTab);
+  else if (view !== 'store') url.searchParams.delete('storeTab');
+  history.replaceState({}, '', url.pathname + url.search + url.hash);
+  syncNavActive();
+  syncViewQuery();
+  await renderCurrent();
+}
+
 async function ready() {
   applyInitialView();
 
   bindNav(
     async () => {
+      syncNavActive();
       syncViewQuery();
 
       try {
@@ -216,20 +240,10 @@ async function ready() {
       renderCurrent,
     );
 
-  document
-    .getElementById('notificationBell')
-    .addEventListener(
-      'click',
-      async () => {
-        state.view =
-          'notifications';
+  document.getElementById('notificationBell').addEventListener('click',
+    () => navigateTo('notifications'));
 
-        syncNavActive();
-        syncViewQuery();
-
-        await renderCurrent();
-      },
-    );
+  initAdminFeatureFinder(navigateTo);
 
   document
     .getElementById('logoutBtn')

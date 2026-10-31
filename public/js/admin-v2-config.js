@@ -36,15 +36,30 @@ export async function renderStore() {
     data.config;
 
   viewRoot.innerHTML = `
-    <div class="settings-tabs">
-      <button class="settings-tab active" data-store-tab="products">Produtos</button>
-      <button class="settings-tab" data-store-tab="addons">Adicionais</button>
-      <button class="settings-tab" data-store-tab="combos">Combos</button>
-      <button class="settings-tab" data-store-tab="coupons">Cupons</button>
-      <button class="settings-tab" data-store-tab="settings">Configurações</button>
-      <button class="settings-tab" data-store-tab="terms">Termos</button>
-      <button class="settings-tab" data-store-tab="contracts">Modelo de contrato</button>
-      <button class="settings-tab" data-store-tab="gallery">Galeria</button>
+    <div class="store-navigation" aria-label="Organização da loja">
+      <div class="store-navigation-group">
+        <span class="store-navigation-label">Catálogo</span>
+        <div class="store-navigation-buttons">
+          <button type="button" class="settings-tab active" data-store-tab="products">Produtos</button>
+          <button type="button" class="settings-tab" data-store-tab="addons">Adicionais</button>
+          <button type="button" class="settings-tab" data-store-tab="combos">Combos</button>
+          <button type="button" class="settings-tab" data-store-tab="gallery">Galeria</button>
+        </div>
+      </div>
+      <div class="store-navigation-group">
+        <span class="store-navigation-label">Promoções</span>
+        <div class="store-navigation-buttons">
+          <button type="button" class="settings-tab" data-store-tab="coupons">Cupons</button>
+        </div>
+      </div>
+      <div class="store-navigation-group">
+        <span class="store-navigation-label">Administração</span>
+        <div class="store-navigation-buttons">
+          <button type="button" class="settings-tab" data-store-tab="settings">Configurações</button>
+          <button type="button" class="settings-tab" data-store-tab="terms">Termos</button>
+          <button type="button" class="settings-tab" data-store-tab="contracts">Contratos</button>
+        </div>
+      </div>
     </div>
 
     <div id="storePanel"></div>
@@ -153,22 +168,21 @@ export async function renderStore() {
       );
     };
 
-  document
-    .querySelectorAll(
-      '[data-store-tab]',
-    )
-    .forEach(
-      (button) =>
-        button.addEventListener(
-          'click',
-          () =>
-            renderTab(
-              button.dataset.storeTab,
-            ),
-        ),
-    );
-
-  renderTab(
-    'products',
+  const availableTabs = new Set([
+    'products', 'addons', 'combos', 'gallery',
+    'coupons', 'settings', 'terms', 'contracts',
+  ]);
+  document.querySelectorAll('[data-store-tab]').forEach(button =>
+    button.addEventListener('click', () => {
+      const tab = button.dataset.storeTab;
+      if (!availableTabs.has(tab)) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set('storeTab', tab);
+      history.replaceState({}, '', url.pathname + url.search + url.hash);
+      renderTab(tab);
+    })
   );
+
+  const initial = new URLSearchParams(window.location.search).get('storeTab');
+  renderTab(availableTabs.has(initial) ? initial : 'products');
 }

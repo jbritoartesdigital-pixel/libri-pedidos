@@ -1486,7 +1486,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .order-optional[open] > summary { margin-bottom: 12px; background: var(--rose-soft); }
 .order-optional .section-grid { margin-top: 8px; }
 .order-briefing-panel { margin-top: 14px; scroll-margin-top: 18px; }
-#orderPreviewDetails { scroll-margin-top: 18px; }
 .order-quick-actions [data-order-action="finalize"] { font-weight: 800; }
 @media (max-width: 620px) {
   .order-quick-actions {
@@ -1498,8 +1497,6 @@ button { -webkit-tap-highlight-color: transparent; }
     min-height: 43px;
     margin: 0;
   }
-  .order-quick-actions > #toggleOrderBriefing { grid-column: 1; }
-  .order-quick-actions > [data-order-action="finalize"] { grid-column: 2; }
 }
 
 /* Keep the Central fast: the search field is visible; advanced controls fold away. */
@@ -1804,4 +1801,39 @@ button { -webkit-tap-highlight-color: transparent; }
   .order-payment-snapshot > div:last-child { grid-column: 1 / -1; }
   .order-finance-action-group { padding: 10px; }
   .order-detail-content > .card { padding: 9px; }
+}
+
+/* Detalhe do pedido: produção em destaque, edição e contato alinhados. */
+.order-main-actions,
+.order-support-actions {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.order-main-actions > .btn,
+.order-support-actions > .btn {
+  min-width: 0;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 10px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.32;
+  font-weight: 750;
+}
+.order-main-actions .order-finalize-action,
+.order-main-actions .order-briefing-solo { grid-column: 1 / -1; }
+.order-main-actions .order-finalize-action { min-height: 50px; }
+.order-support-actions { margin-top: 12px; }
+.order-support-actions .btn { background: var(--surface-soft); }
+.order-support-actions > :only-child { grid-column: 1 / -1; }
+@media (max-width: 620px) {
+  .order-main-actions, .order-support-actions { gap: 9px; }
+  .order-main-actions > .btn, .order-support-actions > .btn {
+    min-height: 52px; font-size: 14px; padding: 10px 8px;
+  }
 }

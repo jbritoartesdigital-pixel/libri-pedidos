@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f7f3f1">
   <title>Libri Convites | Admin V2</title>
   <link rel="manifest" href="/admin-manifest-v2.webmanifest">
-  <link rel="stylesheet" href="/css/admin-v2.css?v=20261021-order-editor-1">
+  <link rel="stylesheet" href="/css/admin-v2.css?v=20261030-admin-organizado-1">
 </head>
 <body>
   <div id="authGate" class="auth-gate hidden" aria-live="polite"></div>
@@ -22,23 +22,27 @@
         </div>
       </div>
 
-      <nav class="nav">
-        <button data-view="central" class="nav-btn active">Central</button>
-        <button data-view="manual" class="nav-btn">Novo pedido</button>
-        <button data-view="production" class="nav-btn">Produção</button>
-        <button data-view="agenda" class="nav-btn">Agenda</button>
-        <button data-view="finance" class="nav-btn">Financeiro</button>
-        <button data-view="archived" class="nav-btn">Arquivados</button>
-        <button data-view="store" class="nav-btn">Loja</button>
-        <button data-view="notifications" class="nav-btn">Notificações</button>
-        <button data-view="security" class="nav-btn">Segurança</button>
+      <nav class="nav" aria-label="Navegação do Admin">
+        <span class="nav-group-label">Seu trabalho</span>
+        <div class="nav-primary">
+          <button type="button" data-view="central" class="nav-btn active">Central</button>
+          <button type="button" data-view="manual" class="nav-btn nav-btn-create">+ Novo pedido</button>
+          <button type="button" data-view="production" class="nav-btn">Produção</button>
+          <button type="button" data-view="agenda" class="nav-btn">Agenda</button>
+          <button type="button" data-view="finance" class="nav-btn">Financeiro</button>
+          <button type="button" data-view="store" class="nav-btn">Loja</button>
+        </div>
+        <details class="nav-more" id="adminMoreMenu">
+          <summary>Mais opções <span aria-hidden="true">⌄</span></summary>
+          <div class="nav-secondary">
+            <button type="button" data-view="archived" class="nav-btn">Arquivados</button>
+            <button type="button" data-view="notifications" class="nav-btn">Notificações</button>
+            <button type="button" data-view="security" class="nav-btn">Segurança</button>
+            <button id="showAdminDiagnostic" type="button" class="nav-btn nav-utility" aria-haspopup="dialog">Diagnóstico técnico</button>
+            <button id="logoutBtn" class="nav-btn nav-utility" type="button">Sair da conta</button>
+          </div>
+        </details>
       </nav>
-
-      <div class="sidebar-foot">
-        <button id="logoutBtn" class="btn btn-ghost btn-full" type="button">
-          Sair
-        </button>
-      </div>
     </aside>
 
     <main class="main">
@@ -54,10 +58,9 @@
             <span id="bellCount" class="bell-count hidden">0</span>
           </button>
 
-          <button id="showAdminDiagnostic" class="icon-btn diagnostic-trigger" type="button"
-            title="Ver diagnóstico técnico" aria-label="Ver diagnóstico técnico"
-            aria-haspopup="dialog">
-            <span aria-hidden="true">🐞</span>
+          <button id="findAdminFeature" class="btn btn-secondary feature-find-trigger"
+            type="button" aria-expanded="false" aria-controls="featureFinder">
+            Encontrar função
           </button>
 
           <button id="refreshBtn" class="btn btn-ghost" type="button">
@@ -65,6 +68,8 @@
           </button>
         </div>
       </header>
+
+      <section id="featureFinder" class="feature-finder hidden" aria-label="Encontrar função"></section>
 
       <section id="viewRoot" class="view-root"></section>
     </main>
@@ -74,6 +79,6 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script defer src="/js/admin-v2-boot-watchdog.js?v=20261010-admin-recovery-1"></script>
-  <script type="module" src="/js/admin-v2.js?v=20261027-delivery-chronological-1"></script>
+  <script type="module" src="/js/admin-v2.js?v=20261030-admin-organizado-1"></script>
 </body>
 </html>

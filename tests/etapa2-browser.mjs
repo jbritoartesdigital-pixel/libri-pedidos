@@ -218,7 +218,8 @@ async function capture(browser,ref,label) {
     assert.equal(await page.locator('#adminApp').isVisible(),true);
     assert.equal(await page.locator('#advancedOrderFilters').getAttribute('open'),null,
       'Busca deve iniciar compacta');
-    assert.equal(await page.getByRole('button',{name:'Ver diagnóstico técnico'}).isVisible(),true);
+    assert.equal(await page.locator('#adminMoreMenu').getAttribute('open'),null,
+      'Ferramentas técnicas devem iniciar recolhidas');
     for(const width of [320,360,390,412]){
       await page.setViewportSize({width,height:844});
       const m=await page.evaluate(()=>{
@@ -241,6 +242,14 @@ async function capture(browser,ref,label) {
     assert.equal(await page.locator('[data-searched-order]').count(),1);
     await page.locator('#advOrderQuery').fill('falha');
     await page.getByText('Falha fictícia do teste').waitFor();
+    await page.getByRole('button',{name:'Encontrar função'}).click();
+    await page.locator('#featureFinderQuery').fill('cupom');
+    assert.equal(await page.locator('[data-feature-index]').count(),1,
+      'Localizador precisa mostrar exatamente a função Cupons');
+    await page.getByRole('button',{name:'Fechar busca de funções'}).click();
+    await page.locator('#adminMoreMenu summary').click();
+    assert.equal(await page.getByRole('button',{name:'Ver diagnóstico técnico'}).isVisible(),true,
+      'Diagnóstico deve continuar acessível dentro de Mais opções');
     await page.getByRole('button',{name:'Ver diagnóstico técnico'}).click();
     const dialog=page.locator('.libri-diagnostic-dialog[open]');
     await dialog.waitFor();

@@ -1,5 +1,6 @@
 name: Publicar Portal de Pedidos
 # Publicações de manutenção com o marcador [sem-migracoes] não aplicam migrations D1.
+# Limpeza de tabelas legadas exige bookmark Time Travel e contagens previamente auditadas.
 
 on:
   workflow_dispatch:

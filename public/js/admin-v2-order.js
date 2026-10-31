@@ -681,8 +681,20 @@ export async function openOrder(code, onChanged = null) {
     modal(
       `${detail.order.code} • ${detail.order.honoreeName}`,
       `
-        <div class="section-grid">
-          <section class="card">
+        <nav class="order-section-nav" aria-label="Ir para uma seção do pedido">
+          <span class="order-section-nav-label">Ir direto para</span>
+          <div class="order-section-nav-links">
+            <button type="button" data-order-jump="summary">Resumo</button>
+            <button type="button" data-order-jump="briefing">Dados e fotos</button>
+            <button type="button" data-order-jump="payment">Pagamentos</button>
+            <button type="button" data-order-jump="preview">Prévias</button>
+            <button type="button" data-order-jump="contract">Contrato</button>
+            <button type="button" data-order-jump="history">Histórico</button>
+            <button type="button" data-order-jump="actions">Outras ações</button>
+          </div>
+        </nav>
+        <div class="section-grid order-overview-grid">
+          <section class="card order-overview-card" id="orderSummary">
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <span class="status ${statusClass(detail.order.status)}">
                 ${esc(detail.order.statusLabel)}
@@ -718,13 +730,23 @@ export async function openOrder(code, onChanged = null) {
               ${detail.order.isLegacyV1 ? `<br>Pix registrado: ${money(pixPaidCents)}
                 • Saldo em aberto: ${money(pixRemainingCents)}` : ''}
             </div>
+            <div class="order-payment-snapshot" aria-label="Resumo financeiro do pedido">
+              <div><small>Valor do pedido</small><strong>${money(detail.pricing.totalCents)}</strong></div>
+              <div><small>Recebido</small><strong>${money(pixPaidCents)}</strong></div>
+              <div><small>${pixRemainingCents > 0 ? 'A receber' : 'Saldo'}</small>
+                <strong>${pixRemainingCents > 0 ? money(pixRemainingCents) : 'Quitado'}</strong></div>
+            </div>
             ${detail.order.canReconcileManualPix ? `
               <p class="notice info" style="margin:10px 0;font-size:13px">
                 Já existe Pix aprovado, mas o andamento ainda aparece como pagamento pendente.
                 Use "Atualizar situação do Pix" sem lançar outro recebimento.
               </p>` : ''}
 
-            <div class="order-quick-actions">
+            <div class="order-action-head">
+              <strong>Ações do pedido</strong>
+              <small>As opções mudam conforme o andamento.</small>
+            </div>
+            <div class="order-quick-actions order-primary-actions">
               ${!['cancelled','finalized'].includes(detail.order.status) ? `
                 <button id="editAdminOrder" class="btn btn-secondary" type="button"
                   aria-controls="adminEditOrderPanel" aria-expanded="false">
@@ -734,23 +756,6 @@ export async function openOrder(code, onChanged = null) {
                 aria-controls="orderBriefingPanel" aria-expanded="false">
                 Abrir briefing
               </button>
-              ${detail.order.canReconcileManualPix ? `
-                <button id="reconcileLegacyPixStatus" class="btn btn-secondary" type="button">
-                  Atualizar situação do Pix
-                </button>
-              ` : ''}
-              ${canAdjustLegacyPrice ? `
-                <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
-                  aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
-                  Ajustar valor combinado
-                </button>
-              ` : ''}
-              ${canRegisterManualPix ? `
-                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
-                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
-                  Registrar Pix recebido
-                </button>
-              ` : ''}
               ${(detail.allowedActions || []).includes('start_production') ? `
                 <button type="button" class="btn btn-primary" data-order-action="start_production">
                   Iniciar produção
@@ -773,6 +778,31 @@ export async function openOrder(code, onChanged = null) {
               <button type="button" class="btn btn-ghost"
                 id="toggleOrderPreview">Ver prévia</button>
             </div>
+
+            ${(detail.order.canReconcileManualPix || canAdjustLegacyPrice || canRegisterManualPix) ? `
+              <div class="order-finance-action-group">
+                <strong>Recebimentos e correções financeiras</strong>
+                <div class="order-quick-actions order-finance-actions">
+              ${detail.order.canReconcileManualPix ? `
+                <button id="reconcileLegacyPixStatus" class="btn btn-secondary" type="button">
+                  Atualizar situação do Pix
+                </button>
+              ` : ''}
+              ${canAdjustLegacyPrice ? `
+                <button id="toggleLegacyNegotiatedPrice" class="btn btn-secondary" type="button"
+                  aria-controls="legacyNegotiatedPricePanel" aria-expanded="false">
+                  Ajustar valor combinado
+                </button>
+              ` : ''}
+              ${canRegisterManualPix ? `
+                <button id="toggleOrderPixReceipt" class="btn btn-secondary" type="button"
+                  aria-controls="orderPixReceiptPanel" aria-expanded="false">
+                  Registrar Pix recebido
+                </button>
+              ` : ''}
+                </div>
+              </div>
+            ` : ''}
 
             <section id="adminEditOrderPanel" class="admin-edit-order-panel hidden"
               role="region" aria-label="Editar cenas, adicionais e valores"></section>
@@ -881,10 +911,8 @@ export async function openOrder(code, onChanged = null) {
             ${
               quickMessages.length
                 ? `
-                  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
-                    <strong style="display:block;margin-bottom:8px">
-                      Mensagens rápidas
-                    </strong>
+                  <details class="order-messages-optional">
+                    <summary>Mensagens rápidas de WhatsApp (${quickMessages.length})</summary>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       ${quickMessages.map(
@@ -900,7 +928,7 @@ export async function openOrder(code, onChanged = null) {
                         `,
                       ).join('')}
                     </div>
-                  </div>
+                  </details>
                 `
                 : ''
             }
@@ -908,12 +936,13 @@ export async function openOrder(code, onChanged = null) {
 
           ${productionQuickBlock(detail)}
 
-          <details class="order-optional card">
-            <summary>Ver contratação e pagamentos</summary>
-            <div class="section-grid">
-              ${contractedBlock(detail)}
-              ${paymentBlock(detail)}
-            </div>
+          <details class="order-optional card" id="orderPaymentDetails">
+            <summary>Pagamento e saldo</summary>
+            ${paymentBlock(detail)}
+          </details>
+          <details class="order-optional card" id="orderContractedDetails">
+            <summary>O que foi contratado e arquivos</summary>
+            ${contractedBlock(detail)}
             <div class="order-quick-actions">
               <a class="btn btn-ghost"
                 href="/api/admin/v2/orders/${esc(detail.order.code)}/download-folder">
@@ -946,8 +975,8 @@ export async function openOrder(code, onChanged = null) {
 
         <div class="section-grid">
           <section class="card">
-            <details class="order-optional">
-              <summary>Outras ações e observações</summary>
+            <details class="order-optional" id="orderMoreActions">
+              <summary>Outras ações e observações (inclui cancelar)</summary>
             <div class="section-title">
               <h3>Ações</h3>
             </div>
@@ -1061,8 +1090,8 @@ export async function openOrder(code, onChanged = null) {
         </div>
 
         <details class="order-optional card" id="orderPreviewDetails">
-          <summary>Prévia, contratos e histórico</summary>
-          <div class="section-grid">
+          <summary>Prévia e aprovação da cliente</summary>
+          <div class="order-detail-content">
           <section class="card">
             <div class="section-title">
               <h3>Prévia</h3>
@@ -1182,7 +1211,11 @@ export async function openOrder(code, onChanged = null) {
               ).join('') || '<div class="empty">Nenhuma prévia publicada.</div>'}
             </div>
           </section>
-
+          </div>
+        </details>
+        <details class="order-optional card" id="orderContractDetails">
+          <summary>Contrato do pedido</summary>
+          <div class="order-detail-content">
           <section class="card">
             <div class="section-title">
               <h3>Contratos</h3>
@@ -1199,17 +1232,36 @@ export async function openOrder(code, onChanged = null) {
               Gerar contrato
             </button>
           </section>
-        </div>
-
-        <div style="margin-top:14px">
+          </div>
+        </details>
+        <details class="order-optional card" id="orderHistoryDetails">
+          <summary>Histórico e movimentações</summary>
           ${historyBlock(detail)}
-        </div>
         </details>
       `,
       {
         width: '1100px',
       },
     );
+
+  // Atalhos só abrem os painéis existentes. Não fazem ações financeiras.
+  const jumpSections = Object.freeze({
+    summary:'orderSummary', briefing:'orderBriefingPanel',
+    payment:'orderPaymentDetails', preview:'orderPreviewDetails',
+    contract:'orderContractDetails', history:'orderHistoryDetails',
+    actions:'orderMoreActions'
+  });
+  document.querySelectorAll('[data-order-jump]').forEach(button => {
+    button.addEventListener('click', () => {
+      const target = document.getElementById(jumpSections[button.dataset.orderJump]);
+      if (!target) return;
+      if (button.dataset.orderJump === 'briefing' && target.classList.contains('hidden')) {
+        document.getElementById('toggleOrderBriefing')?.click();
+      }
+      if (target.tagName === 'DETAILS') target.open = true;
+      target.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
 
   document.getElementById('downloadProjectBible')?.addEventListener('click',async event=>{
     const button=event.currentTarget;

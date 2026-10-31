@@ -28,7 +28,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261030-pedido-organizado-1';
+} from './admin-v2-order.js?v=20261030-pedido-sem-previa-1';
 
 import {
   renderAgenda,

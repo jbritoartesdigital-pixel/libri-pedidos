@@ -1,0 +1,42 @@
+name: Inventario temporario D1 Drive Flow (somente leitura)
+on:
+  push:
+    branches: [chore/remover-flow-e-drive-20261030]
+    paths:
+      - '.github/workflows/inventario-temp-d1-integracoes.yml'
+permissions:
+  contents: read
+jobs:
+  contar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Conferir credenciais existentes sem exibir valores
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Contar somente linhas em tabelas antigas, sem mudar dados
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler d1 execute libri-pedidos-db --remote --json --command "SELECT 'v2_order_drive_folders' AS tabela, COUNT(*) AS registros FROM v2_order_drive_folders UNION ALL SELECT 'v2_drive_oauth_state',COUNT(*) FROM v2_drive_oauth_state UNION ALL SELECT 'v2_drive_oauth_connection',COUNT(*) FROM v2_drive_oauth_connection UNION ALL SELECT 'v2_drive_uploaded_previews',COUNT(*) FROM v2_drive_uploaded_previews UNION ALL SELECT 'v2_drive_sync_settings',COUNT(*) FROM v2_drive_sync_settings UNION ALL SELECT 'v2_drive_sync_attempts',COUNT(*) FROM v2_drive_sync_attempts UNION ALL SELECT 'v2_flow_device_grants',COUNT(*) FROM v2_flow_device_grants UNION ALL SELECT 'v2_flow_publication_links',COUNT(*) FROM v2_flow_publication_links UNION ALL SELECT 'v2_flow_drive_uploads',COUNT(*) FROM v2_flow_drive_uploads" > /tmp/contagem.json
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const raw=JSON.parse(readFileSync('/tmp/contagem.json','utf8'));
+          const rows=raw?.[0]?.results;
+          if(!Array.isArray(rows)||rows.length!==9)throw Error('Inventário inesperado');
+          for(const row of rows){
+            if(!/^(v2_(flow_|drive_|order_drive_))/.test(row.tabela)||!Number.isSafeInteger(row.registros))
+              throw Error('Resposta de inventário inválida');
+            console.log(row.tabela+': '+row.registros);
+          }
+          NODE

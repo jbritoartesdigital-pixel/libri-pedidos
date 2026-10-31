@@ -701,8 +701,15 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 27);
-  assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='v2_flow_device_grants'").get().n, 1);
+  const DB = database(); assert.equal(DB.migrationCount, 28);
+  for(const table of [
+    'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
+    'v2_drive_uploaded_previews','v2_drive_sync_settings','v2_drive_sync_attempts',
+    'v2_flow_device_grants','v2_flow_publication_links','v2_flow_drive_uploads'
+  ]){
+    assert.equal(DB.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table),
+      undefined,table+' should not exist after cleanup migration');
+  }
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_products').get().n, 7);
   assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_combos').get().n, 5);
   assert.equal(DB.sqlite.prepare("SELECT value FROM v2_settings WHERE key = 'company_name'").get().value, 'Libri Convites');

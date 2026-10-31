@@ -742,7 +742,7 @@ export async function openOrder(code, onChanged = null) {
                   aria-controls="adminEditOrderPanel" aria-expanded="false">Editar pedido e valores</button>
               ` : ''}
               <a class="btn btn-secondary"
-                href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\\D/g,''))}"
+                href="https://wa.me/${esc(String(detail.order.whatsapp || '').replace(/\D/g,''))}"
                 target="_blank" rel="noopener">WhatsApp</a>
             </div>
 

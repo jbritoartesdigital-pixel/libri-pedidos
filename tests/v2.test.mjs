@@ -1991,7 +1991,11 @@ test('admin order shows one-tap briefing/finalize, folds rarely used buttons and
   assert.match(ui,/id="orderBriefingPanel"/);
   assert.match(ui,/id="orderPreviewDetails"/);
   assert.match(ui,/Outras ações e observações/);
-  assert.match(ui,/Ver contratação e pagamentos/);
+  assert.match(ui,/id="orderPaymentDetails"/);
+  assert.match(ui,/id="orderContractedDetails"/);
+  assert.match(ui,/id="orderContractDetails"/);
+  assert.match(ui,/id="orderHistoryDetails"/);
+  assert.match(ui,/data-order-jump="payment"/);
   assert.match(ui,/\['finalize','balance_received','start_production'\]/);
   assert.match(ui,/body.innerHTML = finalizeChecklistHtml\(detail\)/);
   assert.doesNotMatch(ui,/await reopenFinalize\(\)/);

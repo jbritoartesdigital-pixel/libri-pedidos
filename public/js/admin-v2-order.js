@@ -911,10 +911,8 @@ export async function openOrder(code, onChanged = null) {
             ${
               quickMessages.length
                 ? `
-                  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
-                    <strong style="display:block;margin-bottom:8px">
-                      Mensagens rápidas
-                    </strong>
+                  <details class="order-messages-optional">
+                    <summary>Mensagens prontas para WhatsApp (${quickMessages.length})</summary>
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap">
                       ${quickMessages.map(
@@ -930,7 +928,7 @@ export async function openOrder(code, onChanged = null) {
                         `,
                       ).join('')}
                     </div>
-                  </div>
+                  </details>
                 `
                 : ''
             }
@@ -1245,6 +1243,25 @@ export async function openOrder(code, onChanged = null) {
         width: '1100px',
       },
     );
+
+  // Atalhos só abrem os painéis existentes. Não fazem ações financeiras.
+  const jumpSections = Object.freeze({
+    summary:'orderSummary', briefing:'orderBriefingPanel',
+    payment:'orderPaymentDetails', preview:'orderPreviewDetails',
+    contract:'orderContractDetails', history:'orderHistoryDetails',
+    actions:'orderMoreActions'
+  });
+  document.querySelectorAll('[data-order-jump]').forEach(button => {
+    button.addEventListener('click', () => {
+      const target = document.getElementById(jumpSections[button.dataset.orderJump]);
+      if (!target) return;
+      if (button.dataset.orderJump === 'briefing' && target.classList.contains('hidden')) {
+        document.getElementById('toggleOrderBriefing')?.click();
+      }
+      if (target.tagName === 'DETAILS') target.open = true;
+      target.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
 
   document.getElementById('downloadProjectBible')?.addEventListener('click',async event=>{
     const button=event.currentTarget;

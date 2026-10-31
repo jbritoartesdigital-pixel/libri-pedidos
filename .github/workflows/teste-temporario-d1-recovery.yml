@@ -21,14 +21,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          pnpm exec wrangler d1 info libri-pedidos-db --json > /tmp/d1-info.json
-          node --input-type=module <<'NODE'
-          import {readFileSync} from 'node:fs';
-          const x=JSON.parse(readFileSync('/tmp/d1-info.json','utf8'));
-          const version=x.version??x.result?.version;
-          if(!['production','beta'].includes(version))throw Error('Time Travel não confirmado para este D1.');
-          console.log('D1: '+version);
-          NODE
           pnpm exec wrangler d1 time-travel info libri-pedidos-db --json > /tmp/d1-bookmark.json
           node --input-type=module <<'NODE'
           import {readFileSync} from 'node:fs';

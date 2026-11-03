@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261030-safari-retry-1';
+} from './client-v2-store.js?v=20261103-manual-addons-1';
 
 import {
   startCustomerArea,

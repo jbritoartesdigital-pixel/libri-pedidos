@@ -23,6 +23,8 @@ import {
   createMercadoPagoCheckout,
 } from './v2-mercadopago.js';
 
+import { applyManualClientAddons } from './v2-manual-client-addons.js';
+
 const TOKEN_PATTERN =
   /^ord_[a-f0-9]{36}$/;
 
@@ -618,6 +620,7 @@ async function publicManualOrder(
             p.payment_method,
             p.deposit_cents,
             p.balance_cents,
+            p.deposit_percent,
             p.pricing_snapshot_json
           FROM v2_orders o
           INNER JOIN v2_customers c
@@ -783,6 +786,8 @@ async function publicManualOrder(
           order.balance_cents
           || 0,
         ),
+
+      depositPercent: Number(order.deposit_percent || 100),
 
       snapshot:
         JSON.parse(
@@ -1529,7 +1534,7 @@ export async function startV2ManualOrderPayment(
   token,
   body = {},
 ) {
-  const manual =
+  let manual =
     await publicManualOrder(
       env.DB,
       token,
@@ -1660,6 +1665,15 @@ export async function startV2ManualOrderPayment(
         },
       };
     }
+  }
+
+  if (Array.isArray(body.addonCodes) && body.addonCodes.length > 0) {
+    await applyManualClientAddons(
+      env.DB, manual, body.addonCodes, body.expectedTotalCents,
+    );
+    // Re-read the committed D1 price. The Mercado Pago amount must always
+    // use this server value, never a client-supplied total.
+    manual = await publicManualOrder(env.DB, token);
   }
 
   const quote =

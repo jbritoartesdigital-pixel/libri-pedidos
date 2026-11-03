@@ -5232,6 +5232,12 @@ export async function startManualOrder(
   const order =
     data.order;
 
+  const addonOffer = data.addonOffer || { editable: false, available: [] };
+  let selectedManualAddonCodes = [];
+  let manualAddonQuote = null;
+  let manualAddonQuotePending = false;
+  let manualQuoteSerial = 0;
+
   const render = () => {
     const paymentPending =
       order.payment
@@ -5290,22 +5296,49 @@ export async function startManualOrder(
 
           <div class="review-line">
             <dt>Total</dt>
-            <dd>${money(order.pricing.totalCents)}</dd>
+            <dd id="manualUpdatedTotal">${money(order.pricing.totalCents)}</dd>
           </div>
 
           <div class="review-line">
             <dt>Pagamento</dt>
-            <dd>
+            <dd id="manualUpdatedDeposit">
               ${
                 order.paidDirectly
                   ? 'Pix direto • recebimento confirmado'
                   : order.pricing.paymentMethod === 'pix'
-                    ? `Pix • ${order.pricing.depositCents < order.pricing.totalCents ? 'entrada de ' : 'integral de '}${money(order.pricing.depositCents)}`
-                    : 'Cartão • pagamento integral'
+                    ? `Pix • ${order.pricing.depositPercent === 50 ? 'entrada de ' : 'integral de '}${money(order.pricing.depositCents)}`
+                    : `Cartão • integral de ${money(order.pricing.depositCents)}`
               }
             </dd>
           </div>
+          ${order.pricing.balanceCents > 0 ? `
+            <div class="review-line">
+              <dt>Saldo após a entrada</dt>
+              <dd id="manualUpdatedBalance">${money(order.pricing.balanceCents)}</dd>
+            </div>` : ''}
         </dl>
+
+        ${addonOffer.editable && addonOffer.available.length && !order.alreadyPaid && !paymentPending ? `
+          <section class="card section-block" id="manualAddonOffer">
+            <div class="section-title">
+              <h2>Quer deixar seu convite ainda mais especial?</h2>
+            </div>
+            <p class="muted">
+              Você pode adicionar opções ao convite antes de pagar.
+              Seu produto e a condição de pagamento autorizada pela Libri não mudam.
+            </p>
+            <div class="list">
+              ${addonOffer.available.map(addon => `
+                <label class="checkline">
+                  <input type="checkbox" name="manualAddonCode"
+                    value="${esc(addon.code)}" ${selectedManualAddonCodes.includes(addon.code) ? 'checked' : ''}>
+                  <span>${esc(addon.name)} <strong>+${money(addon.priceCents)}</strong></span>
+                </label>
+              `).join('')}
+            </div>
+            <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
+          </section>
+        ` : ''}
 
         ${
           order.alreadyPaid
@@ -5364,6 +5397,68 @@ export async function startManualOrder(
       </section>
     `;
 
+    let quoteVersion = manualQuoteSerial;
+    const updateAddonPricing = () => {
+      const totalCents = manualAddonQuote?.totalCents ?? order.pricing.totalCents;
+      const depositCents = manualAddonQuote?.depositCents ?? order.pricing.depositCents;
+      const balanceCents = manualAddonQuote?.balanceCents ?? order.pricing.balanceCents;
+      const total = document.getElementById('manualUpdatedTotal');
+      const deposit = document.getElementById('manualUpdatedDeposit');
+      const balance = document.getElementById('manualUpdatedBalance');
+      if (total) total.textContent = money(totalCents);
+      if (deposit) deposit.textContent = order.pricing.paymentMethod === 'pix'
+        ? `Pix • ${order.pricing.depositPercent === 50 ? 'entrada de ' : 'integral de '}${money(depositCents)}`
+        : `Cartão • integral de ${money(depositCents)}`;
+      if (balance) balance.textContent = money(balanceCents);
+    };
+
+    const addonFeedback = document.getElementById('manualAddonQuoteFeedback');
+    const paymentButton = document.getElementById('manualPay');
+    document.querySelectorAll('[name="manualAddonCode"]').forEach(input => {
+      input.addEventListener('change', async () => {
+        selectedManualAddonCodes = [...document.querySelectorAll('[name="manualAddonCode"]:checked')]
+          .map(field => field.value);
+        const serial = ++manualQuoteSerial;
+        quoteVersion = serial;
+        manualAddonQuote = null;
+        manualAddonQuotePending = selectedManualAddonCodes.length > 0;
+        if (paymentButton) paymentButton.disabled = manualAddonQuotePending;
+        if (!manualAddonQuotePending) {
+          updateAddonPricing();
+          if (addonFeedback) addonFeedback.classList.add('hidden');
+          return;
+        }
+        if (addonFeedback) {
+          addonFeedback.classList.remove('hidden');
+          addonFeedback.textContent = 'Conferindo adicionais, valores e agenda...';
+        }
+        try {
+          const response = await api(`/api/v2/manual-order/${token}/addons/quote`, {
+            method: 'POST',
+            body: JSON.stringify({ addonCodes: selectedManualAddonCodes }),
+          });
+          if (serial !== manualQuoteSerial) return;
+          manualAddonQuote = response.result;
+          manualAddonQuotePending = false;
+          updateAddonPricing();
+          if (addonFeedback) {
+            addonFeedback.textContent = `Novo total: ${money(manualAddonQuote.totalCents)} • ${order.pricing.depositPercent === 50 ? 'Entrada de 50%' : 'Pagamento integral'}: ${money(manualAddonQuote.depositCents)}${manualAddonQuote.balanceCents > 0 ? ` • Saldo posterior: ${money(manualAddonQuote.balanceCents)}` : ''}. Confira antes de pagar.`;
+          }
+          if (paymentButton) paymentButton.disabled = false;
+        } catch (error) {
+          if (serial !== manualQuoteSerial) return;
+          manualAddonQuotePending = false;
+          updateAddonPricing();
+          if (addonFeedback) {
+            addonFeedback.classList.remove('hidden');
+            addonFeedback.textContent = error.message || 'Não foi possível calcular os adicionais.';
+          }
+          // A selection with no confirmed server-side quote must never enter checkout.
+          if (paymentButton) paymentButton.disabled = true;
+        }
+      });
+    });
+
     document.getElementById('manualPendingPay')?.addEventListener('click', event => {
       event.preventDefault();
       const checkoutTab = prepareMercadoPagoTab();
@@ -5398,6 +5493,11 @@ export async function startManualOrder(
       ?.addEventListener(
         'click',
         async () => {
+          if (manualAddonQuotePending
+            || (selectedManualAddonCodes.length && !manualAddonQuote)) {
+            showToast('Confira o valor atualizado dos adicionais antes de pagar.');
+            return;
+          }
           if (
             !document
               .getElementById(
@@ -5441,6 +5541,8 @@ export async function startManualOrder(
                         true,
                       termsVersion:
                         order.terms.version,
+                      addonCodes: selectedManualAddonCodes,
+                      expectedTotalCents: manualAddonQuote?.totalCents ?? order.pricing.totalCents,
                     }),
                 },
               );

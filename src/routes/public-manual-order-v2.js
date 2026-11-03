@@ -8,6 +8,10 @@ import {
   getV2ManualOrderForCustomer,
   startV2ManualOrderPayment,
 } from '../lib/v2-orders-manual.js';
+import {
+  getManualClientAddonOffer,
+  quoteManualClientAddons,
+} from '../lib/v2-manual-client-addons.js';
 
 function routeError(
   error,
@@ -70,7 +74,24 @@ export async function handlePublicManualOrderV2Api(
         true,
 
       order,
+      addonOffer: await getManualClientAddonOffer(env.DB, order),
     });
+  }
+
+  const addonQuoteMatch = url.pathname.match(
+    /^\/api\/v2\/manual-order\/(ord_[a-f0-9]{36})\/addons\/quote$/,
+  );
+  if (addonQuoteMatch && method === 'POST') {
+    try {
+      const order = await getV2ManualOrderForCustomer(env.DB, addonQuoteMatch[1]);
+      if (!order) return fail('Pedido não encontrado.', 404);
+      const body = await readJson(request);
+      const quote = await quoteManualClientAddons(env.DB, order, body.addonCodes);
+      const { _additions, ...result } = quote;
+      return json({ ok: true, result });
+    } catch (error) {
+      return routeError(error, error.status || 422);
+    }
   }
 
   const payMatch =
@@ -109,11 +130,7 @@ export async function handlePublicManualOrderV2Api(
     ) {
       return routeError(
         error,
-        error
-          ?.code
-        === 'delivery_window_unavailable'
-          ? 409
-          : 422,
+        error?.status || (error?.code === 'delivery_window_unavailable' ? 409 : 422),
       );
     }
   }

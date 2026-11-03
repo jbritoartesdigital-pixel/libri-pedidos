@@ -1667,7 +1667,7 @@ export async function startV2ManualOrderPayment(
     }
   }
 
-  if (body.addonCodes !== undefined) {
+  if (Array.isArray(body.addonCodes) && body.addonCodes.length > 0) {
     await applyManualClientAddons(
       env.DB, manual, body.addonCodes, body.expectedTotalCents,
     );

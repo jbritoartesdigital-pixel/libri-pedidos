@@ -139,6 +139,6 @@ test('interface do pedido manual solicita prévia e mostra saldo somente na exce
   assert.match(ui,/addonCodes: selectedManualAddonCodes/);
   assert.match(ui,/expectedTotalCents: manualAddonQuote\?\.totalCents/);
   assert.match(ui,/selectedManualAddonCodes\.length && !manualAddonQuote/);
-  assert.match(routes,/\/addons\/quote/);
+  assert.match(routes,/addonQuoteMatch/);
   assert.match(ui,/Saldo após a entrada/);
 });

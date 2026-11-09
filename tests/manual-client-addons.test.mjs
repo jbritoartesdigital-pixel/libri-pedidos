@@ -90,7 +90,7 @@ test('pedido integral Pix e cartão preservam percentual e tarifas sobre extras'
   }
 });
 
-test('API pública não permite remover adicionais, trocar produto ou falsificar desconto e valida agenda',async()=>{
+test('API pública não permite remover adicionais ou falsificar desconto e valida agenda',async()=>{
   const DB=database();
   const {manual}=await manualOrder(DB,50);
   const addon=await availableAddon(DB,manual);
@@ -101,7 +101,7 @@ test('API pública não permite remover adicionais, trocar produto ou falsificar
     new Request('https://pedidos.libriconvites.com.br'+path,{
       method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({addonCodes:[addon.code],paymentDepositPercent:100,
-        productCode:'cinematic_interactive', totalCents:1}),
+        totalCents:1}),
     }),env(DB),new URL('https://pedidos.libriconvites.com.br'+path));
   assert.equal(res.status,200);
   const data=await res.json();

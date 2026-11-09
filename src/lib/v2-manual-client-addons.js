@@ -1,5 +1,5 @@
 import { nowIso } from './http.js';
-import { loadV2Catalog, loadV2AddonsByCodes } from './v2-catalog.js';
+import { loadV2Catalog, loadV2AddonsByCodes, resolveV2ProductSelection } from './v2-catalog.js';
 import { calculateV2Quote } from './v2-quote.js';
 import { planV2AllocationForWindow } from './v2-agenda.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
@@ -54,10 +54,22 @@ export async function getManualClientAddonOffer(db, manual) {
       code: addon.code, name: addon.name, group: addon.group,
       priceCents: Number(addon.priceCents),
     }));
-  return { editable: true, available, selected: [] };
+  const products = catalogue.products
+    .filter(p => p.variants.length > 0)
+    .map(p => ({
+      code: p.code, name: p.name, pricingMode: p.pricingMode,
+      variants: p.variants.map(v => ({
+        code: v.code, label: v.label, sceneCount: v.sceneCount,
+        priceCents: Number(v.priceCents),
+      })),
+    }));
+  return { editable: true, available, selected: [], products,
+    currentProductCode: productCode || '',
+    currentVariantCode: manual.pricing.snapshot?.variant?.code || '' };
+
 }
 
-export async function quoteManualClientAddons(db, manual, rawCodes) {
+export async function quoteManualClientAddons(db, manual, rawCodes, productSelection = {}) {
   const codes = newCodes(rawCodes);
   if (!await editable(db, manual)) conflict(
     'Este pedido já iniciou o pagamento. Os adicionais precisam ser combinados com a Libri.'
@@ -75,35 +87,70 @@ export async function quoteManualClientAddons(db, manual, rawCodes) {
     throw new Error('Este adicional já está incluído no seu pedido.');
   }
 
+  const oldProduct = snapshot.product || {};
+  const oldVariant = snapshot.variant || {};
+  let chosenProduct = oldProduct;
+  let chosenVariant = oldVariant;
+  const productCode = String(productSelection.productCode || '').trim();
+  const variantCode = String(productSelection.variantCode || '').trim();
+  if (productCode || variantCode) {
+    if (!productCode || !variantCode) {
+      throw new Error('Escolha formato e quantidade de cenas.');
+    }
+    const resolved = await resolveV2ProductSelection(db, { productCode, variantCode });
+    chosenProduct = resolved.product;
+    chosenVariant = resolved.variant;
+  }
+  const productChanged = chosenProduct.code !== oldProduct.code
+    || chosenVariant.code !== oldVariant.code;
+  if (productChanged && (snapshot.combo?.code || snapshot.coupon?.code)) {
+    conflict('Este pedido tem desconto ou combo negociado. Solicite a alteração à Libri.');
+  }
+  if (productChanged && (!Number.isSafeInteger(Number(oldVariant.priceCents))
+    || !Number.isSafeInteger(Number(oldVariant.pointsUnits)))) {
+    conflict('O valor original deste pedido precisa ser conferido pela Libri.');
+  }
+
   let additions = [];
-  if (codes.length) {
+  if (codes.length || productChanged) {
     const combined = [...owned, ...codes];
-    // Use the actual checkout catalogue validation. The product, variant,
-    // combo/coupon and contracted price are never client-editable here.
+    // The normal checkout validates format, scenes and addon compatibility.
+    // Never silently drop an existing addon when switching format.
     const validated = await calculateV2Quote(db, {
-      productCode: snapshot.product?.code,
-      variantCode: snapshot.variant?.code,
-      paymentMethod: manual.pricing.paymentMethod,
-      addonCodes: combined,
+      productCode: chosenProduct.code, variantCode: chosenVariant.code,
+      paymentMethod: manual.pricing.paymentMethod, addonCodes: combined,
     });
     const validatedCodes = new Set(validated.addons.map(x => x.code));
     if (validatedCodes.size !== combined.length
       || combined.some(code => !validatedCodes.has(code))) {
-      throw new Error('Essa combinação de adicionais não está disponível.');
+      throw new Error('O novo formato não é compatível com os adicionais contratados.');
     }
     additions = await loadV2AddonsByCodes(db, codes);
   }
 
-  const extrasCents = additions.reduce((sum, addon) => sum + Number(addon.priceCents), 0);
-  const extraPointsUnits = additions.reduce((sum, addon) => sum + Number(addon.pointsUnits), 0);
+  const productDeltaCents = productChanged
+    ? Number(chosenVariant.priceCents) - Number(oldVariant.priceCents) : 0;
+  const productPointsDelta = productChanged
+    ? Number(chosenVariant.pointsUnits) - Number(oldVariant.pointsUnits) : 0;
+  const extrasCents = additions.reduce((sum, a) => sum + Number(a.priceCents), 0);
+  const extraPointsUnits = additions.reduce((sum, a) => sum + Number(a.pointsUnits), 0);
+  const pointsDelta = productPointsDelta + extraPointsUnits;
+  const oldSubtotalCents = Number(snapshot.subtotalCents);
+  const oldUrgencyCents = Number(snapshot.urgency?.amountCents || 0);
   const urgencyPercent = Number(snapshot.urgency?.percent || 0);
-  const extraUrgencyCents = Math.round(extrasCents * urgencyPercent / 100);
-  const extraBaseCents = extrasCents + extraUrgencyCents;
+  const newSubtotalCents = oldSubtotalCents + productDeltaCents + extrasCents;
+  if (!Number.isSafeInteger(newSubtotalCents) || newSubtotalCents < 0
+    || !Number.isSafeInteger(urgencyPercent) || urgencyPercent < 0
+    || urgencyPercent > 100) {
+    conflict('O novo total não é válido. Solicite a revisão à Libri.');
+  }
+  const extraUrgencyCents = Math.round(newSubtotalCents * urgencyPercent / 100) - oldUrgencyCents;
+  const extraBaseCents = extrasCents + productDeltaCents + extraUrgencyCents;
   const oldBaseCents = Number(snapshot.baseTotalCents);
-  if (!Number.isSafeInteger(oldBaseCents) || oldBaseCents < 0) {
+  if (!Number.isSafeInteger(oldBaseCents) || oldBaseCents < 0
+    || oldBaseCents + extraBaseCents < 0) {
     conflict('Não foi possível preservar o valor contratado. Fale com a Libri.');
   }
-
   const method = manual.pricing.paymentMethod;
   const cardIncrease = method === 'card'
     ? priceWithCardProcessingFee(oldBaseCents + extraBaseCents, 'card').totalCents
@@ -116,20 +163,25 @@ export async function quoteManualClientAddons(db, manual, rawCodes) {
   if (!Number.isSafeInteger(totalCents) || totalCents < 1 || totalCents > 100000000) {
     throw new Error('O total do pedido não é válido.');
   }
-  if (codes.length && extraPointsUnits > 0) {
+  if (pointsDelta > 0) {
     const plan = await planV2AllocationForWindow(db, {
-      start: manual.deliveryWindow.start,
-      end: manual.deliveryWindow.end,
-      pointsUnits: Number(snapshot.pointsUnits || 0) + extraPointsUnits,
+      start: manual.deliveryWindow.start, end: manual.deliveryWindow.end,
+      pointsUnits: Number(snapshot.pointsUnits || 0) + pointsDelta,
     });
     if (!plan.fits) conflict(
-      'A janela de entrega não tem capacidade para estes adicionais. Fale com a Libri.'
+      'A janela de entrega não tem capacidade para o novo formato ou quantidade de cenas. Fale com a Libri.'
     );
   }
   return {
     previousTotalCents: previousTotal, increaseCents, totalCents,
     depositPercent: percent, depositCents, balanceCents,
     extrasCents, extraUrgencyCents, extraBaseCents, extraPointsUnits,
+    pointsDelta, productDeltaCents, productPointsDelta, productChanged,
+    product: { code: chosenProduct.code, name: chosenProduct.name,
+      slug: chosenProduct.slug, pricingMode: chosenProduct.pricingMode },
+    variant: { code: chosenVariant.code, label: chosenVariant.label,
+      sceneCount: chosenVariant.sceneCount, priceCents: Number(chosenVariant.priceCents),
+      pointsUnits: Number(chosenVariant.pointsUnits) },
     addons: additions.map(({ code, name, group, priceCents }) =>
       ({ code, name, group, priceCents: Number(priceCents) })),
     _additions: additions,

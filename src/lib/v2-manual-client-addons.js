@@ -70,7 +70,7 @@ export async function getManualClientAddonOffer(db, manual) {
 }
 
 export async function quoteManualClientAddons(db, manual, rawCodes, productSelection = {}) {
-  const codes = newCodes(rawCodes);
+  const codes = newCodes(rawCodes ?? []);
   if (!await editable(db, manual)) conflict(
     'Este pedido já iniciou o pagamento. Os adicionais precisam ser combinados com a Libri.'
   );
@@ -177,10 +177,8 @@ export async function quoteManualClientAddons(db, manual, rawCodes, productSelec
     depositPercent: percent, depositCents, balanceCents,
     extrasCents, extraUrgencyCents, extraBaseCents, extraPointsUnits,
     pointsDelta, productDeltaCents, productPointsDelta, productChanged,
-    product: { code: chosenProduct.code, name: chosenProduct.name,
-      slug: chosenProduct.slug, pricingMode: chosenProduct.pricingMode },
-    variant: { code: chosenVariant.code, label: chosenVariant.label,
-      sceneCount: chosenVariant.sceneCount, priceCents: Number(chosenVariant.priceCents),
+    product: { ...chosenProduct },
+    variant: { ...chosenVariant, priceCents: Number(chosenVariant.priceCents),
       pointsUnits: Number(chosenVariant.pointsUnits) },
     addons: additions.map(({ code, name, group, priceCents }) =>
       ({ code, name, group, priceCents: Number(priceCents) })),

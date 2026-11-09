@@ -258,11 +258,17 @@ export async function applyManualClientAddons(
         )
         AND NOT EXISTS (SELECT 1 FROM v2_payments WHERE order_id = ?)
         AND NOT EXISTS (SELECT 1 FROM v2_checkout_holds WHERE order_id = ?)
+        AND (? = 0 OR EXISTS (
+          SELECT 1 FROM v2_order_items original
+          WHERE original.order_id = v2_order_pricing.order_id
+            AND original.item_type = 'product' AND original.item_code = ?
+        ))
     `).bind(
       quote.extrasCents + quote.productDeltaCents, quote.extraUrgencyCents,
       quote.totalCents, quote.depositCents, quote.balanceCents,
       newJson, stamp, manual.id, quote.previousTotalCents, oldJson,
       manual.id, manual.id,
+      quote.productChanged ? 1 : 0, snapshot.variant?.code || '',
     ),
     ...(quote.productChanged ? [db.prepare(`
       UPDATE v2_order_items SET

@@ -5237,6 +5237,15 @@ export async function startManualOrder(
   let manualAddonQuote = null;
   let manualAddonQuotePending = false;
   let manualQuoteSerial = 0;
+  const originalProductCode = addonOffer.currentProductCode
+    || order.pricing.snapshot?.product?.code || '';
+  const originalVariantCode = addonOffer.currentVariantCode
+    || order.pricing.snapshot?.variant?.code || '';
+  let selectedManualProductCode = originalProductCode;
+  let selectedManualVariantCode = originalVariantCode;
+  const manualProductChanged = () =>
+    selectedManualProductCode !== originalProductCode
+    || selectedManualVariantCode !== originalVariantCode;
 
   const render = () => {
     const paymentPending =
@@ -5278,10 +5287,12 @@ export async function startManualOrder(
           <div class="review-line">
             <dt>Itens</dt>
             <dd>
-              ${order.items.map(
-                (item) =>
-                  esc(item.name_snapshot),
-              ).join(', ')}
+              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px">
+                <span id="manualUpdatedItems">${order.items.map(item => esc(item.name_snapshot)).join(', ')}</span>
+                ${addonOffer.editable && addonOffer.products?.length && !paymentPending
+                  ? '<button id="manualChangeProduct" type="button" class="btn btn-ghost">Alterar</button>'
+                  : ''}
+              </div>
             </dd>
           </div>
 
@@ -5318,6 +5329,10 @@ export async function startManualOrder(
             </div>` : ''}
         </dl>
 
+        ${addonOffer.editable && !order.alreadyPaid && !paymentPending ? `
+          <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
+        ` : ''}
+
         ${addonOffer.editable && addonOffer.available.length && !order.alreadyPaid && !paymentPending ? `
           <section class="card section-block" id="manualAddonOffer">
             <div class="section-title">
@@ -5325,7 +5340,8 @@ export async function startManualOrder(
             </div>
             <p class="muted">
               Você pode adicionar opções ao convite antes de pagar.
-              Seu produto e a condição de pagamento autorizada pela Libri não mudam.
+              O formato e as cenas podem ser alterados no botão acima.
+              A condição de pagamento autorizada pela Libri não muda.
             </p>
             <div class="list">
               ${addonOffer.available.map(addon => `
@@ -5336,7 +5352,6 @@ export async function startManualOrder(
                 </label>
               `).join('')}
             </div>
-            <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
           </section>
         ` : ''}
 
@@ -5397,65 +5412,126 @@ export async function startManualOrder(
       </section>
     `;
 
-    let quoteVersion = manualQuoteSerial;
-    const updateAddonPricing = () => {
-      const totalCents = manualAddonQuote?.totalCents ?? order.pricing.totalCents;
-      const depositCents = manualAddonQuote?.depositCents ?? order.pricing.depositCents;
-      const balanceCents = manualAddonQuote?.balanceCents ?? order.pricing.balanceCents;
+    const updateManualSummary = () => {
+      const quote = manualAddonQuote;
+      const totalCents = quote?.totalCents ?? order.pricing.totalCents;
+      const depositCents = quote?.depositCents ?? order.pricing.depositCents;
+      const balanceCents = quote?.balanceCents ?? order.pricing.balanceCents;
       const total = document.getElementById('manualUpdatedTotal');
       const deposit = document.getElementById('manualUpdatedDeposit');
       const balance = document.getElementById('manualUpdatedBalance');
+      const items = document.getElementById('manualUpdatedItems');
       if (total) total.textContent = money(totalCents);
       if (deposit) deposit.textContent = order.pricing.paymentMethod === 'pix'
         ? `Pix • ${order.pricing.depositPercent === 50 ? 'entrada de ' : 'integral de '}${money(depositCents)}`
         : `Cartão • integral de ${money(depositCents)}`;
       if (balance) balance.textContent = money(balanceCents);
+      if (items) {
+        const product = order.items.find(item => item.item_type === 'product');
+        const originalAddons = order.items.filter(item => item.item_type !== 'product')
+          .map(item => item.name_snapshot);
+        const name = quote?.productChanged
+          ? `${quote.product.name}${quote.product.pricingMode === 'scene_count' ? ` • ${quote.variant.label}` : ''}`
+          : product?.name_snapshot || '';
+        items.textContent = [name, ...originalAddons, ...(quote?.addons || []).map(a => a.name)]
+          .filter(Boolean).join(', ');
+      }
     };
-
     const addonFeedback = document.getElementById('manualAddonQuoteFeedback');
     const paymentButton = document.getElementById('manualPay');
-    document.querySelectorAll('[name="manualAddonCode"]').forEach(input => {
-      input.addEventListener('change', async () => {
-        selectedManualAddonCodes = [...document.querySelectorAll('[name="manualAddonCode"]:checked')]
-          .map(field => field.value);
-        const serial = ++manualQuoteSerial;
-        quoteVersion = serial;
-        manualAddonQuote = null;
-        manualAddonQuotePending = selectedManualAddonCodes.length > 0;
-        if (paymentButton) paymentButton.disabled = manualAddonQuotePending;
-        if (!manualAddonQuotePending) {
-          updateAddonPricing();
-          if (addonFeedback) addonFeedback.classList.add('hidden');
-          return;
+    const refreshManualQuote = async () => {
+      const serial = ++manualQuoteSerial;
+      manualAddonQuote = null;
+      const changed = manualProductChanged() || selectedManualAddonCodes.length > 0;
+      manualAddonQuotePending = changed;
+      if (paymentButton) paymentButton.disabled = changed;
+      updateManualSummary();
+      if (!changed) {
+        if (addonFeedback) addonFeedback.classList.add('hidden');
+        return;
+      }
+      if (addonFeedback) {
+        addonFeedback.classList.remove('hidden');
+        addonFeedback.textContent = 'Conferindo formato, cenas, adicionais e agenda...';
+      }
+      try {
+        const response = await api(`/api/v2/manual-order/${token}/addons/quote`, {
+          method: 'POST',
+          body: JSON.stringify({
+            addonCodes: selectedManualAddonCodes,
+            productCode: selectedManualProductCode,
+            variantCode: selectedManualVariantCode,
+          }),
+        });
+        if (serial !== manualQuoteSerial) return;
+        manualAddonQuote = response.result;
+        manualAddonQuotePending = false;
+        updateManualSummary();
+        if (addonFeedback) {
+          addonFeedback.textContent = `Novo total: ${money(manualAddonQuote.totalCents)} • ${order.pricing.depositPercent === 50 ? 'Entrada de 50%' : 'Pagamento integral'}: ${money(manualAddonQuote.depositCents)}${manualAddonQuote.balanceCents > 0 ? ` • Saldo posterior: ${money(manualAddonQuote.balanceCents)}` : ''}. Confira antes de pagar.`;
         }
+        if (paymentButton) paymentButton.disabled = false;
+      } catch (error) {
+        if (serial !== manualQuoteSerial) return;
+        manualAddonQuotePending = false;
+        updateManualSummary();
         if (addonFeedback) {
           addonFeedback.classList.remove('hidden');
-          addonFeedback.textContent = 'Conferindo adicionais, valores e agenda...';
+          addonFeedback.textContent = error.message || 'Não foi possível calcular essa alteração.';
         }
-        try {
-          const response = await api(`/api/v2/manual-order/${token}/addons/quote`, {
-            method: 'POST',
-            body: JSON.stringify({ addonCodes: selectedManualAddonCodes }),
-          });
-          if (serial !== manualQuoteSerial) return;
-          manualAddonQuote = response.result;
-          manualAddonQuotePending = false;
-          updateAddonPricing();
-          if (addonFeedback) {
-            addonFeedback.textContent = `Novo total: ${money(manualAddonQuote.totalCents)} • ${order.pricing.depositPercent === 50 ? 'Entrada de 50%' : 'Pagamento integral'}: ${money(manualAddonQuote.depositCents)}${manualAddonQuote.balanceCents > 0 ? ` • Saldo posterior: ${money(manualAddonQuote.balanceCents)}` : ''}. Confira antes de pagar.`;
-          }
-          if (paymentButton) paymentButton.disabled = false;
-        } catch (error) {
-          if (serial !== manualQuoteSerial) return;
-          manualAddonQuotePending = false;
-          updateAddonPricing();
-          if (addonFeedback) {
-            addonFeedback.classList.remove('hidden');
-            addonFeedback.textContent = error.message || 'Não foi possível calcular os adicionais.';
-          }
-          // A selection with no confirmed server-side quote must never enter checkout.
-          if (paymentButton) paymentButton.disabled = true;
+        if (paymentButton) paymentButton.disabled = true;
+      }
+    };
+
+    document.querySelectorAll('[name="manualAddonCode"]').forEach(input => {
+      input.addEventListener('change', () => {
+        selectedManualAddonCodes = [...document.querySelectorAll('[name="manualAddonCode"]:checked')]
+          .map(field => field.value);
+        void refreshManualQuote();
+      });
+    });
+
+    document.getElementById('manualChangeProduct')?.addEventListener('click', () => {
+      const products = addonOffer.products || [];
+      modal('Alterar formato e cenas', `
+        <p class="muted">Escolha outro formato ou quantidade de cenas.
+          O novo valor será mostrado antes do pagamento.</p>
+        <div class="field">
+          <label for="manualProductSelect">Formato do convite</label>
+          <select class="input" id="manualProductSelect">
+            ${products.map(p => `<option value="${esc(p.code)}" ${p.code === selectedManualProductCode ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label for="manualVariantSelect">Quantidade de cenas / modelo</label>
+          <select class="input" id="manualVariantSelect"></select>
+        </div>
+        <button id="manualApplyProduct" class="btn btn-primary" type="button">Conferir novo valor</button>
+      `);
+      const productField = document.getElementById('manualProductSelect');
+      const variantField = document.getElementById('manualVariantSelect');
+      const renderVariants = () => {
+        const p = products.find(item => item.code === productField.value);
+        variantField.innerHTML = (p?.variants || []).map(v =>
+          `<option value="${esc(v.code)}">${esc(v.label)} • ${money(v.priceCents)}</option>`
+        ).join('');
+        if (p?.code === selectedManualProductCode) {
+          variantField.value = selectedManualVariantCode;
         }
+      };
+      productField.addEventListener('change', renderVariants);
+      renderVariants();
+      document.getElementById('manualApplyProduct')?.addEventListener('click', () => {
+        const p = products.find(item => item.code === productField.value);
+        const v = p?.variants.find(item => item.code === variantField.value);
+        if (!p || !v) {
+          showToast('Escolha um formato e modelo disponíveis.');
+          return;
+        }
+        selectedManualProductCode = p.code;
+        selectedManualVariantCode = v.code;
+        document.querySelector('#modalRoot .modal-close')?.click();
+        void refreshManualQuote();
       });
     });
 
@@ -5494,7 +5570,8 @@ export async function startManualOrder(
         'click',
         async () => {
           if (manualAddonQuotePending
-            || (selectedManualAddonCodes.length && !manualAddonQuote)) {
+            || (selectedManualAddonCodes.length && !manualAddonQuote)
+            || (manualProductChanged() && !manualAddonQuote)) {
             showToast('Confira o valor atualizado dos adicionais antes de pagar.');
             return;
           }
@@ -5542,6 +5619,8 @@ export async function startManualOrder(
                       termsVersion:
                         order.terms.version,
                       addonCodes: selectedManualAddonCodes,
+                      productCode: selectedManualProductCode,
+                      variantCode: selectedManualVariantCode,
                       expectedTotalCents: manualAddonQuote?.totalCents ?? order.pricing.totalCents,
                     }),
                 },

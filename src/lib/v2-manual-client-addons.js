@@ -1,5 +1,5 @@
 import { nowIso } from './http.js';
-import { loadV2Catalog, loadV2AddonsByCodes } from './v2-catalog.js';
+import { loadV2Catalog, loadV2AddonsByCodes, resolveV2ProductSelection } from './v2-catalog.js';
 import { calculateV2Quote } from './v2-quote.js';
 import { planV2AllocationForWindow } from './v2-agenda.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
@@ -54,11 +54,23 @@ export async function getManualClientAddonOffer(db, manual) {
       code: addon.code, name: addon.name, group: addon.group,
       priceCents: Number(addon.priceCents),
     }));
-  return { editable: true, available, selected: [] };
+  const products = catalogue.products
+    .filter(p => p.variants.length > 0)
+    .map(p => ({
+      code: p.code, name: p.name, pricingMode: p.pricingMode,
+      variants: p.variants.map(v => ({
+        code: v.code, label: v.label, sceneCount: v.sceneCount,
+        priceCents: Number(v.priceCents),
+      })),
+    }));
+  return { editable: true, available, selected: [], products,
+    currentProductCode: productCode || '',
+    currentVariantCode: manual.pricing.snapshot?.variant?.code || '' };
+
 }
 
-export async function quoteManualClientAddons(db, manual, rawCodes) {
-  const codes = newCodes(rawCodes);
+export async function quoteManualClientAddons(db, manual, rawCodes, productSelection = {}) {
+  const codes = newCodes(rawCodes ?? []);
   if (!await editable(db, manual)) conflict(
     'Este pedido já iniciou o pagamento. Os adicionais precisam ser combinados com a Libri.'
   );
@@ -75,35 +87,70 @@ export async function quoteManualClientAddons(db, manual, rawCodes) {
     throw new Error('Este adicional já está incluído no seu pedido.');
   }
 
+  const oldProduct = snapshot.product || {};
+  const oldVariant = snapshot.variant || {};
+  let chosenProduct = oldProduct;
+  let chosenVariant = oldVariant;
+  const productCode = String(productSelection.productCode || '').trim();
+  const variantCode = String(productSelection.variantCode || '').trim();
+  if (productCode || variantCode) {
+    if (!productCode || !variantCode) {
+      throw new Error('Escolha formato e quantidade de cenas.');
+    }
+    const resolved = await resolveV2ProductSelection(db, { productCode, variantCode });
+    chosenProduct = resolved.product;
+    chosenVariant = resolved.variant;
+  }
+  const productChanged = chosenProduct.code !== oldProduct.code
+    || chosenVariant.code !== oldVariant.code;
+  if (productChanged && (snapshot.combo?.code || snapshot.coupon?.code)) {
+    conflict('Este pedido tem desconto ou combo negociado. Solicite a alteração à Libri.');
+  }
+  if (productChanged && (!Number.isSafeInteger(Number(oldVariant.priceCents))
+    || !Number.isSafeInteger(Number(oldVariant.pointsUnits)))) {
+    conflict('O valor original deste pedido precisa ser conferido pela Libri.');
+  }
+
   let additions = [];
-  if (codes.length) {
+  if (codes.length || productChanged) {
     const combined = [...owned, ...codes];
-    // Use the actual checkout catalogue validation. The product, variant,
-    // combo/coupon and contracted price are never client-editable here.
+    // The normal checkout validates format, scenes and addon compatibility.
+    // Never silently drop an existing addon when switching format.
     const validated = await calculateV2Quote(db, {
-      productCode: snapshot.product?.code,
-      variantCode: snapshot.variant?.code,
-      paymentMethod: manual.pricing.paymentMethod,
-      addonCodes: combined,
+      productCode: chosenProduct.code, variantCode: chosenVariant.code,
+      paymentMethod: manual.pricing.paymentMethod, addonCodes: combined,
     });
     const validatedCodes = new Set(validated.addons.map(x => x.code));
     if (validatedCodes.size !== combined.length
       || combined.some(code => !validatedCodes.has(code))) {
-      throw new Error('Essa combinação de adicionais não está disponível.');
+      throw new Error('O novo formato não é compatível com os adicionais contratados.');
     }
     additions = await loadV2AddonsByCodes(db, codes);
   }
 
-  const extrasCents = additions.reduce((sum, addon) => sum + Number(addon.priceCents), 0);
-  const extraPointsUnits = additions.reduce((sum, addon) => sum + Number(addon.pointsUnits), 0);
+  const productDeltaCents = productChanged
+    ? Number(chosenVariant.priceCents) - Number(oldVariant.priceCents) : 0;
+  const productPointsDelta = productChanged
+    ? Number(chosenVariant.pointsUnits) - Number(oldVariant.pointsUnits) : 0;
+  const extrasCents = additions.reduce((sum, a) => sum + Number(a.priceCents), 0);
+  const extraPointsUnits = additions.reduce((sum, a) => sum + Number(a.pointsUnits), 0);
+  const pointsDelta = productPointsDelta + extraPointsUnits;
+  const oldSubtotalCents = Number(snapshot.subtotalCents);
+  const oldUrgencyCents = Number(snapshot.urgency?.amountCents || 0);
   const urgencyPercent = Number(snapshot.urgency?.percent || 0);
-  const extraUrgencyCents = Math.round(extrasCents * urgencyPercent / 100);
-  const extraBaseCents = extrasCents + extraUrgencyCents;
+  const newSubtotalCents = oldSubtotalCents + productDeltaCents + extrasCents;
+  if (!Number.isSafeInteger(newSubtotalCents) || newSubtotalCents < 0
+    || !Number.isSafeInteger(urgencyPercent) || urgencyPercent < 0
+    || urgencyPercent > 100) {
+    conflict('O novo total não é válido. Solicite a revisão à Libri.');
+  }
+  const extraUrgencyCents = Math.round(newSubtotalCents * urgencyPercent / 100) - oldUrgencyCents;
+  const extraBaseCents = extrasCents + productDeltaCents + extraUrgencyCents;
   const oldBaseCents = Number(snapshot.baseTotalCents);
-  if (!Number.isSafeInteger(oldBaseCents) || oldBaseCents < 0) {
+  if (!Number.isSafeInteger(oldBaseCents) || oldBaseCents < 0
+    || oldBaseCents + extraBaseCents < 0) {
     conflict('Não foi possível preservar o valor contratado. Fale com a Libri.');
   }
-
   const method = manual.pricing.paymentMethod;
   const cardIncrease = method === 'card'
     ? priceWithCardProcessingFee(oldBaseCents + extraBaseCents, 'card').totalCents
@@ -116,29 +163,34 @@ export async function quoteManualClientAddons(db, manual, rawCodes) {
   if (!Number.isSafeInteger(totalCents) || totalCents < 1 || totalCents > 100000000) {
     throw new Error('O total do pedido não é válido.');
   }
-  if (codes.length && extraPointsUnits > 0) {
+  if (pointsDelta > 0) {
     const plan = await planV2AllocationForWindow(db, {
-      start: manual.deliveryWindow.start,
-      end: manual.deliveryWindow.end,
-      pointsUnits: Number(snapshot.pointsUnits || 0) + extraPointsUnits,
+      start: manual.deliveryWindow.start, end: manual.deliveryWindow.end,
+      pointsUnits: Number(snapshot.pointsUnits || 0) + pointsDelta,
     });
     if (!plan.fits) conflict(
-      'A janela de entrega não tem capacidade para estes adicionais. Fale com a Libri.'
+      'A janela de entrega não tem capacidade para o novo formato ou quantidade de cenas. Fale com a Libri.'
     );
   }
   return {
     previousTotalCents: previousTotal, increaseCents, totalCents,
     depositPercent: percent, depositCents, balanceCents,
     extrasCents, extraUrgencyCents, extraBaseCents, extraPointsUnits,
+    pointsDelta, productDeltaCents, productPointsDelta, productChanged,
+    product: { ...chosenProduct },
+    variant: { ...chosenVariant, priceCents: Number(chosenVariant.priceCents),
+      pointsUnits: Number(chosenVariant.pointsUnits) },
     addons: additions.map(({ code, name, group, priceCents }) =>
       ({ code, name, group, priceCents: Number(priceCents) })),
     _additions: additions,
   };
 }
 
-export async function applyManualClientAddons(db, manual, rawCodes, expectedTotalCents) {
-  const quote = await quoteManualClientAddons(db, manual, rawCodes);
-  if (!quote._additions.length) return quote;
+export async function applyManualClientAddons(
+  db, manual, rawCodes, expectedTotalCents, productSelection = {}
+) {
+  const quote = await quoteManualClientAddons(db, manual, rawCodes, productSelection);
+  if (!quote._additions.length && !quote.productChanged) return quote;
   if (!Number.isSafeInteger(expectedTotalCents)
     || expectedTotalCents !== quote.totalCents) {
     conflict('O valor mudou desde a prévia. Confira o novo total antes de pagar.');
@@ -147,14 +199,22 @@ export async function applyManualClientAddons(db, manual, rawCodes, expectedTota
   const snapshot = manual.pricing.snapshot;
   const newSnapshot = {
     ...snapshot,
+    product: quote.product,
+    variant: quote.variant,
     addons: [...(snapshot.addons || []), ...quote._additions],
-    lines: [...(snapshot.lines || []), ...quote._additions.map(a => ({
-      type: 'addon', code: a.code, name: a.name, amountCents: Number(a.priceCents),
-    }))],
+    lines: [
+      ...(snapshot.lines || []).map(line =>
+        quote.productChanged && line.type === 'product'
+          ? { ...line, code: quote.variant.code, name: quote.product.name,
+              amountCents: quote.variant.priceCents } : line),
+      ...quote._additions.map(a => ({
+        type: 'addon', code: a.code, name: a.name, amountCents: Number(a.priceCents),
+      })),
+    ],
     addonsCents: Number(snapshot.addonsCents || 0) + quote.extrasCents,
-    subtotalCents: Number(snapshot.subtotalCents || 0) + quote.extrasCents,
-    pointsUnits: Number(snapshot.pointsUnits || 0) + quote.extraPointsUnits,
-    points: (Number(snapshot.pointsUnits || 0) + quote.extraPointsUnits) / 100,
+    subtotalCents: Number(snapshot.subtotalCents || 0) + quote.extrasCents + quote.productDeltaCents,
+    pointsUnits: Number(snapshot.pointsUnits || 0) + quote.pointsDelta,
+    points: (Number(snapshot.pointsUnits || 0) + quote.pointsDelta) / 100,
     urgency: {
       ...(snapshot.urgency || {}),
       amountCents: Number(snapshot.urgency?.amountCents || 0) + quote.extraUrgencyCents,
@@ -198,12 +258,39 @@ export async function applyManualClientAddons(db, manual, rawCodes, expectedTota
         )
         AND NOT EXISTS (SELECT 1 FROM v2_payments WHERE order_id = ?)
         AND NOT EXISTS (SELECT 1 FROM v2_checkout_holds WHERE order_id = ?)
+        AND (? = 0 OR EXISTS (
+          SELECT 1 FROM v2_order_items original
+          WHERE original.order_id = v2_order_pricing.order_id
+            AND original.item_type = 'product' AND original.item_code = ?
+        ))
     `).bind(
-      quote.extrasCents, quote.extraUrgencyCents,
+      quote.extrasCents + quote.productDeltaCents, quote.extraUrgencyCents,
       quote.totalCents, quote.depositCents, quote.balanceCents,
       newJson, stamp, manual.id, quote.previousTotalCents, oldJson,
       manual.id, manual.id,
+      quote.productChanged ? 1 : 0, snapshot.variant?.code || '',
     ),
+    ...(quote.productChanged ? [db.prepare(`
+      UPDATE v2_order_items SET
+        item_code = ?, name_snapshot = ?, unit_price_cents = ?,
+        points_units = ?, configuration_json = ?
+      WHERE order_id = ? AND item_type = 'product'
+        AND item_code = ?
+        AND EXISTS (
+          SELECT 1 FROM v2_order_pricing
+          WHERE order_id = ? AND pricing_snapshot_json = ?
+        )
+    `).bind(
+      quote.variant.code,
+      quote.product.pricingMode === 'scene_count'
+        ? `${quote.product.name} • ${quote.variant.label}` : quote.product.name,
+      quote.variant.priceCents, quote.variant.pointsUnits,
+      JSON.stringify({
+        productCode: quote.product.code, productSlug: quote.product.slug,
+        variantCode: quote.variant.code, sceneCount: quote.variant.sceneCount,
+      }),
+      manual.id, snapshot.variant.code, manual.id, newJson,
+    )] : []),
     ...quote._additions.map(a => db.prepare(`
       INSERT INTO v2_order_items (
         order_id, item_type, item_code, name_snapshot, quantity,
@@ -222,14 +309,19 @@ export async function applyManualClientAddons(db, manual, rawCodes, expectedTota
       INSERT INTO v2_order_history (
         order_id, action_code, description, metadata_json, created_at
       )
-      SELECT ?, 'manual_customer_addons',
-        'Cliente acrescentou adicionais ao pedido manual antes de pagar.',
+      SELECT ?, ?,
+        'Cliente personalizou formato, cenas ou adicionais antes de pagar.',
         ?, ?
       WHERE EXISTS (
         SELECT 1 FROM v2_order_pricing
         WHERE order_id = ? AND pricing_snapshot_json = ?
       )
-    `).bind(manual.id, JSON.stringify({
+    `).bind(manual.id,
+    quote.productChanged ? 'manual_customer_product_changed' : 'manual_customer_addons',
+    JSON.stringify({
+      fromProduct: snapshot.product?.code, fromVariant: snapshot.variant?.code,
+      toProduct: quote.product.code, toVariant: quote.variant.code,
+      productDeltaCents: quote.productDeltaCents,
       codes: quote._additions.map(a => a.code),
       beforeCents: quote.previousTotalCents,
       afterCents: quote.totalCents,

@@ -1667,9 +1667,16 @@ export async function startV2ManualOrderPayment(
     }
   }
 
-  if (Array.isArray(body.addonCodes) && body.addonCodes.length > 0) {
+  const requestedProduct = String(body.productCode || '');
+  const requestedVariant = String(body.variantCode || '');
+  const productChange = requestedProduct || requestedVariant
+    ? (requestedProduct !== manual.pricing.snapshot?.product?.code
+      || requestedVariant !== manual.pricing.snapshot?.variant?.code) : false;
+  if ((Array.isArray(body.addonCodes) && body.addonCodes.length > 0)
+    || productChange) {
     await applyManualClientAddons(
-      env.DB, manual, body.addonCodes, body.expectedTotalCents,
+      env.DB, manual, body.addonCodes || [], body.expectedTotalCents,
+      { productCode: requestedProduct, variantCode: requestedVariant },
     );
     // Re-read the committed D1 price. The Mercado Pago amount must always
     // use this server value, never a client-supplied total.

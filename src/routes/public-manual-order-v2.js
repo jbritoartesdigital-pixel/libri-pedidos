@@ -86,7 +86,9 @@ export async function handlePublicManualOrderV2Api(
       const order = await getV2ManualOrderForCustomer(env.DB, addonQuoteMatch[1]);
       if (!order) return fail('Pedido não encontrado.', 404);
       const body = await readJson(request);
-      const quote = await quoteManualClientAddons(env.DB, order, body.addonCodes);
+      const quote = await quoteManualClientAddons(env.DB, order, body.addonCodes, {
+        productCode: body.productCode, variantCode: body.variantCode,
+      });
       const { _additions, ...result } = quote;
       return json({ ok: true, result });
     } catch (error) {

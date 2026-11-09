@@ -5237,6 +5237,15 @@ export async function startManualOrder(
   let manualAddonQuote = null;
   let manualAddonQuotePending = false;
   let manualQuoteSerial = 0;
+  const originalProductCode = addonOffer.currentProductCode
+    || order.pricing.snapshot?.product?.code || '';
+  const originalVariantCode = addonOffer.currentVariantCode
+    || order.pricing.snapshot?.variant?.code || '';
+  let selectedManualProductCode = originalProductCode;
+  let selectedManualVariantCode = originalVariantCode;
+  const manualProductChanged = () =>
+    selectedManualProductCode !== originalProductCode
+    || selectedManualVariantCode !== originalVariantCode;
 
   const render = () => {
     const paymentPending =
@@ -5278,10 +5287,12 @@ export async function startManualOrder(
           <div class="review-line">
             <dt>Itens</dt>
             <dd>
-              ${order.items.map(
-                (item) =>
-                  esc(item.name_snapshot),
-              ).join(', ')}
+              <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px">
+                <span id="manualUpdatedItems">${order.items.map(item => esc(item.name_snapshot)).join(', ')}</span>
+                ${addonOffer.editable && addonOffer.products?.length && !paymentPending
+                  ? '<button id="manualChangeProduct" type="button" class="btn btn-ghost">Alterar</button>'
+                  : ''}
+              </div>
             </dd>
           </div>
 
@@ -5318,6 +5329,10 @@ export async function startManualOrder(
             </div>` : ''}
         </dl>
 
+        ${addonOffer.editable && !order.alreadyPaid && !paymentPending ? `
+          <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
+        ` : ''}
+
         ${addonOffer.editable && addonOffer.available.length && !order.alreadyPaid && !paymentPending ? `
           <section class="card section-block" id="manualAddonOffer">
             <div class="section-title">
@@ -5325,7 +5340,8 @@ export async function startManualOrder(
             </div>
             <p class="muted">
               Você pode adicionar opções ao convite antes de pagar.
-              Seu produto e a condição de pagamento autorizada pela Libri não mudam.
+              O formato e as cenas podem ser alterados no botão acima.
+              A condição de pagamento autorizada pela Libri não muda.
             </p>
             <div class="list">
               ${addonOffer.available.map(addon => `
@@ -5336,7 +5352,6 @@ export async function startManualOrder(
                 </label>
               `).join('')}
             </div>
-            <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
           </section>
         ` : ''}
 

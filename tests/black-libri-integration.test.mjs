@@ -12,7 +12,7 @@ import {
 
 function fixture() {
   const sqlite=new DatabaseSync(':memory:');
-  for(const name of ['0003_v2_core.sql','0029_black_libri.sql','0030_black_libri_admin.sql']) {
+  for(const name of ['0003_v2_core.sql','0029_black_libri.sql','0030_black_libri_admin.sql','0031_black_libri_dates.sql']) {
     sqlite.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));
   }
   const db={
@@ -37,18 +37,14 @@ function fixture() {
       } catch(error) { sqlite.exec('ROLLBACK');throw error; }
     }
   };
-  const env={
-    DB:db,BLACK_LIBRI_ENABLED:'1',
-    BLACK_LIBRI_IDENTITY_SECRET:'test-only-identity-secret-longer-than-24-chars',
-    BLACK_LIBRI_START:'2020-01-01T00:00:00-03:00',
-    BLACK_LIBRI_END:'2030-01-01T00:00:00-03:00'
-  };
+  const env={DB:db};
   return {env,db,sqlite,close:()=>sqlite.close()};
 }
 const consent={
   adminEnabled:true,complianceConfirmed:true,
   authorizationReference:'PROTOCOLO-TESTE-APENAS',
-  adminNote:'Dados sintéticos para os testes automatizados'
+  adminNote:'Dados sintéticos para os testes automatizados',
+  validFrom:'2020-01-01',validUntil:'2030-12-31'
 };
 
 test('a campanha não liga por variáveis ambientais sem habilitação no Admin',async()=>{
@@ -68,13 +64,12 @@ test('a campanha não liga por variáveis ambientais sem habilitação no Admin'
   } finally {f.close();}
 });
 
-test('ativação exige referência de autorização e segredo do ambiente',async()=>{
+test('ativação exige autorização e datas válidas configuradas no painel',async()=>{
   const f=fixture();
   try {
     await assert.rejects(()=>saveBlackLibriCampaign(f.env,{...consent,authorizationReference:''}),/autorização/i);
-    await assert.rejects(()=>saveBlackLibriCampaign({
-      ...f.env,BLACK_LIBRI_IDENTITY_SECRET:''
-    },consent),/Configure primeiro/i);
+    await assert.rejects(()=>saveBlackLibriCampaign(f.env,{...consent,validFrom:'',validUntil:''}),/início e término/i);
+    await assert.rejects(()=>saveBlackLibriCampaign(f.env,{...consent,validUntil:'2019-01-01'}),/término/i);
     assert.equal(await blackLibriOperational(f.env),false);
   } finally {f.close();}
 });

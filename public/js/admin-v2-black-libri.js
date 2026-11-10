@@ -85,16 +85,14 @@ export async function renderBlackLibri(panel=viewRoot) {
         <div><strong>${count(data.summary.redeemed)}</strong><span>Confirmados</span></div>
         <div><strong>${count(data.summary.availablePrizeTypes)}</strong><span>Tipos disponíveis</span></div>
       </div>
-      <div class="notice info black-admin-notice">
-        <strong>Ativação com trava dupla.</strong>
-        ${data.environmentReady
-          ? 'Configuração de ambiente detectada; confira o período abaixo e a documentação de autorização.'
-          : 'Ambiente Cloudflare ainda não preparado. A campanha permanece desligada.'}
-        <p>Configuração no painel NÃO publica código nem aplica migrations.</p>
-      </div>
+      <p class="muted">Escolha as datas como nos cupons. A campanha começa e termina automaticamente no período escolhido, sem configurar Cloudflare.</p>
       <div class="black-admin-fields">
-        <div class="black-admin-period"><strong>Início:</strong> ${esc(data.windowStart||'Não configurado')}</div>
-        <div class="black-admin-period"><strong>Fim:</strong> ${esc(data.windowEnd||'Não configurado')}</div>
+        <label for="blackValidFrom">Início da Black Libri
+          <input class="input" id="blackValidFrom" type="date" value="${esc(camp.validFrom||'')}">
+        </label>
+        <label for="blackValidUntil">Término da Black Libri
+          <input class="input" id="blackValidUntil" type="date" value="${esc(camp.validUntil||'')}">
+        </label>
       </div>
       <div class="section-title"><h3>Autorização e controle da campanha</h3></div>
       <div class="form-grid">
@@ -139,12 +137,14 @@ export async function renderBlackLibri(panel=viewRoot) {
     const button=panel.querySelector('#'+buttonId);
     if(button)button.disabled=true;
     if(enabled && !window.confirm(
-      'Ativar a Black Libri? Confirme apenas após a autorização da promoção, os testes e a configuração Cloudflare.')) {
+      'Ativar a Black Libri nas datas escolhidas? Verifique os testes e a autorização aplicável antes de confirmar.')) {
       if(button)button.disabled=false;
       return;
     }
     const body={
       adminEnabled:enabled,
+      validFrom:panel.querySelector('#blackValidFrom')?.value||'',
+      validUntil:panel.querySelector('#blackValidUntil')?.value||'',
       authorizationReference:panel.querySelector('#blackLegalReference')?.value.trim()||'',
       complianceConfirmed:panel.querySelector('#blackComplianceConfirmed')?.checked||false,
       adminNote:panel.querySelector('#blackAdminNote')?.value.trim()||''

@@ -19,6 +19,7 @@ on:
       - 'public/client-v2.html'
       - 'migrations/0029_black_libri.sql'
       - 'migrations/0030_black_libri_admin.sql'
+      - 'migrations/0031_black_libri_dates.sql'
       - 'tests/*black-libri*.test.mjs'
       - 'tests/v2.test.mjs'
       - 'tests/admin-v2-navigation.test.mjs'

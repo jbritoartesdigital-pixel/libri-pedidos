@@ -4,21 +4,21 @@ import { readFileSync } from 'node:fs';
 import { blackLibriEnabled, applyBlackLibriToQuote } from '../src/lib/v2-black-libri.js';
 
 const config = {
-  BLACK_LIBRI_ENABLED:'1',
-  BLACK_LIBRI_IDENTITY_SECRET:'private-development-key-at-least-24-characters',
-  BLACK_LIBRI_START:'2026-11-20T00:00:00-03:00',
-  BLACK_LIBRI_END:'2026-12-01T00:00:00-03:00',
+  admin_enabled:1,
+  compliance_confirmed:1,
+  authorization_reference:'PROTOCOLO-TESTE',
+  valid_from:'2026-11-20T00:00:00-03:00',
+  valid_until:'2026-11-30T23:59:59-03:00'
 };
-
-test('Black Libri permanece fechada sem flag, secret ou janela',()=>{
-  assert.equal(blackLibriEnabled({...config,BLACK_LIBRI_ENABLED:'0'},new Date('2026-11-25T12:00:00Z')),false);
-  assert.equal(blackLibriEnabled({...config,BLACK_LIBRI_IDENTITY_SECRET:''},new Date('2026-11-25T12:00:00Z')),false);
-  assert.equal(blackLibriEnabled({...config,BLACK_LIBRI_END:''},new Date('2026-11-25T12:00:00Z')),false);
+test('Black Libri obedece à ativação e às datas do painel, sem secret',()=>{
+  assert.equal(blackLibriEnabled({...config,admin_enabled:0},new Date('2026-11-25T12:00:00Z')),false);
+  assert.equal(blackLibriEnabled({...config,valid_from:null},new Date('2026-11-25T12:00:00Z')),false);
+  assert.equal(blackLibriEnabled({...config,valid_until:null},new Date('2026-11-25T12:00:00Z')),false);
+  assert.equal(blackLibriEnabled({...config,authorization_reference:''},new Date('2026-11-25T12:00:00Z')),false);
   assert.equal(blackLibriEnabled(config,new Date('2026-11-10T12:00:00Z')),false);
   assert.equal(blackLibriEnabled(config,new Date('2026-12-02T12:00:00Z')),false);
   assert.equal(blackLibriEnabled(config,new Date('2026-11-25T12:00:00Z')),true);
 });
-
 const quote = method => ({
   subtotalCents:9500,baseTotalCents:9500,totalCents:9500,
   payment:{method,depositPercent:100,depositCents:9500,balanceCents:0}

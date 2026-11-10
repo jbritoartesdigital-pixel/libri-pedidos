@@ -1,28 +1,28 @@
 import { normalizeWhatsapp, nowIso, randomToken } from './http.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
 
-// OFF por padrão. Exige data inicial/final e secret antes da liberação comercial.
-export function blackLibriEnabled(env, date = new Date()) {
-  if (String(env.BLACK_LIBRI_ENABLED || '') !== '1') return false;
-  if (!env.BLACK_LIBRI_IDENTITY_SECRET || String(env.BLACK_LIBRI_IDENTITY_SECRET).length < 24) return false;
-  const start = Date.parse(String(env.BLACK_LIBRI_START || ''));
-  const end = Date.parse(String(env.BLACK_LIBRI_END || ''));
-  return Number.isFinite(start) && Number.isFinite(end)
-    && start < end && date.getTime() >= start && date.getTime() < end;
+// A Black Libri usa as mesmas datas simples de início e fim dos cupons,
+// mas mantém estado próprio para não interferir em descontos já existentes.
+export function blackLibriEnabled(config = {}, date = new Date()) {
+  const start=Date.parse(String(config.valid_from || ''));
+  const end=Date.parse(String(config.valid_until || ''));
+  return Number(config.admin_enabled)===1
+    && Number(config.compliance_confirmed)===1
+    && String(config.authorization_reference || '').trim().length>=6
+    && Number.isFinite(start) && Number.isFinite(end)
+    && start<=end && date.getTime()>=start && date.getTime()<=end;
 }
 
 export async function blackLibriOperational(env,date=new Date()) {
-  if (!blackLibriEnabled(env,date)) return false;
   try {
-    const row=await env.DB.prepare(`
-      SELECT admin_enabled,compliance_confirmed,authorization_reference
+    const config=await env.DB.prepare(`
+      SELECT admin_enabled,compliance_confirmed,authorization_reference,
+        valid_from,valid_until
       FROM v2_black_libri_campaign_state WHERE id=1
     `).first();
-    return Number(row?.admin_enabled)===1
-      && Number(row?.compliance_confirmed)===1
-      && String(row?.authorization_reference||'').trim().length>=6;
+    return blackLibriEnabled(config || {},date);
   } catch {
-    // Em caso de erro de banco ou migração ausente, a campanha fica desligada.
+    // Migração ausente ou falha no banco jamais ativa a promoção.
     return false;
   }
 }
@@ -35,13 +35,13 @@ function customerPhone(customer) {
   return digits;
 }
 
-async function customerKey(env, customer) {
-  if (!env.BLACK_LIBRI_IDENTITY_SECRET) throw Object.assign(new Error('A campanha está indisponível.'), { status: 503 });
-  const key = await crypto.subtle.importKey('raw',
-    new TextEncoder().encode(String(env.BLACK_LIBRI_IDENTITY_SECRET)),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(customerPhone(customer)));
-  return Array.from(new Uint8Array(signature), b => b.toString(16).padStart(2, '0')).join('');
+async function customerKey(_env, customer) {
+  // Mesmo telefone normalizado => mesma chave em outro navegador.
+  // Hash SHA-256 sem secret externo: não é autenticação de posse do número.
+  const canonical=customerPhone(customer);
+  const encoded=new TextEncoder().encode('libri:black-2026:phone:'+canonical);
+  const digest=await crypto.subtle.digest('SHA-256',encoded);
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
 
 const currentClaimSql = `
@@ -168,8 +168,14 @@ export async function revealBlackLibri(env, customer, clientRequestId) {
 }
 
 export async function reservedBlackLibriForCheckout(env, customer, clientRequestId) {
-  if (!env.BLACK_LIBRI_IDENTITY_SECRET) return null;
-  const claim = await findBlackLibriClaim(env,customer);
+  // Checkout normal não depende da migração/promocão. Se as tabelas ainda não
+  // existem, não aplicar prêmio e não impedir compras da loja.
+  let claim;
+  try { claim = await findBlackLibriClaim(env,customer); }
+  catch (error) {
+    if (/no such table/i.test(String(error?.message||''))) return null;
+    throw error;
+  }
   if (!claim || claim.status !== 'reserved') return null;
   // Mesmo aparelho ou outro navegador: a identidade pelo WhatsApp recupera
   // sempre a mesma reserva, sem permitir uma segunda escolha.

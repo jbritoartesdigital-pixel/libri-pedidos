@@ -29,7 +29,7 @@ import {
 import { withV2PaymentLock } from './v2-payment-lock.js';
 
 import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
-import { reservedBlackLibriForCheckout, findBlackLibriClaim, blackLibriEnabled, applyBlackLibriToQuote, linkBlackLibriClaim, unlinkBlackLibriClaim } from './v2-black-libri.js';
+import { reservedBlackLibriForCheckout, findBlackLibriClaim, blackLibriOperational, applyBlackLibriToQuote, linkBlackLibriClaim, unlinkBlackLibriClaim } from './v2-black-libri.js';
 
 export class V2CheckoutError extends Error {
   constructor(
@@ -1598,7 +1598,7 @@ export async function startV2Checkout(
       );
 
     // Uma reserva vencida nunca desaparece do total sem aviso explícito.
-    if (blackLibriEnabled(env)) {
+    if (await blackLibriOperational(env)) {
       const previousPrize = await findBlackLibriClaim(env,body.customer);
       if (previousPrize?.status === 'expired' && body.blackLibriExpiredAcknowledged !== true) {
         throw new V2CheckoutError('Seu prêmio Black Libri expirou. Confirme que deseja continuar sem ele.',{

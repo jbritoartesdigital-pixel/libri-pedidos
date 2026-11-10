@@ -53,7 +53,12 @@ export async function runV2Scheduler(env) {
       AND datetime(updated_at) < datetime('now', '-15 minutes')`),
     env.DB.prepare(`DELETE FROM v2_admin_webauthn_challenges WHERE expires_at <= ?`).bind(stamp),
   ]);
-  if (String(env.BLACK_LIBRI_ENABLED || '') === '1') await expireBlackLibriClaims(env.DB);
+  // As reservas precisam expirar mesmo após o término ou pausa da campanha.
+  // Antes da migration, não interromper as demais rotinas agendadas.
+  try { await expireBlackLibriClaims(env.DB); }
+  catch (error) {
+    if (!/no such table/i.test(String(error?.message||''))) throw error;
+  }
   // Repair a notification whose initial creation failed without losing the request.
   const urgency = await env.DB.prepare(`SELECT o.id, o.order_code, o.honoree_display_name FROM v2_orders o
     JOIN v2_urgency_requests u ON u.order_id = o.id WHERE u.status = 'pending'

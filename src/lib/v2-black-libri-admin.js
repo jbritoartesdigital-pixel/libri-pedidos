@@ -4,23 +4,24 @@ import { blackLibriOperational } from './v2-black-libri.js';
 function error(message,status=422,code='black_libri_admin_invalid') {
   return Object.assign(new Error(message),{ status,code });
 }
-export function blackLibriEnvironmentReady(env) {
-  const start=Date.parse(String(env.BLACK_LIBRI_START||''));
-  const end=Date.parse(String(env.BLACK_LIBRI_END||''));
-  return String(env.BLACK_LIBRI_ENABLED||'')==='1'
-    && String(env.BLACK_LIBRI_IDENTITY_SECRET||'').length>=24
-    && Number.isFinite(start) && Number.isFinite(end) && end>start;
+function isoDate(value,label) {
+  const date=String(value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)
+    || Number.isNaN(Date.parse(date+'T12:00:00Z'))) {
+    throw error('Escolha uma data válida em '+label+'.');
+  }
+  return date;
 }
+function startOfCampaign(value){return value+'T00:00:00-03:00';}
+function endOfCampaign(value){return value+'T23:59:59-03:00';}
 
-// Adicional às variáveis de ambiente: precisa ser habilitada no painel e
-// ter registro administrativo da autorização exigida para a ação promocional.
 export async function getBlackLibriAdmin(env) {
   let campaign;
   let prizes;
   try {
     campaign=await env.DB.prepare(`
       SELECT admin_enabled,compliance_confirmed,authorization_reference,
-        admin_note,updated_at
+        admin_note,valid_from,valid_until,updated_at
       FROM v2_black_libri_campaign_state WHERE id=1
     `).first();
     const results=await env.DB.prepare(`
@@ -50,9 +51,9 @@ export async function getBlackLibriAdmin(env) {
       };
     });
   } catch(e) {
-    if (/no such table/i.test(String(e.message||''))) {
+    if (/no such table|no such column/i.test(String(e.message||''))) {
       return {ok:true,migrationRequired:true,active:false,
-        environmentReady:blackLibriEnvironmentReady(env),prizes:[],
+        datesConfigured:false,prizes:[],
         campaign:null,summary:{totalRevealed:0,reserved:0,redeemed:0}};
     }
     throw e;
@@ -61,15 +62,17 @@ export async function getBlackLibriAdmin(env) {
   const totalWeight=available.reduce((s,p)=>s+p.weight,0);
   return {
     ok:true,migrationRequired:false,
-    environmentReady:blackLibriEnvironmentReady(env),
+    datesConfigured:!!(campaign?.valid_from&&campaign?.valid_until),
     active:await blackLibriOperational(env),
-    // Não expor secret nem exigir que a campanha já tenha começado para configurar.
-    windowStart:env.BLACK_LIBRI_START||null,
-    windowEnd:env.BLACK_LIBRI_END||null,
+    // Datas mantidas na mesma interface de datas dos cupons.
+    windowStart:campaign?.valid_from||null,
+    windowEnd:campaign?.valid_until||null,
     campaign:{
       adminEnabled:Number(campaign?.admin_enabled)===1,
       complianceConfirmed:Number(campaign?.compliance_confirmed)===1,
       authorizationReference:campaign?.authorization_reference||'',
+      validFrom:campaign?.valid_from?.slice(0,10)||'',
+      validUntil:campaign?.valid_until?.slice(0,10)||'',
       adminNote:campaign?.admin_note||'',
       updatedAt:campaign?.updated_at||null
     },
@@ -141,29 +144,39 @@ export async function saveBlackLibriCampaign(env,body) {
   }
   const ref=String(body.authorizationReference||'').trim().slice(0,160);
   const note=String(body.adminNote||'').trim().slice(0,600);
+  const from=body.validFrom ? isoDate(body.validFrom,'início') : '';
+  const until=body.validUntil ? isoDate(body.validUntil,'término') : '';
+  if ((from&&!until)||(!from&&until)) {
+    throw error('Preencha as duas datas da Black Libri.');
+  }
+  if (from && Date.parse(startOfCampaign(from))>Date.parse(endOfCampaign(until))) {
+    throw error('O término deve ser igual ou posterior ao início.');
+  }
   if(body.adminEnabled) {
-    if(!blackLibriEnvironmentReady(env)) {
-      throw error('Configure primeiro segredo e período no ambiente Cloudflare.',409);
+    if(!from||!until) throw error('Escolha início e término da campanha antes de ativar.',409);
+    if(Date.parse(endOfCampaign(until))<=Date.now()) {
+      throw error('A data de término da campanha já passou.',409);
     }
     if(!body.complianceConfirmed||ref.length<6) {
       throw error('É necessário registrar a autorização aplicável antes da ativação.',409);
     }
   }
   const current=await env.DB.prepare(`
-    SELECT admin_enabled,compliance_confirmed,authorization_reference,admin_note
+    SELECT admin_enabled,compliance_confirmed,authorization_reference,admin_note,valid_from,valid_until
     FROM v2_black_libri_campaign_state WHERE id=1
   `).first();
   const stamp=nowIso();
   await env.DB.batch([
     env.DB.prepare(`UPDATE v2_black_libri_campaign_state
-      SET admin_enabled=?,compliance_confirmed=?,authorization_reference=?,admin_note=?,updated_at=?
-      WHERE id=1`).bind(body.adminEnabled?1:0,body.complianceConfirmed?1:0,ref,note,stamp),
+      SET admin_enabled=?,compliance_confirmed=?,authorization_reference=?,admin_note=?,valid_from=?,valid_until=?,updated_at=?
+      WHERE id=1`).bind(body.adminEnabled?1:0,body.complianceConfirmed?1:0,ref,note,
+        from?startOfCampaign(from):null,until?endOfCampaign(until):null,stamp),
     env.DB.prepare(`INSERT INTO v2_black_libri_audit
       (action_code,target_code,before_json,after_json,created_at)
       VALUES('campaign_configuration',NULL,?,?,?)`
     ).bind(JSON.stringify(current||{}),JSON.stringify({
       adminEnabled:body.adminEnabled,complianceConfirmed:body.complianceConfirmed,
-      authorizationReference:ref,adminNote:note
+      authorizationReference:ref,adminNote:note,validFrom:from,validUntil:until
     }),stamp)
   ]);
   return getBlackLibriAdmin(env);

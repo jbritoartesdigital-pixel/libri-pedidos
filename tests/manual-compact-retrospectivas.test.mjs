@@ -49,7 +49,7 @@ test('resumo compacto apresenta um Save the Date e um grupo de retrospectivas', 
   assert.equal(retro.options.length,5);
   assert.equal(retro.minPriceCents,10000);
   const html=compactManualAddonsHtml(offer.available,[],[],money,esc);
-  assert.equal((html.match(/data-manual-addon-group="save_the_date"/g)||[]).length,3);
+  assert.equal((html.match(/data-manual-addon-group="save_the_date"/g)||[]).length,4);
   assert.equal((html.match(/<summary>/g)||[]).length,4);
   assert.match(html,/Save the Date/);
   assert.match(html,/A partir de R\$ 20\.00/);
@@ -69,7 +69,7 @@ test('não cobra duas versões da mesma categoria, nem +100 fotos sem álbum',as
   );
   await assert.rejects(
     quoteManualClientAddons(DB,order,['retro_070','retro_100']),
-    /apenas uma versão/
+    /somente um pacote/
   );
   await assert.rejects(
     quoteManualClientAddons(DB,order,['moments_festa','moments_premium']),

@@ -18,6 +18,7 @@ import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupo
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
 import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-2';
+import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
 
 const EVENT_TYPES = [
   {
@@ -4805,9 +4806,17 @@ function renderTerms(
       'click',
       async () => {
         if (state.simulationMode) {
-          state.step = 11;
-          persist(state);
-          render();
+          // O simulador também exibe os balões, mas sem sorteio real e sem
+          // consumir prêmios ou criar cobranças no Mercado Pago.
+          try {
+            await openBlackLibriDemo({onContinue:()=>{
+              state.step = 11;
+              persist(state);
+              render();
+            }});
+          } catch(error) {
+            showToast(error.message||'Não foi possível abrir a prévia.');
+          }
           return;
         }
 
@@ -4828,8 +4837,12 @@ function renderTerms(
           return;
         }
 
-        if (state.blackLibriEnabled) {
-          try {
+        // Verifica a campanha AGORA, não só quando a página abriu.
+        // Quem deixou o carrinho aberto antes da ativação verá os balões.
+        try {
+          const live=await api('/api/v2/black-libri/info',{cache:'no-store'});
+          state.blackLibriEnabled=live.enabled===true;
+          if (state.blackLibriEnabled) {
             await openBlackLibriBeforePayment({
               customer:state.customer,
               clientRequestId:state.clientRequestId,
@@ -4840,12 +4853,13 @@ function renderTerms(
                 checkoutNow();
               }
             });
-          } catch (error) {
-            showToast(error.message || 'Não foi possível abrir a Black Libri.');
+            return;
           }
-          return;
+          checkoutNow();
+        } catch (error) {
+          // Nunca cobrar sem verificar a promoção quando o endpoint falha.
+          showToast(error.message||'Não conseguimos verificar a Black Libri. Tente novamente.');
         }
-        checkoutNow();
       },
     );
 }

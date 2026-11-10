@@ -20,7 +20,7 @@ import {
   renderStoreCombos,
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
-import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-2';
+import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-3';
 
 export async function renderStore() {
   setViewMeta(

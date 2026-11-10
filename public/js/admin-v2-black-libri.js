@@ -1,4 +1,5 @@
 import { api, esc, showToast, setViewMeta, viewRoot } from './admin-v2-core.js';
+import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
 
 function count(n) { return new Intl.NumberFormat('pt-BR').format(Number(n||0)); }
 function effectiveStock(prize) {
@@ -86,6 +87,10 @@ export async function renderBlackLibri(panel=viewRoot) {
         <div><strong>${count(data.summary.availablePrizeTypes)}</strong><span>Tipos disponíveis</span></div>
       </div>
       <p class="muted">Escolha as datas como nos cupons. A campanha começa e termina automaticamente no período escolhido, sem configurar Cloudflare.</p>
+      ${locked&&!data.active?'<p class="notice info"><strong>Campanha habilitada, mas fora do período.</strong> Os balões só aparecem em pedidos reais quando a data atual está dentro do intervalo. Use a prévia para testar a qualquer momento.</p>':''}
+      <div class="black-admin-actions">
+        <button class="btn btn-ghost" id="blackDemo" type="button">🎈 Testar balões sem gastar prêmio</button>
+      </div>
       <div class="black-admin-fields">
         <label for="blackValidFrom">Início da Black Libri
           <input class="input" id="blackValidFrom" type="date" value="${esc(camp.validFrom||'')}">
@@ -160,6 +165,9 @@ export async function renderBlackLibri(panel=viewRoot) {
       if(button)button.disabled=false;
     }
   }
+  panel.querySelector('#blackDemo')?.addEventListener('click',()=>{
+    openBlackLibriDemo().catch(error=>showToast(error.message||'Não foi possível abrir a prévia.'));
+  });
   panel.querySelector('#blackSavePaused')?.addEventListener('click',()=>updateCampaign(false));
   panel.querySelector('#blackPause')?.addEventListener('click',()=>updateCampaign(false));
   panel.querySelector('#blackEnable')?.addEventListener('click',()=>updateCampaign(true));

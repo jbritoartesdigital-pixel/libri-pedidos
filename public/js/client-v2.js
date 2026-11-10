@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261110-black-libri-2';
+} from './client-v2-store.js?v=20261110-black-libri-3';
 
 import {
   startCustomerArea,

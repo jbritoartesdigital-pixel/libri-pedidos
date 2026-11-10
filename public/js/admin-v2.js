@@ -45,6 +45,7 @@ import {
 import {
   renderStore,
 } from './admin-v2-config.js?v=20261026-scene-links-1';
+import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-1';
 
 import {
   refreshBell,
@@ -64,6 +65,7 @@ const ADMIN_VIEWS =
     'finance',
     'archived',
     'store',
+    'black-libri',
     'notifications',
     'security',
   ]);
@@ -178,6 +180,10 @@ async function renderCurrent() {
     state.view === 'archived'
   ) {
     await renderArchived(open);
+  } else if (
+    state.view === 'black-libri'
+  ) {
+    await renderBlackLibri();
   } else if (
     state.view === 'store'
   ) {

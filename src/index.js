@@ -48,6 +48,7 @@ import {
 import {
   handleAdminContractsV2Api,
 } from './routes/admin-contracts-v2.js';
+import { handleAdminBlackLibriV2Api } from './routes/admin-black-libri-v2.js';
 
 /* ==================================================
    CLIENTE V2
@@ -331,6 +332,7 @@ async function handleAdminV2Api(
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
     handleAdminContractsV2Api,
+    handleAdminBlackLibriV2Api,
   ];
 
   for (

@@ -124,7 +124,7 @@ export async function openBlackLibriBeforePayment({customer,clientRequestId,sele
       // A cliente pode fechar o modal depois de revelar: reabrir mostra
       // exatamente o mesmo prêmio. O pagamento não atribui outro.
       close();
-      onContinue();
+      onContinue(claim);
     });
   };
   if(claim) await preview();

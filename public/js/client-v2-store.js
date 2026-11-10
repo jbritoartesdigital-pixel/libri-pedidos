@@ -4703,6 +4703,7 @@ function renderTerms(
                       true,
                     termsVersion:
                       state.terms.version,
+                    blackLibriExpiredAcknowledged:state.blackLibriExpiredAcknowledged === true,
                   }),
               },
             );
@@ -4834,7 +4835,10 @@ function renderTerms(
               clientRequestId:state.clientRequestId,
               selection:state.selection,
               event:state.event,
-              onContinue:checkoutNow
+              onContinue:claim => {
+                state.blackLibriExpiredAcknowledged=claim?.status==='expired';
+                checkoutNow();
+              }
             });
           } catch (error) {
             showToast(error.message || 'Não foi possível abrir a Black Libri.');

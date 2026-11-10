@@ -782,6 +782,13 @@ export async function handlePublicV2Api(
     }
   }
 
+  // Tratamento isolado para os erros conhecidos da promoção.
+  const blackLibriError = error => {
+    const expected=[409,422,503].includes(Number(error?.status));
+    return fail(expected ? error.message : 'Não foi possível acessar a Black Libri agora.',
+      expected ? Number(error.status) : 503,
+      {code:expected ? (error.code||'black_libri_error') : 'black_libri_unavailable'});
+  };
   // BLACK LIBRI: não ativar sem campanha aprovada.
   if (method === 'GET' && path === '/api/v2/black-libri/info') {
     return json({ ok:true, enabled:blackLibriEnabled(env) });
@@ -790,13 +797,13 @@ export async function handlePublicV2Api(
     try {
       const body = await readJson(request);
       return json(await blackLibriStatus(env, body.customer));
-    } catch (error) { return requestError(error); }
+    } catch (error) { return blackLibriError(error); }
   }
   if (method === 'POST' && path === '/api/v2/black-libri/reveal') {
     try {
       const body = await readJson(request);
       return json(await revealBlackLibri(env, body.customer, body.clientRequestId));
-    } catch (error) { return requestError(error); }
+    } catch (error) { return blackLibriError(error); }
   }
   if (method === 'POST' && path === '/api/v2/black-libri/preview') {
     try {
@@ -810,7 +817,7 @@ export async function handlePublicV2Api(
       });
       const claim = await reservedBlackLibriForCheckout(env,body.customer,body.clientRequestId);
       return json({ok:true,quote:applyBlackLibriToQuote(standard,claim)});
-    } catch(error) { return requestError(error); }
+    } catch(error) { return blackLibriError(error); }
   }
   return null;
 }

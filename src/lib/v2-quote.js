@@ -110,6 +110,12 @@ export async function calculateV2Quote(
       addonCodes,
     );
 
+  // Uma retrospectiva por pedido. O checkout público também deve rejeitar
+  // tentativas de enviar múltiplos pacotes via API, não só pela interface.
+  if (addons.filter(addon => addon.group === 'retrospectiva').length > 1) {
+    throw new Error('Escolha somente um pacote de retrospectiva.');
+  }
+
   // A confirmação Libri exige um convite interativo com link e botões.
   // Recusar novos orçamentos incompatíveis, sem modificar pedidos já criados.
   if (

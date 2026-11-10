@@ -46,9 +46,14 @@ export async function getManualClientAddonOffer(db, manual) {
   }
   const catalogue = await loadV2Catalog(db);
   const owned = new Set(currentAddonCodes(manual));
+  const exclusiveGroups = new Set(['save_the_date', 'reminder', 'moments', 'retrospectiva']);
+  const contractedGroups = new Set(catalogue.addons
+    .filter(addon => owned.has(addon.code) && exclusiveGroups.has(addon.group))
+    .map(addon => addon.group));
   const productCode = manual.pricing.snapshot?.product?.code;
   const available = catalogue.addons
     .filter(addon => !owned.has(addon.code))
+    .filter(addon => !contractedGroups.has(addon.group))
     .filter(addon => !(productCode === 'cinematic_video' && addon.group === 'confirmation'))
     .map(addon => ({
       code: addon.code, name: addon.name, group: addon.group,
@@ -120,6 +125,15 @@ export async function quoteManualClientAddons(db, manual, rawCodes, productSelec
       productCode: chosenProduct.code, variantCode: chosenVariant.code,
       paymentMethod: manual.pricing.paymentMethod, addonCodes: combined,
     });
+    const exclusiveGroups = new Set(['save_the_date', 'reminder', 'moments', 'retrospectiva']);
+    const byGroup = new Map();
+    for (const addon of validated.addons) {
+      if (!exclusiveGroups.has(addon.group)) continue;
+      if (byGroup.has(addon.group)) {
+        throw new Error('Escolha apenas uma versão de cada adicional.');
+      }
+      byGroup.set(addon.group, addon.code);
+    }
     const validatedCodes = new Set(validated.addons.map(x => x.code));
     if (validatedCodes.size !== combined.length
       || combined.some(code => !validatedCodes.has(code))) {

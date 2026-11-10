@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 29);
+  const DB = database(); assert.equal(DB.migrationCount, 31);
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
     'v2_drive_uploaded_previews','v2_drive_sync_settings','v2_drive_sync_attempts',
@@ -2396,7 +2396,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261030-pedido-sem-previa-1'));
+    'admin-v2.js?v=20261110-black-libri-2'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261109-compact-retro-1'));
 });
@@ -3212,7 +3212,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261030-pedido-sem-previa-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261110-black-libri-2'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261030-pedido-sem-previa-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261109-compact-retro-1'));
 });
@@ -3239,7 +3239,7 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
   assert.ok(shell.includes('/css/admin-v2.css?v=20261030-pedido-sem-previa-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261030-pedido-sem-previa-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261110-black-libri-2'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261030-pedido-sem-previa-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });

@@ -39,7 +39,7 @@ test('destinos do localizador existem e todas as abas da Loja têm acesso direto
   const allViews=['central','manual','production','agenda','finance','archived','store','notifications','security'];
   assert.ok(ADMIN_FEATURES.every(x=>allViews.includes(x.view)));
   const tabs=[...store.matchAll(/data-store-tab="([^"]+)"/g)].map(x=>x[1]);
-  assert.equal(new Set(tabs).size,8);
+  assert.equal(new Set(tabs).size,9);
   assert.ok(ADMIN_FEATURES.filter(x=>x.tab).every(x=>tabs.includes(x.tab)));
   assert.match(store, /searchParams\.set\('storeTab', tab\)/);
   assert.match(admin, /initAdminFeatureFinder\(navigateTo\)/);

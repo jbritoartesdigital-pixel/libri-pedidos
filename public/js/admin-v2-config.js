@@ -20,6 +20,7 @@ import {
   renderStoreCombos,
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
+import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-2';
 
 export async function renderStore() {
   setViewMeta(
@@ -50,6 +51,7 @@ export async function renderStore() {
         <span class="store-navigation-label">Promoções</span>
         <div class="store-navigation-buttons">
           <button type="button" class="settings-tab" data-store-tab="coupons">Cupons</button>
+          <button type="button" class="settings-tab" data-store-tab="black-libri">🎈 Black Libri</button>
         </div>
       </div>
       <div class="store-navigation-group">
@@ -129,6 +131,11 @@ export async function renderStore() {
         return;
       }
 
+      if (tab === 'black-libri') {
+        renderBlackLibri(panel);
+        return;
+      }
+
       if (
         tab === 'settings'
       ) {
@@ -170,7 +177,7 @@ export async function renderStore() {
 
   const availableTabs = new Set([
     'products', 'addons', 'combos', 'gallery',
-    'coupons', 'settings', 'terms', 'contracts',
+    'coupons', 'black-libri', 'settings', 'terms', 'contracts',
   ]);
   document.querySelectorAll('[data-store-tab]').forEach(button =>
     button.addEventListener('click', () => {

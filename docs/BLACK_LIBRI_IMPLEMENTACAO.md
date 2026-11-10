@@ -40,7 +40,7 @@ Brindes digitais: Save the Date estático 9%, animado 3%, filtro 7%, agradecimen
 Prêmios especiais: lembrete animado 1,5%, vídeo de agradecimento 1%, mini retrospectiva 0,5%, vídeo de personagem 0,5%, vídeo da criança para Stories 0,5%.
 
 ## Administração integrada ao Admin V2
-A navegação principal exibe **Black Libri**. O painel protegido por Passkey mostra:
+A aba **Loja > Promoções > Black Libri** exibe os controles da campanha. O painel protegido por Passkey mostra:
 - 19 prêmios, pesos e chance relativa dos prêmios ainda disponíveis;
 - reservas de 24 horas, prêmios confirmados e estoque restante;
 - edição de pesos/limites/habilitação de cada prêmio com auditoria;

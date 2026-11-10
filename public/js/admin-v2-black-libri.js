@@ -41,6 +41,13 @@ function renderPrize(prize,locked) {
 
 export async function renderBlackLibri(panel=viewRoot) {
   if(panel===viewRoot) setViewMeta('Black Libri','Campanha e prêmios');
+  if (!document.getElementById('blackLibriAdminStyles')) {
+    const style=document.createElement('link');
+    style.id='blackLibriAdminStyles';
+    style.rel='stylesheet';
+    style.href='/css/admin-v2-black-libri.css?v=20261110-2';
+    document.head.appendChild(style);
+  }
   panel.innerHTML='<section class="settings-card"><h2>Black Libri</h2><p>Carregando campanha...</p></section>';
   let data;
   try { data=await api('/api/admin/v2/black-libri'); }

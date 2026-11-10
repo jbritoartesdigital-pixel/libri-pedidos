@@ -16,16 +16,17 @@ function fixture() {
     sqlite.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));
   }
   const db={
-    prepare(sql) { return {
-      bind(...args) { return {
+    prepare(sql) {
+      const statement=(...args)=>({
         async first() { return sqlite.prepare(sql).get(...args)||null; },
         async all() { return {results:sqlite.prepare(sql).all(...args)}; },
         async run() {
           const result=sqlite.prepare(sql).run(...args);
           return {meta:{changes:Number(result.changes||0),last_row_id:Number(result.lastInsertRowid||0)}};
         }
-      }; }
-    }; },
+      });
+      return { ...statement(), bind(...args){ return statement(...args); } };
+    },
     async batch(statements) {
       sqlite.exec('BEGIN');
       try {

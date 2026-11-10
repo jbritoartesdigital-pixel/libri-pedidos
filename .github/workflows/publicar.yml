@@ -7,6 +7,7 @@ name: Publicar Portal de Pedidos
 # Correção 10/11: prévia de balões no simulador e consulta ao clicar em pagamento.
 # Correção 10/11: balão em pedido manual e textos curtos para cliente; sem migrations.
 # Correção 10/11: bônus duplicados convertidos em descontos, conferência do total antes do MP.
+# Novo benefício Black Libri: 20% OFF raro, cadastro desativado por padrão; migration 0032.
 
 on:
   workflow_dispatch:

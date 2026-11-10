@@ -40,7 +40,7 @@ da ativação.** A campanha começa desligada por padrão.
 - O prazo de 24h é do prêmio, não da janela de reserva da agenda nem da validade da cobrança Mercado Pago.
 - O sorteio opera com `crypto.getRandomValues` e seleção ponderada segura, não com estado de `localStorage`.
 - Não alterar probabilidades/estoques depois de publicar regulamento sem rever consequências legais.
-- A nova tela e a flag não afetam pedidos manuais nem o simulador.
+- A tela também aparece em pedidos manuais ainda não pagos quando a cliente abre o link de pagamento, mantendo o mesmo pedido e o mesmo percentual de entrada. Pedidos já pagos ou com checkout iniciado não são alterados. O simulador não participa.
 
 ## Distribuição inicial proposta (ainda não aprovada)
 O peso inicial é 200 unidades; probabilidade = peso / 200 enquanto todos os prêmios estão disponíveis.
@@ -72,3 +72,9 @@ testes Node, banco SQLite com migrations e dry-run do Worker.
 Os testes de integração usam clientes e pagamentos sintéticos, jamais dados reais.
 Eles não substituem homologação manual no celular, webhook real do Mercado Pago,
 validação de capacidade de produção ou inspeção jurídica.
+
+## Pedido manual e texto da cliente
+O link `/pedido/manual/:token` participa da Black Libri antes de criar o checkout Mercado Pago.
+O WhatsApp é obtido do pedido armazenado no D1, e não de um campo fornecido pelo navegador. A mesma identidade participa uma vez em ambos os canais.
+Se houver escolha de adicionais antes de pagar, a prévia calcula o benefício sobre o novo preço; o desconto ou brinde é lançado na precificação e nos itens do **mesmo pedido** antes da cobrança. A entrada Pix de 50% autorizada no atendimento é preservada. Checkout já iniciado ou Pix já recebido não recebem um sorteio retroativo.
+A interface pública exibe apenas o prêmio, o total atualizado e o botão de continuar. Regras antifraude, detalhes da identidade e instruções internas ficam fora da tela.

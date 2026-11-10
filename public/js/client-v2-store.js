@@ -17,7 +17,7 @@ import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
-import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-2';
+import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-4';
 import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
 
 const EVENT_TYPES = [
@@ -5288,6 +5288,12 @@ export async function startManualOrder(
   const order =
     data.order;
 
+  const manualBlackStatus=await api(
+    '/api/v2/manual-order/'+encodeURIComponent(token)+'/black-libri/status',
+    {method:'POST',body:'{}'}
+  ).catch(()=>({enabled:false}));
+  const manualBlackEnabled=manualBlackStatus.enabled===true;
+
   const addonOffer = data.addonOffer || { editable: false, available: [] };
   const contractedAddonCodes = order.items.filter(item => item.item_type === 'addon')
     .map(item => item.item_code);
@@ -5643,33 +5649,7 @@ export async function startManualOrder(
         },
       );
 
-    document
-      .getElementById(
-        'manualPay',
-      )
-      ?.addEventListener(
-        'click',
-        async () => {
-          if (manualAddonQuotePending
-            || (selectedManualAddonCodes.length && !manualAddonQuote)
-            || (manualProductChanged() && !manualAddonQuote)) {
-            showToast('Confira o valor atualizado dos adicionais antes de pagar.');
-            return;
-          }
-          if (
-            !document
-              .getElementById(
-                'manualAcceptTerms',
-              )
-              .checked
-          ) {
-            showToast(
-              'Leia e aceite as condições para continuar.',
-            );
-
-            return;
-          }
-
+    const payManualNow=async()=>{
           const checkoutTab = prepareMercadoPagoTab();
 
           const button =
@@ -5746,8 +5726,36 @@ export async function startManualOrder(
               error.message,
             );
           }
-        },
-      );
+    };
+    document.getElementById('manualPay')?.addEventListener('click',async()=>{
+      if (manualAddonQuotePending
+        || (selectedManualAddonCodes.length && !manualAddonQuote)
+        || (manualProductChanged() && !manualAddonQuote)) {
+        showToast('Confira o valor atualizado dos adicionais antes de pagar.');
+        return;
+      }
+      if (!document.getElementById('manualAcceptTerms')?.checked) {
+        showToast('Leia e aceite as condições para continuar.');
+        return;
+      }
+      if (!manualBlackEnabled) {
+        await payManualNow();
+        return;
+      }
+      try {
+        await openBlackLibriBeforePayment({
+          manualToken:token,
+          manualSelection:{
+            addonCodes:[...selectedManualAddonCodes],
+            productCode:selectedManualProductCode,
+            variantCode:selectedManualVariantCode
+          },
+          onContinue:()=>{void payManualNow();}
+        });
+      } catch(error) {
+        showToast(error.message||'Não foi possível abrir a surpresa. Tente novamente.');
+      }
+    });
   };
 
   render();

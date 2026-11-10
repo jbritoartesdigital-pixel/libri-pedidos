@@ -24,6 +24,7 @@ import {
 } from './v2-mercadopago.js';
 
 import { applyManualClientAddons } from './v2-manual-client-addons.js';
+import { prepareManualBlackLibriPayment } from './v2-black-libri-manual.js';
 
 const TOKEN_PATTERN =
   /^ord_[a-f0-9]{36}$/;
@@ -1682,6 +1683,10 @@ export async function startV2ManualOrderPayment(
     // use this server value, never a client-supplied total.
     manual = await publicManualOrder(env.DB, token);
   }
+
+  // Inclui o prêmio no pedido manual ANTES de reservar agenda ou criar cobrança.
+  // Preserva todas as condições que a administradora já negociou.
+  manual = await prepareManualBlackLibriPayment(env,token,manual);
 
   const quote =
     manual.pricing

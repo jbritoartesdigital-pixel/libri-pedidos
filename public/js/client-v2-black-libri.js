@@ -8,33 +8,38 @@ const palette = [
 
 function prizePanel(claim, quote) {
   if (!claim) return '';
-  const expired = claim.status === 'expired';
-  const redeemed = claim.status === 'redeemed';
-  const attached = claim.status === 'attached';
+  const expired=claim.status==='expired';
+  const used=claim.status==='redeemed';
+  const attached=claim.status==='attached';
+  const discount=Number(quote?.blackLibriDiscountCents||0);
   return `
     <div class="black-libri-result" role="status">
-      <span aria-hidden="true">${expired ? '⌛' : '🎁'}</span>
+      <span aria-hidden="true">${expired?'⌛':'🎁'}</span>
       <strong>${esc(claim.label)}</strong>
-      <p>${expired
-        ? 'Sua reserva de 24 horas expirou. O prêmio original permanece registrado e não haverá novo balão.'
-        : redeemed ? 'Este prêmio já foi confirmado em uma compra.'
-        : attached ? 'Este prêmio já foi vinculado ao pedido anterior. Continue o pagamento daquele pedido para utilizá-lo.'
-        : 'Seu prêmio está reservado por 24 horas. Mesmo saindo e voltando, ele não muda.'}</p>
-      ${quote && !expired && !redeemed ? `
-        <p>${Number(quote.blackLibriDiscountCents||0)>0
-           ? 'Desconto no convite: '+money(quote.blackLibriDiscountCents)+'. '
-           : 'Brinde incluído sem custo adicional. '}
-           Total atualizado: <b>${money(quote.totalCents)}</b></p>` : ''}
-      ${expired ? '<p class="black-libri-expiry">O checkout seguirá sem o prêmio vencido.</p>' : ''}
-      ${redeemed||attached ? '<p>Não é possível usar o mesmo prêmio em outra compra.</p>' : ''}
+      ${expired?'<p>Esse presente não está mais disponível.</p>':
+        used?'<p>Seu presente já foi utilizado.</p>':
+        attached?'<p>Seu presente já faz parte do pedido.</p>':
+        '<p>Seu presente está garantido por 24 horas!</p>'}
+      ${quote&&!expired&&!used? `
+        <p>${discount>0?'Você economiza '+money(discount)+'!':'Um carinho extra da Libri para você!'}</p>
+        <p><b>Total do convite: ${money(quote.totalCents)}</b></p>` : ''}
     </div>`;
 }
 
 // Acionada ao clicar em "Ir para o pagamento"; a confirmação dentro do modal
 // dispara onContinue no próprio clique, preservando a abertura da aba do MP no iOS.
-export async function openBlackLibriBeforePayment({customer,clientRequestId,selection,event,onContinue}) {
-  let response = await api('/api/v2/black-libri/status',{
-    method:'POST',body:JSON.stringify({customer,clientRequestId})
+export async function openBlackLibriBeforePayment({
+  customer,clientRequestId,selection,event,onContinue,
+  manualToken=null,manualSelection=null
+}) {
+  const endpoint=manualToken
+    ? '/api/v2/manual-order/'+encodeURIComponent(manualToken)+'/black-libri'
+    : '/api/v2/black-libri';
+  const payload=manualToken
+    ? {...(manualSelection||{})}
+    : {customer,clientRequestId,selection,event};
+  let response = await api(endpoint+'/status',{
+    method:'POST',body:JSON.stringify(payload)
   });
   if (!response.enabled) {
     onContinue();
@@ -78,8 +83,8 @@ export async function openBlackLibriBeforePayment({customer,clientRequestId,sele
   const preview=async()=>{
     if(!claim||claim.status==='expired'||claim.status==='redeemed')return;
     try {
-      const result=await api('/api/v2/black-libri/preview',{
-        method:'POST',body:JSON.stringify({customer,clientRequestId,selection,event})
+      const result=await api(endpoint+'/preview',{
+        method:'POST',body:JSON.stringify(payload)
       });
       quote=result.quote;
     } catch(error) {
@@ -102,14 +107,14 @@ export async function openBlackLibriBeforePayment({customer,clientRequestId,sele
         aria-labelledby="blackLibriTitle">
         <button class="black-libri-close" type="button" aria-label="Fechar">×</button>
         <span class="black-libri-kicker">Black Libri • Edição especial</span>
-        <h2 class="black-libri-heading" id="blackLibriTitle">${selected?'Seu presente foi revelado!':'Escolha um balão!'}</h2>
+        <h2 class="black-libri-heading" id="blackLibriTitle">${selected?'Surpresa para você!':'Escolha um balão!'}</h2>
         <p class="black-libri-subtitle">${selected
-          ? 'Uma surpresa só sua, vinculada ao seu WhatsApp.'
-          : 'Antes de ir para o pagamento, estoure um balão e descubra seu prêmio especial.'}</p>
+          ? 'A Black Libri trouxe um presente especial!'
+          : 'Estoure um balão e descubra seu presente!'}</p>
         ${selected ? prizePanel(claim,quote) : '<div class="black-libri-grid">'+balloons+'</div>'}
         ${selected ? `<button class="black-libri-button" type="button" data-black-continue
           ${active?'disabled':''}>Continuar para o pagamento</button>` : ''}
-        <p class="black-libri-foot">Uma chance por cliente • Prêmio único • Reserva de 24 horas</p>
+        <p class="black-libri-foot">Feito com carinho pela Libri Convites ♡</p>
       </section>`;
     overlay.querySelector('.black-libri-close')?.addEventListener('click',()=>{if(!active)close();});
     overlay.querySelectorAll('[data-black-slot]').forEach(button=>button.addEventListener('click',async()=>{
@@ -119,8 +124,8 @@ export async function openBlackLibriBeforePayment({customer,clientRequestId,sele
       button.classList.add('chosen');
       overlay.querySelectorAll('[data-black-slot]').forEach(b=>b.disabled=true);
       try {
-        response=await api('/api/v2/black-libri/reveal',{
-          method:'POST',body:JSON.stringify({customer,clientRequestId,balloon:chosen})
+        response=await api(endpoint+'/reveal',{
+          method:'POST',body:JSON.stringify({...payload,balloon:chosen})
         });
         claim=response.claim;
         await preview();

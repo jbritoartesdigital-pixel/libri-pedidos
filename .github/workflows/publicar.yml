@@ -4,6 +4,7 @@ name: Publicar Portal de Pedidos
 # Release de interface 30/10: ações alinhadas e prévia administrativa aposentada, sem alterações D1.
 # Release Black Libri 10/11: tabelas aditivas 0029-0031, painel de prêmios OFF por padrão.
 # Esta linha é um marcador de release; nenhuma campanha é ativada pelo deploy.
+# Correção 10/11: prévia de balões no simulador e consulta ao clicar em pagamento.
 
 on:
   workflow_dispatch:
@@ -315,6 +316,18 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Verificar status público Black Libri sem usar dados de clientes
+        continue-on-error: true
+        run: |
+          node --input-type=module <<'NODE'
+          const url='https://pedidos.libriconvites.com.br/api/v2/black-libri/info';
+          const response=await fetch(url,{headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(15000)});
+          if(!response.ok)throw Error('Status HTTP '+response.status);
+          const body=await response.json();
+          if(typeof body.enabled!=='boolean')throw Error('Resposta de ativação não reconhecida');
+          console.log('Estado público da Black Libri: '+(body.enabled?'ATIVA':'INATIVA'));
+          NODE
 
       - name: Excluir cópias temporárias do backup
         if: always()

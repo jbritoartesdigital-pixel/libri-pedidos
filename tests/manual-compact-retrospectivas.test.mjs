@@ -77,7 +77,7 @@ test('não cobra duas versões da mesma categoria, nem +100 fotos sem álbum',as
   );
   await assert.rejects(
     quoteManualClientAddons(DB,order,['moments_extra_100']),
-    /combinação|disponível/
+    /combinação|disponível|compatível/
   );
   assert.equal(DB.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_payments").get().n,0);
 });

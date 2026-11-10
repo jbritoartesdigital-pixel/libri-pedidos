@@ -57,6 +57,7 @@ const ADDON_GROUP_LABELS = {
   save_the_date: 'Save the Date',
   reminder: 'Lembrete',
   moments: 'Álbum da Festa',
+  retrospectiva: 'Retrospectiva',
   extras: 'Outros adicionais',
 };
 
@@ -1662,6 +1663,18 @@ function addonExplanation(
           ? 'Versão animada.'
           : 'Versão estática.',
         'É entregue separadamente para facilitar o reenvio próximo ao evento.',
+      ],
+    };
+  }
+
+  if (addon.group === 'retrospectiva') {
+    return {
+      intro: 'Retrospectiva de fotos e vídeos da família, preparada pela Libri.',
+      items: [
+        `Até ${Number(config.maxPhotos || 0)} fotos e ${Number(config.maxVideos || 0)} vídeos caseiros.`,
+        'Inclui abertura personalizada, músicas, animações e dedicatória final.',
+        ...(config.captions ? ['Inclui legendas.'] : []),
+        'Após contratar, combine o envio de fotos e vídeos com a Libri.',
       ],
     };
   }

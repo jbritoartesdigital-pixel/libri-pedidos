@@ -5,6 +5,7 @@ name: Publicar Portal de Pedidos
 # Release Black Libri 10/11: tabelas aditivas 0029-0031, painel de prêmios OFF por padrão.
 # Esta linha é um marcador de release; nenhuma campanha é ativada pelo deploy.
 # Correção 10/11: prévia de balões no simulador e consulta ao clicar em pagamento.
+# Correção 10/11: balão em pedido manual e textos curtos para cliente; sem migrations.
 
 on:
   workflow_dispatch:

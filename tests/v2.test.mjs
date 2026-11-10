@@ -226,7 +226,7 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
   assert.match(html, /client-v2\.js\?v=20261109-compact-retro-1/);
-  assert.match(html, /client-v2\.css\?v=20261012-compact-offer-1/);
+  assert.match(html, /client-v2\.css\?v=20261109-compact-retro-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261109-compact-retro-1/);
 });
 
@@ -259,7 +259,7 @@ test('upsell uses compact accessible popup with scrollable details and visible c
   assert.match(actions, /flex:\s*0 0 auto/);
   assert.match(actions, /grid-template-columns:/);
   assert.doesNotMatch(sheet, /bottom:\s*\d+px|transform:\s*translateX/);
-  assert.match(shell, /client-v2\.css\?v=20261012-compact-offer-1/);
+  assert.match(shell, /client-v2\.css\?v=20261109-compact-retro-1/);
 });
 
 test('new coupons can be registered and edited without affecting orders or payments', async () => {
@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 28);
+  const DB = database(); assert.equal(DB.migrationCount, 29);
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
     'v2_drive_uploaded_previews','v2_drive_sync_settings','v2_drive_sync_attempts',

@@ -47,9 +47,6 @@ export function compactManualAddonsHtml(available, selected, contractedCodes, mo
   const groupHtml = compactManualAddonGroups(available).map(group => {
     const ownedMoments = contractedCodes.some(isMomentsPlan);
     const isExtra = group.key === 'moments_extra';
-    if (isExtra && !ownedMoments && !selected.some(isMomentsPlan)) {
-      // Render hidden, unhide if a Moments package is selected.
-    }
     if (group.options.length === 1) {
       const item = group.options[0];
       return `<label class="manual-addon-single ${isExtra && !ownedMoments && !selected.some(isMomentsPlan) ? 'hidden' : ''}"

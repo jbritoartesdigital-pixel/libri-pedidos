@@ -11,10 +11,17 @@ on:
       - 'public/js/*black-libri*.js'
       - 'public/css/*black-libri*.css'
       - 'public/js/admin-v2.js'
+      - 'public/js/admin-v2-config.js'
+      - 'public/js/admin-v2-find.js'
+      - 'public/js/client-v2.js'
+      - 'public/js/client-v2-store.js'
       - 'public/admin-v2.html'
+      - 'public/client-v2.html'
       - 'migrations/0029_black_libri.sql'
       - 'migrations/0030_black_libri_admin.sql'
       - 'tests/*black-libri*.test.mjs'
+      - 'tests/v2.test.mjs'
+      - 'tests/admin-v2-navigation.test.mjs'
       - '.github/workflows/black-libri-ci.yml'
   workflow_dispatch:
 

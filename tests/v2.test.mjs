@@ -697,7 +697,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-pedido-sem-previa-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261030-pedido-sem-previa-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261110-black-libri-2"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1689,7 +1689,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261030-pedido-sem-previa-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261110-black-libri-2/);
   assert.match(entry, /admin-v2-order\.js\?v=20261030-pedido-sem-previa-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
@@ -2881,7 +2881,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261030-pedido-sem-previa-1/);
+  assert.match(html, /admin-v2\.js\?v=20261110-black-libri-2/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {

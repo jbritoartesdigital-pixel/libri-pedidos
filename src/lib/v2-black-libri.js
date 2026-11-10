@@ -11,6 +11,22 @@ export function blackLibriEnabled(env, date = new Date()) {
     && start < end && date.getTime() >= start && date.getTime() < end;
 }
 
+export async function blackLibriOperational(env,date=new Date()) {
+  if (!blackLibriEnabled(env,date)) return false;
+  try {
+    const row=await env.DB.prepare(`
+      SELECT admin_enabled,compliance_confirmed,authorization_reference
+      FROM v2_black_libri_campaign_state WHERE id=1
+    `).first();
+    return Number(row?.admin_enabled)===1
+      && Number(row?.compliance_confirmed)===1
+      && String(row?.authorization_reference||'').trim().length>=6;
+  } catch {
+    // Em caso de erro de banco ou migração ausente, a campanha fica desligada.
+    return false;
+  }
+}
+
 function customerPhone(customer) {
   const digits = normalizeWhatsapp(customer?.whatsapp);
   if (!/^\d{10,15}$/.test(digits)) {
@@ -83,7 +99,7 @@ function publicClaim(claim) {
 }
 
 export async function blackLibriStatus(env, customer) {
-  const active = blackLibriEnabled(env);
+  const active = await blackLibriOperational(env);
   if (!active) return { ok:true, enabled:false, claim:null };
   return { ok:true, enabled:true, claim:publicClaim(await findBlackLibriClaim(env, customer)) };
 }
@@ -97,7 +113,7 @@ function cryptoChoice(weightSum) {
 }
 
 export async function revealBlackLibri(env, customer, clientRequestId) {
-  if (!blackLibriEnabled(env)) {
+  if (!(await blackLibriOperational(env))) {
     throw Object.assign(new Error('A Black Libri ainda não está disponível.'), { status: 409, code: 'black_libri_disabled' });
   }
   const requestId = String(clientRequestId || '').trim();

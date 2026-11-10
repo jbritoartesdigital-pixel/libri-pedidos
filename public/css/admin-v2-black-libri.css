@@ -1,0 +1,39 @@
+/* BLACK LIBRI | Painel Admin V2. */
+.black-admin {max-width:100%}
+.black-admin-top {display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.black-admin-status {border:1px solid #c7b4b0;background:#f7efec;color:#6a3f51;
+  padding:7px 12px;border-radius:30px;font-size:12px;font-weight:800;letter-spacing:.05em}
+.black-admin-status[data-on="1"] {border-color:#a4d2b5;color:#126342;background:#e4f6e7}
+.black-admin-stats {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0}
+.black-admin-stats>div {display:flex;flex-direction:column;gap:4px;padding:13px;
+  border:1px solid #e5d9dc;border-radius:14px;background:#fff8f8}
+.black-admin-stats strong {font-size:22px;font-variant-numeric:tabular-nums;color:#69425d}
+.black-admin-stats span {font-size:11px;color:#776970}
+.black-admin-notice {margin:14px 0}
+.black-admin-notice p {margin:5px 0 0}
+.black-admin-period {font-size:13px;word-break:break-word;background:#faf4f1;
+  border-radius:12px;padding:10px}
+.black-admin-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
+.black-admin-fields label {font-size:11px;font-weight:700;color:#665760}
+.black-admin-fields input {margin-top:5px;width:100%}
+.black-admin-toggle {display:flex;align-items:center;gap:10px;font-size:13px;margin:12px 0}
+.black-admin-toggle input {width:18px;height:18px;flex-shrink:0}
+.black-admin-actions {display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.black-admin-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.black-admin-prize {padding:17px;border:1px solid #e4d8db;border-radius:18px;
+  background:linear-gradient(155deg,#fffdfd,#fff8f4);display:flex;flex-direction:column;gap:6px}
+.black-admin-prize-head {display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.black-admin-prize h3 {margin:4px 0;font-size:15px;line-height:1.3}
+.black-admin-kind {font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9c687d}
+.black-admin-chance {white-space:nowrap;color:#8d5c78;font-size:16px}
+.black-admin-description {margin:0;color:#7b6f74;font-size:12px;min-height:34px}
+.black-admin-numbers {margin:8px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.black-admin-numbers div {padding:8px 4px;border-radius:9px;background:#f7eef0;text-align:center}
+.black-admin-numbers dt {font-size:10px;color:#7c6571}
+.black-admin-numbers dd {font-weight:750;font-size:13px;margin:3px 0 0}
+.black-admin-prize button {margin-top:auto}
+@media(max-width:720px){
+  .black-admin-grid {grid-template-columns:1fr}
+  .black-admin-stats {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .black-admin-fields {grid-template-columns:1fr}
+}

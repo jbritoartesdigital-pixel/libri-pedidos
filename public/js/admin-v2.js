@@ -45,7 +45,7 @@ import {
 import {
   renderStore,
 } from './admin-v2-config.js?v=20261026-scene-links-1';
-import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-1';
+import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261110-black-libri-2';
 
 import {
   refreshBell,

@@ -1,0 +1,58 @@
+name: Verificar Black Libri sem publicar
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/v2-black-libri*.js'
+      - 'src/routes/*black-libri*.js'
+      - 'src/routes/public-v2.js'
+      - 'src/index.js'
+      - 'public/js/*black-libri*.js'
+      - 'public/css/*black-libri*.css'
+      - 'public/js/admin-v2.js'
+      - 'public/admin-v2.html'
+      - 'migrations/0029_black_libri.sql'
+      - 'migrations/0030_black_libri_admin.sql'
+      - 'tests/*black-libri*.test.mjs'
+      - '.github/workflows/black-libri-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-black-libri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+      - name: Conferir sintaxe e rotas
+        run: npm run check
+      - name: Testar todos os fluxos do aplicativo
+        run: npm test
+      - name: Validar banco SQLite a partir das migrations
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sqlite3
+          db=sqlite3.connect(':memory:')
+          for file in sorted(Path('migrations').glob('*.sql')):
+              print('Aplicando',file.name)
+              db.executescript(file.read_text(encoding='utf-8'))
+          prizes=db.execute('select count(*) from v2_black_libri_prizes').fetchone()[0]
+          enabled=db.execute('select admin_enabled from v2_black_libri_campaign_state where id=1').fetchone()[0]
+          assert prizes==19, f'Esperados 19 prêmios, encontrado: {prizes}'
+          assert enabled==0, 'Campanha jamais pode começar habilitada'
+          print('OK: 19 prêmios e campanha desligada')
+          PY
+      - name: Validar empacotamento, sem deploy
+        run: pnpm exec wrangler deploy --dry-run --outdir .wrangler/black-libri-check
+        env:
+          WRANGLER_SEND_METRICS: 'false'

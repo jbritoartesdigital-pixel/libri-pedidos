@@ -38,3 +38,33 @@ O peso inicial é 200 unidades; probabilidade = peso / 200 enquanto todos os pr�
 Descontos: R$10 15%, R$15 10%, R$20 4%, 5% 15%, 8% 7%, 10% 3%.
 Brindes digitais: Save the Date estático 9%, animado 3%, filtro 7%, agradecimento 6%, lembrete estático 6%, contagem regressiva 4%, arte para um personalizado 4%, placa digital 3%.
 Prêmios especiais: lembrete animado 1,5%, vídeo de agradecimento 1%, mini retrospectiva 0,5%, vídeo de personagem 0,5%, vídeo da criança para Stories 0,5%.
+
+## Administração integrada ao Admin V2
+A navegação principal exibe **Black Libri**. O painel protegido por Passkey mostra:
+- 19 prêmios, pesos e chance relativa dos prêmios ainda disponíveis;
+- reservas de 24 horas, prêmios confirmados e estoque restante;
+- edição de pesos/limites/habilitação de cada prêmio com auditoria;
+- ativação/pausa administrativa com confirmação expressa e referência de autorização.
+
+**Travamento de lançamento por três condições simultâneas:** (1) variáveis Cloudflare
+`BLACK_LIBRI_ENABLED=1`, `BLACK_LIBRI_START`, `BLACK_LIBRI_END` e segredo imutável
+`BLACK_LIBRI_IDENTITY_SECRET`; (2) linha `v2_black_libri_campaign_state.admin_enabled=1`;
+(3) confirmação administrativa de conformidade e referência de autorização.
+O código começa com `admin_enabled=0`. Salvar o painel não faz deploy e não aplica migrations.
+
+**Não alterar o segredo HMAC depois de começar a ação.** Ele identifica a cliente
+pelo WhatsApp, e trocar o segredo quebraria a garantia de recuperação do prêmio
+original. A identificação por WhatsApp informado não constitui validação de posse;
+requer verificação adicional se for necessária proteção contra fraude.
+
+**Limitação:** a referência digitada no painel não verifica por si só a validade
+de uma autorização; deve corresponder a documento real conferido fora do sistema.
+Como a distribuição usa sorteio e depende de compra, verificar exigências da SPA/MF
+antes do lançamento. Cupons e descontos acumulados ainda demandam decisão comercial.
+
+## Homologação automatizada sem deploy
+Workflow `.github/workflows/black-libri-ci.yml` executa sintaxe,
+testes Node, banco SQLite com migrations e dry-run do Worker.
+Os testes de integração usam clientes e pagamentos sintéticos, jamais dados reais.
+Eles não substituem homologação manual no celular, webhook real do Mercado Pago,
+validação de capacidade de produção ou inspeção jurídica.

@@ -4,7 +4,7 @@ import {
   readJson,
   normalizeWhatsapp,
 } from '../lib/http.js';
-import { blackLibriEnabled, blackLibriStatus, revealBlackLibri, reservedBlackLibriForCheckout, applyBlackLibriToQuote } from '../lib/v2-black-libri.js';
+import { blackLibriOperational, blackLibriStatus, revealBlackLibri, reservedBlackLibriForCheckout, applyBlackLibriToQuote } from '../lib/v2-black-libri.js';
 
 import {
   loadV2Catalog,
@@ -791,7 +791,7 @@ export async function handlePublicV2Api(
   };
   // BLACK LIBRI: não ativar sem campanha aprovada.
   if (method === 'GET' && path === '/api/v2/black-libri/info') {
-    return json({ ok:true, enabled:blackLibriEnabled(env) });
+    return json({ ok:true, enabled:await blackLibriOperational(env) });
   }
   if (method === 'POST' && path === '/api/v2/black-libri/status') {
     try {
@@ -808,7 +808,7 @@ export async function handlePublicV2Api(
   if (method === 'POST' && path === '/api/v2/black-libri/preview') {
     try {
       const body = await readJson(request);
-      if (!blackLibriEnabled(env)) return fail('Campanha indisponível.',409);
+      if (!(await blackLibriOperational(env))) return fail('Campanha indisponível.',409);
       const whatsapp = normalizeWhatsapp(body.customer?.whatsapp);
       const customer = await env.DB.prepare('SELECT id FROM v2_customers WHERE whatsapp=? LIMIT 1')
         .bind(whatsapp).first();

@@ -60,7 +60,9 @@ test('pedido manual revela prêmio por token e atualiza valor original antes do 
     description:'',kind:'fixed',value:1500,expires_at:revealed.claim.expiresAt
   });
   assert.equal(preview.quote.totalCents,expected.totalCents);
-  const paid=await startV2ManualOrderPayment(request,f.env,f.token,f.payBody);
+  const paid=await startV2ManualOrderPayment(request,f.env,f.token,{
+    ...f.payBody,expectedTotalCents:preview.quote.totalCents
+  });
   assert.ok(paid.payment.checkoutUrl);
   assert.equal(paid.payment.amountDueNowCents,expected.payment.depositCents);
   const current=await getV2ManualOrderForCustomer(f.DB,f.token);
@@ -79,7 +81,9 @@ test('pedido manual Pix 50% preserva parcelamento após prêmio',async t=>{
   f.DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='off_10' THEN 1 ELSE 0 END");
   const prize=await revealManualBlackLibri(f.env,f.token);
   assert.equal(prize.claim.code,'off_10');
-  const result=await startV2ManualOrderPayment(request,f.env,f.token,f.payBody);
+  const result=await startV2ManualOrderPayment(request,f.env,f.token,{
+    ...f.payBody,expectedTotalCents:f.original.pricing.totalCents-1000
+  });
   const current=await getV2ManualOrderForCustomer(f.DB,f.token);
   assert.equal(current.pricing.depositPercent,50);
   assert.equal(current.pricing.totalCents,f.original.pricing.totalCents-1000);

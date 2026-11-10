@@ -17,6 +17,7 @@ import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
+import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-1';
 
 const EVENT_TYPES = [
   {
@@ -4662,37 +4663,9 @@ function renderTerms(
     render,
   );
 
-  document
-    .getElementById(
-      'payBtn',
-    )
-    .addEventListener(
-      'click',
-      async () => {
-        if (state.simulationMode) {
-          state.step = 11;
-          persist(state);
-          render();
-          return;
-        }
-
-        state.termsAccepted =
-          document
-            .getElementById(
-              'termsAccepted',
-            )
-            .checked;
-
-        if (
-          !state.termsAccepted
-        ) {
-          showToast(
-            'Leia e aceite as condições para continuar.',
-          );
-
-          return;
-        }
-
+  // O modal chama checkoutNow no clique real do botão de continuação,
+  // preservando a abertura da aba do Mercado Pago no Safari/iOS.
+  const checkoutNow = async () => {
         const checkoutTab = prepareMercadoPagoTab();
 
         const button =
@@ -4821,6 +4794,54 @@ function renderTerms(
             error.message,
           );
         }
+  };
+
+  document
+    .getElementById(
+      'payBtn',
+    )
+    .addEventListener(
+      'click',
+      async () => {
+        if (state.simulationMode) {
+          state.step = 11;
+          persist(state);
+          render();
+          return;
+        }
+
+        state.termsAccepted =
+          document
+            .getElementById(
+              'termsAccepted',
+            )
+            .checked;
+
+        if (
+          !state.termsAccepted
+        ) {
+          showToast(
+            'Leia e aceite as condições para continuar.',
+          );
+
+          return;
+        }
+
+        if (state.blackLibriEnabled) {
+          try {
+            await openBlackLibriBeforePayment({
+              customer:state.customer,
+              clientRequestId:state.clientRequestId,
+              selection:state.selection,
+              event:state.event,
+              onContinue:checkoutNow
+            });
+          } catch (error) {
+            showToast(error.message || 'Não foi possível abrir a Black Libri.');
+          }
+          return;
+        }
+        checkoutNow();
       },
     );
 }
@@ -4976,6 +4997,7 @@ export async function startStore(
   const [
     catalogData,
     termsData,
+    blackLibriData,
   ] =
     await Promise.all([
       api(
@@ -4984,6 +5006,7 @@ export async function startStore(
       api(
         '/api/v2/terms/current',
       ),
+      api('/api/v2/black-libri/info').catch(() => ({ enabled:false })),
     ]);
 
   state.catalog =
@@ -4991,6 +5014,7 @@ export async function startStore(
 
   state.terms =
     termsData.terms;
+  state.blackLibriEnabled = blackLibriData.enabled === true;
 
   // Também corrige carrinhos em andamento salvos no navegador.
   removeVideoConfirmation(state);

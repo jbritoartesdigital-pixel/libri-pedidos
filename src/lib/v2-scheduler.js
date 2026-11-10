@@ -1,4 +1,5 @@
 import { nowIso } from './http.js';
+import { expireBlackLibriClaims } from './v2-black-libri.js';
 import { syncMercadoPagoOrder } from './v2-mercadopago.js';
 import { createV2AdminNotification, runV2NotificationScheduler } from './v2-notifications.js';
 import { cleanupAbandonedUnpaidV2Orders } from './v2-admin-core.js';
@@ -52,6 +53,7 @@ export async function runV2Scheduler(env) {
       AND datetime(updated_at) < datetime('now', '-15 minutes')`),
     env.DB.prepare(`DELETE FROM v2_admin_webauthn_challenges WHERE expires_at <= ?`).bind(stamp),
   ]);
+  if (String(env.BLACK_LIBRI_ENABLED || '') === '1') await expireBlackLibriClaims(env.DB);
   // Repair a notification whose initial creation failed without losing the request.
   const urgency = await env.DB.prepare(`SELECT o.id, o.order_code, o.honoree_display_name FROM v2_orders o
     JOIN v2_urgency_requests u ON u.order_id = o.id WHERE u.status = 'pending'

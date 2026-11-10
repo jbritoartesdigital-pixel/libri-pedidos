@@ -2,7 +2,9 @@ import {
   fail,
   json,
   readJson,
+  normalizeWhatsapp,
 } from '../lib/http.js';
+import { blackLibriEnabled, blackLibriStatus, revealBlackLibri, reservedBlackLibriForCheckout, applyBlackLibriToQuote } from '../lib/v2-black-libri.js';
 
 import {
   loadV2Catalog,
@@ -780,6 +782,36 @@ export async function handlePublicV2Api(
     }
   }
 
+  // BLACK LIBRI: não ativar sem campanha aprovada.
+  if (method === 'GET' && path === '/api/v2/black-libri/info') {
+    return json({ ok:true, enabled:blackLibriEnabled(env) });
+  }
+  if (method === 'POST' && path === '/api/v2/black-libri/status') {
+    try {
+      const body = await readJson(request);
+      return json(await blackLibriStatus(env, body.customer));
+    } catch (error) { return requestError(error); }
+  }
+  if (method === 'POST' && path === '/api/v2/black-libri/reveal') {
+    try {
+      const body = await readJson(request);
+      return json(await revealBlackLibri(env, body.customer, body.clientRequestId));
+    } catch (error) { return requestError(error); }
+  }
+  if (method === 'POST' && path === '/api/v2/black-libri/preview') {
+    try {
+      const body = await readJson(request);
+      if (!blackLibriEnabled(env)) return fail('Campanha indisponível.',409);
+      const whatsapp = normalizeWhatsapp(body.customer?.whatsapp);
+      const customer = await env.DB.prepare('SELECT id FROM v2_customers WHERE whatsapp=? LIMIT 1')
+        .bind(whatsapp).first();
+      const standard = await calculateCommercialV2Quote(env.DB,body.selection||{},{
+        customerId:customer?.id||null,eventType:body.event?.type||null,urgencyApproved:false
+      });
+      const claim = await reservedBlackLibriForCheckout(env,body.customer,body.clientRequestId);
+      return json({ok:true,quote:applyBlackLibriToQuote(standard,claim)});
+    } catch(error) { return requestError(error); }
+  }
   return null;
 }
 

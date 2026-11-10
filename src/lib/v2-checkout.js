@@ -29,6 +29,7 @@ import {
 import { withV2PaymentLock } from './v2-payment-lock.js';
 
 import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
+import { reservedBlackLibriForCheckout, applyBlackLibriToQuote, linkBlackLibriClaim, unlinkBlackLibriClaim } from './v2-black-libri.js';
 
 export class V2CheckoutError extends Error {
   constructor(
@@ -647,6 +648,15 @@ async function createOrderRecords(
               stamp,
             ),
       );
+
+  if (quote.blackLibri?.kind === 'gift') {
+    itemStatements.push(db.prepare(`
+      INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,
+        quantity,unit_price_cents,points_units,configuration_json,created_at)
+      VALUES(?,'addon',?,?,1,0,0,'{}',?)
+    `).bind(orderId,'black_libri:'+quote.blackLibri.code,
+      'Brinde Black Libri: '+quote.blackLibri.label,stamp));
+  }
 
   await db.batch([
     ...itemStatements,
@@ -1570,7 +1580,7 @@ export async function startV2Checkout(
         )
         .first();
 
-    const quote =
+    let quote =
       await calculateCommercialV2Quote(
         env.DB,
         selection,
@@ -1586,6 +1596,10 @@ export async function startV2Checkout(
             false,
         },
       );
+
+    // O servidor calcula o prêmio concedido, nunca valores enviados pela cliente.
+    const blackLibriClaim = await reservedBlackLibriForCheckout(env,body.customer,requestKey);
+    quote = applyBlackLibriToQuote(quote,blackLibriClaim);
 
     const deliveryStart =
       requireText(
@@ -1837,6 +1851,8 @@ export async function startV2Checkout(
         },
       );
 
+    await linkBlackLibriClaim(env.DB,blackLibriClaim,orderId);
+
     const expiresAt =
       new Date(
         Date.now()
@@ -1978,6 +1994,7 @@ export async function startV2Checkout(
         await completeCheckoutRequest(env.DB, requestKey, orderId);
         return completedCheckoutResponse(env.DB, orderId);
       }
+      await unlinkBlackLibriClaim(env.DB,orderId);
       await env.DB
         .prepare(
           `

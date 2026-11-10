@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 32);
+  const DB = database(); assert.equal(DB.migrationCount, 33);
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
     'v2_drive_uploaded_previews','v2_drive_sync_settings','v2_drive_sync_attempts',

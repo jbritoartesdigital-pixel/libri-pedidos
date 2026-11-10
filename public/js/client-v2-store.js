@@ -17,7 +17,7 @@ import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
-import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-1';
+import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-2';
 
 const EVENT_TYPES = [
   {

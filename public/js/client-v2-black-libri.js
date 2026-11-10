@@ -40,6 +40,19 @@ export async function openBlackLibriBeforePayment({customer,clientRequestId,sele
     onContinue();
     return;
   }
+  // Estilo só no fluxo promocional, mantendo a loja normal leve e um único
+  // stylesheet principal no HTML. Carrega antes de mostrar o modal.
+  if (!document.getElementById('blackLibriClientStyles')) {
+    const stylesheet=document.createElement('link');
+    stylesheet.id='blackLibriClientStyles';
+    stylesheet.rel='stylesheet';
+    stylesheet.href='/css/client-v2-black-libri.css?v=20261110-2';
+    await new Promise(resolve=>{
+      stylesheet.onload=resolve;
+      stylesheet.onerror=resolve;
+      document.head.appendChild(stylesheet);
+    });
+  }
   let claim=response.claim||null;
   let quote=null;
   const overlay=document.createElement('div');

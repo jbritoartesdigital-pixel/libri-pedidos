@@ -102,6 +102,10 @@ export async function saveBlackLibriPrize(env,code,body) {
   `).bind(code).first();
   if(!current) throw error('Prêmio não encontrado.',404);
   if(!body||typeof body!=='object'||Array.isArray(body)) throw error('Dados inválidos.');
+  const campaign=await env.DB.prepare('SELECT admin_enabled FROM v2_black_libri_campaign_state WHERE id=1').first();
+  if(Number(campaign?.admin_enabled)===1) {
+    throw error('Pause a campanha antes de alterar estoque ou probabilidades.',409);
+  }
   const weight=parseWhole(body.weight,1,2000,'Peso');
   const enabled=body.enabled===true?1:body.enabled===false?0:null;
   if(enabled===null) throw error('Escolha se o prêmio está habilitado.');

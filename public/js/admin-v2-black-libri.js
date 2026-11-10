@@ -76,7 +76,7 @@ export async function renderBlackLibri(panel=viewRoot) {
         <div>
           <span class="eyebrow">Loja • Promoções</span>
           <h2>🎈 Black Libri | Balão Premiado</h2>
-          <p class="muted">19 benefícios, um balão por cliente e reserva imutável de 24 horas.</p>
+          <p class="muted">${items.length} benefícios, um balão por cliente e reserva imutável de 24 horas.</p>
         </div>
         <span class="black-admin-status" data-on="${data.active?'1':'0'}">${status}</span>
       </div>

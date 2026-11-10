@@ -1,13 +1,13 @@
 # BLACK LIBRI | Balão Premiado | Integração no Pedidos V2
 
-**Status:** somente código em `main`, SEM DEPLOY/SEM ATIVAÇÃO. Exige autorização promocional e homologação.
+**Status:** implementação integrada ao `libri-pedidos`. Ativação e regularidade da campanha continuam sob controle do Admin V2.
 
 ## Decisões preservadas
 - Após aceitar os termos e tocar **Ir para o pagamento**, uma tela premium cheia de balões aparece.
 - A pessoa estoura **um balão** e revela o prêmio. A cor/posição do balão não aumenta chances.
 - **1 prêmio por cliente** na campanha: identificação pelo WhatsApp normalizado e hash SHA-256 estável, sem Secret configurável. Não se oferece segunda tentativa após expirar.
 - **Reserva por 24 horas** após a revelação. A saída, retorno, troca de navegador e recarga exibem o mesmo prêmio.
-- 19 prêmios, com estoques distintos. Quando um estoque esgota, ele deixa a seleção e os pesos remanescentes são normalizados.
+- 20 prêmios, com estoques distintos. Quando um estoque esgota, ele deixa a seleção e os pesos remanescentes são normalizados.
 - Prêmio sem reposição automática após vencimento. Descontos e brindes são aplicados no servidor, no pedido real, antes da cobrança do Mercado Pago.
 - Brindes digitais entram em `v2_order_items` sem preço; descontos aparecem no snapshot `v2_order_pricing.pricing_snapshot_json`.
 
@@ -25,7 +25,7 @@ após o último dia. Não é necessário cadastrar variáveis ou secrets no Clou
 da ativação.** A campanha começa desligada por padrão.
 
 ## Pontos para homologação
-1. Aplicar migration 0029 em **ambiente de teste**; validar 19 registros e nenhum prêmio repetido.
+1. Aplicar migration 0029 em **ambiente de teste**; validar 20 registros e nenhum prêmio repetido.
 2. Verificar links de compra Pix/cartão e atualização do preço com cupom/combo; confirmar política de cumulatividade antes da ativação.
 3. Testar dois navegadores/abas com mesmo WhatsApp e dois celulares concorrendo ao último brinde.
 4. Confirmar 24h, cron, expiração, pagamento no limite da reserva e webhooks atrasados.
@@ -43,14 +43,18 @@ da ativação.** A campanha começa desligada por padrão.
 - A tela também aparece em pedidos manuais ainda não pagos quando a cliente abre o link de pagamento, mantendo o mesmo pedido e o mesmo percentual de entrada. Pedidos já pagos ou com checkout iniciado não são alterados. O simulador não participa.
 
 ## Distribuição inicial proposta (ainda não aprovada)
-O peso inicial é 200 unidades; probabilidade = peso / 200 enquanto todos os prêmios estão disponíveis.
+A distribuição original tinha peso ativo 200. Em 0032 entra o prêmio raro **20% OFF**
+(com peso 1, somente **3 unidades**, inicialmente **desabilitado**).
+A chance aproximada do prêmio raro, quando habilitado com os demais 19 prêmios
+ativos nos pesos originais, é **1/201 ≈ 0,50%**, podendo mudar conforme estoques e
+pesos definidos no Admin. O novo prêmio não modifica sorteios existentes.
 Descontos: R$10 15%, R$15 10%, R$20 4%, 5% 15%, 8% 7%, 10% 3%.
 Brindes digitais: Save the Date estático 9%, animado 3%, filtro 7%, agradecimento 6%, lembrete estático 6%, contagem regressiva 4%, arte para um personalizado 4%, placa digital 3%.
 Prêmios especiais: lembrete animado 1,5%, vídeo de agradecimento 1%, mini retrospectiva 0,5%, vídeo de personagem 0,5%, vídeo da criança para Stories 0,5%.
 
 ## Administração integrada ao Admin V2
 A aba **Loja > Promoções > Black Libri** exibe os controles da campanha. O painel protegido por Passkey mostra:
-- 19 prêmios, pesos e chance relativa dos prêmios ainda disponíveis;
+- 20 prêmios, pesos e chance relativa dos prêmios ainda disponíveis;
 - reservas de 24 horas, prêmios confirmados e estoque restante;
 - edição de pesos/limites/habilitação de cada prêmio com auditoria;
 - ativação/pausa administrativa com confirmação expressa e referência de autorização.
@@ -98,3 +102,14 @@ em crédito se houver adicional contratado exatamente com o código sorteado.
 Caso contrário, o presente continua como item gratuito.
 O crédito Black Libri permanece separado do desconto de cupom no snapshot,
 para não inflar a contabilização de cupons resgatados pelos webhooks.
+
+## Novo prêmio de 20% | migração 0032
+- `off_20p`: **20% OFF**, `kind=percent`, `value=20`, `weight=1`,
+  `max_claims=3`, `enabled=0` inicialmente.
+- Foi cadastrado **desativado** para não alterar probabilidades de uma campanha
+  já ativa. Para incluí-lo: pausar campanha no Admin, ativar este prêmio,
+  salvar prêmio e reativar campanha, após verificar o regulamento aplicável.
+- A frase “descontos de até 20%” só deve ser divulgada após **habilitar**
+  o prêmio, enquanto ele estiver disponível e a campanha estiver ativa.
+- A precificação existente por desconto percentual aplica o mesmo cálculo
+  tanto ao checkout da loja quanto ao pedido manual.

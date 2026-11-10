@@ -12,7 +12,7 @@ import {
 
 function fixture() {
   const sqlite=new DatabaseSync(':memory:');
-  for(const name of ['0003_v2_core.sql','0029_black_libri.sql','0030_black_libri_admin.sql','0031_black_libri_dates.sql']) {
+  for(const name of ['0003_v2_core.sql','0029_black_libri.sql','0030_black_libri_admin.sql','0031_black_libri_dates.sql','0032_black_libri_20pct.sql']) {
     sqlite.exec(readFileSync(new URL('../migrations/'+name,import.meta.url),'utf8'));
   }
   const db={
@@ -52,7 +52,7 @@ test('a campanha não liga por variáveis ambientais sem habilitação no Admin'
   try {
     assert.equal(await blackLibriOperational(f.env),false);
     let view=await getBlackLibriAdmin(f.env);
-    assert.equal(view.prizes.length,19);
+    assert.equal(view.prizes.length,20);
     assert.equal(view.summary.totalWeight,200);
     assert.equal(view.campaign.adminEnabled,false);
     await saveBlackLibriCampaign(f.env,{...consent,adminEnabled:false});
@@ -145,4 +145,55 @@ test('prêmio já revelado permanece imutável mesmo depois de mudar pesos',asyn
     assert.equal(repeat.value,first.claim.value);
     assert.equal(repeat.label,first.claim.label);
   } finally {f.close();}
+});
+
+test('20% raro só participa depois de habilitação no Admin com campanha pausada',async()=>{
+  const f=fixture();
+  try {
+    await saveBlackLibriCampaign(f.env,consent);
+    let view=await getBlackLibriAdmin(f.env);
+    const prize=view.prizes.find(p=>p.code==='off_20p');
+    assert.ok(prize);
+    assert.equal(prize.kind,'percent');
+    assert.equal(prize.value,20);
+    assert.equal(prize.weight,1);
+    assert.equal(prize.maxClaims,3);
+    assert.equal(prize.enabled,false);
+    assert.equal(view.summary.totalWeight,200,
+      'Campanha ativa não tem probabilidades alteradas pela migration');
+    await assert.rejects(
+      ()=>saveBlackLibriPrize(f.env,'off_20p',{weight:1,maxClaims:3,enabled:true}),
+      /Pause a campanha/i
+    );
+    await saveBlackLibriCampaign(f.env,{...consent,adminEnabled:false});
+    await saveBlackLibriPrize(f.env,'off_20p',{weight:1,maxClaims:3,enabled:true});
+    await saveBlackLibriCampaign(f.env,consent);
+    view=await getBlackLibriAdmin(f.env);
+    assert.equal(view.prizes.find(p=>p.code==='off_20p').enabled,true);
+    assert.equal(view.summary.totalWeight,201);
+    assert.equal(view.summary.availablePrizeTypes,20);
+    assert.ok(view.prizes.find(p=>p.code==='off_20p').chancePercent>0);
+  }finally{f.close();}
+});
+
+test('estoque de 20% raro respeita limite de 3 sorteios',async()=>{
+  const f=fixture();
+  try {
+    await saveBlackLibriCampaign(f.env,consent);
+    await saveBlackLibriCampaign(f.env,{...consent,adminEnabled:false});
+    f.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='off_20p' THEN 1 ELSE 0 END");
+    await saveBlackLibriCampaign(f.env,consent);
+    for(let i=1;i<=3;i++){
+      const customer={whatsapp:'55619888855'+String(i).padStart(2,'0')};
+      const result=await revealBlackLibri(f.env,customer,'rare_20pct_customer_'+i+'_check');
+      assert.equal(result.claim.code,'off_20p');
+    }
+    const result=await getBlackLibriAdmin(f.env);
+    const prize=result.prizes.find(p=>p.code==='off_20p');
+    assert.equal(prize.available,0);
+    assert.equal(prize.reserved,3);
+    await assert.rejects(()=>revealBlackLibri(f.env,{
+      whatsapp:'5561988885504'
+    },'rare_20pct_customer_4_check'),/esgotaram/i);
+  }finally{f.close();}
 });

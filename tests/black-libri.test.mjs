@@ -117,3 +117,31 @@ test('crédito respeita preços negociados inferiores, sem checkout zero',()=>{
   },{...prize('gift',0),prize_code:'save_static'});
   assert.equal(tiny.totalCents,100);
 });
+
+test('migração cadastra 20% OFF como vigésimo prêmio raro, sem ativação automática',()=>{
+  const add=readFileSync(new URL('../migrations/0032_black_libri_20pct.sql',import.meta.url),'utf8');
+  assert.match(add,/off_20p','20% OFF','percent',20,1,3,0/);
+  assert.match(add,/UPDATE v2_black_libri_prizes SET sort_order=sort_order\+1/);
+});
+
+test('20% OFF reduz o total no Pix, inclusive entrada de 50%',()=>{
+  const base={...quote('pix'),
+    payment:{method:'pix',depositPercent:50,depositCents:4750,balanceCents:4750}};
+  const adjusted=applyBlackLibriToQuote(base,{
+    ...prize('percent',20),prize_code:'off_20p',label:'20% OFF'
+  });
+  assert.equal(adjusted.blackLibriDiscountCents,1900);
+  assert.equal(adjusted.baseTotalCents,7600);
+  assert.equal(adjusted.totalCents,7600);
+  assert.equal(adjusted.payment.depositCents,3800);
+  assert.equal(adjusted.payment.balanceCents,3800);
+});
+
+test('20% OFF recalcula a taxa no cartão sem alterar o percentual do prêmio',()=>{
+  const adjusted=applyBlackLibriToQuote(quote('card'),{
+    ...prize('percent',20),prize_code:'off_20p'
+  });
+  assert.equal(adjusted.blackLibriDiscountCents,1900);
+  assert.equal(adjusted.baseTotalCents,7600);
+  assert.ok(adjusted.totalCents>7600);
+});

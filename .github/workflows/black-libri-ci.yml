@@ -20,6 +20,7 @@ on:
       - 'migrations/0029_black_libri.sql'
       - 'migrations/0030_black_libri_admin.sql'
       - 'migrations/0031_black_libri_dates.sql'
+      - 'migrations/0032_black_libri_20pct.sql'
       - 'tests/*black-libri*.test.mjs'
       - 'tests/v2.test.mjs'
       - 'tests/admin-v2-navigation.test.mjs'
@@ -56,9 +57,11 @@ jobs:
               db.executescript(file.read_text(encoding='utf-8'))
           prizes=db.execute('select count(*) from v2_black_libri_prizes').fetchone()[0]
           enabled=db.execute('select admin_enabled from v2_black_libri_campaign_state where id=1').fetchone()[0]
-          assert prizes==19, f'Esperados 19 prêmios, encontrado: {prizes}'
+          assert prizes==20, f'Esperados 20 prêmios, encontrado: {prizes}'
           assert enabled==0, 'Campanha jamais pode começar habilitada'
-          print('OK: 19 prêmios e campanha desligada')
+          rare=db.execute("SELECT kind,value,weight,max_claims,enabled FROM v2_black_libri_prizes WHERE code='off_20p'").fetchone()
+          assert rare==('percent',20,1,3,0), f'Prêmio raro fora da configuração aprovada: {rare}'
+          print('OK: 20 prêmios; 20% raro com 3 unidades e desativado por padrão')
           PY
       - name: Validar empacotamento, sem deploy
         run: pnpm exec wrangler deploy --dry-run --outdir .wrangler/black-libri-check

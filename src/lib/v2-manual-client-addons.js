@@ -25,7 +25,8 @@ function newCodes(raw) {
 
 async function editable(db, manual) {
   if (!manual || !['awaiting_payment', 'configuring'].includes(manual.status)
-    || manual.alreadyPaid || manual.payment) return false;
+    || manual.alreadyPaid || manual.payment || manual.pricing?.snapshot?.blackLibri)
+    return false;
   const row = await db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM v2_payments WHERE order_id = ?) AS payments,

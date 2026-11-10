@@ -78,3 +78,23 @@ O link `/pedido/manual/:token` participa da Black Libri antes de criar o checkou
 O WhatsApp é obtido do pedido armazenado no D1, e não de um campo fornecido pelo navegador. A mesma identidade participa uma vez em ambos os canais.
 Se houver escolha de adicionais antes de pagar, a prévia calcula o benefício sobre o novo preço; o desconto ou brinde é lançado na precificação e nos itens do **mesmo pedido** antes da cobrança. A entrada Pix de 50% autorizada no atendimento é preservada. Checkout já iniciado ou Pix já recebido não recebem um sorteio retroativo.
 A interface pública exibe apenas o prêmio, o total atualizado e o botão de continuar. Regras antifraude, detalhes da identidade e instruções internas ficam fora da tela.
+
+## Valor final confirmado antes de abrir checkout | Pedido manual
+O balão agora é mostrado antes do resumo final: cliente escolhe presentes,
+o servidor grava a premiação no **mesmo pedido manual**, a página reabre o
+resumo com o desconto/prêmio como linha de pedido, e só então exige
+aceitar os termos e iniciar o Mercado Pago. Se o total mudar entre a
+confirmação e a cobrança, a API recusa em vez de cobrar valor antigo.
+
+### Prêmio de adicional que já foi comprado
+Quando o adicional premiado já existe no pedido, o sistema NÃO adiciona
+outro: converte o prêmio em um **crédito** registrado como item financeiro
+`combo_adjustment` negativo; mantém o adicional original para produção.
+O crédito é o menor entre o valor desse adicional contratado e o preço
+da versão premiada, limitado ao saldo positivo do pedido.
+Equivalências vigentes: Save estático/animado, Lembrete estático/animado,
+Filtro de foto / Filtro Personalizado. Outros brindes são convertidos
+em crédito se houver adicional contratado exatamente com o código sorteado.
+Caso contrário, o presente continua como item gratuito.
+O crédito Black Libri permanece separado do desconto de cupom no snapshot,
+para não inflar a contabilização de cupons resgatados pelos webhooks.

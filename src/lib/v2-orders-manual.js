@@ -1688,6 +1688,17 @@ export async function startV2ManualOrderPayment(
   // Preserva todas as condições que a administradora já negociou.
   manual = await prepareManualBlackLibriPayment(env,token,manual);
 
+  // O valor do checkout deve coincidir com a última conferência visual.
+  // Se o prêmio vencer, o preço for renegociado ou outro dispositivo atualizar
+  // o pedido, nunca cobrar um total maior silenciosamente.
+  if (Number.isSafeInteger(body.expectedTotalCents)
+    && body.expectedTotalCents !== manual.pricing.totalCents) {
+    const error=new Error('O total do pedido foi atualizado. Confira o valor antes de pagar.');
+    error.status=409;
+    error.code='manual_total_changed';
+    throw error;
+  }
+
   const quote =
     manual.pricing
       .snapshot;

@@ -12,7 +12,10 @@ import {
   getManualClientAddonOffer,
   quoteManualClientAddons,
 } from '../lib/v2-manual-client-addons.js';
-import { statusManualBlackLibri, revealManualBlackLibri, previewManualBlackLibri } from '../lib/v2-black-libri-manual.js';
+import {
+  statusManualBlackLibri, revealManualBlackLibri, previewManualBlackLibri,
+  applyManualBlackLibriBeforePayment
+} from '../lib/v2-black-libri-manual.js';
 
 function routeError(
   error,
@@ -82,13 +85,14 @@ export async function handlePublicManualOrderV2Api(
   // Pedido manual: o token privado encontra o WhatsApp salvo no servidor.
   // A cliente não precisa repetir telefone nem criar outro pedido.
   const blackMatch=url.pathname.match(
-    /^\/api\/v2\/manual-order\/(ord_[a-f0-9]{36})\/black-libri\/(status|reveal|preview)$/
+    /^\/api\/v2\/manual-order\/(ord_[a-f0-9]{36})\/black-libri\/(status|reveal|preview|apply)$/
   );
   if(blackMatch && method==='POST') {
     try {
       const [,token,action]=blackMatch;
       if(action==='status') return json(await statusManualBlackLibri(env,token));
       if(action==='reveal') return json(await revealManualBlackLibri(env,token));
+      if(action==='apply') return json(await applyManualBlackLibriBeforePayment(env,token,await readJson(request)));
       return json(await previewManualBlackLibri(env,token,await readJson(request)));
     } catch(error) {
       return routeError(error,error?.status||422);

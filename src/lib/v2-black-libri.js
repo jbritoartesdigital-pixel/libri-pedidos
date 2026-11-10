@@ -182,21 +182,63 @@ export async function reservedBlackLibriForCheckout(env, customer, clientRequest
   return claim;
 }
 
+// Benefícios já contratados recebem um crédito, não uma segunda entrega.
+// Os valores máximos correspondem aos adicionais atualmente vendidos;
+// eventuais preços negociados menores são respeitados.
+const GIFT_EQUIVALENTS=Object.freeze({
+  save_static:{codes:['save_static','save_animated'],faceCents:2000},
+  save_animated:{codes:['save_static','save_animated'],faceCents:3500},
+  reminder_static:{codes:['reminder_static','reminder_animated'],faceCents:2000},
+  reminder_animated:{codes:['reminder_static','reminder_animated'],faceCents:3500},
+  photo_filter:{codes:['custom_filter'],faceCents:3500}
+});
+
+export function matchingBlackLibriGift(quote,claim) {
+  if(claim?.kind!=='gift')return null;
+  const code=String(claim.prize_code||'');
+  const rule=GIFT_EQUIVALENTS[code]||{codes:[code],faceCents:Infinity};
+  const addons=Array.isArray(quote.blackLibriOwnedAddons)
+    ? quote.blackLibriOwnedAddons : (Array.isArray(quote.addons)?quote.addons:[]);
+  const owned=addons.filter(item=>rule.codes.includes(item.code)
+    && Number.isSafeInteger(Number(item.priceCents))
+    && Number(item.priceCents)>0);
+  // Preferir a versão exata. Se não houver, reconhecer o mesmo serviço,
+  // porém nunca conceder crédito acima do preço da versão premiada.
+  const item=owned.find(a=>a.code===code)||owned[0];
+  if(!item)return null;
+  return {
+    code:item.code,
+    originalPaidCents:Number(item.priceCents),
+    creditCents:Math.min(Number(item.priceCents),rule.faceCents)
+  };
+}
+
 export function applyBlackLibriToQuote(quote, claim) {
   if (!claim) return quote;
   const discountBase = Math.max(0, Number(quote.baseTotalCents || 0));
   let discountCents = 0;
   if (claim.kind === 'fixed') discountCents = Number(claim.value);
   if (claim.kind === 'percent') discountCents = Math.round(discountBase * Number(claim.value)/100);
+  const duplicateGift=matchingBlackLibriGift(quote,claim);
+  if (duplicateGift) discountCents=duplicateGift.creditCents;
   // Não cria checkout de valor zero ou negativo.
   discountCents = Math.max(0,Math.min(Math.max(0,discountBase-100),discountCents));
   const adjustedBase = discountBase - discountCents;
-  const priced = priceWithCardProcessingFee(adjustedBase,quote.payment.method);
+  // Presentes gratuitos não podem alterar valores negociados no pedido manual
+  // nem gerar diferença de centavos por reprocessamento da taxa do cartão.
+  const priced = discountCents===0
+    ? { totalCents:Number(quote.totalCents||0),
+        cardFeeCents:Number(quote.cardFeeCents||0),
+        cardFeePercent:Number(quote.cardFeePercent||0) }
+    : priceWithCardProcessingFee(adjustedBase,quote.payment.method);
   const depositPercent = Number(quote.payment.depositPercent||100);
   const depositCents = Math.round(priced.totalCents * depositPercent/100);
   return {
     ...quote,
     subtotalCents: Math.max(0, Number(quote.subtotalCents||0)-discountCents),
+    // O cupom tradicional mantém seu valor original para não inflar
+    // a contabilização de uso de cupons no webhook do Mercado Pago.
+    couponDiscountCents:Number(quote.couponDiscountCents||0),
     baseTotalCents: adjustedBase,
     totalCents: priced.totalCents,
     cardFeeCents: priced.cardFeeCents,
@@ -207,6 +249,9 @@ export function applyBlackLibriToQuote(quote, claim) {
       code: claim.prize_code,
       label: claim.label,
       kind: claim.kind,
+      convertedToDiscount:Boolean(duplicateGift),
+      matchingAddonCode:duplicateGift?.code||null,
+      creditCents:discountCents,
       expiresAt: claim.expires_at,
       description: claim.description
     },

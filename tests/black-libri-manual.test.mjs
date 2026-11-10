@@ -6,7 +6,10 @@ import {createV2ManualOrder,startV2ManualOrderPayment,getV2ManualOrderForCustome
   from '../src/lib/v2-orders-manual.js';
 import {saveBlackLibriCampaign} from '../src/lib/v2-black-libri-admin.js';
 import {applyBlackLibriToQuote} from '../src/lib/v2-black-libri.js';
-import {statusManualBlackLibri,revealManualBlackLibri,previewManualBlackLibri}
+import {
+  statusManualBlackLibri,revealManualBlackLibri,previewManualBlackLibri,
+  applyManualBlackLibriBeforePayment
+}
   from '../src/lib/v2-black-libri-manual.js';
 import {handlePublicManualOrderV2Api} from '../src/routes/public-manual-order-v2.js';
 
@@ -15,14 +18,16 @@ const campaign={
   adminEnabled:true,complianceConfirmed:true,authorizationReference:'REGISTRO-TESTE',
   adminNote:'Ambiente sintético',validFrom:'2020-01-01',validUntil:'2030-12-31'
 };
-async function fixture(t,{depositPercent=100,paymentMethod='pix',phone='5511999997456'}={}) {
+async function fixture(t,{
+  depositPercent=100,paymentMethod='pix',phone='5511999997456',addonCodes=[]
+}={}) {
   const DB=database();
   providerMock(t);
   const env={DB,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
   const created=await createV2ManualOrder(request,env,{
     customer:{name:'Cliente Manual',whatsapp:phone,email:'manual-test@example.com'},
     event:{type:'birthday',honoreeName:'Teste Manual Black Libri',date:day(60)},
-    selection:{productCode:'interactive_essential',paymentMethod},
+    selection:{productCode:'interactive_essential',paymentMethod,addonCodes},
     deliveryWindow:{start:day(12),end:day(14)},
     paymentDepositPercent:depositPercent
   });
@@ -123,4 +128,78 @@ test('rota manual não aceita WhatsApp forjado enviado pelo navegador',async t=>
   const ui=readFileSync('public/js/client-v2-black-libri.js','utf8');
   assert.doesNotMatch(ui,/vinculada ao seu WhatsApp|Uma chance por cliente|Prêmio único/);
   assert.match(ui,/Surpresa para você!/);
+});
+
+test('prêmio duplicado Save vira abatimento ANTES do total e do Mercado Pago',async t=>{
+  const f=await fixture(t,{phone:'5511988881040',addonCodes:['save_static']});
+  const firstTotal=f.original.pricing.totalCents;
+  f.DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
+  assert.equal((await revealManualBlackLibri(f.env,f.token)).claim.code,'save_static');
+  const preview=await previewManualBlackLibri(f.env,f.token,{
+    productCode:f.payBody.productCode,variantCode:f.payBody.variantCode,addonCodes:[]
+  });
+  assert.equal(preview.quote.totalCents,firstTotal-2000);
+  const result=await applyManualBlackLibriBeforePayment(f.env,f.token,f.payBody);
+  assert.equal(result.order.pricing.totalCents,firstTotal-2000);
+  assert.equal(result.order.pricing.snapshot.blackLibri.convertedToDiscount,true);
+  const priced=f.DB.sqlite.prepare(
+    'SELECT coupon_discount_cents,total_cents,deposit_cents FROM v2_order_pricing WHERE order_id=?'
+  ).get(f.original.id);
+  assert.equal(priced.coupon_discount_cents,0,'Crédito Black não infla relatórios de cupons');
+  assert.equal(priced.total_cents,firstTotal-2000);
+  const rows=f.DB.sqlite.prepare(
+    'SELECT item_type,item_code,unit_price_cents FROM v2_order_items WHERE order_id=?'
+  ).all(f.original.id);
+  assert.equal(rows.filter(x=>x.item_code==='save_static').length,1);
+  assert.equal(rows.filter(x=>x.item_code==='black_libri:save_static').length,1);
+  const credit=rows.find(x=>x.item_code==='black_libri:save_static');
+  assert.equal(credit.item_type,'combo_adjustment');
+  assert.equal(credit.unit_price_cents,-2000);
+  const countBefore=f.DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n;
+  const checkout=await startV2ManualOrderPayment(request,f.env,f.token,{
+    ...f.payBody,expectedTotalCents:priced.total_cents
+  });
+  assert.equal(checkout.payment.amountDueNowCents,priced.deposit_cents);
+  assert.equal(f.DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,countBefore);
+  const again=await applyManualBlackLibriBeforePayment(f.env,f.token,f.payBody);
+  assert.equal(again.alreadyApplied,true);
+});
+
+test('lembrete premiado repetido credita o preço da versão sorteada',async t=>{
+  const f=await fixture(t,{phone:'5511988881041',addonCodes:['reminder_animated']});
+  f.DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='reminder_static' THEN 1 ELSE 0 END");
+  await revealManualBlackLibri(f.env,f.token);
+  const awarded=await applyManualBlackLibriBeforePayment(f.env,f.token,f.payBody);
+  assert.equal(awarded.order.pricing.totalCents,f.original.pricing.totalCents-2000);
+  assert.equal(awarded.order.pricing.snapshot.blackLibri.matchingAddonCode,'reminder_animated');
+  const duplicate=f.DB.sqlite.prepare(
+    "SELECT count(*) AS n FROM v2_order_items WHERE order_id=? AND item_code='black_libri:reminder_static' AND item_type='addon'"
+  ).get(f.original.id);
+  assert.equal(duplicate.n,0);
+});
+
+test('prêmio é aplicado em pedido Pix 50% antes de iniciar cobrança',async t=>{
+  const f=await fixture(t,{phone:'5511988881042',depositPercent:50});
+  f.DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='off_15' THEN 1 ELSE 0 END");
+  await revealManualBlackLibri(f.env,f.token);
+  const applied=await applyManualBlackLibriBeforePayment(f.env,f.token,f.payBody);
+  assert.equal(applied.order.pricing.totalCents,f.original.pricing.totalCents-1500);
+  assert.equal(applied.order.pricing.depositPercent,50);
+  const pay=await startV2ManualOrderPayment(request,f.env,f.token,{
+    ...f.payBody,expectedTotalCents:applied.order.pricing.totalCents
+  });
+  assert.equal(pay.payment.amountDueNowCents,applied.order.pricing.depositCents);
+});
+
+test('não permite cobrar valor antigo depois que o prêmio foi aplicado',async t=>{
+  const f=await fixture(t,{phone:'5511988881043'});
+  f.DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='off_10' THEN 1 ELSE 0 END");
+  await revealManualBlackLibri(f.env,f.token);
+  const applied=await applyManualBlackLibriBeforePayment(f.env,f.token,f.payBody);
+  assert.equal(applied.order.pricing.totalCents,f.original.pricing.totalCents-1000);
+  await assert.rejects(
+    startV2ManualOrderPayment(request,f.env,f.token,f.payBody),
+    /total do pedido foi atualizado/i
+  );
+  assert.equal(f.DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
 });

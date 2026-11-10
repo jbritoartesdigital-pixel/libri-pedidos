@@ -649,13 +649,19 @@ async function createOrderRecords(
             ),
       );
 
-  if (quote.blackLibri?.kind === 'gift') {
+  if (quote.blackLibri) {
+    // O mesmo adicional comprado + presente sorteado gera desconto, não
+    // duplicidade no trabalho de produção. Benefício e preço seguem o pedido.
+    const creditCents=Number(quote.blackLibriDiscountCents||0);
     itemStatements.push(db.prepare(`
       INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,
         quantity,unit_price_cents,points_units,configuration_json,created_at)
-      VALUES(?,'addon',?,?,1,0,0,'{}',?)
-    `).bind(orderId,'black_libri:'+quote.blackLibri.code,
-      'Brinde Black Libri: '+quote.blackLibri.label,stamp));
+      VALUES(?,?,?,?,1,?,0,'{}',?)
+    `).bind(orderId,creditCents>0?'combo_adjustment':'addon',
+      'black_libri:'+quote.blackLibri.code,
+      creditCents>0?'Desconto Black Libri: '+quote.blackLibri.label:
+        'Brinde Black Libri: '+quote.blackLibri.label,
+      creditCents>0?-creditCents:0,stamp));
   }
 
   await db.batch([

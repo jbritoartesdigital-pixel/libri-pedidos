@@ -59,3 +59,61 @@ test('catálogo mantém exatamente 19 prêmios e 100% de peso inicial',()=>{
   assert.match(migration,/customer_key TEXT NOT NULL UNIQUE/);
   assert.match(migration,/status IN \('reserved','attached','redeemed','expired'\)/);
 });
+
+test('Save the Date já contratado vira crédito, sem brinde duplicado',()=>{
+  const base={...quote('pix'),
+    addons:[{code:'save_static',priceCents:2000,group:'save_the_date'}]};
+  const award={...prize('gift',0),prize_code:'save_static',label:'Save the Date estático'};
+  const adjusted=applyBlackLibriToQuote(base,award);
+  assert.equal(adjusted.blackLibriDiscountCents,2000);
+  assert.equal(adjusted.totalCents,7500);
+  assert.equal(adjusted.blackLibri.convertedToDiscount,true);
+  assert.equal(adjusted.blackLibri.matchingAddonCode,'save_static');
+  assert.equal(adjusted.couponDiscountCents,0);
+});
+
+test('Lembrete contratado: prêmio estático limita crédito da versão animada',()=>{
+  const base={...quote('pix'),
+    addons:[{code:'reminder_animated',priceCents:3500,group:'reminder'}]};
+  const award={...prize('gift',0),prize_code:'reminder_static',label:'Lembrete estático'};
+  const adjusted=applyBlackLibriToQuote(base,award);
+  assert.equal(adjusted.blackLibriDiscountCents,2000);
+  assert.equal(adjusted.totalCents,7500);
+  assert.equal(adjusted.blackLibri.convertedToDiscount,true);
+});
+
+test('brinde animado com item estático já comprado dá crédito até o valor pago',()=>{
+  const base={...quote('pix'),
+    addons:[{code:'save_static',priceCents:2000,group:'save_the_date'}]};
+  const award={...prize('gift',0),prize_code:'save_animated'};
+  const adjusted=applyBlackLibriToQuote(base,award);
+  assert.equal(adjusted.blackLibriDiscountCents,2000);
+  assert.equal(adjusted.totalCents,7500);
+});
+
+test('filtro e brinde genérico exato: descontar somente adicional já comprado',()=>{
+  const base={...quote('pix'),
+    addons:[{code:'custom_filter',priceCents:3500,group:'filter'}]};
+  const award={...prize('gift',0),prize_code:'photo_filter'};
+  const adjusted=applyBlackLibriToQuote(base,award);
+  assert.equal(adjusted.blackLibriDiscountCents,3500);
+  assert.equal(adjusted.totalCents,6000);
+  const absent=applyBlackLibriToQuote({...quote('pix'),addons:[]},award);
+  assert.equal(absent.totalCents,9500);
+  assert.equal(absent.blackLibri.convertedToDiscount,false);
+});
+
+test('crédito respeita preços negociados inferiores, sem checkout zero',()=>{
+  const negotiated={...quote('pix'),
+    addons:[{code:'save_static',priceCents:1200}]};
+  const adjusted=applyBlackLibriToQuote(negotiated,{
+    ...prize('gift',0),prize_code:'save_static'
+  });
+  assert.equal(adjusted.blackLibriDiscountCents,1200);
+  const tiny=applyBlackLibriToQuote({...quote('pix'),
+    subtotalCents:1500,baseTotalCents:1500,totalCents:1500,
+    addons:[{code:'save_static',priceCents:2000}],
+    payment:{...quote('pix').payment,depositCents:1500}
+  },{...prize('gift',0),prize_code:'save_static'});
+  assert.equal(tiny.totalCents,100);
+});

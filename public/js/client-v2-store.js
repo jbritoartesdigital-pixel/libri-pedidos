@@ -17,7 +17,7 @@ import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
-import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-4';
+import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-5';
 import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
 
 const EVENT_TYPES = [
@@ -5285,16 +5285,16 @@ export async function startManualOrder(
       }`,
     );
 
-  const order =
+  let order =
     data.order;
 
   const manualBlackStatus=await api(
     '/api/v2/manual-order/'+encodeURIComponent(token)+'/black-libri/status',
     {method:'POST',body:'{}'}
   ).catch(()=>({enabled:false}));
-  const manualBlackEnabled=manualBlackStatus.enabled===true;
+  let manualBlackEnabled=manualBlackStatus.enabled===true;
 
-  const addonOffer = data.addonOffer || { editable: false, available: [] };
+  let addonOffer = data.addonOffer || { editable: false, available: [] };
   const contractedAddonCodes = order.items.filter(item => item.item_type === 'addon')
     .map(item => item.item_code);
   let selectedManualAddonCodes = [];
@@ -5317,6 +5317,10 @@ export async function startManualOrder(
       && order.payment.status
       !== 'approved'
       && order.payment.checkoutUrl;
+    const appliedPrize=order.pricing.snapshot?.blackLibri||null;
+    const promoPending=manualBlackEnabled && !appliedPrize &&
+      !order.alreadyPaid && !paymentPending;
+    const promoDiscount=Number(order.pricing.snapshot?.blackLibriDiscountCents||0);
 
     app.innerHTML = `
       <section class="page-card">
@@ -5369,12 +5373,21 @@ export async function startManualOrder(
             </dd>
           </div>
 
+          ${appliedPrize ? `
           <div class="review-line">
-            <dt>Total</dt>
-            <dd id="manualUpdatedTotal">${money(order.pricing.totalCents)}</dd>
+            <dt>Antes da promoção</dt>
+            <dd>${money(order.pricing.snapshot?.blackLibriOriginal?.totalCents ?? order.pricing.totalCents)}</dd>
+          </div>
+          <div class="review-line">
+            <dt>🎁 ${promoDiscount>0?'Desconto Black Libri':'Presente Black Libri'}</dt>
+            <dd>${promoDiscount>0?'-'+money(promoDiscount):esc(appliedPrize.label)}</dd>
+          </div>` : ''}
+          <div class="review-line">
+            <dt>${promoPending?'Total após a surpresa':'Total'}</dt>
+            <dd id="manualUpdatedTotal">${promoPending?'A revelar':money(order.pricing.totalCents)}</dd>
           </div>
 
-          <div class="review-line">
+          <div class="review-line ${promoPending?'hidden':''}">
             <dt>Pagamento</dt>
             <dd id="manualUpdatedDeposit">
               ${
@@ -5387,7 +5400,7 @@ export async function startManualOrder(
             </dd>
           </div>
           ${order.pricing.balanceCents > 0 ? `
-            <div class="review-line">
+            <div class="review-line ${promoPending?'hidden':''}">
               <dt>Saldo após a entrada</dt>
               <dd id="manualUpdatedBalance">${money(order.pricing.balanceCents)}</dd>
             </div>` : ''}
@@ -5452,17 +5465,20 @@ export async function startManualOrder(
                   </a>
                 </div>
               `
-              : `
+              : promoPending ? `
+                <section class="card section-block" aria-label="Black Libri">
+                  <div class="section-title"><h2>🎈 Uma surpresa antes do total!</h2></div>
+                  <p>Escolha um balão e descubra o presente especial da Libri. O valor final aparecerá aqui antes de pagar.</p>
+                  <button id="manualRevealPrize" type="button" class="btn btn-primary btn-large">
+                    Descobrir meu presente
+                  </button>
+                </section>
+              ` : `
+                ${appliedPrize?'<p class="notice success">Seu presente Black Libri foi aplicado ao pedido!</p>':''}
                 ${manualTerms(order)}
-
                 <div class="action-row">
                   <span></span>
-
-                  <button
-                    id="manualPay"
-                    class="btn btn-primary btn-large"
-                    type="button"
-                  >
+                  <button id="manualPay" class="btn btn-primary btn-large" type="button">
                     Ir para o pagamento
                   </button>
                 </div>
@@ -5480,7 +5496,7 @@ export async function startManualOrder(
       const deposit = document.getElementById('manualUpdatedDeposit');
       const balance = document.getElementById('manualUpdatedBalance');
       const items = document.getElementById('manualUpdatedItems');
-      if (total) total.textContent = money(totalCents);
+      if (total) total.textContent = promoPending ? 'A revelar' : money(totalCents);
       if (deposit) deposit.textContent = order.pricing.paymentMethod === 'pix'
         ? `Pix • ${order.pricing.depositPercent === 50 ? 'entrada de ' : 'integral de '}${money(depositCents)}`
         : `Cartão • integral de ${money(depositCents)}`;
@@ -5527,7 +5543,9 @@ export async function startManualOrder(
         manualAddonQuotePending = false;
         updateManualSummary();
         if (addonFeedback) {
-          addonFeedback.textContent = `Novo total: ${money(manualAddonQuote.totalCents)} • ${order.pricing.depositPercent === 50 ? 'Entrada de 50%' : 'Pagamento integral'}: ${money(manualAddonQuote.depositCents)}${manualAddonQuote.balanceCents > 0 ? ` • Saldo posterior: ${money(manualAddonQuote.balanceCents)}` : ''}. Confira antes de pagar.`;
+          addonFeedback.textContent = promoPending
+            ? 'Adicionais conferidos. O total final aparecerá depois do presente Black Libri.'
+            : `Novo total: ${money(manualAddonQuote.totalCents)} • ${order.pricing.depositPercent === 50 ? 'Entrada de 50%' : 'Pagamento integral'}: ${money(manualAddonQuote.depositCents)}${manualAddonQuote.balanceCents > 0 ? ` • Saldo posterior: ${money(manualAddonQuote.balanceCents)}` : ''}. Confira antes de pagar.`;
         }
         if (paymentButton) paymentButton.disabled = false;
       } catch (error) {
@@ -5727,6 +5745,54 @@ export async function startManualOrder(
             );
           }
     };
+    document.getElementById('manualRevealPrize')?.addEventListener('click',async()=>{
+      if (manualAddonQuotePending ||
+        ((selectedManualAddonCodes.length||manualProductChanged())&&!manualAddonQuote)) {
+        showToast('Confira os adicionais antes de descobrir seu presente.');
+        return;
+      }
+      const selection={
+        addonCodes:[...selectedManualAddonCodes],
+        productCode:selectedManualProductCode,
+        variantCode:selectedManualVariantCode,
+        expectedTotalCents:manualAddonQuote?.totalCents ?? order.pricing.totalCents
+      };
+      try {
+        await openBlackLibriBeforePayment({
+          manualToken:token,manualSelection:selection,
+          onContinue:async claim=>{
+            if (!claim || claim.status!=='reserved') {
+              showToast('Este presente não está disponível neste pedido.');
+              return;
+            }
+            try {
+              const res=await api(
+                '/api/v2/manual-order/'+encodeURIComponent(token)+'/black-libri/apply',
+                {method:'POST',body:JSON.stringify(selection)}
+              );
+              if (!res.order?.pricing?.snapshot?.blackLibri) {
+                throw new Error('O total do pedido não foi atualizado. Atualize a página.');
+              }
+              order=res.order;
+              manualBlackEnabled=false;
+              addonOffer={editable:false,available:[],products:[]};
+              selectedManualAddonCodes=[];
+              manualAddonQuote=null;
+              manualAddonQuotePending=false;
+              selectedManualProductCode=order.pricing.snapshot.product?.code||'';
+              selectedManualVariantCode=order.pricing.snapshot.variant?.code||'';
+              render();
+              showToast('Seu presente foi aplicado ao total do pedido!');
+            } catch(error) {
+              showToast(error.message||'Não foi possível aplicar o presente. Atualize a página.');
+            }
+          }
+        });
+      } catch(error) {
+        showToast(error.message||'Não foi possível abrir a surpresa.');
+      }
+    });
+
     document.getElementById('manualPay')?.addEventListener('click',async()=>{
       if (manualAddonQuotePending
         || (selectedManualAddonCodes.length && !manualAddonQuote)
@@ -5738,23 +5804,7 @@ export async function startManualOrder(
         showToast('Leia e aceite as condições para continuar.');
         return;
       }
-      if (!manualBlackEnabled) {
-        await payManualNow();
-        return;
-      }
-      try {
-        await openBlackLibriBeforePayment({
-          manualToken:token,
-          manualSelection:{
-            addonCodes:[...selectedManualAddonCodes],
-            productCode:selectedManualProductCode,
-            variantCode:selectedManualVariantCode
-          },
-          onContinue:()=>{void payManualNow();}
-        });
-      } catch(error) {
-        showToast(error.message||'Não foi possível abrir a surpresa. Tente novamente.');
-      }
+      await payManualNow();
     });
   };
 

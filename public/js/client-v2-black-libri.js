@@ -113,7 +113,7 @@ export async function openBlackLibriBeforePayment({
           : 'Estoure um balão e descubra seu presente!'}</p>
         ${selected ? prizePanel(claim,quote) : '<div class="black-libri-grid">'+balloons+'</div>'}
         ${selected ? `<button class="black-libri-button" type="button" data-black-continue
-          ${active?'disabled':''}>Continuar para o pagamento</button>` : ''}
+          ${active || (claim.status==='reserved'&&!quote)?'disabled':''}>${manualToken?'Aplicar meu presente':'Continuar para o pagamento'}</button>` : ''}
         <p class="black-libri-foot">Feito com carinho pela Libri Convites ♡</p>
       </section>`;
     overlay.querySelector('.black-libri-close')?.addEventListener('click',()=>{if(!active)close();});
@@ -138,7 +138,7 @@ export async function openBlackLibriBeforePayment({
       }
     }));
     overlay.querySelector('[data-black-continue]')?.addEventListener('click',()=>{
-      if(active)return;
+      if(active || (claim?.status==='reserved'&&!quote))return;
       // A cliente pode fechar o modal depois de revelar: reabrir mostra
       // exatamente o mesmo prêmio. O pagamento não atribui outro.
       close();

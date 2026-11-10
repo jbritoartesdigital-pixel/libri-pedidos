@@ -1,3 +1,4 @@
+import { summarizeBlackLibriAwards } from './admin-v2-black-libri-prize.js?v=20261110-1';
 import {
   api,
   dateBr,
@@ -188,6 +189,38 @@ function finalizeChecklistHtml(
         Finalizar pedido
       </button>
     </div>
+  `;
+}
+
+function blackLibriPrizeBlock(detail) {
+  const awards = summarizeBlackLibriAwards(detail.items);
+  if (!awards.length) return '';
+
+  return `
+    <section aria-label="Premiação Black Libri deste pedido"
+      style="margin:12px 0;padding:14px 16px;border:1px solid #d9a89c;
+      border-radius:14px;background:linear-gradient(120deg,#fff9f7,#f9e8e5);
+      color:#5f2945">
+      <strong style="display:block;font-size:14px;letter-spacing:.02em">
+        🎈 BLACK LIBRI | Prêmio da cliente
+      </strong>
+      ${awards.map(award => `
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:8px">
+          <strong style="font-size:16px">${esc(award.label)}</strong>
+          <small style="font-size:13px">
+            ${award.kind === 'gift'
+              ? 'Brinde digital sem custo adicional'
+              : award.kind === 'converted_gift'
+                ? 'Brinde convertido em crédito: ' + money(award.amountCents)
+                  + ' (não produzir em duplicidade)'
+                : 'Desconto aplicado: ' + money(award.amountCents)}
+          </small>
+        </div>
+      `).join('')}
+      <small style="display:block;margin-top:9px;font-size:12px">
+        Benefício registrado no pedido. Confira o pagamento antes de iniciar a produção.
+      </small>
+    </section>
   `;
 }
 
@@ -710,6 +743,7 @@ export async function openOrder(code, onChanged = null) {
               ${detail.order.isLegacyV1 ? `<br>Pix registrado: ${money(pixPaidCents)}
                 • Saldo em aberto: ${money(pixRemainingCents)}` : ''}
             </div>
+            ${blackLibriPrizeBlock(detail)}
             <div class="order-payment-snapshot" aria-label="Resumo financeiro do pedido">
               <div><small>Valor do pedido</small><strong>${money(detail.pricing.totalCents)}</strong></div>
               <div><small>Recebido</small><strong>${money(pixPaidCents)}</strong></div>

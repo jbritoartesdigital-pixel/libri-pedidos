@@ -16,6 +16,7 @@ import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingC
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
+import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
 
 const EVENT_TYPES = [
   {
@@ -5233,6 +5234,8 @@ export async function startManualOrder(
     data.order;
 
   const addonOffer = data.addonOffer || { editable: false, available: [] };
+  const contractedAddonCodes = order.items.filter(item => item.item_type === 'addon')
+    .map(item => item.item_code);
   let selectedManualAddonCodes = [];
   let manualAddonQuote = null;
   let manualAddonQuotePending = false;
@@ -5343,14 +5346,9 @@ export async function startManualOrder(
               O formato e as cenas podem ser alterados no botão acima.
               A condição de pagamento autorizada pela Libri não muda.
             </p>
-            <div class="list">
-              ${addonOffer.available.map(addon => `
-                <label class="checkline">
-                  <input type="checkbox" name="manualAddonCode"
-                    value="${esc(addon.code)}" ${selectedManualAddonCodes.includes(addon.code) ? 'checked' : ''}>
-                  <span>${esc(addon.name)} <strong>+${money(addon.priceCents)}</strong></span>
-                </label>
-              `).join('')}
+            <div class="manual-addon-groups">
+              ${compactManualAddonsHtml(addonOffer.available, selectedManualAddonCodes,
+                contractedAddonCodes, money, esc)}
             </div>
           </section>
         ` : ''}
@@ -5483,13 +5481,41 @@ export async function startManualOrder(
       }
     };
 
-    document.querySelectorAll('[name="manualAddonCode"]').forEach(input => {
-      input.addEventListener('change', () => {
-        selectedManualAddonCodes = [...document.querySelectorAll('[name="manualAddonCode"]:checked')]
-          .map(field => field.value);
-        void refreshManualQuote();
-      });
-    });
+    const syncManualAddonSelection = () => {
+      const checkedCodes = () => [...document.querySelectorAll('[data-manual-addon="1"]:checked')]
+        .map(input => input.value).filter(Boolean);
+      let codes = checkedCodes();
+      const extraRow = document.getElementById('manualMomentsExtraRow');
+      const hasAlbum = contractedAddonCodes.some(isMomentsPlan) || codes.some(isMomentsPlan);
+      if (extraRow) {
+        extraRow.classList.toggle('hidden', !hasAlbum);
+        if (!hasAlbum) {
+          const extra = extraRow.querySelector('input');
+          if (extra) extra.checked = false;
+          codes = checkedCodes();
+        }
+      }
+      selectedManualAddonCodes = codes;
+      for (const details of document.querySelectorAll('[data-manual-addon-group]')) {
+        if (details.tagName !== 'DETAILS') continue;
+        const group = details.dataset.manualAddonGroup;
+        const data = compactManualAddonGroups(addonOffer.available).find(x => x.key === group);
+        if (!data) continue;
+        const chosen = data.options.find(option => codes.includes(option.code));
+        const price = details.querySelector('[data-addon-price]');
+        const label = details.querySelector('[data-addon-choice]');
+        const selectedOption = chosen
+          ? details.querySelector(`input[value="${chosen.code}"]`)?.closest('label')
+          : null;
+        if (price) price.textContent = chosen ? money(chosen.priceCents)
+          : 'A partir de ' + money(data.minPriceCents);
+        if (label) label.textContent = selectedOption?.querySelector('span')?.textContent
+          || 'Toque para escolher';
+      }
+      void refreshManualQuote();
+    };
+    document.querySelectorAll('[data-manual-addon="1"], [name^="manualAddonGroup_"]')
+      .forEach(input => input.addEventListener('change', syncManualAddonSelection));
 
     document.getElementById('manualChangeProduct')?.addEventListener('click', () => {
       const products = addonOffer.products || [];

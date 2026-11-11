@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release Black Libri Rose Edition 11/11: baloes rose, som, resgate e consulta; sem migrations.
 # Release 10/11: mostrar premiação Black Libri no detalhe administrativo; sem migrations.
 # Publicações de manutenção com o marcador [sem-migracoes] não aplicam migrations D1.
 # Limpeza de tabelas legadas exige bookmark Time Travel e contagens previamente auditadas.

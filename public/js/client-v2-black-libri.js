@@ -10,7 +10,7 @@ async function ensureStyles(){
  if(document.getElementById('blackLibriClientStyles'))return;
  const link=document.createElement('link');
  link.id='blackLibriClientStyles';link.rel='stylesheet';
- link.href='/css/client-v2-black-libri.css?v=20261110-rose-1';
+ link.href='/css/client-v2-black-libri.css?v=20261111-rose-v2-2';
  await new Promise(resolve=>{link.onload=resolve;link.onerror=resolve;document.head.appendChild(link);});
 }
 

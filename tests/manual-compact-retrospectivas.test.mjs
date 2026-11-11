@@ -132,6 +132,6 @@ test('interface compacta preserva fluxo de cotação e cache renovado',()=>{
   assert.match(store,/data-manual-addon="1"/);
   assert.match(store,/refreshManualQuote\(\)/);
   assert.match(html,/client-v2\.css\?v=20261110-confirmation-clear-1/);
-  assert.match(html,/client-v2\.js\?v=20261110-rose-1/);
-  assert.match(entry,/client-v2-store\.js\?v=20261110-rose-1/);
+  assert.match(html,/client-v2\.js\?v=20261111-rose-v2-2/);
+  assert.match(entry,/client-v2-store\.js\?v=20261111-rose-v2-2/);
 });

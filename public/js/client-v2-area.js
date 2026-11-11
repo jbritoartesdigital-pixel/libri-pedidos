@@ -1,4 +1,4 @@
-import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261110-rose-1';
+import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261111-rose-v2-2';
 
 import {
   api,

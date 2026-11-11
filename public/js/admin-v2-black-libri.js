@@ -1,5 +1,5 @@
 import { api, esc, showToast, setViewMeta, viewRoot } from './admin-v2-core.js';
-import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-rose-1';
+import { openBlackLibriDemo } from './black-libri-demo.js?v=20261111-rose-v2-2';
 
 function count(n) { return new Intl.NumberFormat('pt-BR').format(Number(n||0)); }
 function effectiveStock(prize) {

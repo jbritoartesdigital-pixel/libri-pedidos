@@ -7,11 +7,11 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261110-rose-1';
+} from './client-v2-store.js?v=20261111-rose-v2-2';
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261110-rose-1';
+} from './client-v2-area.js?v=20261111-rose-v2-2';
 
 async function bootstrap() {
   const route =

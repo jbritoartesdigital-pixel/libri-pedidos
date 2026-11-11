@@ -1,4 +1,5 @@
 import { syncMercadoPagoOrder } from './v2-mercadopago.js';
+import { pendingPaidCapacityReview } from './v2-capacity-review.js';
 
 import {
   fail,
@@ -2696,6 +2697,11 @@ export async function getV2CustomerArea(
       )
       - paidCents,
     );
+  const capacityReviewPending = paidCents > 0 && (
+    await pendingPaidCapacityReview(env.DB, context.order.id)
+    || (context.order.briefing_status === 'locked'
+      && ['awaiting_payment', 'urgency_approved'].includes(context.order.status))
+  );
 
   const pricingSnapshot = parseJson(context.order.pricing_snapshot_json, {});
   const baseTotalCents = baseTotalFromSnapshot(context.order, pricingSnapshot);
@@ -2806,15 +2812,7 @@ export async function getV2CustomerArea(
         ),
       paidCents,
       remainingCents,
-      capacityReview:
-        paidCents > 0
-        && context.order.briefing_status === 'locked'
-        && [
-          'awaiting_payment',
-          'urgency_approved',
-        ].includes(
-          context.order.status,
-        ),
+      capacityReview: capacityReviewPending,
       balancePix:
         context.order.status === 'balance_pending'
         && context.order.payment_method === 'pix'
@@ -3793,8 +3791,12 @@ export async function submitV2Briefing(
   }
 
   const keepStage = retainAdminOrderStage(context, administrative);
-  const nextOrderStatus = keepStage ? context.order.status : 'ready_for_production';
-  const nextAction = keepStage ? context.order.next_action : 'Iniciar produção';
+  const awaitingCapacity = await pendingPaidCapacityReview(env.DB, context.order.id);
+  const nextOrderStatus = keepStage ? context.order.status
+    : awaitingCapacity ? 'briefing_pending' : 'ready_for_production';
+  const nextAction = keepStage ? context.order.next_action
+    : awaitingCapacity ? 'Dados recebidos; revisar agenda antes da produção'
+      : 'Iniciar produção';
   const stamp =
     nowIso();
 
@@ -3880,7 +3882,7 @@ export async function submitV2Briefing(
       title:
         keepStage ? 'Dados da festa registrados ✓' : 'Dados da festa enviados ✓',
       body:
-        `${context.order.order_code} • ${context.order.honoree_display_name} • ${keepStage ? 'briefing administrativo concluído' : 'pronto para produção'}`,
+        `${context.order.order_code} • ${context.order.honoree_display_name} • ${awaitingCapacity ? 'dados recebidos, agenda ainda em revisão' : keepStage ? 'briefing administrativo concluído' : 'pronto para produção'}`,
       actionUrl:
         `/admin-v2?order=${
           encodeURIComponent(
@@ -3911,7 +3913,9 @@ export async function submitV2Briefing(
       title:
         'Tudo pronto! 💛',
       message:
-        'Os dados e as fotos do pedido foram enviados para a Libri e estão organizados para a produção.',
+        awaitingCapacity
+          ? 'Recebemos os dados e as fotos. A Libri ainda está revisando a janela de entrega antes de iniciar a produção.'
+          : 'Os dados e as fotos do pedido foram enviados para a Libri e estão organizados para a produção.',
       whatsappButtonLabel:
         'Avisar a Libri no WhatsApp 💛',
       whatsappUrl:

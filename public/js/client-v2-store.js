@@ -218,6 +218,11 @@ function readSaved(
         productSlug
         || saved.deepProductSlug
         || '',
+      customer: {
+        ...emptyState(productSlug).customer,
+        ...(saved.customer && typeof saved.customer === 'object'
+          ? saved.customer : {}),
+      },
       selection: {
         ...emptyState(
           productSlug,
@@ -237,6 +242,8 @@ function readSaved(
   }
 }
 
+let warnedStorageUnavailable = false;
+
 function persist(
   state,
 ) {
@@ -249,14 +256,26 @@ function persist(
   } =
     state;
 
-  localStorage.setItem(
-    storeKeyFor(
-      state.simulationMode,
-    ),
-    JSON.stringify(
-      save,
-    ),
-  );
+  try {
+    localStorage.setItem(
+      storeKeyFor(
+        state.simulationMode,
+      ),
+      JSON.stringify(
+        save,
+      ),
+    );
+  } catch (error) {
+    // iOS Safari can deny storage or run out of quota. Storage failure
+    // must not turn an optional offer into a mandatory purchase.
+    // Keep the in-memory state so the customer can finish this session.
+    if (!['QuotaExceededError', 'SecurityError', 'NotAllowedError']
+      .includes(error?.name)) throw error;
+    if (!warnedStorageUnavailable) {
+      warnedStorageUnavailable = true;
+      showToast('Seu navegador não salvou o progresso. Continue sem fechar esta aba.');
+    }
+  }
 }
 
 function productFor(
@@ -1507,7 +1526,9 @@ async function continueAfterRecommendation(
   state.step =
     7;
 
-  persist(state);
+  // All offers are optional. Never require an extra quote/API call here.
+  // render() persists once; the step is already in memory if Safari
+  // temporarily denies localStorage.
   render();
 }
 
@@ -3605,25 +3626,22 @@ function renderRecommendation(
     )
     .addEventListener(
       'click',
-      async () => {
-        loading(
-          'Continuando...',
-        );
+      async (event) => {
+        const button = event.currentTarget;
+        if (button.disabled) return;
+        button.disabled = true;
+        button.textContent = 'Abrindo seus dados...';
 
         try {
-          await continueAfterRecommendation(
-            state,
-            render,
-          );
+          await continueAfterRecommendation(state, render);
         } catch (error) {
-          showToast(
-            error.message,
-          );
-
-          renderRecommendation(
-            state,
-            render,
-          );
+          // Avoid sending the customer back to the same popup forever.
+          // Their choice to decline is saved in the in-memory step.
+          console.error('Falha ao avançar após oferta opcional:', error?.name);
+          showToast('Não foi possível abrir seus dados. Tente novamente.');
+          button.disabled = false;
+          button.textContent = offer.kind === 'product_upgrade'
+            ? 'Não, quero apenas o vídeo' : 'Agora não';
         }
       },
     );

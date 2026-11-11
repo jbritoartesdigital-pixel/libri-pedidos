@@ -44,7 +44,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261110-black-libri-3';
+} from './admin-v2-config.js?v=20261110-rose-1';
 
 import {
   refreshBell,

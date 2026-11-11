@@ -2752,6 +2752,15 @@ export async function getV2CustomerArea(
         context.order.source,
     },
 
+    blackLibri: pricingSnapshot.blackLibri?.label ? {
+      code: String(pricingSnapshot.blackLibri.code || ''),
+      label: String(pricingSnapshot.blackLibri.label),
+      description: String(pricingSnapshot.blackLibri.description || ''),
+      kind: String(pricingSnapshot.blackLibri.kind || ''),
+      creditCents: Math.max(0, Number(pricingSnapshot.blackLibri.creditCents || 0)),
+      convertedToDiscount: pricingSnapshot.blackLibri.convertedToDiscount === true,
+    } : null,
+
     urgency: urgency ? { status: urgency.status, note: urgency.decision_note,
       percent: Number(urgency.urgency_percent || 0) } : null,
 

@@ -32,7 +32,25 @@ test('admin oferece prévia independente sem cobrar nem reservar',()=>{
 });
 test('client HTML aponta para o novo módulo em cache separado',()=>{
   const entry=readFileSync(new URL('../public/js/client-v2.js',import.meta.url),'utf8');
-  assert.match(shell,/\/js\/client-v2\.js\?v=20261110-capacity-review-1/);
-  assert.match(entry,/client-v2-store\.js\?v=20261110-confirmation-clear-1/);
-  assert.match(store,/black-libri-demo\.js\?v=20261110-1/);
+  assert.match(shell,/\/js\/client-v2\.js\?v=20261110-rose-1/);
+  assert.match(entry,/client-v2-store\.js\?v=20261110-rose-1/);
+  assert.match(store,/black-libri-demo\.js\?v=20261110-rose-1/);
+});
+
+
+test('Rose Edition keeps server reveal, pop sound and stored gift re-opening',()=>{
+ const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
+ const area=readFileSync(new URL('../public/js/client-v2-area.js',import.meta.url),'utf8');
+ const server=readFileSync(new URL('../src/lib/v2-customer-area.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
+ assert.match(live,/playBalloonPop\(soundOn\)/);
+ assert.match(live,/window\.AudioContext/);
+ assert.match(live,/Resgatar meu presente/);
+ assert.match(live,/onContinue\(claim\)/);
+ assert.match(live,/openBlackLibriPrizeDetails/);
+ assert.match(area,/id="viewBlackLibriPrize"/);
+ assert.match(store,/id="manualViewBlackLibriPrize"/);
+ assert.match(server,/blackLibri: pricingSnapshot\.blackLibri/);
+ assert.match(css,/grid-template-columns:repeat\(3/);
+ assert.doesNotMatch(css,/#111017|#e9b25d/);
 });

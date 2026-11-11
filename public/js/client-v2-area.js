@@ -1,3 +1,5 @@
+import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261110-rose-1';
+
 import {
   api,
   app,
@@ -644,6 +646,14 @@ function summaryHtml(
         </p>
       </div>
 
+      ${area.blackLibri ? `
+        <div class="notice success" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+          <strong>🎁 Black Libri: ${esc(area.blackLibri.label)}</strong>
+          <button class="btn btn-ghost" type="button" id="viewBlackLibriPrize">
+            Ver meu presente
+          </button>
+        </div>
+      ` : ''}
       ${area.payment?.returnState === 'confirmed' ? '<div class="notice success">Pagamento confirmado ✓ O próximo passo já foi liberado.</div>' : ''}
       ${capacityReview || area.payment?.returnState === 'capacity_review' ? '<div class="notice info">Pagamento confirmado ✓ A Libri está revisando sua janela de entrega antes de liberar o próximo passo. Não é necessário pagar novamente.</div>' : ''}
       ${area.payment?.returnState === 'waiting' ? '<div class="notice info"><strong>Seu pagamento está em outra aba.</strong> Assim que o Mercado Pago confirmar, abriremos automaticamente os dados do convite aqui. Se a página de pagamento não abriu, toque em "Continuar para pagamento" abaixo.</div>' : ''}
@@ -1578,6 +1588,12 @@ export async function startCustomerArea(
         </div>
       </div>
     `;
+
+    app.querySelector('#viewBlackLibriPrize')?.addEventListener('click',()=>{
+      void openBlackLibriPrizeDetails(area.blackLibri,{
+        paid: Number(area.payment?.paidCents||0)>0
+      }).catch(error=>showToast(error.message||'Não conseguimos abrir o presente.'));
+    });
 
     restoreFieldViewport(viewport, app);
     if (activeTab === 'briefing') {

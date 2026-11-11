@@ -17,8 +17,8 @@ import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261110-confirmation-clear-1';
-import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-5';
-import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
+import { openBlackLibriBeforePayment, openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261110-rose-1';
+import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-rose-1';
 
 const EVENT_TYPES = [
   {
@@ -5406,6 +5406,15 @@ export async function startManualOrder(
               <dd id="manualUpdatedBalance">${money(order.pricing.balanceCents)}</dd>
             </div>` : ''}
         </dl>
+        ${appliedPrize ? `
+          <section class="card section-block" aria-label="Presente da Black Libri">
+            <strong>🎁 Seu presente Black Libri</strong>
+            <p>Você pode consultar o presente que recebeu quando quiser.</p>
+            <button class="btn btn-secondary" type="button" id="manualViewBlackLibriPrize">
+              Ver meu presente
+            </button>
+          </section>
+        ` : ''}
 
         ${addonOffer.editable && !order.alreadyPaid && !paymentPending ? `
           <div id="manualAddonQuoteFeedback" class="notice info compact-notice hidden" role="status"></div>
@@ -5487,6 +5496,12 @@ export async function startManualOrder(
         }
       </section>
     `;
+
+    document.getElementById('manualViewBlackLibriPrize')?.addEventListener('click',()=>{
+      void openBlackLibriPrizeDetails(order.pricing.snapshot?.blackLibri,{
+        paid: order.alreadyPaid === true
+      }).catch(error=>showToast(error.message||'Não conseguimos abrir o presente.'));
+    });
 
     const updateManualSummary = () => {
       const quote = manualAddonQuote;

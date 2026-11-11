@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release pontual PR #131: esclarecer Confirmação Libri opcional, sem migrations.
 # Release 10/11: mostrar premiação Black Libri no detalhe administrativo; sem migrations.
 # Publicações de manutenção com o marcador [sem-migracoes] não aplicam migrations D1.
 # Limpeza de tabelas legadas exige bookmark Time Travel e contagens previamente auditadas.

@@ -83,10 +83,15 @@ function overlayShell(){
 }
 
 function brandHeader(title,subtitle){
- return `<span class="black-libri-brand">Libri Convites</span>
-  <span class="black-libri-kicker">BLACK LIBRI · EDIÇÃO ESPECIAL</span>
-  <h2 class="black-libri-heading" id="blackLibriTitle">${title}</h2>
-  <p class="black-libri-subtitle">${subtitle}</p>`;
+ const isPrize=title.includes('presente');
+ return `<div class="black-libri-brand-slot" aria-label="Libri Convites">
+     <span class="black-libri-brand">LIBRI CONVITES</span>
+   </div>
+   <span class="black-libri-kicker">EDIÇÃO ESPECIAL · SURPRESA PREMIADA</span>
+   <div class="black-libri-campaign" aria-label="Black Libri">BLACK <em>LIBRI</em></div>
+   <p class="black-libri-strapline">Seu convite merece uma surpresa!</p>
+   <h2 class="black-libri-heading" id="blackLibriTitle">${isPrize?'VOCÊ GANHOU!':title}</h2>
+   <p class="black-libri-subtitle">${subtitle}</p>`;
 }
 
 // Modal de consulta: lê o benefício salvo no pedido, nunca sorteia novamente.
@@ -138,7 +143,7 @@ export async function openBlackLibriBeforePayment({
    <button class="black-libri-balloon" type="button"
     style="--balloon:${color};--slot:${i}" data-black-slot="${i}"
     aria-label="Estourar balão ${i+1}" ${selected||active?'disabled':''}>
-    <span class="bulb"></span><span class="string"></span>
+    <span class="bulb"></span><span class="knot"></span><span class="string"></span>
    </button>`).join('');
   const label=claim?.status==='expired'?'Continuar sem brinde':
    ['attached','redeemed'].includes(claim?.status)?'Continuar para meu pedido':'Resgatar meu presente';
@@ -146,7 +151,7 @@ export async function openBlackLibriBeforePayment({
    aria-labelledby="blackLibriTitle">
    <button class="black-libri-close" type="button" aria-label="Fechar">×</button>
    ${brandHeader(selected?'Seu presente especial!':'Escolha seu balão!',
-    selected?'Surpresa para você! O seu presente já está registrado.':'Toque em um dos 12 balões rosé para descobrir seu presente.')}
+    selected?'Surpresa para você! O seu presente já está registrado.':'Toque em um dos 12 balões e descubra seu presente.')}
    ${selected?prizePanel(claim,quote):`
     <div class="black-libri-grid" aria-label="Doze balões rosé">${balloons}</div>
     <button type="button" class="black-libri-sound" data-black-sound

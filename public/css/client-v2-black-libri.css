@@ -140,3 +140,103 @@
  .black-libri-balloon,.black-libri-balloon.chosen::after{animation:none}
  .black-libri-balloon.chosen .bulb{transition:none}
 }
+
+
+/* Black Libri V2: hierarquia editorial e shape de balão com nó real */
+.black-libri-panel{
+  padding:18px clamp(12px,4vw,24px) 16px;
+  background:radial-gradient(ellipse at 48% -7%,#fffdfa,transparent 52%),
+    radial-gradient(ellipse at 100% 92%,rgba(188,106,141,.20),transparent 55%),
+    linear-gradient(152deg,#fff7f4,#faebea 44%,#f6dee2);
+  border-color:#f3d0d6;
+}
+.black-libri-brand-slot{display:flex;align-items:center;justify-content:center;
+  margin:0 36px 2px;min-height:25px;}
+.black-libri-brand-slot .black-libri-brand{
+  margin:0;font:700 10px/1.2 Georgia,serif;letter-spacing:.31em;
+  text-shadow:none;color:#a46c80;
+}
+.black-libri-kicker{font-size:9px;letter-spacing:.19em;color:#a36a7d;}
+.black-libri-campaign{margin:6px auto 2px;color:#743c54;
+  font:700 clamp(30px,8vw,46px)/1.05 Georgia,serif;
+  letter-spacing:-.065em;text-shadow:0 1px 0 #fff;
+}
+.black-libri-campaign em{font-style:normal;color:#ab617d;}
+.black-libri-strapline{
+  margin:3px auto 7px;color:#91526d;font-weight:700;font-size:12px;
+}
+.black-libri-heading{
+  margin:5px auto 4px;max-width:410px;
+  color:#753d57;font:700 clamp(20px,5.3vw,26px)/1.13 Georgia,serif;
+}
+.black-libri-subtitle{margin:0 auto 7px;color:#825c6c;font-size:12px;max-width:333px;}
+.black-libri-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:2px 5px;max-width:380px;margin:5px auto 7px;
+  padding:8px 5px 4px;border-radius:22px;
+  border:1px solid rgba(218,162,180,.55);
+  background:linear-gradient(150deg,rgba(255,252,249,.87),rgba(248,223,226,.72));
+  box-shadow:inset 0 1px rgba(255,255,255,.95),0 9px 25px rgba(145,76,104,.10);
+}
+.black-libri-balloon{
+  display:flex;flex-direction:column;align-items:center;
+  padding:3px 1px 3px;min-height:93px;filter:drop-shadow(0 4px 5px rgba(120,63,91,.10));
+}
+.black-libri-balloon .bulb{
+  width:min(100%,70px);height:77px;aspect-ratio:auto;
+  border:0;border-radius:0;
+  clip-path:polygon(50% 0%,65% 2%,80% 9%,92% 22%,98% 38%,
+    96% 54%,89% 69%,77% 83%,63% 93%,50% 100%,
+    37% 93%,23% 83%,11% 69%,4% 54%,2% 38%,8% 22%,20% 9%,35% 2%);
+  background:radial-gradient(ellipse at 26% 19%,rgba(255,255,255,.94),transparent 23%),
+    radial-gradient(ellipse at 70% 77%,rgba(75,28,51,.42),transparent 62%),
+    radial-gradient(ellipse at 36% 37%,rgba(255,237,241,.60),transparent 59%),
+    var(--balloon);
+  box-shadow:inset -8px -9px 14px rgba(73,25,49,.17);
+}
+.black-libri-balloon .bulb::after{display:none;}
+.black-libri-balloon .knot{
+  display:block;flex:none;margin:-1px auto 0;width:11px;height:8px;
+  background:var(--balloon);clip-path:polygon(50% 0%,7% 100%,93% 100%);
+  filter:brightness(.82);
+}
+.black-libri-balloon .string{
+  flex:none;width:13px;height:15px;margin:0 auto;
+  border-left:1px solid rgba(165,100,125,.65);
+  border-bottom:1px solid rgba(165,100,125,.34);
+  border-radius:0 0 0 86%;background:none;
+  transform:rotate(calc(var(--slot)*1deg - 5deg));
+}
+.black-libri-balloon:nth-child(3n+1) .bulb{transform:rotate(-1.4deg);}
+.black-libri-balloon:nth-child(3n+2) .bulb{transform:rotate(1.4deg);}
+.black-libri-balloon.chosen .bulb{transform:scale(1.65);opacity:0;}
+.black-libri-balloon.chosen .knot,.black-libri-balloon.chosen .string{opacity:0;}
+.black-libri-result{
+  margin:12px auto 10px;
+  background:radial-gradient(ellipse at 100% 0%,rgba(225,160,182,.40),transparent 65%),
+    linear-gradient(140deg,#fffdfb,#fff1f1);
+  animation:bl-v2-reveal .5s ease-out both;
+}
+.black-libri-result small{
+  display:block;font-size:11px;font-weight:800;letter-spacing:.13em;color:#a36a81;
+}
+.black-libri-foot{margin:8px auto 0;}
+@keyframes bl-v2-reveal{
+  from{opacity:0;transform:translateY(12px) scale(.97);}
+  to{opacity:1;transform:translateY(0) scale(1);}
+}
+@media(max-width:390px){
+  .black-libri-panel{padding:14px 10px 11px;}
+  .black-libri-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:1px 3px;padding:6px 3px 4px;}
+  .black-libri-balloon{min-height:82px;padding:3px 0;}
+  .black-libri-balloon .bulb{width:min(100%,62px);height:67px;}
+  .black-libri-balloon .string{height:11px;}
+}
+@media(max-height:720px){
+  .black-libri-brand-slot{min-height:19px;}
+  .black-libri-panel{padding-block:12px;}
+  .black-libri-balloon{min-height:74px;}
+  .black-libri-balloon .bulb{width:min(100%,60px);height:64px;}
+  .black-libri-grid{padding-block:3px;}
+}
+@media(prefers-reduced-motion:reduce){.black-libri-result{animation:none;}}

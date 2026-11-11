@@ -54,3 +54,15 @@ test('Rose Edition keeps server reveal, pop sound and stored gift re-opening',()
  assert.match(css,/grid-template-columns:repeat\(3/);
  assert.doesNotMatch(css,/#111017|#e9b25d/);
 });
+
+
+test('Rosé V2 mantém quatro colunas e o sorteio original',()=>{
+ const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
+ assert.match(live,/class="black-libri-campaign"/);
+ assert.match(css,/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+ assert.match(css,/clip-path:polygon/);
+ assert.match(live,/playBalloonPop\(soundOn\)/);
+ assert.match(live,/api\(endpoint\+'\/reveal'/);
+ assert.match(live,/onContinue\(claim\)/);
+});

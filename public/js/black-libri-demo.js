@@ -40,10 +40,12 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
       <section class="black-libri-panel" role="dialog" aria-modal="true"
         aria-labelledby="blackLibriDemoTitle">
         <button class="black-libri-close" type="button" aria-label="Fechar prévia">×</button>
-        <span class="black-libri-brand">Libri Convites</span>
-        <span class="black-libri-kicker">BLACK LIBRI · PRÉVIA SEM COBRANÇA</span>
+        <div class="black-libri-brand-slot"><span class="black-libri-brand">LIBRI CONVITES</span></div>
+        <span class="black-libri-kicker">EDIÇÃO ESPECIAL · PRÉVIA SEM COBRANÇA</span>
+        <div class="black-libri-campaign">BLACK <em>LIBRI</em></div>
+        <p class="black-libri-strapline">Seu convite merece uma surpresa!</p>
         <h2 class="black-libri-heading" id="blackLibriDemoTitle">
-          ${chosen<0?'Escolha seu balão!':'Seu presente especial!'}
+          ${chosen<0?'Escolha seu balão!':'VOCÊ GANHOU!'}
         </h2>
         <p class="black-libri-subtitle">
           ${chosen<0
@@ -54,7 +56,7 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
           <button type="button" class="black-libri-balloon"
             data-demo-slot="${index}" style="--balloon:${color};--slot:${index}"
             aria-label="Estourar balão ${index+1}">
-            <span class="bulb"></span><span class="string"></span>
+            <span class="bulb"></span><span class="knot"></span><span class="string"></span>
           </button>`).join('')+`</div><button type="button" class="black-libri-sound" data-demo-sound
             aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>`:`
           <div class="black-libri-result" role="status">

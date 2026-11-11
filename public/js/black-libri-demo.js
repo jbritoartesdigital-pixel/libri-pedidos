@@ -55,8 +55,8 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
             data-demo-slot="${index}" style="--balloon:${color};--slot:${index}"
             aria-label="Estourar balão ${index+1}">
             <span class="bulb"></span><span class="string"></span>
-          </button>`).join('')+'</div><button type="button" class="black-libri-sound" data-demo-sound
-            aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>':`
+          </button>`).join('')+`</div><button type="button" class="black-libri-sound" data-demo-sound
+            aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>`:`
           <div class="black-libri-result" role="status">
             <span aria-hidden="true">🎁</span>
             <strong>Save the Date estático</strong>

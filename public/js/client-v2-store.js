@@ -16,7 +16,7 @@ import { prepareMercadoPagoTab, sendToMercadoPago, closeMercadoPagoTab, waitingC
 import { captureFieldViewport, restoreFieldViewport } from './client-v2-viewport.js';
 import { removeCouponFromCart, quoteWithCouponRecovery } from './client-v2-coupon.js';
 import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1';
-import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261109-compact-retro-1';
+import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261110-confirmation-clear-1';
 import { openBlackLibriBeforePayment } from './client-v2-black-libri.js?v=20261110-black-libri-5';
 import { openBlackLibriDemo } from './black-libri-demo.js?v=20261110-1';
 
@@ -54,7 +54,7 @@ const EVENT_TYPES = [
 ];
 
 const ADDON_GROUP_LABELS = {
-  confirmation: 'Confirmação de presença',
+  confirmation: 'Confirmação de Presença Libri (opcional)',
   filter: 'Filtro personalizado',
   save_the_date: 'Save the Date',
   reminder: 'Lembrete',
@@ -1289,7 +1289,7 @@ function recommendationReason(
     offer?.group
     === 'confirmation'
   ) {
-    return 'Seu convite já é interativo. A confirmação ajuda você a organizar quem realmente vai à festa sem depender de respostas espalhadas no WhatsApp.';
+    return 'Seu convite interativo pode ter confirmação simples de presença sem custo adicional. A Confirmação Libri é opcional e ajuda a organizar e acompanhar as respostas, com confirmação livre ou lista de convidados.';
   }
 
   if (
@@ -1609,10 +1609,11 @@ function addonExplanation(
   ) {
     return {
       intro:
-        'Confirmação de presença vinculada ao seu convite.',
+        'Este adicional é opcional. Seu convite interativo pode ter confirmação simples de presença sem a Confirmação Libri.',
       items: [
-        'Depois da compra, você escolhe se a confirmação será livre ou por lista de convidados.',
-        'Se escolher lista, os nomes serão informados ao preencher os dados do pedido.',
+        'Com a Confirmação Libri, você acompanha as respostas de maneira organizada.',
+        'Você escolhe confirmação livre ou por lista de convidados.',
+        'Na lista de convidados, os nomes e limites são configurados no aplicativo Libri RSVP.',
       ],
     };
   }

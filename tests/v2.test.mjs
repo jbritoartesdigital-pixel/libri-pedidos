@@ -4303,7 +4303,7 @@ test('store client keeps the approved commercial journey and a single final reco
   );
   assert.match(addons, /addon-single/);
   assert.match(addons, /addonExplanationHtml/);
-  assert.match(source, /Confirmação de presença vinculada ao seu convite/);
+  assert.match(source, /Este adicional é opcional/);
   assert.match(source, /Pode ser preparado para Instagram ou para o App Libri/);
   assert.match(source, /Até \${Number\(config\.photoLimit\)} fotos/);
 

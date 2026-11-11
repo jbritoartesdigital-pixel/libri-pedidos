@@ -756,6 +756,22 @@ export async function openOrder(code, onChanged = null) {
                 Use "Atualizar situação do Pix" sem lançar outro recebimento.
               </p>` : ''}
 
+            ${detail.order.capacityReview ? `
+              <div class="notice info" role="status" style="margin-top:14px">
+                <strong>Pagamento confirmado • revisão da agenda</strong>
+                <p style="margin:8px 0">A cliente pode preencher os dados, mas a produção
+                  só será liberada após confirmar capacidade na janela de entrega.
+                  Nenhuma cobrança adicional será aberta por estas ações.</p>
+                <div class="order-quick-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+                  ${detail.order.canUnlockPaidBriefing ? `
+                    <button id="unlockPaidBriefing" class="btn btn-primary" type="button"
+                      data-capacity-review-action="unlock_briefing">Liberar preenchimento dos dados</button>` : ''}
+                  <button id="confirmPaidCapacity" class="btn btn-secondary" type="button"
+                    data-capacity-review-action="confirm_capacity">Conferir agenda e liberar produção</button>
+                </div>
+              </div>
+            ` : ''}
+
             <div class="order-action-head">
               <strong>Produção e andamento</strong>
               <small>As ações disponíveis acompanham a situação do pedido.</small>
@@ -1142,6 +1158,31 @@ export async function openOrder(code, onChanged = null) {
 
   bindAdminOrderEditing(detail,onChanged,close,openOrder);
   bindAdminWhatsAppBriefing(detail.order.code, onChanged);
+
+  document.querySelectorAll('[data-capacity-review-action]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const action = button.dataset.capacityReviewAction;
+      if (action === 'confirm_capacity' && !confirm(
+        'Conferir capacidade real da janela de entrega? A produção só será liberada se houver vagas suficientes.'
+      )) return;
+      button.disabled = true;
+      try {
+        await api(`/api/admin/v2/orders/${detail.order.code}/capacity-review`, {
+          method: 'POST',
+          body: JSON.stringify({ action }),
+        });
+        close();
+        showToast(action === 'unlock_briefing'
+          ? 'Dados liberados para a cliente. Produção continua aguardando revisão.'
+          : 'Agenda confirmada! Situação do pedido atualizada.');
+        if (onChanged) await onChanged();
+        await openOrder(detail.order.code, onChanged);
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message);
+      }
+    });
+  });
 
   const briefingToggle = document.getElementById('toggleOrderBriefing');
   briefingToggle?.addEventListener('click', () => {

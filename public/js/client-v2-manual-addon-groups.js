@@ -1,7 +1,8 @@
 // Layout compacto de adicionais para pedidos manuais enviados às clientes.
 // O catálogo, preços e disponibilidade continuam vindo da API do servidor.
-const groupOrder = ['filter', 'save_the_date', 'reminder', 'moments', 'retrospectiva', 'moments_extra'];
+const groupOrder = ['confirmation', 'filter', 'save_the_date', 'reminder', 'moments', 'retrospectiva', 'moments_extra'];
 const groupTitles = {
+  confirmation: 'Confirmação de Presença Libri',
   filter: 'Filtro personalizado',
   save_the_date: 'Save the Date',
   reminder: 'Lembrete do evento',
@@ -49,6 +50,22 @@ export function compactManualAddonsHtml(available, selected, contractedCodes, mo
     const isExtra = group.key === 'moments_extra';
     if (group.options.length === 1) {
       const item = group.options[0];
+      if (group.key === 'confirmation') {
+        return `<label class="manual-addon-single manual-addon-confirmation">
+          <input type="checkbox" data-manual-addon="1" value="${esc(item.code)}"
+            aria-describedby="manualConfirmationExplanation"
+            ${selected.includes(item.code) ? 'checked' : ''}>
+          <span class="manual-addon-copy">
+            <strong class="manual-addon-label">Confirmação de Presença Libri <small>(opcional)</small></strong>
+            <span class="manual-addon-explanation" id="manualConfirmationExplanation">
+              Seu convite interativo pode ter confirmação simples de presença sem este adicional.
+              Com a Confirmação Libri, você acompanha as respostas e escolhe confirmação livre
+              ou por lista de convidados.
+            </span>
+          </span>
+          <strong class="manual-addon-price">+${money(item.priceCents)}</strong>
+        </label>`;
+      }
       return `<label class="manual-addon-single ${isExtra && !ownedMoments && !selected.some(isMomentsPlan) ? 'hidden' : ''}"
           ${isExtra ? 'id="manualMomentsExtraRow"' : ''}>
         <input type="checkbox" data-manual-addon="1" value="${esc(item.code)}"

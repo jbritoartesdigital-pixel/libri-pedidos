@@ -131,7 +131,7 @@ test('interface compacta preserva fluxo de cotação e cache renovado',()=>{
   assert.match(store,/syncManualAddonSelection/);
   assert.match(store,/data-manual-addon="1"/);
   assert.match(store,/refreshManualQuote\(\)/);
-  assert.match(html,/client-v2\.css\?v=20261109-compact-retro-1/);
-  assert.match(html,/client-v2\.js\?v=20261110-black-libri-5/);
-  assert.match(entry,/client-v2-store\.js\?v=20261110-black-libri-5/);
+  assert.match(html,/client-v2\.css\?v=20261110-confirmation-clear-1/);
+  assert.match(html,/client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(entry,/client-v2-store\.js\?v=20261110-confirmation-clear-1/);
 });

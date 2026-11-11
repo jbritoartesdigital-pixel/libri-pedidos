@@ -2051,6 +2051,19 @@ a {
   flex-shrink: 0;
 }
 .manual-addon-label { flex: 1; }
+.manual-addon-confirmation { align-items: flex-start; }
+.manual-addon-confirmation > input { margin-top: 5px; }
+.manual-addon-copy { flex: 1; min-width: 0; }
+.manual-addon-copy .manual-addon-label { display: block; font-size: 14px; }
+.manual-addon-copy .manual-addon-label small { color: var(--muted); font-weight: 500; }
+.manual-addon-explanation {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.manual-addon-confirmation .manual-addon-price { margin-top: 3px; }
 .manual-addon-options {
   border-top: 1px solid var(--line);
   padding: 5px 12px 10px;

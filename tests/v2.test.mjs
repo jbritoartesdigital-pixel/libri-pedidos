@@ -129,7 +129,7 @@ test('video-only storefront hides confirmation and clears incompatible saved car
   assert.match(store, /state\.selection\.addonCodes = compatible/);
   assert.match(store, /function renderAddons\([\s\S]*?removeVideoConfirmation\(state\)/);
   assert.match(store, /state\.terms =\s*termsData\.terms;[\s\S]*?removeVideoConfirmation\(state\)/);
-  assert.match(shell, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261110-confirmation-clear-1/);
 });
 
@@ -161,7 +161,7 @@ test('resumed customer order rechecks live delivery before urgency and preserves
   assert.match(customer, /state\.delivery = serverDelivery/);
   assert.match(customer, /state\.step = 4/);
   assert.match(customer, /customer: state\.customer/);
-  assert.match(shell, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261110-confirmation-clear-1/);
 });
 
@@ -225,7 +225,7 @@ test('storefront validates coupons before showing success and keeps the itemized
   assert.match(store, /state\.quote\?\.coupon[\s\S]*?aplicado ✓/);
   assert.match(css, /\.coupon-applied/);
   assert.match(css, /\.quote-row\.quote-discount strong/);
-  assert.match(html, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(html, /client-v2\.js\?v=20261110-capacity-review-1/);
   assert.match(html, /client-v2\.css\?v=20261110-confirmation-clear-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261110-confirmation-clear-1/);
 });
@@ -362,8 +362,8 @@ test('mobile briefing reads nested validation details, highlights missing fields
   assert.match(area, /showBriefingMissing\(missing\)/);
   assert.match(area, /briefing-field-invalid/);
   assert.match(area, /await saveBriefingNow\(firstSection, \{\}\)/);
-  assert.match(entry, /client-v2-area\.js\?v=20261030-area-limpa-1/);
-  assert.match(shell, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261110-capacity-review-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
 });
 
 test('Pix confirmation clears visually when invalidated and can be consciously selected again', async t => {
@@ -412,8 +412,8 @@ test('mobile Pix validation never leaves a stale selected confirmation', () => {
   assert.match(ui, /invalidatePixConfirmationOnEdit\(control\.dataset\.field, control\.value\)/);
   assert.match(ui, /result\.data\.pix_confirmed !== 'yes'/);
   assert.match(ui, /toque novamente em/);
-  assert.match(entry, /client-v2-area\.js\?v=20261030-area-limpa-1/);
-  assert.match(shell, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(entry, /client-v2-area\.js\?v=20261110-capacity-review-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
 });
 
 test('Libri RSVP closed list asks only strict or flexible, not guest names', () => {
@@ -697,7 +697,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
   assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-pedido-sem-previa-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261110-black-libri-premio-1"><\/script>/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261110-capacity-review-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1 and V2 tables intact', () => {
@@ -1645,7 +1645,7 @@ test('manual order link recognizes direct Pix and opens briefing without another
   assert.match(manual, /window\.location\.href =\s*result\.result\.customerAreaPath/);
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');
-  assert.match(shell, /client-v2\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
   assert.match(entry, /client-v2-store\.js\?v=20261110-confirmation-clear-1/);
 });
 
@@ -1689,8 +1689,8 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261110-black-libri-premio-1/);
-  assert.match(entry, /admin-v2-order\.js\?v=20261110-black-libri-premio-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261110-capacity-review-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261110-capacity-review-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
     amountCents: checkout.payment.amountDueNowCents,
@@ -2881,7 +2881,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
   assert.match(entry, /admin-v2-central\.js\?v=20261010-parties-focus-3/);
-  assert.match(html, /admin-v2\.js\?v=20261110-black-libri-premio-1/);
+  assert.match(html, /admin-v2\.js\?v=20261110-capacity-review-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {

@@ -10,7 +10,9 @@ import {
 import {
   cancelMercadoPagoOrder,
   fetchMercadoPagoOrder,
+  convertHoldToAgenda,
 } from './v2-mercadopago.js';
+import { pendingPaidCapacityReview, openPaidCapacityReview } from './v2-capacity-review.js';
 
 import {
   getV2FinanceSummary,
@@ -2249,6 +2251,11 @@ export async function getV2AdminOrderDetail(
       ),
     ]);
 
+  const capacityReviewPending = payments.paidCents > 0 && (
+    await pendingPaidCapacityReview(db, order.id)
+    || (order.briefing_status === 'locked'
+      && ['awaiting_payment', 'urgency_approved'].includes(order.status))
+  );
   const fieldMeta = await getV2AdminBriefingFieldMeta(db, order.public_token);
   const texts = buildBriefingTexts(order, items, briefing, uploads, fieldMeta.fields);
 
@@ -2313,6 +2320,8 @@ export async function getV2AdminOrderDetail(
         order.event_subtype,
       isLegacyV1,
       canReconcileManualPix,
+      capacityReview: capacityReviewPending,
+      canUnlockPaidBriefing: capacityReviewPending && order.briefing_status === 'locked',
       honoreeName:
         order.honoree_display_name,
       eventDate:
@@ -4013,6 +4022,72 @@ export async function markV2CongratulationsSent(
         existing,
       ),
   };
+}
+
+// Authenticated administrator only. Never marks payment as approved, creates
+// a Mercado Pago transaction, or bypasses calendar capacity when producing.
+export async function reviewPaidV2Capacity(db, orderCode, action) {
+  const order = await orderByCode(db, orderCode);
+  if (!order) return null;
+  if (!['awaiting_payment','urgency_approved','briefing_pending'].includes(order.status)) {
+    throw new Error('Este pedido não está em revisão de entrega.');
+  }
+  const payments = await paymentSummary(db, order);
+  if (payments.paidCents <= 0) {
+    throw new Error('Não há pagamento aprovado. Confira o Financeiro antes de liberar dados.');
+  }
+  if (action === 'unlock_briefing') {
+    const result = await openPaidCapacityReview(db, order.id, 'admin');
+    if (!result.unlocked && !result.pending) {
+      throw new Error('Não foi possível liberar os dados. Atualize o pedido.');
+    }
+    return { ...result, status: 'briefing_pending', canFill: true };
+  }
+  if (action !== 'confirm_capacity') {
+    throw new Error('Ação de revisão desconhecida.');
+  }
+  if (order.briefing_status === 'locked') {
+    await openPaidCapacityReview(db, order.id, 'admin');
+  }
+  const plan = await convertHoldToAgenda(db, order.id);
+  if (!plan.converted) {
+    const error = new Error(
+      'Esta janela de entrega não tem capacidade disponível. Ajuste a Agenda antes de confirmar a produção.'
+    );
+    error.status = 409;
+    throw error;
+  }
+  const stamp = nowIso();
+  const change = await db.batch([
+    db.prepare(`
+      UPDATE v2_orders
+      SET briefing_status = CASE WHEN briefing_status = 'locked'
+            THEN 'available' ELSE briefing_status END,
+          status = CASE WHEN briefing_status = 'completed'
+            THEN 'ready_for_production' ELSE 'briefing_pending' END,
+          next_action = CASE WHEN briefing_status = 'completed'
+            THEN 'Iniciar produção' ELSE 'Aguardar dados do convite' END,
+          updated_at = ?
+      WHERE id = ? AND status IN ('awaiting_payment','urgency_approved','briefing_pending')
+        AND EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ?)
+    `).bind(stamp, order.id, order.id),
+    db.prepare(`
+      INSERT INTO v2_order_history (
+        order_id, action_code, description, metadata_json, created_at
+      )
+      SELECT ?, 'delivery_capacity_confirmed',
+        'Administradora confirmou capacidade de entrega após pagamento.',
+        '{}', ?
+      WHERE EXISTS (SELECT 1 FROM v2_agenda_allocations WHERE order_id = ?)
+        AND NOT EXISTS (SELECT 1 FROM v2_order_history
+          WHERE order_id = ? AND action_code = 'delivery_capacity_confirmed')
+    `).bind(order.id, stamp, order.id, order.id),
+  ]);
+  if (Number(change[0]?.meta?.changes || 0) !== 1) {
+    throw new Error('O pedido foi alterado. Atualize para verificar a situação.');
+  }
+  return { confirmed: true, status:
+    order.briefing_status === 'completed' ? 'ready_for_production' : 'briefing_pending' };
 }
 
 export async function applyV2AdminAction(

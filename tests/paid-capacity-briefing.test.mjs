@@ -19,7 +19,7 @@ async function paidLateOrder(t) {
   const created = await requestV2UrgencyReview(request, e, {
     clientRequestId: crypto.randomUUID(),
     customer: {name:'Cliente Exemplo',whatsapp:'5511988776655',email:'test@example.com'},
-    event: {honoreeName:'Liz Teste',type:'birthday',date:day(60)},
+    event: {honoreeName:'Liz Teste',type:'birthday',date:day(2)},
     selection: {productCode:'interactive_essential',paymentMethod:'pix'},
   });
   await decideV2Urgency(DB, created.order.code, {
@@ -85,7 +85,7 @@ test('Central não pode liberar dados sem entrada efetivamente aprovada', async 
   const created=await requestV2UrgencyReview(request,e,{
     clientRequestId:crypto.randomUUID(),
     customer:{name:'Cliente Exemplo',whatsapp:'5511988776655',email:'test@example.com'},
-    event:{honoreeName:'Teste',type:'birthday',date:day(60)},
+    event:{honoreeName:'Teste',type:'birthday',date:day(2)},
     selection:{productCode:'interactive_essential',paymentMethod:'pix'},
   });
   await decideV2Urgency(DB,created.order.code,{

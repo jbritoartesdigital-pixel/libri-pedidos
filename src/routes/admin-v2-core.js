@@ -14,6 +14,7 @@ import {
   listV2ArchivedOrders,
   listV2Production,
   markV2CongratulationsSent,
+  reviewPaidV2Capacity,
 } from '../lib/v2-admin-core.js';
 
 import { lookupReturningV2Customer, searchV2AdminOrders } from '../lib/v2-admin-search.js';
@@ -289,6 +290,22 @@ export async function handleAdminV2CoreApi(
         || 'Não foi possível cancelar este pedido.',
         409,
       );
+    }
+  }
+
+  const capacityReviewMatch = path.match(
+    /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/capacity-review$/,
+  );
+  if (capacityReviewMatch && method === 'POST') {
+    try {
+      const body = await readJson(request);
+      const result = await reviewPaidV2Capacity(
+        env.DB, capacityReviewMatch[1], String(body.action || ''),
+      );
+      if (!result) return fail('Pedido não encontrado.', 404);
+      return json({ ok: true, result });
+    } catch (error) {
+      return fail(error?.message || 'Não foi possível revisar a agenda.', error?.status || 409);
     }
   }
 

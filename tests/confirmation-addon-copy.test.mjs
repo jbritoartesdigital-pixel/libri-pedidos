@@ -61,7 +61,7 @@ test('a loja diferencia confirmação simples do RSVP Libri', () => {
   assert.match(store, /Você escolhe confirmação livre ou por lista de convidados/);
   assert.match(styles, /\.manual-addon-explanation/);
   assert.match(shell, /client-v2\.css\?v=20261110-confirmation-clear-1/);
-  assert.match(shell, /client-v2\.js\?v=20261110-capacity-review-1/);
-  assert.match(entry, /client-v2-store\.js\?v=20261110-confirmation-clear-1/);
+  assert.match(shell, /client-v2\.js\?v=20261110-rose-1/);
+  assert.match(entry, /client-v2-store\.js\?v=20261110-rose-1/);
   assert.match(store, /client-v2-manual-addon-groups\.js\?v=20261110-confirmation-clear-1/);
 });

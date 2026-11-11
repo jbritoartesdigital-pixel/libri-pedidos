@@ -159,7 +159,7 @@ export async function openBlackLibriBeforePayment({
      ?'Seu prêmio anterior não será substituído.':
      'Continue para vincular o benefício ao pedido e ao pagamento.'}</p>
    `:''}
-   <p class="black-libri-foot">Uma chance por cliente · Reserva de 24 horas ♡</p>
+   <p class="black-libri-foot">Seu presente fica registrado · Reserva de 24 horas ♡</p>
   </section>`;
   overlay.querySelector('.black-libri-close')?.addEventListener('click',close);
   overlay.querySelector('[data-black-sound]')?.addEventListener('click',e=>{

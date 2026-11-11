@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { database, day, providerMock } from './helpers.mjs';
-import { requestV2UrgencyReview, resumeV2Payment } from '../src/lib/v2-checkout.js';
-import { decideV2Urgency } from '../src/lib/v2-urgency-admin.js';
+import { startV2Checkout } from '../src/lib/v2-checkout.js';
 import { setV2AgendaPeriod } from '../src/lib/v2-agenda-admin.js';
 import { syncMercadoPagoOrder } from '../src/lib/v2-mercadopago.js';
 import { getV2CustomerArea, saveV2Briefing } from '../src/lib/v2-customer-area.js';
@@ -11,29 +10,27 @@ import { getV2AdminOrderDetail, reviewPaidV2Capacity } from '../src/lib/v2-admin
 
 const request = new Request('https://pedidos.libriconvites.com.br/api/v2/checkout/start');
 const env = DB => ({ DB, MERCADO_PAGO_ACCESS_TOKEN: 'TEST-token' });
-async function paidLateOrder(t) {
-  const DB = database();
-  const mp = providerMock(t);
+async function makeCheckout(DB) {
   const e = env(DB);
   const terms = await DB.prepare('SELECT version FROM v2_terms_versions WHERE active=1').first();
-  const created = await requestV2UrgencyReview(request, e, {
+  return startV2Checkout(request, e, {
     clientRequestId: crypto.randomUUID(),
     customer: {name:'Cliente Exemplo',whatsapp:'5511988776655',email:'test@example.com'},
-    event: {honoreeName:'Liz Teste',type:'birthday',date:day(2)},
+    event: {honoreeName:'Liz Teste',type:'birthday',date:day(80)},
     selection: {productCode:'interactive_essential',paymentMethod:'pix'},
+    deliveryWindow: {start:day(20),end:day(22)},
+    termsAccepted:true, termsVersion:terms.version,
   });
-  await decideV2Urgency(DB, created.order.code, {
-    decision:'approve', deliveryStart:day(0), deliveryEnd:day(1),
-  });
-  const payment = await resumeV2Payment(request,e,created.order.publicToken,{
-    termsAccepted:true, termsVersion:terms.version, clientRequestId:crypto.randomUUID(),
-  });
-  DB.sqlite.prepare(
-    "UPDATE v2_checkout_holds SET status='expired',expires_at='2000-01-01'"
-  ).run();
-  await setV2AgendaPeriod(DB,{start:day(0),end:day(1),blocked:true});
-  mp.approve(payment.payment.providerOrderId);
-  return { DB, e, mp, created, payment };
+}
+async function paidLateOrder(t) {
+  const DB=database();
+  const mp=providerMock(t);
+  const e=env(DB);
+  const created=await makeCheckout(DB);
+  DB.sqlite.prepare("UPDATE v2_checkout_holds SET status='expired',expires_at='2000-01-01'").run();
+  await setV2AgendaPeriod(DB,{start:day(20),end:day(22),blocked:true});
+  mp.approve(created.payment.providerOrderId);
+  return {DB,e,mp,created,payment:created};
 }
 
 test('Pix aprovado com reserva expirada libera o formulário mas NÃO a produção', async t => {
@@ -69,7 +66,7 @@ test('Central reavalia capacidade com idempotência e sem cobrar novamente', asy
     /não tem capacidade/,
   );
   assert.equal((await DB.prepare('SELECT COUNT(*) n FROM v2_agenda_allocations').first()).n,0);
-  await setV2AgendaPeriod(DB,{start:day(0),end:day(1),blocked:false});
+  await setV2AgendaPeriod(DB,{start:day(20),end:day(22),blocked:false});
   const result=await reviewPaidV2Capacity(DB,created.order.code,'confirm_capacity');
   assert.equal(result.confirmed,true);
   assert.ok((await DB.prepare('SELECT COUNT(*) n FROM v2_agenda_allocations').first()).n>0);
@@ -81,16 +78,8 @@ test('Central reavalia capacidade com idempotência e sem cobrar novamente', asy
 
 test('Central não pode liberar dados sem entrada efetivamente aprovada', async t => {
   const DB=database();
-  const e=env(DB);
-  const created=await requestV2UrgencyReview(request,e,{
-    clientRequestId:crypto.randomUUID(),
-    customer:{name:'Cliente Exemplo',whatsapp:'5511988776655',email:'test@example.com'},
-    event:{honoreeName:'Teste',type:'birthday',date:day(2)},
-    selection:{productCode:'interactive_essential',paymentMethod:'pix'},
-  });
-  await decideV2Urgency(DB,created.order.code,{
-    decision:'approve',deliveryStart:day(0),deliveryEnd:day(1),
-  });
+  providerMock(t);
+  const created=await makeCheckout(DB);
   await assert.rejects(
     reviewPaidV2Capacity(DB,created.order.code,'unlock_briefing'),
     /Não há pagamento aprovado/,

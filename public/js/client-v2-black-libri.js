@@ -146,7 +146,7 @@ export async function openBlackLibriBeforePayment({
    aria-labelledby="blackLibriTitle">
    <button class="black-libri-close" type="button" aria-label="Fechar">×</button>
    ${brandHeader(selected?'Seu presente especial!':'Escolha seu balão!',
-    selected?'Sua surpresa já está registrada.':'Toque em um dos 12 balões rosé para descobrir seu presente.')}
+    selected?'Surpresa para você! O seu presente já está registrado.':'Toque em um dos 12 balões rosé para descobrir seu presente.')}
    ${selected?prizePanel(claim,quote):`
     <div class="black-libri-grid" aria-label="Doze balões rosé">${balloons}</div>
     <button type="button" class="black-libri-sound" data-black-sound

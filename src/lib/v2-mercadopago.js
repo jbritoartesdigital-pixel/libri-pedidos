@@ -1967,11 +1967,12 @@ async function syncMercadoPagoOrderUnlocked(
         .order_id,
     );
 
-    if (!capacity.converted && localPayment.briefing_status === 'locked') {
-      // Payment was approved, but its temporary reservation was lost.
-      // The customer may provide briefing data while the administrative
-      // capacity review remains open. Production is separately gated.
-      await openPaidCapacityReview(env.DB, localPayment.order_id, 'mercado_pago');
+    if (!capacity.converted) {
+      // Even when the form is already unlocked, a repeated provider webhook
+      // must not advance the order while its agenda allocation is missing.
+      if (localPayment.briefing_status === 'locked') {
+        await openPaidCapacityReview(env.DB, localPayment.order_id, 'mercado_pago');
+      }
       await createV2AdminNotification(env, {
         eventCode: 'PAYMENT_CONFIRMED', orderId: localPayment.order_id,
         title: 'Pagamento recebido; dados liberados, revisar capacidade',

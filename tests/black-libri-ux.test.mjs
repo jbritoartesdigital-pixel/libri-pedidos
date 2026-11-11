@@ -32,8 +32,8 @@ test('admin oferece prévia independente sem cobrar nem reservar',()=>{
 });
 test('client HTML aponta para o novo módulo em cache separado',()=>{
   const entry=readFileSync(new URL('../public/js/client-v2.js',import.meta.url),'utf8');
-  assert.match(shell,/\/js\/client-v2\.js\?v=20261111-rose-v2-2/);
-  assert.match(entry,/client-v2-store\.js\?v=20261111-rose-v2-2/);
+  assert.match(shell,/\/js\/client-v2\.js\?v=20261111-skip-offer-ios-1/);
+  assert.match(entry,/client-v2-store\.js\?v=20261111-skip-offer-ios-1/);
   assert.match(store,/black-libri-demo\.js\?v=20261111-rose-v2-2/);
 });
 

@@ -50,7 +50,7 @@ function source(path,reference) {
   sourceCache.set(key,bytes);
   return bytes;
 }
-function mockServer(reference, { couponOffline = false, sceneLinks = false } = {}) {
+function mockServer(reference, { couponOffline = false, sceneLinks = false, confirmationUpsell = false } = {}) {
   return createServer((req,res)=>{
     const url=new URL(req.url,'http://127.0.0.1');
     const send=(code,body,headers={})=>{
@@ -72,7 +72,10 @@ function mockServer(reference, { couponOffline = false, sceneLinks = false } = {
               {code:'cinematic_interactive_3',label:'3 cenas',sceneCount:3,priceCents:10000,isDefault:false,active:true},
               {code:'cinematic_interactive_4',label:'4 cenas',sceneCount:4,priceCents:12500,isDefault:false,active:true}
             ]}] : [])],
-        addons:[],combos:[]
+        addons:confirmationUpsell ? [{
+          code:'confirmation_libri',name:'Confirmação de Presença Libri',
+          group:'confirmation',priceCents:3500,pointsUnits:100,config:{}
+        }] : [],combos:[]
       }});
       if(url.pathname==='/api/v2/terms/current')return json(200,{
         terms:{version:'2.0',body:'Condições fictícias do pedido'}
@@ -377,6 +380,81 @@ async function checkOfferIsFullyReachable(browser) {
     audit.tests.push('pop-up curto: botões visíveis e detalhes com scroll próprio em 5 viewports');
   } finally {
     await ctx.close();
+  }
+}
+
+async function checkOptionalOfferSkipOnMobile(browser) {
+  for (const scenario of [
+    {label:'iPhone semelhante, estado salvo antigo',customer:null,storageDenied:false},
+    {label:'iPhone semelhante, armazenamento bloqueado',customer:{name:'',whatsapp:'',email:''},
+      storageDenied:true},
+    {label:'Android, recusa simples',customer:{name:'',whatsapp:'',email:''},
+      storageDenied:false},
+  ]) {
+    const instance=await openServer('',{confirmationUpsell:true});
+    const context=await browser.newContext({
+      viewport:{width:scenario.label.startsWith('Android')?360:390,height:844},
+      isMobile:true,hasTouch:true,locale:'pt-BR',
+      timezoneId:'America/Sao_Paulo',
+      userAgent:scenario.label.startsWith('Android')
+        ? 'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/145.0 Mobile Safari/537.36'
+        : 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+    });
+    const page=await context.newPage(),errors=[],external=[],requests=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    page.on('request',req=>{
+      if(req.url().includes('/api/v2/quote'))requests.push(req.url());
+    });
+    await page.route('**/*',route=>{
+      if(!route.request().url().startsWith(instance.url+'/')) {
+        external.push('unexpected external request');
+        return route.abort('blockedbyclient');
+      }
+      return route.continue();
+    });
+    await page.addInitScript(customer=>{
+      localStorage.setItem('libriV2StoreState',JSON.stringify({
+        step:6,customer,
+        event:{type:'birthday',honoreeName:'Festa Fictícia',date:'2026-12-07'},
+        selection:{productCode:'interactive_essential',productSlug:'interativo',
+          variantCode:'base',addonCodes:[],comboCode:'',couponCode:'',paymentMethod:'pix'},
+        deliveryWindow:{start:'2026-11-25',end:'2026-11-27'}
+      }));
+    },scenario.customer);
+    try {
+      await page.goto(instance.url+'/pedido',{waitUntil:'domcontentloaded'});
+      await page.locator('#skipFinalOffer').waitFor({timeout:15000});
+      assert.match(await page.locator('.promo-title').innerText(),/confirmações/);
+      if(scenario.storageDenied) {
+        await page.evaluate(()=>{
+          Storage.prototype.setItem=function(){
+            throw new DOMException('Storage is full','QuotaExceededError');
+          };
+        });
+      }
+      const before=requests.length;
+      await page.locator('#skipFinalOffer').click();
+      await page.getByRole('heading',{name:'Agora, só o essencial'}).waitFor({timeout:10000});
+      assert.equal(await page.locator('#skipFinalOffer').count(),0,
+        scenario.label+': a oferta desaparece ao recusar');
+      assert.equal(await page.locator('#customerName').isVisible(),true);
+      assert.equal(await page.locator('#whatsapp').isVisible(),true);
+      assert.equal(requests.length,before,
+        scenario.label+': recusar a oferta não deve chamar a API nem recalcular preço');
+      const step=await page.evaluate(()=>{
+        try{return JSON.parse(localStorage.getItem('libriV2StoreState')).step;}
+        catch{return null;}
+      });
+      if(!scenario.storageDenied)assert.equal(step,7,'etapa 7 salva para recarregar');
+      assert.deepEqual(errors,[],scenario.label+': erro JS');
+      assert.deepEqual(external,[],scenario.label+': chamadas externas');
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth);
+      assert.ok(overflow<=390,scenario.label+': overflow mobile');
+      audit.tests.push('Recusar confirmação opcional: '+scenario.label+' avança sem cobrar');
+    } finally {
+      await context.close();
+      await new Promise(resolve=>instance.server.close(resolve));
+    }
   }
 }
 
@@ -754,6 +832,7 @@ try{
   await capture(browser,'','alteracao');
   await checkAdminOrderDetailAndroid(browser);
   await checkOfferIsFullyReachable(browser);
+  await checkOptionalOfferSkipOnMobile(browser);
   await checkCouponCanBeRemovedOnAndroid(browser);
   await checkAgendaPeriodMobile(browser);
   await checkAdminOrderEditorMobile(browser);

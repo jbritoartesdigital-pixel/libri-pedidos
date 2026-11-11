@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261111-rose-v2-2';
+} from './client-v2-store.js?v=20261111-skip-offer-ios-1';
 
 import {
   startCustomerArea,

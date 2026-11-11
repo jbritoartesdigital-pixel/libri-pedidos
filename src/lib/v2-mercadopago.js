@@ -13,6 +13,7 @@ import {
 import { planV2AllocationForWindow } from './v2-agenda.js';
 import { createV2AdminNotification } from './v2-notifications.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
+import { openPaidCapacityReview } from './v2-capacity-review.js';
 
 const MP_API_BASE =
   'https://api.mercadopago.com';
@@ -1274,7 +1275,7 @@ async function reconcileMercadoPagoFinance(
   };
 }
 
-async function convertHoldToAgenda(
+export async function convertHoldToAgenda(
   db,
   orderId,
 ) {
@@ -1966,11 +1967,16 @@ async function syncMercadoPagoOrderUnlocked(
         .order_id,
     );
 
-    if (!capacity.converted && localPayment.briefing_status === 'locked') {
+    if (!capacity.converted) {
+      // Even when the form is already unlocked, a repeated provider webhook
+      // must not advance the order while its agenda allocation is missing.
+      if (localPayment.briefing_status === 'locked') {
+        await openPaidCapacityReview(env.DB, localPayment.order_id, 'mercado_pago');
+      }
       await createV2AdminNotification(env, {
         eventCode: 'PAYMENT_CONFIRMED', orderId: localPayment.order_id,
-        title: 'Pagamento recebido; revisar capacidade',
-        body: `${localPayment.order_code} • pagamento recebido após perda da reserva. Revise a agenda antes de liberar a produção.`,
+        title: 'Pagamento recebido; dados liberados, revisar capacidade',
+        body: `${localPayment.order_code} • pagamento confirmado. A cliente já pode preencher os dados; revise a agenda antes de iniciar a produção.`,
         actionUrl: `/admin-v2?order=${encodeURIComponent(localPayment.order_code)}`,
         priority: 'high', pushEligible: true, dedupeKey: `payment-capacity:${localPayment.order_id}`,
       });

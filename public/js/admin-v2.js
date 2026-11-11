@@ -28,7 +28,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261110-black-libri-premio-1';
+} from './admin-v2-order.js?v=20261110-capacity-review-1';
 
 import {
   renderAgenda,

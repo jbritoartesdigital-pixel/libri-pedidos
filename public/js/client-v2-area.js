@@ -356,8 +356,9 @@ function nextStepCard(
   ) {
     title =
       'Preencher os dados do convite';
-    body =
-      'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.';
+    body = area.payment?.capacityReview
+      ? 'Pagamento confirmado. Você já pode enviar os dados e fotos; a Libri ainda está revisando a janela de entrega antes da produção.'
+      : 'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.';
     tab =
       'briefing';
     buttonLabel =
@@ -632,7 +633,9 @@ function summaryHtml(
           ${unpaidArchived
             ? 'Seu pedido está salvo, mas as 24 horas para pagamento terminaram. Entre em contato com a Libri para reativá-lo.'
             : capacityReview
-            ? 'A Libri está revisando sua janela de entrega. Nenhum novo pagamento é necessário.'
+            ? (area.briefing.locked
+                ? 'A Libri está revisando sua janela de entrega. Nenhum novo pagamento é necessário.'
+                : 'Seu pagamento está confirmado. Você já pode enviar os dados enquanto a Libri confere a entrega.')
             : awaitingInitialPayment
               ? 'Finalize o pagamento para liberar o próximo passo do seu pedido.'
               : awaitingBalance
@@ -1053,6 +1056,13 @@ function briefingHtml(
 
   return `
     <section class="page-card briefing-form">
+      ${area.payment?.capacityReview ? `
+        <div class="notice info" role="status">
+          <strong>Pagamento confirmado. Você já pode preencher seus dados.</strong>
+          <p>A Libri está conferindo a janela de entrega. Você pode enviar as informações e fotos normalmente,
+            mas a produção será iniciada somente depois da revisão da agenda.</p>
+        </div>
+      ` : ''}
       <p class="briefing-save-note">
         <span>Salvamento automático. Evite dispositivos compartilhados.</span>
         <span id="briefingSaveStatus" role="status" aria-live="polite">Salvamento automático</span>

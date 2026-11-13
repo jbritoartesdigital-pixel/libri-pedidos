@@ -173,7 +173,9 @@ async function prepare(db,code,input) {
   if(pointsDelta<0&&Math.abs(pointsDelta)>1000000) reject('Carga de produção inválida.');
   if((sceneOverride&&sceneOverride!==originalScene)&&adjustment===priorAdjustment&&!productChange)
     reject('Para alterar cenas de um modelo antigo, informe também o acréscimo ou desconto de preço combinado.');
-  const itemChanges=JSON.stringify(compact(items))!==JSON.stringify(compact(allItems));
+  const itemChanges=productChange || (sceneOverride>0&&sceneOverride!==originalScene)
+    || selectedAddonCodes.slice().sort().join('|')!==addonRows
+      .filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|');
   const changed=depositChanged || productChange || (sceneOverride>0&&sceneOverride!==originalScene)
     || selectedAddonCodes.slice().sort().join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
     || manualDiscount!==priorDiscount||adjustment!==priorAdjustment;

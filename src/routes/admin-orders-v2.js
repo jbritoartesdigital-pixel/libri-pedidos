@@ -7,6 +7,7 @@ import { decideV2Urgency } from '../lib/v2-urgency-admin.js';
 import { setV2LegacyNegotiatedTotal } from '../lib/v2-legacy-negotiated-pricing.js';
 import { reconcileV2LegacyPixStatus } from '../lib/v2-legacy-payment-reconcile.js';
 import { getV2OrderEditOptions, previewV2AdminOrderEdit, saveV2AdminOrderEdit } from '../lib/v2-admin-order-edit.js';
+import { releaseV2PendingCheckoutForAdminDeposit } from '../lib/v2-admin-deposit-checkout.js';
 
 import {
   createV2ManualOrder,
@@ -73,6 +74,20 @@ export async function handleAdminOrdersV2Api(
     } catch (error) {
       return routeError(error,Number(error?.status)||422);
     }
+  }
+
+  const releaseDepositMatch = path.match(
+    /^\/api\/admin\/v2\/orders\/(LIBRI-\d+)\/edit\/release-checkout$/,
+  );
+  if (releaseDepositMatch && method === 'POST') {
+    try {
+      const body = await readJson(request);
+      if (body.confirmCancellation !== true) {
+        return fail('Confirme o encerramento da cobrança anterior para prosseguir.', 422);
+      }
+      const result = await releaseV2PendingCheckoutForAdminDeposit(env, releaseDepositMatch[1]);
+      return json({ ok:true, result });
+    } catch (error) { return routeError(error, Number(error?.status) || 409); }
   }
 
   const reconcileMatch = path.match(

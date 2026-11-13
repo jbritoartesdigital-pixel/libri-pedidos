@@ -60,6 +60,11 @@ export async function getV2OrderEditOptions(db,code) {
       balanceCents:Number(order.balance_cents || 0),
       canEditDeposit:canEditDeposit({order,paid,pendingMp,hasApprovedPayment,activeHold}),
       activeCheckoutHold:activeHold,
+      canReleaseOldCheckout:order.payment_method==='pix' && pendingMp
+        && !hasApprovedPayment && paid===0
+        && ['awaiting_payment','urgency_approved','configuring'].includes(order.status)
+        && order.briefing_status==='locked',
+      customerAreaPath:`/meu-pedido/${order.public_token}`,
       manualDiscountCents:Number(snapshot.adminEdit?.manualDiscountCents||0),
       priceAdjustmentCents:Number(snapshot.adminEdit?.priceAdjustmentCents||0),
       pendingMercadoPago:pendingMp},
@@ -168,6 +173,7 @@ async function prepare(db,code,input) {
   if(pointsDelta<0&&Math.abs(pointsDelta)>1000000) reject('Carga de produção inválida.');
   if((sceneOverride&&sceneOverride!==originalScene)&&adjustment===priorAdjustment&&!productChange)
     reject('Para alterar cenas de um modelo antigo, informe também o acréscimo ou desconto de preço combinado.');
+  const itemChanges=JSON.stringify(compact(items))!==JSON.stringify(compact(allItems));
   const changed=depositChanged || productChange || (sceneOverride>0&&sceneOverride!==originalScene)
     || selectedAddonCodes.slice().sort().join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
     || manualDiscount!==priorDiscount||adjustment!==priorAdjustment;
@@ -178,7 +184,7 @@ async function prepare(db,code,input) {
   const balanceCents=total-depositCents;
   return {order,items,allItems,paid,itemsDelta,pointsDelta,total,manualDiscount,adjustment,
     depositPercent,originalDepositPercent,depositChanged,depositCents,balanceCents,
-    productDifferenceCents,addonDifferenceCents,
+    itemChanges,productDifferenceCents,addonDifferenceCents,
     priorDiscount,priorAdjustment,snapshot,changed,selectionChanged:productChange||
       sceneOverride>0&&sceneOverride!==originalScene || itemsDelta!==0||pointsDelta!==0,
     before:compact(items),after:compact(allItems)};
@@ -306,16 +312,21 @@ export async function saveV2AdminOrderEdit(db,code,input){
     db.prepare(`UPDATE v2_orders SET briefing_status=?,updated_at=?
       WHERE id=? AND ${isCurrent}`)
       .bind(newBriefingStatus,stamp,p.order.id,p.order.id,pricingSnapshot),
-    db.prepare(`DELETE FROM v2_order_items WHERE order_id=? AND ${isCurrent}`)
-      .bind(p.order.id,p.order.id,pricingSnapshot),
   ];
-  for(const item of p.allItems){
-    operations.push(db.prepare(`INSERT INTO v2_order_items
-      (order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
-      SELECT ?,?,?,?,?,?,?,?,? WHERE ${isCurrent}`)
-      .bind(p.order.id,item.item_type,item.item_code,item.name_snapshot,
-        item.quantity||1,item.unit_price_cents,item.points_units||0,
-        item.configuration_json||'{}',item.created_at||stamp,p.order.id,pricingSnapshot));
+  // A change of Pix deposit only is financial metadata. Never delete or
+  // recreate the contracted item rows: this preserves free gifts, addons,
+  // their row IDs and every field in the customer's original briefing.
+  if(p.itemChanges){
+    operations.push(db.prepare(`DELETE FROM v2_order_items WHERE order_id=? AND ${isCurrent}`)
+      .bind(p.order.id,p.order.id,pricingSnapshot));
+    for(const item of p.allItems){
+      operations.push(db.prepare(`INSERT INTO v2_order_items
+        (order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
+        SELECT ?,?,?,?,?,?,?,?,? WHERE ${isCurrent}`)
+        .bind(p.order.id,item.item_type,item.item_code,item.name_snapshot,
+          item.quantity||1,item.unit_price_cents,item.points_units||0,
+          item.configuration_json||'{}',item.created_at||stamp,p.order.id,pricingSnapshot));
+    }
   }
   for(const change of agenda){
     if(change.id){

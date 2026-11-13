@@ -138,14 +138,6 @@ async function prepare(db,code,input) {
   const originalDepositPercent=Number(order.deposit_percent || 100);
   const depositPercent=requestedDepositPercent(input,originalDepositPercent);
   const depositChanged=depositPercent!==originalDepositPercent;
-  if(activeHold && (depositChanged || input.manualDiscountCents !== undefined
-    || input.priceAdjustmentCents !== undefined)) {
-    // An orphan provider attempt may still exist even before v2_payments
-    // received its webhook. Never mutate an active checkout reservation.
-    if(depositChanged) reject(
-      'Existe uma reserva de checkout ativa. Aguarde a tentativa anterior ser resolvida.',409
-    );
-  }
   if(depositChanged && !canEditDeposit({order,paid,pendingMp,hasApprovedPayment,activeHold})) {
     reject(
       'A entrada só pode ser alterada antes de iniciar o pagamento Pix. Confira a cobrança e o Financeiro.',409
@@ -165,6 +157,9 @@ async function prepare(db,code,input) {
   const itemsDelta=productDifferenceCents+addonDifferenceCents;
   const total=Number(order.total_cents)+itemsDelta+(adjustment-priorAdjustment)-(manualDiscount-priorDiscount);
   if(!Number.isSafeInteger(total)||total<1||total>100000000) reject('O novo total precisa ser positivo.');
+  if(activeHold && (total!==Number(order.total_cents) || depositChanged)) {
+    reject('Há uma tentativa de checkout ativa. Resolva essa cobrança antes de mudar os valores.',409);
+  }
   if(total<paid) reject('O total negociado ficou abaixo do valor já recebido. Registre um estorno real antes de reduzir o pedido.',409);
   const pointsDelta=sumPoints(allItems)-sumPoints(items);
   if(pointsDelta<0&&Math.abs(pointsDelta)>1000000) reject('Carga de produção inválida.');

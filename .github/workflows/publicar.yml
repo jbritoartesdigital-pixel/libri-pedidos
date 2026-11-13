@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release PR #134: editar pedido existente e autorizar entrada Pix 50% sem migrations.
 # Release V2 11/11: arte editorial e logo original Black Libri; cache revisado, sem migrations.
 # Release Black Libri Rose Edition 11/11: baloes rose, som, resgate e consulta; sem migrations.
 # Release 10/11: mostrar premiação Black Libri no detalhe administrativo; sem migrations.

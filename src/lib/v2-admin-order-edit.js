@@ -138,6 +138,14 @@ async function prepare(db,code,input) {
   const originalDepositPercent=Number(order.deposit_percent || 100);
   const depositPercent=requestedDepositPercent(input,originalDepositPercent);
   const depositChanged=depositPercent!==originalDepositPercent;
+  if(activeHold && (depositChanged || input.manualDiscountCents !== undefined
+    || input.priceAdjustmentCents !== undefined)) {
+    // An orphan provider attempt may still exist even before v2_payments
+    // received its webhook. Never mutate an active checkout reservation.
+    if(depositChanged) reject(
+      'Existe uma reserva de checkout ativa. Aguarde a tentativa anterior ser resolvida.',409
+    );
+  }
   if(depositChanged && !canEditDeposit({order,paid,pendingMp,hasApprovedPayment,activeHold})) {
     reject(
       'A entrada só pode ser alterada antes de iniciar o pagamento Pix. Confira a cobrança e o Financeiro.',409
@@ -239,7 +247,11 @@ export async function saveV2AdminOrderEdit(db,code,input){
   const agenda=await agendaChanges(db,p.order,p.pointsDelta);
   const stamp=nowIso();
   const revision=crypto.randomUUID();
+  const cardFeeCents=Number(p.snapshot.cardFeeCents || 0);
+  const baseTotalCents=p.order.payment_method==='pix'
+    ? p.total : Math.max(0,p.total-cardFeeCents);
   const pricingSnapshot=JSON.stringify({...p.snapshot,
+    baseTotalCents,
     payment:{
       ...(p.snapshot.payment||{}),
       method:p.order.payment_method,

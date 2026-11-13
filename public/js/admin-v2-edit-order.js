@@ -74,7 +74,16 @@ function cardHtml(options){
     <div class="admin-edit-totals"><span>Total atual <b>${money(current.totalCents)}</b></span>
       <span>Já recebido <b>${money(paid)}</b></span>
       <span>Saldo atual <b>${money(Math.max(0,current.totalCents-paid))}</b></span></div>
-    ${current.pendingMercadoPago?'<p class="notice info">Existe cobrança pendente no Mercado Pago. Resolva-a antes de editar valores.</p>':''}
+    ${current.pendingMercadoPago ? `
+      <div class="notice info">
+        <strong>Cobrança integral já aberta</strong>
+        <p>Não crie outro pedido. Para autorizar 50%, confirme o encerramento do checkout
+          antigo no Mercado Pago. O código, brinde, cenas e briefing do pedido serão preservados.</p>
+        ${current.canReleaseOldCheckout ? `
+          <button id="adminEditReleaseCheckout" class="btn btn-secondary" type="button">
+            Encerrar checkout antigo para autorizar 50%
+          </button>` : '<small>Há pagamento ou status incompatível. Confira o Financeiro.</small>'}
+      </div>` : ''}
     <div class="field"><label for="adminEditProduct">Produto contratado</label>
       <select id="adminEditProduct" class="select">
       <option value="__keep__" selected>Manter: ${esc(original?.name||'produto atual')} (sem reajuste)</option>
@@ -111,8 +120,10 @@ function cardHtml(options){
           </option>
         </select>
         <small>${current.canEditDeposit
-          ? 'Só a administradora autoriza 50%. O link da cliente permanece o mesmo; após salvar, ela verá a nova entrada e o saldo.'
-          : 'Condição bloqueada porque o pagamento já começou, foi recebido ou o pedido saiu da etapa de cobrança. Confira o Financeiro.'
+          ? 'Só a administradora autoriza 50%. O link do pedido e o brinde permanecem iguais. A cliente pagará a nova entrada dentro do pedido original.'
+          : current.canReleaseOldCheckout
+            ? 'Primeiro encerre a cobrança integral acima. Depois selecione 50%, confira o valor e salve.'
+            : 'Condição bloqueada porque há pagamento recebido, reserva sem identificação ou etapa incompatível. Confira o Financeiro.'
         }</small>
       </div>
     ` : '<p class="notice info">Cartão permanece 100% integral. A exceção de 50% é somente para Pix.</p>'}
@@ -125,7 +136,9 @@ function cardHtml(options){
       <button id="adminEditSave" class="btn btn-primary" type="button" disabled>Salvar alterações</button>
       <button id="adminEditCancel" class="btn btn-ghost" type="button">Fechar</button>
     </div>
-    <small>Para corrigir um Pix já registrado, use o Financeiro. Pagamentos do Mercado Pago exigem estorno ou cobrança próprios.</small>
+    <small>O endereço original do pedido continua válido para a cliente: não envie outro link de compra.
+      Apenas um checkout antigo do Mercado Pago poderá ser encerrado, após sua confirmação.
+      Para pagamentos já recebidos, confira o Financeiro e não gere segunda cobrança.</small>
   </div>`;
 }
 export function bindAdminOrderEditing(detail,onChanged,close,reopen){
@@ -158,6 +171,33 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
         el.addEventListener('input',invalidate));
       p.addEventListener('change',()=>{renderProductVariants(form,options);invalidate();});
       form.querySelector('#adminEditCancel').addEventListener('click',hide);
+      form.querySelector('#adminEditReleaseCheckout')?.addEventListener('click', async event => {
+        if (!confirm(
+          'O checkout do Mercado Pago de 100% será cancelado após conferir se não houve pagamento.\n\n'
+          + 'O pedido da cliente NÃO será apagado: brinde, cenas, briefing e link original serão mantidos.\n\n'
+          + 'Você confirma que deseja autorizar uma nova entrada de 50% neste mesmo pedido?'
+        )) return;
+        const button=event.currentTarget;
+        button.disabled=true;
+        try {
+          const response=await api(
+            `/api/admin/v2/orders/${detail.order.code}/edit/release-checkout`,
+            {method:'POST',body:JSON.stringify({confirmCancellation:true})},
+          );
+          showToast(response.result.cancelled
+            ? 'Checkout anterior encerrado. Pedido e brinde preservados. Selecione 50%.'
+            : 'Checkout já encerrado. Selecione 50% para esta cliente.');
+          await begin();
+          const select=panel.querySelector('#adminEditDepositPercent');
+          if (select && !select.disabled) {
+            select.value='50';
+            select.dispatchEvent(new Event('input',{bubbles:true}));
+          }
+        } catch(error){
+          button.disabled=false;
+          showToast(error.message || 'Não foi possível confirmar o cancelamento do checkout.');
+        }
+      });
       form.querySelector('#adminEditPreview').addEventListener('click',async e=>{
         const button=e.currentTarget;button.disabled=true;
         try {
@@ -184,7 +224,7 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
         const body=capture(form,options);
         if(!verified||verified!==JSON.stringify(body)){invalidate();return;}
         if(body.note.length<5){showToast('Explique o que foi combinado com a cliente.');return;}
-        if(!confirm(`Salvar alterações do pedido ${detail.order.code}? A entrada será de ${body.paymentDepositPercent}% no Pix conforme a prévia. Nenhuma cobrança ou estorno será criado automaticamente.`))return;
+        if(!confirm(`Salvar alteração no mesmo pedido ${detail.order.code}? A entrada Pix será de ${body.paymentDepositPercent}% conforme a prévia. Brinde, briefing e link do pedido permanecem; nenhum novo pedido ou pagamento será criado agora.`))return;
         save.disabled=true;
         try {
           const answer=await api(`/api/admin/v2/orders/${detail.order.code}/edit`,{

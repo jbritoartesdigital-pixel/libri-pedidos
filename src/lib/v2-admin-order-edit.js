@@ -143,7 +143,10 @@ async function prepare(db,code,input) {
       'A entrada só pode ser alterada antes de iniciar o pagamento Pix. Confira a cobrança e o Financeiro.',409
     );
   }
-  if(depositPercent===50 && order.payment_method!=='pix') {
+  if(depositPercent===50 && order.payment_method!=='pix'
+    && input.paymentDepositPercent !== undefined) {
+    // A card order imported with a historic 50% field is preserved when an
+    // unrelated price edit omits this setting. New card exceptions are denied.
     reject('A exceção de 50% é exclusiva do Pix. Cartão permanece integral.',409);
   }
   const priorDiscount=Number(snapshot.adminEdit?.manualDiscountCents||0);

@@ -10,7 +10,7 @@ import {
   statusClass,
 } from './admin-v2-core.js';
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
-import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-deposit-exception-1';
+import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-existing-checkout-gift-1';
 
 function whatsappBr(value) {
   const digits =

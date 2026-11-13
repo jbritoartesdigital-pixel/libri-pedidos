@@ -13,38 +13,63 @@ function compact(items) { return items.map(x => ({type:x.item_type, code:x.item_
   config: parseJson(x.configuration_json, {})})); }
 const sumPrice = xs => xs.reduce((n,x) => n + Number(x.unit_price_cents||0)*Number(x.quantity||1),0);
 const sumPoints = xs => xs.reduce((n,x) => n + Number(x.points_units||0)*Number(x.quantity||1),0);
+
+// Deposit exceptions belong to the authenticated Central, never to public APIs.
+function requestedDepositPercent(input, current) {
+  const value = input.paymentDepositPercent === undefined
+    ? current : Number(input.paymentDepositPercent);
+  if (![50, 100].includes(value)) reject('Escolha 50% ou 100% de entrada Pix.');
+  return value;
+}
+function canEditDeposit({ order, paid, pendingMp, hasApprovedPayment, activeHold }) {
+  return order.payment_method === 'pix' && paid === 0
+    && !pendingMp && !hasApprovedPayment && !activeHold
+    && ['awaiting_payment', 'urgency_approved', 'configuring'].includes(order.status)
+    && order.briefing_status === 'locked';
+}
+
 async function context(db, code) {
   if (!/^LIBRI-\d+$/.test(code)) reject('Código do pedido inválido.');
-  const order = await db.prepare(`SELECT o.*,p.total_cents,p.subtotal_cents,p.deposit_cents,
+  const order = await db.prepare(`SELECT o.*,p.total_cents,p.subtotal_cents,p.deposit_percent,p.deposit_cents,
     p.balance_cents,p.payment_method,p.pricing_snapshot_json,p.updated_at AS pricing_updated_at
     FROM v2_orders o JOIN v2_order_pricing p ON p.order_id=o.id
     WHERE o.order_code=? LIMIT 1`).bind(code).first();
   if (!order) reject('Pedido não encontrado.',404);
   if (['finalized','cancelled'].includes(order.status)) reject('Pedido encerrado. Não é possível editar esta contratação.',409);
-  const [items, payments] = await Promise.all([
+  const [items, payments, activeHoldRow] = await Promise.all([
     db.prepare('SELECT * FROM v2_order_items WHERE order_id=? ORDER BY id').bind(order.id).all(),
     db.prepare('SELECT provider,status,payment_type,amount_cents FROM v2_payments WHERE order_id=?').bind(order.id).all(),
+    db.prepare("SELECT 1 FROM v2_checkout_holds WHERE order_id=? AND status='active' LIMIT 1")
+      .bind(order.id).first(),
   ]);
   const pay = payments.results||[];
   const paid = Math.max(0,pay.reduce((n,p)=>p.status==='approved'
     ? n+(p.payment_type==='refund'?-Number(p.amount_cents):Number(p.amount_cents)):n,0));
   const pendingMp = pay.some(p=>p.provider==='mercado_pago'&&p.status==='pending');
-  return {order,items:items.results||[],paid,pendingMp};
+  return {order,items:items.results||[],paid,pendingMp,
+    hasApprovedPayment:pay.some(p=>p.status==='approved'),activeHold:!!activeHoldRow};
 }
 export async function getV2OrderEditOptions(db,code) {
-  const [{order,items,paid,pendingMp},catalog] = await Promise.all([context(db,code),loadV2Catalog(db)]);
+  const [{order,items,paid,pendingMp,hasApprovedPayment,activeHold},catalog] = await Promise.all([context(db,code),loadV2Catalog(db)]);
   const snapshot = parseJson(order.pricing_snapshot_json,{});
   return {catalog:{products:catalog.products,addons:catalog.addons},
     current:{items:compact(items),totalCents:order.total_cents,paidCents:paid,
       paymentMethod:order.payment_method,revision:order.pricing_updated_at,
+      paymentDepositPercent:Number(order.deposit_percent || 100),
+      depositCents:Number(order.deposit_cents || 0),
+      balanceCents:Number(order.balance_cents || 0),
+      canEditDeposit:canEditDeposit({order,paid,pendingMp,hasApprovedPayment,activeHold}),
+      activeCheckoutHold:activeHold,
       manualDiscountCents:Number(snapshot.adminEdit?.manualDiscountCents||0),
       priceAdjustmentCents:Number(snapshot.adminEdit?.priceAdjustmentCents||0),
       pendingMercadoPago:pendingMp},
   };
 }
 async function prepare(db,code,input) {
-  const {order,items,paid,pendingMp}=await context(db,code);
-  if(pendingMp) reject('Há cobrança pendente no Mercado Pago. Resolva essa cobrança antes de editar o total.',409);
+  const {order,items,paid,pendingMp,hasApprovedPayment,activeHold}=await context(db,code);
+  if(pendingMp) reject(
+    'Há uma cobrança pendente no Mercado Pago. Confirme ou cancele essa tentativa antes de autorizar 50%.',409
+  );
   const oldProduct=items.find(x=>x.item_type==='product');
   if(!oldProduct) reject('Pedido sem produto registrado. Confira a importação da V1.',409);
   const addonRows=items.filter(x=>x.item_type==='addon');
@@ -110,6 +135,20 @@ async function prepare(db,code,input) {
   }
   allItems.push(...preserved);
   const snapshot=parseJson(order.pricing_snapshot_json,{});
+  const originalDepositPercent=Number(order.deposit_percent || 100);
+  const depositPercent=requestedDepositPercent(input,originalDepositPercent);
+  const depositChanged=depositPercent!==originalDepositPercent;
+  if(depositChanged && !canEditDeposit({order,paid,pendingMp,hasApprovedPayment,activeHold})) {
+    reject(
+      'A entrada só pode ser alterada antes de iniciar o pagamento Pix. Confira a cobrança e o Financeiro.',409
+    );
+  }
+  if(depositPercent===50 && order.payment_method!=='pix'
+    && input.paymentDepositPercent !== undefined) {
+    // A card order imported with a historic 50% field is preserved when an
+    // unrelated price edit omits this setting. New card exceptions are denied.
+    reject('A exceção de 50% é exclusiva do Pix. Cartão permanece integral.',409);
+  }
   const priorDiscount=Number(snapshot.adminEdit?.manualDiscountCents||0);
   const priorAdjustment=Number(snapshot.adminEdit?.priceAdjustmentCents||0);
   const manualDiscount=moneyInt(input.manualDiscountCents??priorDiscount,'Desconto',0,100000000);
@@ -121,15 +160,24 @@ async function prepare(db,code,input) {
   const itemsDelta=productDifferenceCents+addonDifferenceCents;
   const total=Number(order.total_cents)+itemsDelta+(adjustment-priorAdjustment)-(manualDiscount-priorDiscount);
   if(!Number.isSafeInteger(total)||total<1||total>100000000) reject('O novo total precisa ser positivo.');
+  if(activeHold && (total!==Number(order.total_cents) || depositChanged)) {
+    reject('Há uma tentativa de checkout ativa. Resolva essa cobrança antes de mudar os valores.',409);
+  }
   if(total<paid) reject('O total negociado ficou abaixo do valor já recebido. Registre um estorno real antes de reduzir o pedido.',409);
   const pointsDelta=sumPoints(allItems)-sumPoints(items);
   if(pointsDelta<0&&Math.abs(pointsDelta)>1000000) reject('Carga de produção inválida.');
   if((sceneOverride&&sceneOverride!==originalScene)&&adjustment===priorAdjustment&&!productChange)
     reject('Para alterar cenas de um modelo antigo, informe também o acréscimo ou desconto de preço combinado.');
-  const changed=productChange || (sceneOverride>0&&sceneOverride!==originalScene)
+  const changed=depositChanged || productChange || (sceneOverride>0&&sceneOverride!==originalScene)
     || selectedAddonCodes.slice().sort().join('|')!==addonRows.filter(x=>activeCodes.has(x.item_code)).map(x=>x.item_code).sort().join('|')
     || manualDiscount!==priorDiscount||adjustment!==priorAdjustment;
+  const depositCents=depositChanged || (paid===0 && !hasApprovedPayment
+      && !pendingMp && !activeHold && ['awaiting_payment','urgency_approved','configuring'].includes(order.status))
+    ? Math.round(total*depositPercent/100)
+    : Math.min(total,Number(order.deposit_cents||0));
+  const balanceCents=total-depositCents;
   return {order,items,allItems,paid,itemsDelta,pointsDelta,total,manualDiscount,adjustment,
+    depositPercent,originalDepositPercent,depositChanged,depositCents,balanceCents,
     productDifferenceCents,addonDifferenceCents,
     priorDiscount,priorAdjustment,snapshot,changed,selectionChanged:productChange||
       sceneOverride>0&&sceneOverride!==originalScene || itemsDelta!==0||pointsDelta!==0,
@@ -138,7 +186,9 @@ async function prepare(db,code,input) {
 export async function previewV2AdminOrderEdit(db,code,input){
   const p=await prepare(db,code,input);
   return {beforeTotalCents:p.order.total_cents,newTotalCents:p.total,
-    paidCents:p.paid,remainingCents:p.total-p.paid,itemsDifferenceCents:p.itemsDelta,
+    paidCents:p.paid,remainingCents:p.total-p.paid,
+    depositPercent:p.depositPercent,depositCents:p.depositCents,balanceCents:p.balanceCents,
+    depositChanged:p.depositChanged,itemsDifferenceCents:p.itemsDelta,
     productDifferenceCents:p.productDifferenceCents,
     addonDifferenceCents:p.addonDifferenceCents,
     manualDiscountCents:p.manualDiscount,priceAdjustmentCents:p.adjustment,
@@ -195,11 +245,28 @@ export async function saveV2AdminOrderEdit(db,code,input){
   const agenda=await agendaChanges(db,p.order,p.pointsDelta);
   const stamp=nowIso();
   const revision=crypto.randomUUID();
-  const pricingSnapshot=JSON.stringify({...p.snapshot,adminEdit:{
-    ...(p.snapshot.adminEdit||{}),manualDiscountCents:p.manualDiscount,
-    priceAdjustmentCents:p.adjustment,lastRevision:revision,updatedAt:stamp,
-  }});
-  const deposit=Math.min(p.total,Number(p.order.deposit_cents||0));
+  const cardFeeCents=Number(p.snapshot.cardFeeCents || 0);
+  const baseTotalCents=p.order.payment_method==='pix'
+    ? p.total : Math.max(0,p.total-cardFeeCents);
+  const pricingSnapshot=JSON.stringify({...p.snapshot,
+    baseTotalCents,
+    payment:{
+      ...(p.snapshot.payment||{}),
+      method:p.order.payment_method,
+      depositPercent:p.depositPercent,
+      adminDepositException:p.order.payment_method==='pix' && p.depositPercent===50,
+      depositCents:p.depositCents,
+      balanceCents:p.balanceCents,
+    },
+    totalCents:p.total,
+    adminEdit:{
+      ...(p.snapshot.adminEdit||{}),manualDiscountCents:p.manualDiscount,
+      priceAdjustmentCents:p.adjustment,lastRevision:revision,updatedAt:stamp,
+      ...(p.depositChanged ? {
+        paymentDepositPercent:p.depositPercent,depositExceptionAuthorizedAt:stamp,
+      } : {}),
+    },
+  });
   const newBriefingStatus=p.selectionChanged&&p.order.briefing_status==='completed'
     ? 'in_progress' : p.order.briefing_status;
   const history=JSON.stringify({source:'admin_whatsapp',reason:note,
@@ -208,22 +275,34 @@ export async function saveV2AdminOrderEdit(db,code,input){
     productDifferenceCents:p.productDifferenceCents,
     addonDifferenceCents:p.addonDifferenceCents,
     manualDiscountCents:p.manualDiscount,priceAdjustmentCents:p.adjustment,
+    oldDepositPercent:p.originalDepositPercent,newDepositPercent:p.depositPercent,
+    authorizedHalfDeposit:p.depositChanged && p.depositPercent===50,
+    depositCents:p.depositCents,balanceCents:p.balanceCents,
     oldBriefingStatus:p.order.briefing_status,newBriefingStatus,
     agendaNeedsReview:false,agendaAllocationsAdjusted:agenda});
   const isCurrent=`EXISTS(SELECT 1 FROM v2_order_pricing q WHERE q.order_id=?
     AND q.pricing_snapshot_json=?)`;
   const operations=[
     db.prepare(`UPDATE v2_order_pricing SET total_cents=?,subtotal_cents=?,
-      deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=?
+      deposit_percent=?,deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=?
       WHERE order_id=? AND total_cents=? AND pricing_snapshot_json=?
       AND NOT EXISTS(SELECT 1 FROM v2_payments pm WHERE pm.order_id=?
         AND pm.provider='mercado_pago' AND pm.status='pending')
+      AND (?=0 OR (
+        NOT EXISTS(SELECT 1 FROM v2_payments pm WHERE pm.order_id=? AND pm.status='approved')
+        AND NOT EXISTS(SELECT 1 FROM v2_checkout_holds h WHERE h.order_id=? AND h.status='active')
+        AND EXISTS(SELECT 1 FROM v2_orders o WHERE o.id=? AND
+          o.status IN ('awaiting_payment','urgency_approved','configuring')
+          AND o.briefing_status='locked')
+      ))
       AND COALESCE((SELECT SUM(CASE WHEN pm.status='approved' THEN
         CASE WHEN pm.payment_type='refund' THEN -pm.amount_cents ELSE pm.amount_cents END
         ELSE 0 END) FROM v2_payments pm WHERE pm.order_id=?),0)<=?`)
       .bind(p.total,Math.max(0,Number(p.order.subtotal_cents)+p.itemsDelta),
-        deposit,p.total-deposit,pricingSnapshot,stamp,p.order.id,
-        p.order.total_cents,p.order.pricing_snapshot_json,p.order.id,p.order.id,p.total),
+        p.depositPercent,p.depositCents,p.balanceCents,pricingSnapshot,stamp,p.order.id,
+        p.order.total_cents,p.order.pricing_snapshot_json,p.order.id,
+        p.depositChanged?1:0,p.order.id,p.order.id,p.order.id,
+        p.order.id,p.total),
     db.prepare(`UPDATE v2_orders SET briefing_status=?,updated_at=?
       WHERE id=? AND ${isCurrent}`)
       .bind(newBriefingStatus,stamp,p.order.id,p.order.id,pricingSnapshot),
@@ -257,9 +336,17 @@ export async function saveV2AdminOrderEdit(db,code,input){
     (order_id,action_code,description,metadata_json,created_at)
     SELECT ?,'admin_order_edited','Pedido e valores alterados pela administradora após contato pelo WhatsApp',?,?
     WHERE ${isCurrent}`).bind(p.order.id,history,stamp,p.order.id,pricingSnapshot));
+  if(p.depositChanged) operations.push(db.prepare(`
+    INSERT INTO v2_order_history
+    (order_id,action_code,description,metadata_json,created_at)
+    SELECT ?,'admin_deposit_exception_changed',
+      'Administradora alterou a entrada Pix entre 100% e 50%.',?,?
+    WHERE ${isCurrent}`
+  ).bind(p.order.id,history,stamp,p.order.id,pricingSnapshot));
   const results=await db.batch(operations);
   if(Number(results?.[0]?.meta?.changes||0)!==1)
     reject('O pedido mudou durante a gravação. Atualize e tente novamente.',409);
   return {ok:true,totalCents:p.total,paidCents:p.paid,remainingCents:p.total-p.paid,
+    depositPercent:p.depositPercent,depositCents:p.depositCents,balanceCents:p.balanceCents,
     briefingNeedsReview:newBriefingStatus!==p.order.briefing_status};
 }

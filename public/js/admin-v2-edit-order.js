@@ -44,6 +44,9 @@ function capture(form,options){
     addonCodes:[...form.querySelectorAll('[data-edit-addon]:checked')].map(x=>x.value),
     manualDiscountCents:cents(form.querySelector('#adminEditDiscount').value),
     priceAdjustmentCents:cents(form.querySelector('#adminEditAdjustment').value),
+    paymentDepositPercent:form.querySelector('#adminEditDepositPercent')?.value
+      ? Number(form.querySelector('#adminEditDepositPercent').value)
+      : options.current.paymentDepositPercent,
     expectedTotalCents:options.current.totalCents,
     expectedRevision:options.current.revision,
     note:form.querySelector('#adminEditNote').value.trim(),
@@ -95,6 +98,24 @@ function cardHtml(options){
           step="0.01" value="${reais(current.priceAdjustmentCents)}"></div>
     </div>
     <small>Use ajuste positivo para cobrar uma cena ou serviço fora do catálogo. Um desconto adicional não altera descontos anteriores.</small>
+    ${current.paymentMethod==='pix' ? `
+      <div class="field admin-edit-deposit">
+        <label for="adminEditDepositPercent">Pagamento Pix combinado com a cliente</label>
+        <select id="adminEditDepositPercent" class="select"
+          ${!current.canEditDeposit ? 'disabled' : ''}>
+          <option value="100" ${current.paymentDepositPercent!==50 ? 'selected' : ''}>
+            100% antecipado (padrão)
+          </option>
+          <option value="50" ${current.paymentDepositPercent===50 ? 'selected' : ''}>
+            Exceção autorizada: 50% de entrada
+          </option>
+        </select>
+        <small>${current.canEditDeposit
+          ? 'Só a administradora autoriza 50%. O link da cliente permanece o mesmo; após salvar, ela verá a nova entrada e o saldo.'
+          : 'Condição bloqueada porque o pagamento já começou, foi recebido ou o pedido saiu da etapa de cobrança. Confira o Financeiro.'
+        }</small>
+      </div>
+    ` : '<p class="notice info">Cartão permanece 100% integral. A exceção de 50% é somente para Pix.</p>'}
     <div class="field"><label for="adminEditNote">O que foi combinado no WhatsApp?</label>
       <textarea id="adminEditNote" class="textarea" rows="2" maxlength="800"
         placeholder="Ex.: acrescentar mais uma cena e confirmação, desconto autorizado"></textarea></div>
@@ -148,6 +169,8 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
           const v=r.result;
           save.disabled=!v.changed||options.current.pendingMercadoPago;
           preview.innerHTML=`<strong>Novo total: ${money(v.newTotalCents)}</strong>
+            <span>Entrada Pix autorizada: ${v.depositPercent}% • ${money(v.depositCents)}</span>
+            ${v.balanceCents > 0 ? `<span>Saldo contratado: ${money(v.balanceCents)}</span>` : ''}
             <span>Produto / cenas: ${money(v.productDifferenceCents || 0)} de alteração</span>
             <span>Adicionais: ${money(v.addonDifferenceCents || 0)} de alteração</span>
             <span>Diferença total: ${money(v.newTotalCents-v.beforeTotalCents)}</span>
@@ -161,7 +184,7 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
         const body=capture(form,options);
         if(!verified||verified!==JSON.stringify(body)){invalidate();return;}
         if(body.note.length<5){showToast('Explique o que foi combinado com a cliente.');return;}
-        if(!confirm(`Salvar alterações do pedido ${detail.order.code}? O total e o saldo serão atualizados, sem cobrar ou estornar pagamentos automaticamente.`))return;
+        if(!confirm(`Salvar alterações do pedido ${detail.order.code}? A entrada será de ${body.paymentDepositPercent}% no Pix conforme a prévia. Nenhuma cobrança ou estorno será criado automaticamente.`))return;
         save.disabled=true;
         try {
           const answer=await api(`/api/admin/v2/orders/${detail.order.code}/edit`,{
@@ -170,7 +193,7 @@ export function bindAdminOrderEditing(detail,onChanged,close,reopen){
           close();
           showToast(answer.result.briefingNeedsReview
             ? 'Pedido atualizado. Confira o briefing após alterar cenas/adicionais.'
-            : 'Pedido e saldo atualizados com histórico ✓');
+            : `Pedido atualizado: Pix ${answer.result.depositPercent}% • ${money(answer.result.depositCents)} agora ✓`);
           if(onChanged)await onChanged();
           await reopen(detail.order.code,onChanged);
         }catch(err){showToast(err.message);save.disabled=false;}

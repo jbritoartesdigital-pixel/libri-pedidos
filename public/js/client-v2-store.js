@@ -19,6 +19,7 @@ import { sceneLinkSelection } from './v2-scene-links.js?v=20261026-scene-links-1
 import { compactManualAddonGroups, compactManualAddonsHtml, isMomentsPlan } from './client-v2-manual-addon-groups.js?v=20261110-confirmation-clear-1';
 import { openBlackLibriBeforePayment, openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261111-rose-v2-2';
 import { openBlackLibriDemo } from './black-libri-demo.js?v=20261111-rose-v2-2';
+import {recordCheckoutStep} from './client-v2-funnel.js';
 
 const EVENT_TYPES = [
   {
@@ -4728,6 +4729,9 @@ function renderTerms(
               },
             );
 
+          // The checkout was created, NOT necessarily paid. This distinction
+          // prevents misleading "converted" metrics for pending Mercado Pago.
+          if(!state.simulationMode) void recordCheckoutStep(10,{checkoutCreated:true});
           if (
             !result.payment
               ?.checkoutUrl
@@ -5111,6 +5115,7 @@ export async function startStore(
 
   const render = () => {
     persist(state);
+    if(!state.simulationMode) void recordCheckoutStep(state.step);
 
     if (
       state.step === 0

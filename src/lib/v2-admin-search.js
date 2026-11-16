@@ -36,7 +36,7 @@ export async function searchV2AdminOrders(db, filters = {}) {
     throw new Error('Confira o período de busca.');
   }
   if (filters.eventDate && !eventDate) throw new Error('Confira a data exata da festa.');
-  if (sceneText && (!/^[1-9]\\d?$/.test(sceneText) || sceneCount > 20)) {
+  if (sceneText && (!/^[1-9][0-9]?$/.test(sceneText) || sceneCount > 20)) {
     throw new Error('Número de cenas inválido.');
   }
   if (status && !/^[a-z_]{2,50}$/.test(status)) throw new Error('Status inválido.');

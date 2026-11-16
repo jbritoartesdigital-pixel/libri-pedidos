@@ -10,6 +10,17 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
+const SEARCH_MODEL_TYPES = [
+  ['cinematic_video', 'Convite em vídeo'],
+  ['cinematic_interactive', 'Interativo cinematográfico'],
+  ['interactive_essential', 'Interativo essencial'],
+  ['interactive_animated', 'Interativo animado'],
+  ['interactive_gif', 'Interativo GIF'],
+  ['book', 'Livro digital'],
+  ['infinite', 'Convite infinito'],
+];
+const SEARCH_MODEL_LABELS = Object.fromEntries(SEARCH_MODEL_TYPES);
+
 function attentionRow(item) {
   return `
     <div class="row-card">
@@ -184,22 +195,35 @@ export async function renderCentral(openOrder) {
             ['ready_for_delivery','Pronto para entrega'],['finalized','Finalizado'],
             ['cancelled','Cancelado']].map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
           </select></div>
-        <div class="field"><label for="advOrderProduct">Formato</label><select class="select" id="advOrderProduct">
-          <option value="">Todos</option>
-          ${[['cinematic_video','Convite em vídeo'],['interactive_essential','Interativo essencial'],
-            ['interactive_gif','Interativo GIF'],['interactive_animated','Interativo animado'],
-            ['cinematic_interactive','Interativo cinematográfico'],['book','Livro digital']]
-            .map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
+        <div class="field"><label for="advOrderProduct">Formato do convite</label><select class="select" id="advOrderProduct">
+          <option value="">Todos os formatos</option>
+          ${SEARCH_MODEL_TYPES.map(([v,label]) =>
+            `<option value="${v}">${label}</option>`).join('')}
           </select></div>
+        <div class="field"><label for="advOrderScenes">Modelo / número de cenas</label>
+          <select class="select" id="advOrderScenes">
+            <option value="">Qualquer quantidade</option>
+            ${Array.from({length: 8}, (_, i) => i + 1)
+              .map(n => `<option value="${n}">${n} ${n === 1 ? 'cena' : 'cenas'}</option>`).join('')}
+          </select>
+          <small class="muted">Ex.: Interativo cinematográfico + 2 cenas.</small>
+        </div>
         <div class="field"><label for="advOrderArchived">Arquivados</label><select class="select" id="advOrderArchived">
           <option value="all">Todos</option><option value="no">Somente ativos</option>
           <option value="yes">Somente arquivados</option></select></div>
+        <div class="field"><label for="advOrderDate">Data exata da festa</label>
+          <input class="input" id="advOrderDate" type="date">
+          <small class="muted">Use uma data ou escolha um período abaixo.</small>
+        </div>
         <div class="field"><label for="advOrderFrom">Festa a partir de</label>
           <input class="input" id="advOrderFrom" type="date"></div>
         <div class="field"><label for="advOrderTo">Festa até</label>
           <input class="input" id="advOrderTo" type="date"></div>
         </div>
-        <button type="button" class="btn btn-secondary" id="runAdvancedOrderSearch" style="margin-top:8px">Buscar com filtros</button>
+        <div class="toolbar" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-secondary" id="runAdvancedOrderSearch">Buscar com filtros</button>
+          <button type="button" class="btn btn-ghost" id="clearAdvancedOrderSearch">Limpar filtros</button>
+        </div>
       </details>
       <div id="advancedOrderResults" class="list" style="margin-top:12px" aria-live="polite"></div>
     </section>
@@ -427,11 +451,16 @@ export async function renderCentral(openOrder) {
   const extraFilters = document.getElementById('advancedOrderFilters');
   let searchDebounce;
   let searchRevision = 0;
+  const filterIds = [
+    'advOrderStatus', 'advOrderProduct', 'advOrderScenes',
+    'advOrderDate', 'advOrderFrom', 'advOrderTo',
+  ];
+  const isFilterActive = () => filterIds.some(id =>
+    Boolean(document.getElementById(id)?.value))
+    || document.getElementById('advOrderArchived')?.value !== 'all';
 
   const refreshFilterIndicator = () => {
-    const active = ['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
-      .some(id => Boolean(document.getElementById(id)?.value))
-      || document.getElementById('advOrderArchived')?.value !== 'all';
+    const active = isFilterActive();
     const summary = extraFilters?.querySelector('summary');
     if (summary) summary.textContent = active
       ? 'Mostrar mais filtros • ativos' : 'Mostrar mais filtros';
@@ -441,9 +470,7 @@ export async function renderCentral(openOrder) {
     const revision = ++searchRevision;
     clearTimeout(searchDebounce);
     const hasQuery = Boolean(quickSearch?.value.trim());
-    const hasExtraFilters = ['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
-      .some(id => Boolean(document.getElementById(id)?.value))
-      || document.getElementById('advOrderArchived')?.value !== 'all';
+    const hasExtraFilters = isFilterActive();
     refreshFilterIndicator();
     // Do not fetch (or show) every historical order when the name search is blank.
     if (!hasQuery && !hasExtraFilters) {
@@ -452,6 +479,7 @@ export async function renderCentral(openOrder) {
     }
     const values = [
       ['q','advOrderQuery'], ['status','advOrderStatus'], ['product','advOrderProduct'],
+      ['scenes','advOrderScenes'], ['eventDate','advOrderDate'],
       ['archived','advOrderArchived'], ['from','advOrderFrom'], ['to','advOrderTo'],
     ];
     const params = new URLSearchParams(values.map(([key,id]) =>
@@ -466,7 +494,10 @@ export async function renderCentral(openOrder) {
         <button class="row-card" type="button" data-searched-order="${esc(item.code)}"
           style="text-align:left;cursor:pointer">
           <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
-          <small>${esc(item.customerName)} • ${dateBr(item.eventDate)}
+          <small>${esc(item.customerName)} • Festa: ${dateBr(item.eventDate)}
+            • ${esc(SEARCH_MODEL_LABELS[item.productCode] || item.productCode || 'Modelo não informado')}
+            ${Number(item.sceneCount) > 0
+              ? `• ${Number(item.sceneCount)} ${Number(item.sceneCount) === 1 ? 'cena' : 'cenas'}` : ''}
             • ${esc(item.status)} ${item.archived ? '• Arquivado' : ''}</small>
         </button>`).join('') || empty('Nenhum pedido encontrado.');
       results.querySelectorAll('[data-searched-order]').forEach(button =>
@@ -487,9 +518,7 @@ export async function renderCentral(openOrder) {
     // a newer search or reappears after clearing the field.
     ++searchRevision;
     if (!quickSearch.value.trim()) {
-      if (['advOrderStatus', 'advOrderProduct', 'advOrderFrom', 'advOrderTo']
-        .some(id => Boolean(document.getElementById(id)?.value))
-        || document.getElementById('advOrderArchived')?.value !== 'all') {
+      if (isFilterActive()) {
         searchDebounce = setTimeout(runOrderSearch, 350);
       } else {
         searchResults.innerHTML = '';
@@ -505,9 +534,27 @@ export async function renderCentral(openOrder) {
       runOrderSearch();
     }
   });
-  ['advOrderStatus', 'advOrderProduct', 'advOrderArchived', 'advOrderFrom', 'advOrderTo']
+  // A single date and a period are alternative ways to search by event date.
+  document.getElementById('advOrderDate')?.addEventListener('change', event => {
+    if (event.target.value) {
+      document.getElementById('advOrderFrom').value = '';
+      document.getElementById('advOrderTo').value = '';
+    }
+  });
+  ['advOrderFrom', 'advOrderTo'].forEach(id =>
+    document.getElementById(id)?.addEventListener('change', event => {
+      if (event.target.value) document.getElementById('advOrderDate').value = '';
+    }));
+  ['advOrderStatus', 'advOrderProduct', 'advOrderScenes',
+    'advOrderArchived', 'advOrderDate', 'advOrderFrom', 'advOrderTo']
     .forEach(id => document.getElementById(id)
       ?.addEventListener('change', refreshFilterIndicator));
+  document.getElementById('clearAdvancedOrderSearch')?.addEventListener('click', () => {
+    for (const id of filterIds) document.getElementById(id).value = '';
+    document.getElementById('advOrderArchived').value = 'all';
+    refreshFilterIndicator();
+    void runOrderSearch();
+  });
 
   viewRoot
     .querySelectorAll('[data-open-order]')

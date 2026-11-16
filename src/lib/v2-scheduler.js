@@ -69,6 +69,16 @@ export async function runV2Scheduler(env) {
       actionUrl: `/admin-v2?order=${encodeURIComponent(order.order_code)}`, priority: 'high',
       pushEligible: true, dedupeKey: `urgency-requested:${order.id}` });
   }
+  // Run once daily despite the 5-minute scheduler; no historical tracking
+  // survives more than 45 days. Analytics is noncritical to payments.
+  const utcNow=new Date();
+  if(utcNow.getUTCHours()===4 && utcNow.getUTCMinutes()<5) {
+    try{
+      await env.DB.prepare(
+        "DELETE FROM v2_funnel_sessions WHERE last_seen_at < datetime('now','-45 days')"
+      ).run();
+    }catch(error){console.warn("funnel_cleanup_unavailable",error?.name||"Error")}
+  }
   result.abandonedOrders = await cleanupAbandonedUnpaidV2Orders(env);
   result.notifications = await runV2NotificationScheduler(env);
   return result;

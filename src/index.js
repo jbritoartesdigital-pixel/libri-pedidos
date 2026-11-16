@@ -75,6 +75,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import {handleAnonymousFunnel} from './routes/public-funnel.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -467,6 +468,10 @@ export default {
         /* ==================================================
            CLIENTE / PÚBLICO V2
         ================================================== */
+
+        if (url.pathname === '/api/v2/analytics/funnel') {
+          return await handleAnonymousFunnel(request,env);
+        }
 
         if (
           url.pathname

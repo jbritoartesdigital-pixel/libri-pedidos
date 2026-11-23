@@ -47,7 +47,7 @@ test('Ateliê only, paid only, cannot edit V2 invitation or unpaid order',async(
   assert.equal(await getAtelieCustomerBriefing(db,TOKEN_INVITE),null);
   assert.equal((await getAtelieCustomerBriefing(db,TOKEN_UNPAID)).locked,true);
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKEN_UNPAID,{
-    revision:0,currentSection:'direction',data:{theme:'Jardim'}
+    revision:0,currentSection:'theme',data:{theme:'Jardim'}
   }),/não está liberado/);
   assert.equal(sqlite.prepare('SELECT count(*) AS n FROM v3_atelie_briefings').get().n,0);
 });
@@ -59,13 +59,13 @@ test('prefilled fields and private save/continue with optimistic concurrency',as
   assert.equal(initial.schema.sections[0].fields[0].prefill,'Luna');
   assert.equal(initial.schema.sections[0].fields[3].prefill,'2027-02-14');
   const saved=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:0,currentSection:'direction',data:{theme:'Jardim Encantado',styleFreedom:'a Libri pode decidir'}
+    revision:0,currentSection:'theme',data:{theme:'Jardim Encantado',styleFreedom:'a Libri pode decidir'}
   });
   assert.equal(saved.revision,1);
   assert.equal(saved.data.theme,'Jardim Encantado');
   assert.equal(saved.currentSection,'direction');
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:0,currentSection:'direction',data:{theme:'Outro tema'}
+    revision:0,currentSection:'theme',data:{theme:'Outro tema'}
   }),/atualizadas em outro lugar/);
   assert.equal((await getAtelieCustomerBriefing(db,TOKEN)).data.theme,'Jardim Encantado');
   assert.equal(sqlite.prepare('SELECT status FROM v2_orders WHERE id=1').get().status,'briefing_pending');
@@ -74,11 +74,11 @@ test('prefilled fields and private save/continue with optimistic concurrency',as
 test('partial answers work, invalid fields, upload injection and consent are rejected',async()=>{
   const {db}=fixture();
   const p=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:0,currentSection:'direction',data:{styleFreedom:''}
+    revision:0,currentSection:'theme',data:{styleFreedom:''}
   });
   assert.equal(p.data.styleFreedom,'');
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:1,currentSection:'direction',data:{speech_preference:'no_speech'}
+    revision:1,currentSection:'theme',data:{speech_preference:'no_speech'}
   }),/indisponível/);
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKEN,{
     revision:1,currentSection:'references',data:{childPhotos:'some_public_url'}
@@ -90,15 +90,15 @@ test('partial answers work, invalid fields, upload injection and consent are rej
 test('style questions are conditional, and data is never auto-published',async()=>{
   const {db}=fixture();
   let p=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:0,currentSection:'direction',data:{styleFreedom:'quero escolher'}
+    revision:0,currentSection:'theme',data:{styleFreedom:'quero escolher'}
   });
   assert.ok(p.schema.sections.flatMap(x=>x.fields).some(x=>x.key==='styleDetails'));
   p=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:1,currentSection:'direction',data:{styleDetails:'Delicado e elegante'}
+    revision:1,currentSection:'theme',data:{styleDetails:'Delicado e elegante'}
   });
   assert.equal(p.data.styleDetails,'Delicado e elegante');
   p=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:2,currentSection:'direction',data:{styleFreedom:'a Libri pode decidir'}
+    revision:2,currentSection:'theme',data:{styleFreedom:'a Libri pode decidir'}
   });
   assert.ok(!('styleDetails' in p.data));
   assert.equal(p.schema.portfolioConsentDefault,false);
@@ -107,7 +107,7 @@ test('style questions are conditional, and data is never auto-published',async()
 });
 test('Admin reads creative answers by order code without a customer token',async()=>{
   const {db}=fixture();
-  await saveAtelieCustomerBriefing(db,TOKEN,{revision:0,currentSection:'direction',
+  await saveAtelieCustomerBriefing(db,TOKEN,{revision:0,currentSection:'theme',
     data:{theme:'Jardim Encantado'}});
   const result=await getAtelieAdminBriefing(db,'LIBRI-2001');
   assert.equal(result.data.theme,'Jardim Encantado');

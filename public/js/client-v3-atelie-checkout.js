@@ -5,7 +5,7 @@ const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 const money=cents=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'})
   .format(Number(cents||0)/100);
 const field=(name,label,value,type='text',hint='')=>'<label class="v3-at-field">'+
-  '<span>'+esc(label)+'</span><input required class="v3-at-input" name="'+name+'" type="'+type+
+  '<span>'+esc(label)+'</span><input '+(name==='email'?'':'required ')+'class="v3-at-input" name="'+name+'" type="'+type+
   '" value="'+esc(value||'')+'" '+(type==='tel'?'inputmode="tel"':'')+'>'+
   (hint?'<small>'+esc(hint)+'</small>':'')+'</label>';
 async function api(path,body){

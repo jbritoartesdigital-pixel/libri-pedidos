@@ -12,6 +12,7 @@ import {
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
 import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-existing-checkout-gift-1';
 import { isAtelieOrderDetail, mountAtelieProduction } from './admin-v2-atelie-production.js';
+import { mountAtelieCreativeBriefing } from './admin-v2-atelie-briefing.js';
 
 function whatsappBr(value) {
   const digits =
@@ -987,7 +988,7 @@ export async function openOrder(code, onChanged = null) {
         <section id="orderBriefingPanel" class="order-briefing-panel hidden"
           aria-label="Dados enviados pela cliente">
           ${atelieOrder
-            ? '<section class="card"><h3>Briefing criativo do Ateliê</h3><p>A integração segura do briefing e dos arquivos na área da cliente ainda está em desenvolvimento. Não envie dados de crianças por formulário de convites.</p></section>'
+            ? '<section id="atelieCreativeBriefingHost"></section>'
             : `${orderUploadsBlock(detail)}<div class="section-grid">${briefingBlock(detail)}</div>`
           }
         </section>
@@ -1160,6 +1161,7 @@ export async function openOrder(code, onChanged = null) {
 
   if (atelieOrder) {
     void mountAtelieProduction(document.getElementById('atelieArtProduction'), detail.order.code);
+    void mountAtelieCreativeBriefing(document.getElementById('atelieCreativeBriefingHost'),detail.order.code);
   }
   bindAdminOrderEditing(detail,onChanged,close,openOrder);
   bindAdminWhatsAppBriefing(detail.order.code, onChanged);

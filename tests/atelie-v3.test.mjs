@@ -106,7 +106,7 @@ test('Ateliê briefing is isolated, adaptive, and private by default', () => {
   assert.ok(!base.sections.flatMap(x=>x.fields).some(f=>f.key==='childPhotos'));
   assert.equal(base.sections[0].fields[0].prefill,'Criança');
   const withPhoto=buildAtelieBriefingBlueprint({requiresChildPhoto:true,data:{childPhotoPermission:'sim',
-    styleFreedom:'quero escolher'}});
+    guardianAuthorization:'sim',styleFreedom:'quero escolher'}});
   const fields=withPhoto.sections.flatMap(x=>x.fields);
   assert.ok(fields.some(x=>x.key==='childPhotos'&&x.privateOnly===true));
   assert.ok(fields.some(x=>x.key==='styleDetails'));

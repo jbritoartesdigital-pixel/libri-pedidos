@@ -1837,3 +1837,63 @@ button { -webkit-tap-highlight-color: transparent; }
     min-height: 52px; font-size: 14px; padding: 10px 8px;
   }
 }
+
+/* V3 operacional, aditivo ao Admin V2: sem alterar formulários ou ações legadas. */
+.admin-v3-shortcuts {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin:0 0 18px;
+}
+.admin-v3-shortcut {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  gap:5px;
+  padding:15px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:var(--surface);
+  color:var(--ink);
+  text-decoration:none;
+  box-shadow:0 4px 14px rgba(63,43,47,.035);
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+.admin-v3-shortcut strong{font-size:14px;line-height:1.3}
+.admin-v3-shortcut small{color:var(--muted);font-size:11px;line-height:1.45}
+.admin-v3-shortcut:hover,.admin-v3-shortcut:focus-visible{
+  border-color:var(--rose);
+  box-shadow:0 6px 20px rgba(105,54,65,.09);
+}
+.admin-v3-shortcut:focus-visible,.admin-v3-filter select:focus-visible{
+  outline:3px solid var(--rose);
+  outline-offset:2px;
+}
+.admin-v3-production-filters{align-items:flex-end;gap:10px}
+.admin-v3-filter{display:flex;flex-direction:column;min-width:180px;gap:5px}
+.admin-v3-filter>span{color:var(--muted);font-size:11px;font-weight:800}
+.admin-v3-filter .select{min-width:0;width:100%}
+.admin-v3-type-tag,.admin-v3-stage-tag{
+  display:inline-flex;align-items:center;
+  padding:5px 9px;border-radius:99px;
+  border:1px solid #e9ccd5;
+  color:var(--rose-dark);
+  background:var(--rose-soft);
+  font-size:11px;font-weight:750;line-height:1.25;
+}
+.admin-v3-stage-tag{background:var(--blue-soft);border-color:#d5e3ed;color:var(--blue)}
+.admin-v3-type-invite{background:var(--surface-soft);border-color:var(--line);color:var(--muted)}
+@media(max-width:980px){.admin-v3-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){
+  .admin-v3-shortcuts{gap:7px}
+  .admin-v3-shortcut{padding:12px;border-radius:12px}
+  .admin-v3-production-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  .admin-v3-filter{min-width:0;grid-column:auto}
+  .admin-v3-production-filters>input{grid-column:1/-1;width:100%;max-width:none!important}
+  .admin-v3-production-filters>select{min-width:0;max-width:none!important;width:100%}
+}
+@media(max-width:380px){
+  .admin-v3-shortcuts{grid-template-columns:minmax(0,1fr)}
+  .admin-v3-production-filters{grid-template-columns:minmax(0,1fr)}
+  .admin-v3-production-filters>input{grid-column:auto}
+}

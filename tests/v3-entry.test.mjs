@@ -44,7 +44,9 @@ test('V3 provides the free WhatsApp confirmation and avoids duplicating Moments 
 test('V3 excludes commercial claims for non-configured products and supports reduced motion', () => {
   const js = source('public/js/client-v3.js');
   const css = source('public/css/client-v3.css');
-  assert.match(js, /ainda está em desenvolvimento/);
+  assert.match(js, /Contratação em preparação/);
+  assert.match(js, /item\.scopeApproved/);
+  assert.match(js, /Não vamos prometer entregas antes disso/);
   assert.match(js, /prefers-reduced-motion: reduce/);
   assert.match(css, /prefers-reduced-motion:reduce/);
 });

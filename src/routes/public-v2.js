@@ -497,6 +497,8 @@ export async function handlePublicV2Api(
         env.DB,
       );
 
+    // A loja V2 continua exclusiva dos convites. Ateliê é comprado pela V3.
+    catalog.products=catalog.products.filter(p=>!p.code.startsWith('atelie_'));
     return json({
       ok: true,
       catalog,
@@ -516,7 +518,7 @@ export async function handlePublicV2Api(
         return fail('Dados da simulação muito grandes.', 413);
       }
       const catalog = await loadV2Catalog(env.DB);
-      const product = catalog.products.find(item => item.code === body.productCode);
+      const product = catalog.products.find(item => item.code === body.productCode && !item.code.startsWith('atelie_'));
       if (!product) return fail('Formato não encontrado.', 404);
       const requested = Array.isArray(body.addonCodes) ? body.addonCodes : [];
       if (requested.length > 25) return fail('Seleção de adicionais inválida.', 422);

@@ -9,6 +9,7 @@ import { blackLibriOperational, blackLibriStatus, revealBlackLibri, reservedBlac
 import {
   loadV2Catalog,
 } from '../lib/v2-catalog.js';
+import { listAteliePackages } from '../lib/v3-atelie-catalog.js';
 import { buildV2BriefingSimulationSchema } from '../lib/v2-customer-area.js';
 
 import {
@@ -470,6 +471,16 @@ export async function handlePublicV2Api(
       galleryContentMatch[1],
       galleryContentMatch[2],
     );
+  }
+
+  // Nova categoria na vitrine V3: apenas apresentação, sem preços nem checkout.
+  // Nunca expõe rascunhos internos ao público.
+  if (method === 'GET' && path === '/api/v2/atelie/catalog') {
+    return json({
+      ok:true,
+      packages:await listAteliePackages(env.DB),
+      purchaseAvailable:false
+    });
   }
 
   /* ==================================================

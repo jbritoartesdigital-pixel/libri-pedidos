@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS v3_atelie_art_production (
   stage TEXT NOT NULL DEFAULT 'briefing' CHECK(stage IN ('briefing','art_direction','creation','revision','approval','delivery')),
   revisions_used INTEGER NOT NULL DEFAULT 0 CHECK(revisions_used >= 0),
   revisions_included INTEGER CHECK(revisions_included IS NULL OR revisions_included >= 0),
-  version INTEGER NOT NULL DEFAULT 1 CHECK(version > 0),
+  version INTEGER NOT NULL DEFAULT 0 CHECK(version >= 0),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS v3_atelie_art_history (

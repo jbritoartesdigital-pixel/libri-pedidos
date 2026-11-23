@@ -16,7 +16,7 @@ Produtos, variantes e capacidade ficam no mesmo banco D1; pagamentos e confirma�
 - API administrativa de rascunhos sob autenticação Passkey já existente.
 - Aba Libri Ateliê na Loja do Admin V2, para configurar descrição, itens, exclusões, preço interno, capacidade, revisões e versão de escopo.
 - Duas categorias principais na prévia V3: Convites Digitais e Identidade Visual. Retrospectiva preservada como opção secundária ainda em desenvolvimento.
-- Blueprint de briefing artístico adaptativo, ainda não conectado a pagamentos, dados ou uploads.
+- Blueprint artístico adaptativo já conectado a rascunhos do pedido; a conclusão final permanece bloqueada.
 - Não altera produtos, adicionais, combos, cupons, pedidos ou valores da V2.
 
 ## Gate comercial obrigatório antes da próxima fase
@@ -26,7 +26,7 @@ Produtos, variantes e capacidade ficam no mesmo banco D1; pagamentos e confirma�
 3. Estimar e testar carga de trabalho por pacote; não usar contagem de cenas.
 4. Integrar produto principal e adicionais ao catálogo e cálculo oficiais com validação no servidor.
 5. Reaproveitar checkout, Mercado Pago, agenda, reserva, Pix, notificações, contratos, histórico e área da cliente.
-6. Conectar briefing artístico à área privada com salvar e continuar e arquivos protegidos.
+6. Briefing criativo privado, salvar/continuar e imagens R2 preparados no branch; homologação de segurança e usabilidade pendente.
 7. Integrar fases artísticas, revisões, prévias e aprovação ao mesmo detalhe de pedido no Admin.
 8. Exigir consentimento específico para eventual divulgação; fotos de crianças não autorizam portfólio.
 9. Executar testes completos do fluxo e regressão V2 antes de publicação.
@@ -68,9 +68,26 @@ A migração 0034 acrescenta tabelas artísticas vinculadas ao ID do pedido V2, 
 - Etapas curtas: celebração, tema e personagens, cores e estilo, referências, aplicações e privacidade. Pré-preenche nome e data do próprio pedido, sem duplicar compra.
 - Respostas são salvas ao avançar e ao voltar, com versão para evitar sobrescrever respostas em outras abas. Não armazena fotos em localStorage.
 - GET /api/admin/v2/atelie/orders/{código}/briefing: leitura interna pela Passkey existente, sem expor token da cliente. O detalhe do pedido mostra as respostas legíveis em abas e pode atualizar.
-- Não conclui o briefing, não altera status V2 nem gera evento financeiro. Uploads e submissão final **continuam desabilitados** até integração segura com R2, controle de consentimento e aprovação do catálogo comercial.
+- Não conclui o briefing, não altera status V2 nem gera evento financeiro. Upload privado implementado no branch; submissão final e venda ainda desabilitadas até homologação.
 - Arquivos de teste: tests/atelie-customer-briefing.test.mjs (salvar, continuar, privacidade, concorrência, bloqueio pré-pagamento, visualização do Admin e isolamento dos convites).
 
 ### Condição de homologação
 
 É necessário um checkout completo do repositório com as dependências para executar npm run check, npm test, dry-run do Worker e testes reais em Android/iPhone. O ambiente de execução desta conversa não consegue baixar o repositório GitHub, e nenhum CI foi reportado no branch. Por isso a fase continua em PR de rascunho, sem merge, migração remota ou publicação.
+
+
+## Fase privada de R2: referências e fotos (branch de testes)
+
+- Migração 0036_atelie_v3_private_uploads.sql: tabela própria de arquivos, vinculada ao pedido V2. Não altera uploads cinematográficos.
+- Mesmo bucket FILES (R2) e chaves internas aleatórias sob orders/{id}/atelie/{campo}. Não há URL pública do bucket.
+- Área da Cliente: POST imagem, GET conteúdo, DELETE arquivo sob o mesmo token privado do pedido; requer produto Ateliê real e pagamento confirmado.
+- Imagens JPG/PNG/WebP/HEIC/HEIF, checagem de assinatura inicial, máximo de 15 MB e limites de 6 inspirações e 4 fotos da criança.
+- Fotos da criança exigem pacote compatível e autorização expressa de uso privado no briefing. Para revogar, exclua primeiro as imagens vinculadas.
+- Admin Passkey visualiza imagens e respostas no detalhe do mesmo pedido, sem precisar do link privado da cliente.
+- Cache privado/no-store, nosniff e ausência de publicação automática. Envios não mudam status V2, valores, prazo ou descontos.
+- Remoção de imagens exclui o objeto R2 e o registro no D1, com limpeza de objetos órfãos pendente de procedimento de auditoria.
+- Atenção: metadados embutidos, como EXIF e potencial localização, ainda não são eliminados automaticamente. Avaliar antes da publicação.
+- Testes: novos testes Node sobre isolamento, permissão, imagens disfarçadas, limites e exclusão; smoke tests de lógica e SQL SQLite executados nesta conversa.
+- PENDENTE: npm run check, npm test, Worker/R2 real, testes Android/iPhone e avaliação de retenção de dados.
+
+**Sem merge, migração remota ou deploy até homologação completa e autorização explícita.**

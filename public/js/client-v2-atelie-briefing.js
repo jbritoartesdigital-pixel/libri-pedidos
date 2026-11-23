@@ -27,7 +27,7 @@ export function atelieBriefingHtml(briefing) {
         '<div style="flex:1;min-width:100px"><strong>'+esc(item.originalFilename)+'</strong>'+
         '<small style="display:block">'+(Math.ceil(Number(item.sizeBytes||0)/1024))+' KB</small>'+
         '<a href="'+esc(item.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem</a></div>'+
-        (!frozen?'<button type="button" class="btn btn-danger btn-small" data-atelie-delete="'+Number(item.id)+'">Remover</button>':'')+
+        '<button type="button" class="btn btn-danger btn-small" data-atelie-delete="'+Number(item.id)+'">Remover</button>'+
         '</div>').join('');
       return '<div class="field full"><strong>'+esc(field.label)+'</strong>'+
         '<p class="field-help">'+fileList.length+' de '+limit+' imagens · até 15 MB cada. Acesso privado ao seu pedido.</p>'+

@@ -23,15 +23,15 @@ const PRODUCTS = {
   },
   interactive_essential: {
     title: 'Interativo Essencial',
-    description: 'Você envia pelo WhatsApp. O convidado toca na mensagem, abre o convite na tela do celular e pode usar botões para acessar informações da festa.'
+    description: 'Você envia pelo WhatsApp. O convidado toca na mensagem, abre o convite no celular e encontra até 3 botões já incluídos para acessar informações da festa.'
   },
   interactive_gif: {
     title: 'Interativo GIF',
-    description: 'O convite abre na tela do celular, com detalhes que se movimentam sem parar e botões que ajudam os convidados.'
+    description: 'O convite abre na tela do celular, com detalhes que se movimentam sem parar e até 3 botões já incluídos para ajudar os convidados.'
   },
   interactive_animated: {
     title: 'Interativo com Abertura Animada',
-    description: 'Uma pequena animação revela seu convite. Depois, os convidados encontram as informações e podem tocar nos botões disponíveis.'
+    description: 'Uma pequena animação revela seu convite. Depois, os convidados encontram as informações e até 3 botões já incluídos.'
   },
   book: {
     title: 'Convite em Livro',
@@ -217,7 +217,7 @@ function formatCodes() {
   if (state.intent === 'story') return ['cinematic_video','cinematic_interactive'];
   const codes = ['interactive_essential','interactive_gif','interactive_animated'];
   if (state.eventType === 'wedding') codes.push('book','infinite');
-  if (state.eventType !== 'wedding') codes.push('infinite');
+  if (state.eventType === '15_years' || state.eventType === 'other') codes.push('infinite');
   return codes;
 }
 function renderFormats() {
@@ -355,6 +355,20 @@ async function determineOffer() {
         title:'Que tal deixar seu vídeo interativo?',
         description:'O mesmo vídeo e as mesmas cenas. No final, os convidados poderão tocar nos botões para acessar as informações da festa.',
         productCode:'cinematic_interactive',variantCode:item.code,
+        delta:alternative.totalCents-quote.totalCents
+      };
+    }
+  }
+  if (current === 'interactive_essential' && !state.dismissed.includes('upgrade:interactive_animated')) {
+    const product = getProduct('interactive_animated');
+    const variant = product?.variants?.[0];
+    if (variant) {
+      const alternative = await priceFor(product.code, variant.code, state.addonCodes);
+      return {
+        id:'upgrade:interactive_animated',kind:'upgrade',
+        title:'Quer uma abertura animada para seu convite?',
+        description:'Seu convite continua com os mesmos recursos. Só acrescentamos uma pequena animação especial antes de mostrar a arte principal.',
+        productCode:product.code,variantCode:variant.code,
         delta:alternative.totalCents-quote.totalCents
       };
     }

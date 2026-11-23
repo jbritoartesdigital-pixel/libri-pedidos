@@ -1,6 +1,6 @@
 import { api, esc, showToast } from './admin-v2-core.js';
 
-// Usa o Admin já autenticado. Não inclui botão para ativar vendas.
+// Usa a autenticação Passkey e as operações comerciais do Admin existente.
 export async function renderAtelieStore(panel) {
   panel.innerHTML='<div class="card">Carregando Libri Ateliê…</div>';
   let data;
@@ -16,11 +16,19 @@ export async function renderAtelieStore(panel) {
   function render() {
     const p=packages.find(x=>x.code===selected);
     if(!p){panel.innerHTML='<div class="card empty">Nenhum pacote cadastrado.</div>';return;}
-    const tabs=packages.map(x=>'<button class="settings-tab '+(x.code===selected?'active':'')+'" type="button" data-atelie-package="'+esc(x.code)+'">'+esc(x.name)+'</button>').join('');
+    const tabs=packages.map(x=>'<button class="settings-tab '+(x.code===selected?'active':'')+'" type="button" data-atelie-package="'+esc(x.code)+'">'+esc(x.name)+
+      '<span class="admin-v3-at-package-state">'+(x.saleEnabled?'À venda':!(x.releaseMissing||[]).length?'Pronto para liberar':'Em configuração')+'</span></button>').join('');
     const price=p.priceCents==null?'':(p.priceCents/100).toFixed(2).replace('.',',');
+    const capacityPoints=p.pointsUnits==null?'':(p.pointsUnits/100).toLocaleString('pt-BR',{maximumFractionDigits:2});
+    const activeCount=packages.filter(x=>x.saleEnabled).length;
+    const readyCount=packages.filter(x=>!x.saleEnabled&&!(x.releaseMissing||[]).length).length;
     panel.innerHTML='<section class="card"><h2>Libri Ateliê | Identidade Visual</h2>'+
       '<p>Gerencie os pacotes e valores do Ateliê na mesma loja. A publicação depende de uma ação explícita no Admin.</p>'+
-      '<div class="notice info">Preços e entregáveis em rascunho não aparecem para a cliente. Só o botão Liberar venda pode publicar um pacote completo.</div></section>'+
+      '<div class="admin-v3-at-overview" aria-label="Situação dos pacotes">'+
+      '<div><strong>'+activeCount+'</strong><span>À venda</span></div>'+
+      '<div><strong>'+readyCount+'</strong><span>Prontos para liberar</span></div>'+
+      '<div><strong>'+(packages.length-activeCount-readyCount)+'</strong><span>Em configuração</span></div></div>'+
+      '<div class="notice info">Valores provisórios não são publicados. Cada pacote só entra à venda após a confirmação expressa dos valores e do catálogo oficial V4.1.</div></section>'+
       '<div class="store-navigation-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">'+tabs+'</div>'+
       '<section class="card"><h2>Pacote '+esc(p.name)+'</h2><form id="atelieForm"><fieldset '+(p.saleEnabled?'disabled':'')+' style="border:0;padding:0;margin:0">'+
       f('atDesc','Explicação simples para a cliente',textarea('atDesc',p.shortDescription,3))+
@@ -30,11 +38,11 @@ export async function renderAtelieStore(panel) {
       f('atScope','Versão oficial de referência',input('atScope',p.scopeReference,'Ex.: V4.1 aprovada'))+
       '<div class="form-grid">'+
       f('atPrice','Preço em R$ (interno)',input('atPrice',price,'Pendente'))+
-      f('atPoints','Carga de agenda em pontos',input('atPoints',p.pointsUnits,'Pendente'))+
+      f('atPoints','Carga de produção em pontos (ex.: 1, 1,5, 2)',input('atPoints',capacityPoints,'Pendente'))+
       f('atRevisions','Rodadas de ajustes',input('atRevisions',p.revisionLimit,'Pendente'))+'</div>'+
       f('atNotes','Observações comerciais internas',textarea('atNotes',p.commercialNotes,4))+
       f('atTerms','Condições específicas para a cliente (entregas, revisões, direitos de uso e exclusões)',textarea('atTerms',p.specificTermsDraft,7))+
-      box('atVisible','Exibir na prévia V3, sempre sem preço e sem venda.',p.showcaseVisible)+
+      box('atVisible','Exibir o pacote na vitrine V3 (preço apenas quando a venda for liberada).',p.showcaseVisible)+
       box('atApproved','Confirmei escopo, entregáveis, exclusões e rodadas contra o catálogo oficial.',p.scopeApproved)+
       '<div class="toolbar" style="margin-top:16px"><button class="btn btn-primary" type="submit" id="atSave">Salvar rascunho</button></div>'+
       '</fieldset></form>'+
@@ -67,14 +75,23 @@ export async function renderAtelieStore(panel) {
       const value=id=>panel.querySelector('#'+id).value;
       const raw=value('atPrice').trim().replace(',','.');
       if(raw!==''&&!/^\d+(\.\d{1,2})?$/.test(raw)){showToast('Preço inválido. Use um valor em reais com até duas casas decimais.');return;}
-      const rawPoints=value('atPoints').trim(), rawRevisions=value('atRevisions').trim();
+      const rawPoints=value('atPoints').trim().replace(',','.');
+      const rawRevisions=value('atRevisions').trim();
+      if(rawPoints!=='' && (!/^\\d+(?:\\.\\d{1,2})?$/.test(rawPoints)||Number(rawPoints)<=0)){
+        showToast('Informe a carga de produção em pontos. Ex.: 1, 1,5 ou 2.');
+        return;
+      }
+      if(rawRevisions!=='' && (!/^\\d+$/.test(rawRevisions)||!Number.isSafeInteger(Number(rawRevisions)))){
+        showToast('Informe o número inteiro de rodadas de revisão.');
+        return;
+      }
       const payload={
         shortDescription:value('atDesc'),
         includedItems:value('atIncluded').split('\n'),
         excludedItems:value('atExcluded').split('\n'),
         scopeReference:value('atScope'),
         priceCents:raw===''?null:Math.round(Number(raw)*100),
-        pointsUnits:rawPoints===''?null:Number(rawPoints),
+        pointsUnits:rawPoints===''?null:Math.round(Number(rawPoints)*100),
         revisionLimit:rawRevisions===''?null:Number(rawRevisions),
         commercialNotes:value('atNotes'),specificTerms:value('atTerms'),
         showcaseVisible:panel.querySelector('#atVisible').checked,
@@ -86,7 +103,7 @@ export async function renderAtelieStore(panel) {
           method:'PATCH',body:JSON.stringify(payload)
         });
         packages[packages.findIndex(x=>x.code===selected)]=result.package;
-        showToast('Rascunho salvo. Compra continua bloqueada.');render();
+        showToast('Configuração salva. A venda só muda pelo botão de liberação.');render();
       }catch(e){showToast(e.message||'Falha ao salvar.');button.disabled=false;}
     });
   }

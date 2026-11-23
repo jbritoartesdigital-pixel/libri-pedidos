@@ -20,20 +20,22 @@ export function buildAtelieBriefingBlueprint({
       f('eventDate','Data da festa','date',
         {prefill:event.date||'',required:false})
     ]),
-    section('direction','Como você imagina a festa?',[
+    section('theme','Tema e personagens',[
       f('theme','Qual é o tema?','text',{required:true}),
       f('interpretation','Como você imagina esse tema?','textarea',
         {hint:'Pode descrever com suas palavras, sem termos de design.'}),
+      f('charactersWanted','Personagens ou figuras que gostaria de ver','textarea',{required:false}),
+      f('mustHave','Algo que precisa aparecer?','textarea',{required:false}),
+      f('mustAvoid','Algo que não pode aparecer?','textarea',{required:false})
+    ]),
+    section('style','Cores e estilo',[
       f('colorsLiked','Cores que gostaria de usar'),
       f('colorsAvoided','Cores que prefere evitar'),
       f('styleFreedom','Quer escolher o estilo ou deixar a Libri sugerir?','choice',{
         options:['quero escolher','a Libri pode decidir'],required:true
       }),
       ...(data.styleFreedom==='quero escolher'
-        ?[f('styleDetails','Que clima ou estilo você imagina?','textarea')]:[]),
-      f('charactersWanted','Personagens ou figuras que gostaria de ver','textarea',{required:false}),
-      f('mustHave','Algo que precisa aparecer?','textarea',{required:false}),
-      f('mustAvoid','Algo que não pode aparecer?','textarea',{required:false})
+        ?[f('styleDetails','Que clima ou estilo você imagina?','textarea')]:[])
     ]),
     section('references','Inspirações e referências',[
       f('referenceNotes','O que gostou nas imagens de inspiração?','textarea',

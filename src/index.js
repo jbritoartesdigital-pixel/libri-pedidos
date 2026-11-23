@@ -75,6 +75,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -331,6 +332,7 @@ async function handleAdminV2Api(
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
+    handleAdminAtelieV3Api,
     handleAdminContractsV2Api,
     handleAdminBlackLibriV2Api,
   ];

@@ -1,8 +1,10 @@
 name: V3 | Verificar antes de publicar
 on:
+  pull_request:
+    branches: [main]
   push:
     branches:
-      - feature/libri-admin-v3-operacao-20261123
+      - 'feature/libri-admin-v3-*'
   workflow_dispatch:
 permissions:
   contents: read

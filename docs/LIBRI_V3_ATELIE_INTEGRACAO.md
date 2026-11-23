@@ -91,3 +91,21 @@ A migração 0034 acrescenta tabelas artísticas vinculadas ao ID do pedido V2, 
 - PENDENTE: npm run check, npm test, Worker/R2 real, testes Android/iPhone e avaliação de retenção de dados.
 
 **Sem merge, migração remota ou deploy até homologação completa e autorização explícita.**
+
+
+## Fase seguinte: conclusão do briefing → produção e aceite da prévia
+
+- Migração 0037_atelie_v3_briefing_submission.sql: estado e histórico auditável de envio/reabertura por pedido. Não atualiza o status financeiro/comercial V2.
+- Cliente: ação de envio somente quando as respostas obrigatórias estiverem salvas; confirmação explícita, recibo, proteção contra envios repetidos e bloqueio de edição após envio.
+- Admin: estado Enviado/Rascunho na ficha, reabertura justificada para complementos (somente enquanto a etapa artística ainda é Briefing).
+- Após envio, novas fotos/respostas ficam bloqueadas até reabertura; a cliente pode remover imagens privadas mesmo quando o pedido é encerrado.
+- Notificações reaproveitam o mecanismo V2 (evento BRIEFING_COMPLETED). Uma falha de notificação não perde o envio gravado no banco.
+- A etapa Direção de Arte requer duas evidências: briefing submetido E alocação de agenda confirmada. Pagamento isolado não autoriza produzir.
+- A etapa Aprovação exige prévia ativa; a passagem da aprovação para entrega exige que a versão MAIS RECENTE da prévia tenha registro de aprovação da cliente no sistema V2.
+- Não se cria outra ferramenta de prévias ou aprovação: a estrutura V2 existente é reutilizada; status do pedido, pagamentos, contratos e webhook não são alterados automaticamente.
+- A Área da Cliente distingue briefing recebido e pendente, sem apresentar perguntas de convite cinematográfico para o Ateliê.
+- Testes acrescentados: tests/atelie-briefing-submission.test.mjs e cenários de agenda/aprovação em tests/atelie-art-production.test.mjs.
+- Verificações isoladas: 6 cenários de envio/reabertura e 9 de produção/aprovação passaram em mocks; duas operações de submissão e reenvio passaram em SQLite local.
+- Ainda pendente: npm run check/npm test, homologação de notificações, R2 real, Worker, permissões e testes no navegador. Não habilitar venda nem publicar antes dos gates comerciais e técnicos.
+
+**O sistema ainda não possui produtos Ateliê ativos para compra. A implementação permanece isolada no PR #137.**

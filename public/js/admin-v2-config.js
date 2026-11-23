@@ -21,7 +21,7 @@ import {
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
 import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261111-rose-v2-2';
-import { renderAtelieStore } from './admin-v2-atelie.js';
+import { renderAtelieStore } from './admin-v2-atelie.js?v=20261123-admin-v3-1';
 
 export async function renderStore() {
   setViewMeta(

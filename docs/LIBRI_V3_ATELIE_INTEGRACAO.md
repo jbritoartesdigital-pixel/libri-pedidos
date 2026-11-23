@@ -35,3 +35,26 @@ Produtos, variantes e capacidade ficam no mesmo banco D1; pagamentos e confirma�
 ## Limites que nunca são inclusões automáticas
 
 Impressão física, fabricação, arquivo Silhouette, decoração executiva, convites cinematográficos ou interativos, personagens complexos a partir de fotos, poses extras e peças especiais. Todos os pacotes incluem apresentação visual e uma simulação conceitual de decoração, não uma montagem real. O case de Instagram é material interno, não produto cobrado nem publicação autorizada automaticamente.
+
+
+## Evolução do Admin e produção artística (fase segura)
+
+A migração 0034 acrescenta tabelas artísticas vinculadas ao ID do pedido V2, sem alterar o status geral da venda, os pagamentos e a agenda.
+
+- API já existente e protegida por Passkey: GET/PATCH /api/admin/v2/atelie/orders/{LIBRI-ID}/production.
+- Serviço de etapas: briefing criativo, direção de arte, criação, revisão, aprovação, preparação de arquivos finais.
+- Regras: edição só para pedido cujo produto principal efetivo seja do Ateliê e com pagamento aprovado; pedidos de convites não abrem essas etapas.
+- Revisionamento: contador com limite proveniente do snapshot contratual. Se o contrato não definir revisões, registrar revisão é bloqueado.
+- Histórico: alterações artísticas e pedidos de orçamento extra ficam registrados, sem lançar cobrança financeira automaticamente.
+- Otimismo: cada gravação exige versão atual para evitar sobrescrever uma edição simultânea.
+- Tela: o mesmo detalhe de pedido apresenta o painel artístico e seu histórico somente para produto Ateliê; briefings cinematográficos não são exibidos como briefing do Ateliê.
+- A área administrativa de busca de funções também encontra Libri Ateliê.
+
+**Importante:** ainda não há produtos Ateliê ativos no checkout, logo não há pedidos reais dessa categoria para usar o novo acompanhamento. O módulo está preparado para ativação após os gates comerciais e testes ponta a ponta.
+
+### Testes adicionados e verificação local parcial
+
+- tests/atelie-art-production.test.mjs: convites protegidos, pagamento obrigatório, estados, revisões, limite, histórico, concorrência.
+- tests/atelie-v3.test.mjs: catálogo e preços protegidos, aprovação de escopo, briefing, autenticação Passkey.
+- Sintaxe dos módulos alterados verificada com parser JS de maneira isolada; smoke tests de lógica executados; SQL de concorrência e exclusão em cascata conferidos em SQLite local.
+- A suíte completa npm run check e npm test ainda depende de um checkout completo do repositório e ambiente de dependências; sem CI de PR reportado. **Nenhum deploy ou merge autorizado.**

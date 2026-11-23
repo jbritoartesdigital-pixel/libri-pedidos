@@ -1,4 +1,5 @@
-// Catálogo de rascunho do Libri Ateliê, dentro do banco do Libri Pedidos.
+// Catálogo do Ateliê dentro do Libri Pedidos. Só o Admin libera a venda.
+import { verifyAtelieRelease } from './v3-atelie-release.js';
 // NÃO cria produtos à venda; integração ao checkout depende de escopo V4.1,
 // carga de produção, termos, catálogo e liberação comercial aprovados.
 const CODES = new Set(['essencia', 'encanto', 'universo']);
@@ -38,7 +39,11 @@ function mapRow(row, admin=false) {
     includedItems:Number(row.scope_approved)===1 ? parseArray(row.included_json) : [],
     excludedItems:Number(row.scope_approved)===1 ? parseArray(row.excluded_json) : [],
     scopeApproved:Number(row.scope_approved)===1,
-    purchaseAvailable:false
+    purchaseAvailable:Number(row.sale_enabled)===1,
+    ...(Number(row.sale_enabled)===1?{
+      priceCents:Number(row.price_cents),variantCode:'atelie_'+row.code+'_default',
+      specificTerms:row.specific_terms,termsVersion:row.updated_at
+    }:{})
   };
   if (!admin) return base;
   return {
@@ -49,12 +54,15 @@ function mapRow(row, admin=false) {
     pointsUnits:row.points_units===null?null:Number(row.points_units),
     revisionLimit:row.revision_limit===null?null:Number(row.revision_limit),
     commercialNotes:row.commercial_notes,
-    showcaseVisible:Number(row.showcase_visible)===1
+    showcaseVisible:Number(row.showcase_visible)===1,
+    saleEnabled:Number(row.sale_enabled)===1,
+    specificTermsDraft:row.specific_terms,
+    releaseMissing:verifyAtelieRelease(row)
   };
 }
 export async function listAteliePackages(db, {admin=false}={}) {
   const result=await db.prepare(
-    "SELECT code,name,short_description,included_json,excluded_json,scope_reference,scope_approved,price_cents,points_units,revision_limit,commercial_notes,showcase_visible FROM v3_atelie_packages ORDER BY CASE code WHEN 'essencia' THEN 1 WHEN 'encanto' THEN 2 ELSE 3 END"
+    "SELECT code,name,short_description,included_json,excluded_json,scope_reference,scope_approved,price_cents,points_units,revision_limit,commercial_notes,showcase_visible,sale_enabled,specific_terms,updated_at FROM v3_atelie_packages ORDER BY CASE code WHEN 'essencia' THEN 1 WHEN 'encanto' THEN 2 ELSE 3 END"
   ).all();
   return (result.results||[])
     .filter(row=>admin || Number(row.showcase_visible)===1)
@@ -64,12 +72,14 @@ export async function updateAtelieDraft(db,code,patch={}) {
   if (!CODES.has(code)) throw new Error('Pacote do Ateliê não encontrado.');
   if (!patch || typeof patch!=='object' || Array.isArray(patch)) throw new Error('Dados do pacote inválidos.');
   const allowed = new Set(['shortDescription','includedItems','excludedItems','scopeReference',
-    'scopeApproved','priceCents','pointsUnits','revisionLimit','commercialNotes','showcaseVisible']);
+    'scopeApproved','priceCents','pointsUnits','revisionLimit','commercialNotes','showcaseVisible','specificTerms']);
   if (Object.keys(patch).some(key=>!allowed.has(key))) throw new Error('Configuração não permitida.');
   const rows=await db.prepare(
     'SELECT * FROM v3_atelie_packages WHERE code = ? LIMIT 1'
   ).bind(code).first();
   if (!rows) throw new Error('Pacote do Ateliê não encontrado.');
+  if(Number(rows.sale_enabled)===1)
+    throw new Error('Pause as vendas antes de alterar o pacote. Pedidos antigos são preservados.');
   const shortDescription=('shortDescription' in patch ? String(patch.shortDescription||'') : rows.short_description).trim();
   const included='includedItems' in patch?normalList(patch.includedItems,'Entregáveis'):parseArray(rows.included_json);
   const excluded='excludedItems' in patch?normalList(patch.excludedItems,'Exclusões'):parseArray(rows.excluded_json);
@@ -80,6 +90,8 @@ export async function updateAtelieDraft(db,code,patch={}) {
   const revisions='revisionLimit' in patch?nullableInt(patch.revisionLimit,'Rodadas de revisão',0):rows.revision_limit;
   const notes=('commercialNotes' in patch?String(patch.commercialNotes||''):rows.commercial_notes).trim();
   const visible='showcaseVisible' in patch?patch.showcaseVisible:!!rows.showcase_visible;
+  const specificTerms=('specificTerms' in patch?String(patch.specificTerms||''):rows.specific_terms).trim();
+  if(specificTerms.length>6000)throw new Error('Condições específicas muito longas.');
   if (shortDescription.length<5 || shortDescription.length>400) throw new Error('Descrição precisa ter entre 5 e 400 caracteres.');
   if (scopeReference.length>120 || notes.length>3000) throw new Error('Texto de configuração muito longo.');
   if (typeof scopeApproved!=='boolean'||typeof visible!=='boolean') throw new Error('Ativação inválida.');
@@ -96,9 +108,9 @@ export async function updateAtelieDraft(db,code,patch={}) {
   }
   if (scopeApproved && !excluded.length) throw new Error('Informe as exclusões do pacote antes de validar o escopo.');
   const values=[shortDescription,JSON.stringify(included),JSON.stringify(excluded),
-    scopeReference,scopeApproved?1:0,price,points,revisions,notes,visible?1:0,code];
+    scopeReference,scopeApproved?1:0,price,points,revisions,notes,visible?1:0,specificTerms,code];
   await db.prepare(
-    'UPDATE v3_atelie_packages SET short_description=?,included_json=?,excluded_json=?,scope_reference=?,scope_approved=?,price_cents=?,points_units=?,revision_limit=?,commercial_notes=?,showcase_visible=?,updated_at=datetime(\'now\') WHERE code=?'
+    'UPDATE v3_atelie_packages SET short_description=?,included_json=?,excluded_json=?,scope_reference=?,scope_approved=?,price_cents=?,points_units=?,revision_limit=?,commercial_notes=?,showcase_visible=?,specific_terms=?,updated_at=datetime(\'now\') WHERE code=?'
   ).bind(...values).run();
   const current=await db.prepare('SELECT * FROM v3_atelie_packages WHERE code=?').bind(code).first();
   return mapRow(current,true);

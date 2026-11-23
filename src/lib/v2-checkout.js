@@ -452,6 +452,9 @@ function orderItemRows(
       sceneCount:
         quote.variant
           .sceneCount,
+      ...(quote.product.code.startsWith('atelie_') ? {
+        atelie:quote.variant.config?.atelie || {}
+      } : {}),
     },
   });
 
@@ -1603,8 +1606,20 @@ export async function startV2Checkout(
         },
       );
 
+    const isAtelie=quote.product.code.startsWith('atelie_');
+    if(isAtelie){
+      const specific=quote.variant.config?.atelie;
+      if(!specific?.specificTerms || !specific?.termsVersion)
+        throw new V2CheckoutError('O pacote do Ateliê ainda não tem condições comerciais aprovadas.');
+      if(body.atelieTermsAccepted!==true)
+        throw new V2CheckoutError('Leia e aceite as condições específicas do Ateliê para continuar.');
+      if(body.atelieTermsVersion!==specific.termsVersion)
+        throw new V2CheckoutError('As condições do Ateliê foram atualizadas. Confira novamente.',{
+          status:409,code:'atelie_terms_changed'});
+    }
+    // A Black Libri pertence aos convites, nunca aos pacotes do Ateliê.
     // Uma reserva vencida nunca desaparece do total sem aviso explícito.
-    if (await blackLibriOperational(env)) {
+    if (!isAtelie && await blackLibriOperational(env)) {
       const previousPrize = await findBlackLibriClaim(env,body.customer);
       if (previousPrize?.status === 'expired' && body.blackLibriExpiredAcknowledged !== true) {
         throw new V2CheckoutError('Seu prêmio Black Libri expirou. Confirme que deseja continuar sem ele.',{
@@ -1613,8 +1628,8 @@ export async function startV2Checkout(
       }
     }
     // O servidor calcula o prêmio concedido, nunca valores enviados pela cliente.
-    const blackLibriClaim = await reservedBlackLibriForCheckout(env,body.customer,requestKey);
-    quote = applyBlackLibriToQuote(quote,blackLibriClaim);
+    const blackLibriClaim = isAtelie ? null : await reservedBlackLibriForCheckout(env,body.customer,requestKey);
+    if(!isAtelie)quote = applyBlackLibriToQuote(quote,blackLibriClaim);
 
     const deliveryStart =
       requireText(
@@ -1787,6 +1802,14 @@ export async function startV2Checkout(
           : null,
     };
 
+    if(isAtelie){
+      termsEvidence.atelie={
+        scopeReference:quote.variant.config.atelie.scopeReference,
+        termsVersion:quote.variant.config.atelie.termsVersion,
+        specificTermsHash:await sha256Hex(quote.variant.config.atelie.specificTerms),
+        approvedByCustomer:true
+      };
+    }
     const delivery =
       await findV2DeliveryOptions(
         env.DB,

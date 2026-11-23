@@ -2506,6 +2506,8 @@ export async function listV2Production(
   // Finalizados. Keep the operational default and Arquivados separate.
   if (status === 'finalized') {
     clauses.push("o.status = 'finalized'");
+  } else if (status === 'briefing_pending' && service === 'atelie') {
+    clauses.push("o.status = 'briefing_pending'");
   } else if (
     status
     && status !== 'all'
@@ -2517,7 +2519,7 @@ export async function listV2Production(
     binds.push(status);
   } else {
     clauses.push(
-      `o.status IN (
+      `(o.status IN (
         'ready_for_production',
         'in_production',
         'waiting_customer',
@@ -2525,7 +2527,7 @@ export async function listV2Production(
         'approved',
         'balance_pending',
         'ready_for_delivery'
-      )`,
+      ) OR (o.status = 'briefing_pending' AND ${atelieProduct}))`,
     );
   }
 

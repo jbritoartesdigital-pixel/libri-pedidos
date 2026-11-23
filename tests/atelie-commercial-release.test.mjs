@@ -35,7 +35,8 @@ test('Ateliê publicado usa produto principal V2 sem expor convites a catálogos
   assert.equal(product.active,1);
   assert.equal(product.pricing_mode,'fixed');
   const variant=db.sqlite.prepare("SELECT price_cents,points_units FROM v2_product_variants WHERE code='atelie_essencia_default'").get();
-  assert.deepEqual(variant,{price_cents:17800,points_units:100});
+  assert.equal(variant.price_cents,17800);
+  assert.equal(variant.points_units,100);
   const storefront=await worker.fetch(new Request('https://test/api/v2/catalog'),{DB:db},{waitUntil(){}});
   const publicStore=await storefront.json();
   assert.equal(publicStore.catalog.products.length,7);

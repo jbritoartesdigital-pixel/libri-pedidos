@@ -2,7 +2,7 @@ name: V3 | Verificar antes de publicar
 on:
   push:
     branches:
-      - feature/libri-v3-compra-guiada-fase1-20261123
+      - feature/libri-admin-v3-operacao-20261123
   workflow_dispatch:
 permissions:
   contents: read

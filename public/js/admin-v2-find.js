@@ -4,13 +4,14 @@ export const ADMIN_FEATURES = Object.freeze([
   { title: 'Novos pedidos e prioridades', section: 'Pedidos', view: 'central', detail: 'Fila do dia e pedidos que precisam de atenção' },
   { title: 'Cadastrar pedido manual', section: 'Pedidos', view: 'manual', detail: 'Criar pedido com condições de pagamento da Central' },
   { title: 'Pedidos arquivados', section: 'Pedidos', view: 'archived', detail: 'Consultar ou reabrir histórico' },
-  { title: 'Produção dos convites', section: 'Produção', view: 'production', detail: 'Pedidos em produção e próximos passos' },
+  { title: 'Produção dos convites', section: 'Produção', view: 'production', service:'convites', detail: 'Fila de convites digitais e próximos passos' },
+  { title: 'Produção do Ateliê', section: 'Produção', view: 'production', service:'atelie', keywords:'identidade visual brasao criacao arte revisão aprovação', detail: 'Briefings pagos, direção de arte, revisões e entrega das identidades visuais' },
   { title: 'Agenda e bloqueios', section: 'Produção', view: 'agenda', detail: 'Datas, capacidade e disponibilidade' },
   { title: 'Pagamentos e saldos', section: 'Financeiro', view: 'finance', detail: 'Recebimentos, saldos Pix e movimentações' },
   { title: 'Registrar Pix recebido', section: 'Financeiro', view: 'central', detail: 'Encontre o pedido e abra o detalhe para registrar' },
   { title: 'Meta e faturamento', section: 'Financeiro', view: 'finance', detail: 'Indicadores financeiros e vendas' },
   { title: 'Produtos e preços', section: 'Loja', view: 'store', tab: 'products', detail: 'Catálogo, variações por cenas e valores' },
-  { title: 'Libri Ateliê', section: 'Loja', view: 'store', tab: 'atelie', keywords: 'identidade visual essencia encanto universo brasao monograma estampas', detail: 'Rascunhos dos pacotes, entregáveis, preços internos, revisões e capacidade. Vendas ainda bloqueadas.' },
+  { title: 'Libri Ateliê', section: 'Loja', view: 'store', tab: 'atelie', keywords: 'identidade visual essencia encanto universo brasao monograma estampas', detail: 'Pacotes, entregáveis, preços, revisões, capacidade e ativação comercial individual.' },
   { title: 'Adicionais', section: 'Loja', view: 'store', tab: 'addons', detail: 'Itens opcionais de cada produto' },
   { title: 'Combos', section: 'Loja', view: 'store', tab: 'combos', detail: 'Pacotes e ofertas combinadas' },
   { title: 'Cupons', section: 'Loja', view: 'store', tab: 'coupons', keywords: 'cupom desconto promoção', detail: 'Criar e administrar descontos promocionais' },
@@ -87,7 +88,7 @@ export function initAdminFeatureFinder(onNavigate) {
     const item = ADMIN_FEATURES[Number(button.dataset.featureIndex)];
     if (!item) return;
     close();
-    await onNavigate(item.view, item.tab);
+    await onNavigate(item.view, item.tab, item.service);
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !root.classList.contains('hidden')) close({focus:true});

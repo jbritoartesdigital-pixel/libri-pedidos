@@ -696,8 +696,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
     assert.match(scripts[0][0], /\btype="module"/, name + ' must use module script');
     assert.match(html, /<\/script>/, name + ' must terminate the script element');
   }
-  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261030-pedido-sem-previa-1">/);
-  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261116-search-model-date-1"><\/script>/);
+  assert.match(adminHtml, /href="\/css\/admin-v2\.css\?v=20261123-admin-v3-1">/);
+  assert.match(adminHtml, /src="\/js\/admin-v2\.js\?v=20261123-admin-v3-1"><\/script>/);
 });
 
 test('all migrations run in SQLite with V1, V2 and disabled V3 staging intact', () => {
@@ -1689,7 +1689,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(shell, /admin-v2\.js\?v=20261116-search-model-date-1/);
+  assert.match(shell, /admin-v2\.js\?v=20261123-admin-v3-1/);
   assert.match(entry, /admin-v2-order\.js\?v=20261113-existing-checkout-gift-1/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
@@ -2396,7 +2396,7 @@ test('approved briefing and Admin UX shows inline validation and production at a
   assert.match(customerCss, /\.briefing-field-invalid/);
   assert.match(adminCss, /\.production-quick-grid/);
   assert.ok(readFileSync('public/admin-v2.html', 'utf8').includes(
-    'admin-v2.js?v=20261116-search-model-date-1'));
+    'admin-v2.js?v=20261123-admin-v3-1'));
   assert.ok(readFileSync('public/client-v2.html', 'utf8').includes(
     'client-v2.js?v=20261111-skip-offer-ios-1'));
 });
@@ -2771,7 +2771,7 @@ test('Production UI exposes completed filter and clears contradictory active-onl
   assert.match(production, /status === 'finalized'/);
   assert.match(production, /\['new', 'in_production'\]\.includes\(period\.value\)/);
   assert.match(production, /Os que já foram arquivados continuam na seção Arquivados/);
-  assert.match(boot, /admin-v2-production\.js\?v=20261010-finalized-1/);
+  assert.match(boot, /admin-v2-production\.js\?v=20261123-admin-v3-1/);
 });
 
 test('Central includes tomorrow in chronological upcoming parties without rewriting orders', async t => {
@@ -2831,7 +2831,7 @@ test('Central merges overlapping delivery/production lists and folds repeated wi
     'today keeps its congratulations card and future dates share one upcoming card');
   assert.doesNotMatch(central, /<h2>Festas de amanhã<\/h2>/);
   assert.ok(central.includes('Pagamentos pendentes'), 'unpaid orders remain actionable');
-  assert.match(boot, /admin-v2-central\.js\?v=20261116-search-model-date-1/);
+  assert.match(boot, /admin-v2-central\.js\?v=20261123-admin-v3-1/);
 });
 
 test('Central shows three upcoming parties and folds extras without duplicating reminders', () => {
@@ -2880,8 +2880,8 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /\['archived','advOrderArchived'\]/);
   assert.match(central, /\['from','advOrderFrom'\]/);
   assert.match(central, /\['to','advOrderTo'\]/);
-  assert.match(entry, /admin-v2-central\.js\?v=20261116-search-model-date-1/);
-  assert.match(html, /admin-v2\.js\?v=20261116-search-model-date-1/);
+  assert.match(entry, /admin-v2-central\.js\?v=20261123-admin-v3-1/);
+  assert.match(html, /admin-v2\.js\?v=20261123-admin-v3-1/);
 });
 
 test('Finalizados filter shows completed non-archived orders newest first, without altering records', async t => {
@@ -3212,7 +3212,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(shell.includes('admin-v2.js?v=20261116-search-model-date-1'));
+  assert.ok(shell.includes('admin-v2.js?v=20261123-admin-v3-1'));
   assert.ok(entry.includes('admin-v2-order.js?v=20261113-existing-checkout-gift-1'));
   assert.ok(publicShell.includes('client-v2.js?v=20261111-skip-offer-ios-1'));
 });
@@ -3238,8 +3238,8 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(shell.includes('/css/admin-v2.css?v=20261030-pedido-sem-previa-1'));
-  assert.ok(shell.includes('/js/admin-v2.js?v=20261116-search-model-date-1'));
+  assert.ok(shell.includes('/css/admin-v2.css?v=20261123-admin-v3-1'));
+  assert.ok(shell.includes('/js/admin-v2.js?v=20261123-admin-v3-1'));
   assert.ok(admin.includes("./admin-v2-order.js?v=20261113-existing-checkout-gift-1"));
   assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
 });
@@ -3418,7 +3418,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   assert.ok(html.includes('/js/client-v2.js?v=20261111-skip-offer-ios-1'));
   assert.ok(entry.includes('client-v2-area.js?v=20261111-rose-v2-2'));
-  assert.ok(admin.includes('admin-v2-central.js?v=20261116-search-model-date-1'));
+  assert.ok(admin.includes('admin-v2-central.js?v=20261123-admin-v3-1'));
   assert.ok(admin.includes('admin-v2-manual.js?v=20261027-delivery-chronological-1'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);

@@ -7,7 +7,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261123-admin-v3-1';
 
 import {
   ensureAuth,
@@ -16,11 +16,11 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261116-search-model-date-1';
+} from './admin-v2-central.js?v=20261123-admin-v3-1';
 
 import {
   renderProduction,
-} from './admin-v2-production.js?v=20261010-finalized-1';
+} from './admin-v2-production.js?v=20261123-admin-v3-1';
 
 import {
   renderManualOrder,
@@ -44,7 +44,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261111-rose-v2-2';
+} from './admin-v2-config.js?v=20261123-admin-v3-1';
 
 import {
   refreshBell,
@@ -134,6 +134,10 @@ function syncViewQuery() {
   }
 
   if (state.view !== 'store') url.searchParams.delete('storeTab');
+  if (state.view !== 'production') {
+    url.searchParams.delete('service');
+    url.searchParams.delete('artStage');
+  }
 
   history.replaceState(
     {},
@@ -197,12 +201,16 @@ async function renderCurrent() {
   await refreshBell();
 }
 
-async function navigateTo(view, storeTab) {
+async function navigateTo(view, storeTab, service) {
   if (!ADMIN_VIEWS.has(view)) return;
   state.view = view;
   const more = document.getElementById('adminMoreMenu');
   if (more && !['archived', 'notifications', 'security'].includes(view)) more.open = false;
   const url = new URL(window.location.href);
+  if (view === 'production' && ['atelie','convites'].includes(service)) {
+    url.searchParams.set('service',service);
+    url.searchParams.delete('artStage');
+  }
   if (view === 'store' && storeTab) url.searchParams.set('storeTab', storeTab);
   else if (view !== 'store') url.searchParams.delete('storeTab');
   history.replaceState({}, '', url.pathname + url.search + url.hash);

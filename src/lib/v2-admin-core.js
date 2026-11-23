@@ -2473,6 +2473,8 @@ export async function listV2Production(
     status = '',
     q = '',
     when = '',
+    service = '',
+    artStage = '',
   } = {},
 ) {
   const clauses = [
@@ -2480,11 +2482,38 @@ export async function listV2Production(
   ];
 
   const binds = [];
+  // Filtro aditivo: mantém os status, pagamento e a ordenação V2 intactos.
+  // Identificação pelo produto principal salvo no pedido, não pelo nome.
+  const atelieProduct= `EXISTS (
+    SELECT 1 FROM v2_order_items si
+    WHERE si.order_id=o.id AND si.item_type='product'
+    AND (
+      (CASE WHEN json_valid(si.configuration_json)
+        THEN json_extract(si.configuration_json,'$.productCode') END)
+          IN ('atelie_essencia','atelie_encanto','atelie_universo')
+      OR si.item_code IN ('atelie_essencia_default','atelie_encanto_default','atelie_universo_default')
+    )
+  )`;
+  const paidAtelieBriefing=`(o.status='briefing_pending' AND ${atelieProduct}
+    AND EXISTS (
+      SELECT 1 FROM v2_payments pay
+      WHERE pay.order_id=o.id AND pay.status='approved'
+        AND pay.payment_type!='refund' AND pay.amount_cents>0
+    ))`;
+  if(service==='atelie')clauses.push(atelieProduct);
+  else if(service==='convites')clauses.push('NOT '+atelieProduct);
+  const validArtStages = new Set(['briefing','art_direction','creation','revision','approval','delivery']);
+  if(service==='atelie' && artStage && validArtStages.has(artStage)) {
+    clauses.push("COALESCE((SELECT a.stage FROM v3_atelie_art_production a WHERE a.order_id=o.id),'briefing') = ?");
+    binds.push(artStage);
+  }
 
   // Only show completed orders when the operator explicitly requests
   // Finalizados. Keep the operational default and Arquivados separate.
   if (status === 'finalized') {
     clauses.push("o.status = 'finalized'");
+  } else if (status === 'briefing_pending' && service !== 'convites') {
+    clauses.push(paidAtelieBriefing);
   } else if (
     status
     && status !== 'all'
@@ -2496,7 +2525,7 @@ export async function listV2Production(
     binds.push(status);
   } else {
     clauses.push(
-      `o.status IN (
+      `(o.status IN (
         'ready_for_production',
         'in_production',
         'waiting_customer',
@@ -2504,7 +2533,7 @@ export async function listV2Production(
         'approved',
         'balance_pending',
         'ready_for_delivery'
-      )`,
+      ) OR ${paidAtelieBriefing})`,
     );
   }
 
@@ -2620,6 +2649,22 @@ export async function listV2Production(
             ) AS product_name,
 
             (
+              SELECT COALESCE(
+                CASE WHEN json_valid(item.configuration_json)
+                  THEN json_extract(item.configuration_json,'$.productCode') END,
+                item.item_code
+              )
+              FROM v2_order_items item
+              WHERE item.order_id=o.id AND item.item_type='product'
+              ORDER BY item.id LIMIT 1
+            ) AS product_code,
+
+            (
+              SELECT a.stage FROM v3_atelie_art_production a
+              WHERE a.order_id=o.id LIMIT 1
+            ) AS atelie_art_stage,
+
+            (
               SELECT json_extract(
                 item.configuration_json,
                 '$.sceneCount'
@@ -2714,6 +2759,10 @@ export async function listV2Production(
         productName:
           row.product_name
           || '',
+        service: String(row.product_code || '').startsWith('atelie_')
+          ? 'atelie' : 'convites',
+        artStage: String(row.product_code || '').startsWith('atelie_')
+          ? (row.atelie_art_stage || 'briefing') : null,
         sceneCount:
           Number(
             row.scene_count

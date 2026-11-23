@@ -18,6 +18,9 @@ const SEARCH_MODEL_TYPES = [
   ['interactive_gif', 'Interativo GIF'],
   ['book', 'Livro digital'],
   ['infinite', 'Convite infinito'],
+  ['atelie_essencia', 'Identidade Visual · Essência'],
+  ['atelie_encanto', 'Identidade Visual · Encanto'],
+  ['atelie_universo', 'Identidade Visual · Universo'],
 ];
 const SEARCH_MODEL_LABELS = Object.fromEntries(SEARCH_MODEL_TYPES);
 
@@ -164,15 +167,27 @@ export async function renderCentral(openOrder) {
       || item.status === 'ready_for_production');
 
   viewRoot.innerHTML = `
-    <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
-      <a
-        class="btn btn-secondary"
-        href="/pedido?simular=1"
-        target="_blank"
-        rel="noopener"
-      >
-        Simular compra
+    <nav class="admin-v3-shortcuts" aria-label="Atalhos de operação">
+      <a class="admin-v3-shortcut" href="/admin-v2?view=production&service=convites">
+        <strong>Convites Digitais</strong>
+        <small>Ver a fila de produção</small>
       </a>
+      <a class="admin-v3-shortcut" href="/admin-v2?view=production&service=atelie">
+        <strong>Identidades Visuais</strong>
+        <small>Pedidos e etapas do Ateliê</small>
+      </a>
+      <a class="admin-v3-shortcut" href="/admin-v2?view=store&storeTab=atelie">
+        <strong>Pacotes do Ateliê</strong>
+        <small>Entregáveis, valores e disponibilidade</small>
+      </a>
+      <a class="admin-v3-shortcut" href="/loja" target="_blank" rel="noopener noreferrer">
+        <strong>Loja V3</strong>
+        <small>Ver a experiência da cliente</small>
+      </a>
+    </nav>
+    <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
+      <a class="btn btn-secondary" href="/pedido?simular=1" target="_blank"
+        rel="noopener noreferrer">Simular compra V2</a>
     </div>
 
     <section class="card" id="advancedOrderSearch">

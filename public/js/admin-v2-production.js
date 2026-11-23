@@ -8,8 +8,20 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
+const ATELIE_STAGES = [
+  ['', 'Todas as etapas artísticas'],
+  ['briefing', 'Briefing'],
+  ['art_direction', 'Direção de arte'],
+  ['creation', 'Criação'],
+  ['revision', 'Revisão'],
+  ['approval', 'Aprovação'],
+  ['delivery', 'Entrega']
+];
+const ART_STAGE_LABELS = Object.fromEntries(ATELIE_STAGES);
+
 const STATUS_OPTIONS = [
   ['', 'Todos'],
+  ['briefing_pending', 'Briefing · Ateliê'],
   ['ready_for_production', 'Prontos'],
   ['in_production', 'Em produção'],
   ['waiting_customer', 'Aguardando cliente'],
@@ -23,11 +35,25 @@ const STATUS_OPTIONS = [
 export async function renderProduction(openOrder) {
   setViewMeta(
     'Produção',
-    'Fila operacional',
+    'Convites e identidades visuais',
   );
 
   viewRoot.innerHTML = `
-    <div class="toolbar">
+    <div class="toolbar admin-v3-production-filters">
+      <label class="admin-v3-filter">
+        <span>Serviço</span>
+        <select id="productionService" class="select" aria-label="Filtrar serviço">
+          <option value="">Todos os serviços</option>
+          <option value="convites">Convites Digitais</option>
+          <option value="atelie">Identidade Visual · Ateliê</option>
+        </select>
+      </label>
+      <label class="admin-v3-filter admin-v3-art-filter hidden" id="productionArtFilter">
+        <span>Etapa artística</span>
+        <select id="productionArtStage" class="select" aria-label="Filtrar etapa artística">
+          ${ATELIE_STAGES.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('')}
+        </select>
+      </label>
       <input
         id="productionSearch"
         class="input"
@@ -75,8 +101,29 @@ export async function renderProduction(openOrder) {
     );
 
   let timer;
+  let requestSequence = 0;
+  const serviceControl = document.getElementById('productionService');
+  const stageControl = document.getElementById('productionArtStage');
+  const initialService = new URLSearchParams(window.location.search).get('service');
+  if(['atelie','convites'].includes(initialService)) serviceControl.value=initialService;
+  const initialStage = new URLSearchParams(window.location.search).get('artStage');
+  if(ATELIE_STAGES.some(([code])=>code===initialStage)) stageControl.value=initialStage;
+
+  function syncService() {
+    const art = serviceControl.value==='atelie';
+    document.getElementById('productionArtFilter')?.classList.toggle('hidden',!art);
+    if(!art)stageControl.value='';
+    const url = new URL(window.location.href);
+    if(serviceControl.value)url.searchParams.set('service',serviceControl.value);
+    else url.searchParams.delete('service');
+    if(art && stageControl.value)url.searchParams.set('artStage',stageControl.value);
+    else url.searchParams.delete('artStage');
+    history.replaceState({},'',url.pathname+url.search+url.hash);
+  }
+  syncService();
 
   const load = async () => {
+    const currentRequest = ++requestSequence;
     const q =
       document
         .getElementById('productionSearch')
@@ -106,14 +153,19 @@ export async function renderProduction(openOrder) {
     if (q) params.set('q', q);
     if (status) params.set('status', status);
     if (when) params.set('when', when);
+    if (serviceControl.value)params.set('service',serviceControl.value);
+    if (serviceControl.value==='atelie' && stageControl.value)
+      params.set('artStage',stageControl.value);
 
-    const data =
-      await api(
-        `/api/admin/v2/production?${params}`,
-      );
-
-    const orders =
-      data.orders || [];
+    let data;
+    try {
+      data=await api(`/api/admin/v2/production?${params}`);
+    } catch(e) {
+      if(currentRequest===requestSequence)list.innerHTML=empty('Não foi possível consultar a fila. '+e.message);
+      return;
+    }
+    if(currentRequest!==requestSequence)return;
+    const orders=data.orders||[];
 
     list.innerHTML =
       orders.length
@@ -125,6 +177,12 @@ export async function renderProduction(openOrder) {
                   <span class="status ${statusClass(order.status)}">
                     ${esc(order.statusLabel)}
                   </span>
+                  ${order.service==='atelie'
+                    ? '<span class="admin-v3-type-tag">Identidade Visual</span>'
+                    : '<span class="admin-v3-type-tag admin-v3-type-invite">Convite Digital</span>'}
+                  ${order.service==='atelie'
+                    ? '<span class="admin-v3-stage-tag">'+esc(ART_STAGE_LABELS[order.artStage]||'Briefing')+'</span>'
+                    : ''}
 
                   ${
                     order.risk
@@ -181,6 +239,16 @@ export async function renderProduction(openOrder) {
           ? 'Nenhum pedido finalizado fora dos arquivados.'
           : 'Nenhum pedido nessa fila.');
   };
+
+  serviceControl.addEventListener('change',()=>{
+    stageControl.value='';
+    const statusControl=document.getElementById('productionStatus');
+    if(serviceControl.value==='convites'&&statusControl.value==='briefing_pending')
+      statusControl.value='';
+    syncService();
+    load();
+  });
+  stageControl.addEventListener('change',()=>{syncService();load();});
 
   document
     .getElementById('productionStatus')

@@ -121,3 +121,37 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
     throw error('Outra atualização foi salva. Atualize antes de tentar novamente.',409);
   return getAtelieCustomerBriefing(db,token);
 }
+
+
+// Consulta interna por número do pedido. NUNCA devolve token privado ao Admin.
+export async function getAtelieAdminBriefing(db,orderCode) {
+  if(!/^LIBRI-\d{1,12}$/.test(orderCode||''))return null;
+  const order=await db.prepare(
+    "SELECT o.id,o.order_code,o.status,o.event_type,o.event_date,o.honoree_display_name,p.code AS product_code,i.configuration_json "+
+    "FROM v2_orders o JOIN v2_order_items i ON i.order_id=o.id AND i.item_type='product' "+
+    "JOIN v2_product_variants pv ON pv.code=i.item_code "+
+    "JOIN v2_products p ON p.id=pv.product_id WHERE o.order_code=? LIMIT 1"
+  ).bind(orderCode).first();
+  if(!order||!ATELIE_CODES.has(order.product_code))return null;
+  const item=jsonValue(order.configuration_json);
+  const contract=item.atelie&&typeof item.atelie==='object'?item.atelie:{};
+  const ctx={
+    order,applications:Array.isArray(contract.contractedApplications)
+      ?contract.contractedApplications.filter(x=>typeof x==='string').slice(0,30):[],
+    requiresChildPhoto:contract.requiresChildPhoto===true
+  };
+  const row=await db.prepare(
+    'SELECT data_json,current_section,revision,updated_at FROM v3_atelie_briefings WHERE order_id=?'
+  ).bind(order.id).first();
+  const data=jsonValue(row?.data_json);
+  const schema=schemaFor(ctx,data);
+  const missing=missingFor(schema,data);
+  return {
+    orderCode:order.order_code,
+    schema,data,revision:Number(row?.revision||0),
+    updatedAt:row?.updated_at||null,
+    missing,
+    uploadsEnabled:false,
+    note:'Rascunho do briefing criativo. Arquivos ainda não foram habilitados.'
+  };
+}

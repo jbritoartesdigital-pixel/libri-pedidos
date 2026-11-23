@@ -1,4 +1,5 @@
-// Libri Pedidos V3 | etapa 1: prévia isolada e não transacional.
+import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
+// Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
 // O catálogo, os preços e o cálculo de descontos permanecem nas APIs V2.
 // A etapa de pagamento continua exclusivamente no fluxo V2 existente.
 const root = document.getElementById('v3-app');
@@ -207,7 +208,7 @@ function renderAtelie() {
     '<button type="button" class="v3-choice '+(item.code===state.ateliePackage?'is-selected':'')+
       '" data-action="atelie-package" data-value="'+clean(item.code)+'" aria-pressed="'+(item.code===state.ateliePackage)+'">'+
       '<strong>'+clean(item.name)+'</strong><small>'+clean(item.shortDescription)+'</small>'+
-      '<span class="v3-mini">Ver detalhes · valores ainda não publicados</span></button>'
+      '<span class="v3-mini">'+(item.purchaseAvailable?('Pacote disponível · '+money(item.priceCents)):'Ver detalhes · valores ainda não publicados')+'</span></button>'
   ).join('');
   panel('Sua festa, com tudo combinando',
     'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
@@ -229,10 +230,10 @@ function renderAtelieDetail() {
     '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual e uma simulação conceitual de decoração.</p></div>'+
     '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
     '<h2 class="v3-title" style="font-size:23px;margin-top:22px">O que não está incluído</h2>'+excluded+
-    '<div class="v3-notice"><strong>Compra ainda não liberada.</strong> Preço, quantidade de peças, revisões, agenda e condições serão apresentados quando houver aprovação comercial. Fotos de crianças não são autorização de divulgação.</div>'+
+    '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
     '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso e identificação de simulações conceituais.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
-    '<button class="v3-btn v3-btn-secondary" type="button" disabled>Contratação em preparação</button></div>',3);
+    '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Contratar este pacote':'Contratação em preparação')+'</button></div>',3);
 }
 function renderIntent() {
   panel('Como imagina seu convite?',
@@ -334,6 +335,11 @@ function render() {
     case 'unready': renderUnready(); break;
     case 'atelie': renderAtelie(); break;
     case 'atelie-detail': renderAtelieDetail(); break;
+    case 'atelie-checkout': {
+      const item=ateliePackages.find(p=>p.code===state.ateliePackage);
+      mountAtelieCheckout(root,{item,eventType:state.eventType,onBack:()=>go('atelie-detail')});
+      break;
+    }
     case 'intent': renderIntent(); break;
     case 'format': renderFormats(); break;
     case 'scenes': renderScenes(); break;
@@ -487,6 +493,11 @@ root.addEventListener('click', async event => {
     if(action==='retrospective-info'){state.creation='retrospective';await go('unready');return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
+    if(action==='atelie-buy'){
+      const item=ateliePackages.find(p=>p.code===state.ateliePackage);
+      if(!item?.purchaseAvailable)return message('Pacote indisponível para compra.');
+      await go('atelie-checkout');return;
+    }
     if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='product'){
       const product=getProduct(value);if(!product)return;

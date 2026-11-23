@@ -1,5 +1,6 @@
 import { fail, json, readJson } from '../lib/http.js';
 import { listAteliePackages, updateAtelieDraft } from '../lib/v3-atelie-catalog.js';
+import { setAtelieSaleStatus } from '../lib/v3-atelie-release.js';
 import { getAtelieArtProgress, updateAtelieArtProgress } from '../lib/v3-atelie-art-production.js';
 import { getAtelieAdminBriefing } from '../lib/v3-atelie-customer-briefing.js';
 import { reopenAtelieCreativeBriefing } from '../lib/v3-atelie-briefing-submission.js';
@@ -11,6 +12,15 @@ export async function handleAdminAtelieV3Api(request, env, url) {
   if (path==='/api/admin/v2/atelie/packages' && request.method==='GET') {
     return json({ok:true,packages:await listAteliePackages(env.DB,{admin:true}),
       salesStatus:'blocked_pending_catalog_v4_1_checkout_and_capacity'});
+  }
+  const saleMatch=path.match(/^\/api\/admin\/v2\/atelie\/packages\/(essencia|encanto|universo)\/sales$/);
+  if(saleMatch && request.method==='POST'){
+    try{
+      const body=await readJson(request);
+      if(typeof body?.enabled!=='boolean')return fail('Informe se deseja ativar ou pausar as vendas.',422);
+      const status=await setAtelieSaleStatus(env.DB,saleMatch[1],body.enabled);
+      return json({ok:true,status,packages:await listAteliePackages(env.DB,{admin:true})});
+    }catch(e){return fail(e.message||'Não foi possível atualizar a venda.',422);}
   }
   const match=path.match(/^\/api\/admin\/v2\/atelie\/packages\/(essencia|encanto|universo)$/);
   if (match && request.method==='PATCH') {

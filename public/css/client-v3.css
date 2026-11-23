@@ -75,3 +75,20 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 @media(min-width:660px){.v3-span-full{grid-column:1/-1}}
 @media(max-width:560px){.v3-main{margin-top:10px}.v3-topbar{min-height:71px}.v3-preview-label{max-width:115px;font-size:10px}.v3-brand-name{font-size:20px}.v3-panel{border-radius:22px;min-height:calc(100dvh - 193px);padding:26px 19px}.v3-panel--entrance{min-height:calc(100dvh - 200px)}.v3-grid{grid-template-columns:1fr}.v3-choice{min-height:unset;padding:16px}.v3-title{font-size:35px}.v3-action-row .v3-btn-primary{flex:1}.v3-footer{padding-bottom:18px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Libri Ateliê: checkout na mesma loja, sem componentes de pagamento paralelos. */
+.v3-at-form{display:grid;gap:15px;margin-top:21px}
+.v3-at-field{display:grid;gap:7px;font-size:.92rem;font-weight:600}
+.v3-at-field small{font-size:.78rem;font-weight:400;opacity:.8}
+.v3-at-input{width:100%;min-width:0;padding:13px 14px;border:1px solid #d6bdc5;
+  border-radius:12px;background:#fffdfa;color:#472331;font:inherit}
+.v3-at-input:focus-visible{outline:2px solid #98506a;outline-offset:2px}
+.v3-at-summary{padding:18px;background:#fffaf9;border:1px solid #e6ccd4;border-radius:18px}
+.v3-at-summary h2{font-size:1.25rem;margin:0 0 8px}
+.v3-at-summary li{margin:6px 0}
+.v3-at-summary strong{display:block;margin-top:13px}
+.v3-at-check{display:flex;align-items:flex-start;gap:11px;font-size:.9rem;cursor:pointer}
+.v3-at-check input{margin-top:3px;min-width:18px;min-height:18px}
+.v3-at-terms{white-space:pre-wrap;overflow-wrap:anywhere;max-height:210px;overflow-y:auto;
+  background:#fffaf9;padding:13px;border:1px solid #ead2d8;border-radius:10px;
+  font:inherit;font-size:.83rem;line-height:1.65}

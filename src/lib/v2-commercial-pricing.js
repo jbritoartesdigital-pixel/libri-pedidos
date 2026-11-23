@@ -12,6 +12,7 @@ import {
 } from './v2-catalog.js';
 
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
+import { verifyAtelieQuoteSelection } from './v3-atelie-release.js';
 
 function cleanText(
   value,
@@ -713,6 +714,7 @@ export async function calculateCommercialV2Quote(
       },
     );
 
+  const atelie = await verifyAtelieQuoteSelection(db,selection,base.product.code);
   const baseBeforeDiscounts =
     Number(
       base.productCents
@@ -758,7 +760,7 @@ export async function calculateCommercialV2Quote(
     );
 
   const suggestedCombo =
-    combo
+    combo || atelie
       ? null
       : await bestComboSuggestion(
         db,

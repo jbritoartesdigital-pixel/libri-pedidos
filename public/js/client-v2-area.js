@@ -323,6 +323,7 @@ function uploadRuleHtml(
 function nextStepCard(
   area,
 ) {
+  const atelie = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code || '');
   const status =
     area.order.status;
 
@@ -358,10 +359,10 @@ function nextStepCard(
     && !area.briefing.completed
   ) {
     title =
-      'Preencher os dados do convite';
+      atelie ? 'Preencher o briefing criativo' : 'Preencher os dados do convite';
     body = area.payment?.capacityReview
-      ? 'Pagamento confirmado. Você já pode enviar os dados e fotos; a Libri ainda está revisando a janela de entrega antes da produção.'
-      : 'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.';
+      ? (atelie ? 'Pagamento confirmado. Você já pode responder o briefing artístico; a Libri ainda está conferindo a janela de produção.' : 'Pagamento confirmado. Você já pode enviar os dados e fotos; a Libri ainda está revisando a janela de entrega antes da produção.')
+      : (atelie ? 'Conte como imagina a festa. O envio de imagens será liberado com segurança depois.' : 'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.');
     tab =
       'briefing';
     buttonLabel =
@@ -395,7 +396,7 @@ function nextStepCard(
     title =
       'Quitar o saldo';
     body =
-      'O convite já avançou para a etapa final. Confira abaixo os dados do saldo pendente.';
+      atelie ? 'Seu projeto avançou para a etapa final. Confira o saldo pendente abaixo.' : 'O convite já avançou para a etapa final. Confira abaixo os dados do saldo pendente.';
     tab =
       'summary';
     buttonLabel =
@@ -425,7 +426,7 @@ function nextStepCard(
     title =
       'Produção em andamento';
     body =
-      'Neste momento, você não precisa enviar nada. A Libri está cuidando da produção do seu convite.';
+      atelie ? 'A Libri está cuidando da sua identidade visual.' : 'Neste momento, você não precisa enviar nada. A Libri está cuidando da produção do seu convite.';
   } else if (
     area.modules.contracts
       .available

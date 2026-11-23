@@ -56,6 +56,35 @@ function missingFor(schema,data) {
     .map(field=>({section:section.id,label:field.label})));
 }
 function safeSection(value) { return SECTIONS.has(value)?value:'celebracao'; }
+
+async function listUploadRows(db,orderId) {
+  const rows=await db.prepare(
+    'SELECT id,field_key,original_filename,mime_type,size_bytes,note,created_at FROM v3_atelie_uploads WHERE order_id=? ORDER BY id'
+  ).bind(orderId).all();
+  return rows.results||[];
+}
+function publicUploads(rows,base) {
+  return rows.map(row=>({
+    id:row.id,fieldKey:row.field_key,originalFilename:row.original_filename,
+    mimeType:row.mime_type,sizeBytes:row.size_bytes,note:row.note,
+    createdAt:row.created_at,
+    contentPath:base+'/'+row.id+'/content'
+  }));
+}
+export async function getAtelieUploadAccess(db,token) {
+  const ctx=await context(db,token);
+  if(!ctx)return null;
+  const row=await db.prepare(
+    'SELECT data_json FROM v3_atelie_briefings WHERE order_id=?'
+  ).bind(ctx.order.id).first();
+  const data=jsonValue(row?.data_json);
+  return {
+    orderId:ctx.order.id,orderCode:ctx.order.order_code,
+    paid:ctx.paid,canWrite:ctx.paid&&!CLOSED.has(ctx.order.status),
+    allowsChildPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'
+  };
+}
+
 export async function getAtelieCustomerBriefing(db,token) {
   const ctx=await context(db,token);
   if(!ctx)return null;
@@ -67,6 +96,8 @@ export async function getAtelieCustomerBriefing(db,token) {
   const data=jsonValue(row?.data_json);
   const schema=schemaFor(ctx,data);
   const missing=missingFor(schema,data);
+  const uploads=publicUploads(await listUploadRows(db,ctx.order.id),
+    '/api/v2/customer-area/'+token+'/atelie/briefing/uploads');
   const required=schema.sections.flatMap(s=>s.fields)
     .filter(x=>x.required&&x.type!=='upload').length;
   return {kind:'atelie',orderCode:ctx.order.order_code,locked:false,
@@ -74,7 +105,8 @@ export async function getAtelieCustomerBriefing(db,token) {
     schema,data,revision:Number(row?.revision||0),
     currentSection:safeSection(row?.current_section),updatedAt:row?.updated_at||null,
     missing,progress:required?Math.round(100*(required-missing.length)/required):100,
-    uploadsEnabled:false,canSubmit:false,
+    uploadsEnabled:!CLOSED.has(ctx.order.status),canSubmit:false,
+    uploads,uploadLimits:{referenceFiles:6,childPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'?4:0},
     notice:'Suas respostas ficam no pedido. Fotos e dados não são publicados no portfólio automaticamente.'};
 }
 export async function saveAtelieCustomerBriefing(db,token,payload={}) {
@@ -107,6 +139,14 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
   }
   if(data.styleFreedom!=='quero escolher')delete data.styleDetails;
   if(data.childPhotoPermission!=='sim')delete data.childPhotos;
+  if(ctx.requiresChildPhoto && data.childPhotoPermission!=='sim' &&
+    ('childPhotoPermission' in patch)) {
+    const count=await db.prepare(
+      "SELECT COUNT(*) AS n FROM v3_atelie_uploads WHERE order_id=? AND field_key='childPhotos'"
+    ).bind(ctx.order.id).first();
+    if(Number(count?.n||0)>0)
+      throw error('Para retirar a autorização de uso das fotos, exclua primeiro as fotos da criança deste pedido.');
+  }
   const section=payload.currentSection||safeSection(row?.current_section);
   if(!SECTIONS.has(section))throw error('Etapa do briefing inválida.');
   const encoded=JSON.stringify(data);
@@ -146,12 +186,14 @@ export async function getAtelieAdminBriefing(db,orderCode) {
   const data=jsonValue(row?.data_json);
   const schema=schemaFor(ctx,data);
   const missing=missingFor(schema,data);
+  const uploads=publicUploads(await listUploadRows(db,order.id),
+    '/api/admin/v2/atelie/orders/'+orderCode+'/briefing/uploads');
   return {
     orderCode:order.order_code,
     schema,data,revision:Number(row?.revision||0),
     updatedAt:row?.updated_at||null,
-    missing,
-    uploadsEnabled:false,
-    note:'Rascunho do briefing criativo. Arquivos ainda não foram habilitados.'
+    missing,uploads,
+    uploadsEnabled:true,
+    note:'Arquivos privados do R2, disponíveis somente na Área da Cliente ou no Admin autenticado. Portfólio exige autorização separada.'
   };
 }

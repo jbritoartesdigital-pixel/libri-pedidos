@@ -193,7 +193,7 @@ function renderCreation() {
     '<div class="v3-choices-stack">' +
     choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
     choice('identity','Identidade Visual para Festas | Libri Ateliê',
-      'Criamos uma aparência que combina com toda a festa: brasão, nome decorado, cores, elementos e estampas, de acordo com o pacote.',state.creation,'creation') +
+      'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
     '</div><p class="v3-mini" style="margin-top:18px"><button type="button" class="v3-btn v3-btn-text" data-action="retrospective-info">Conhecer retrospectivas (em preparação)</button></p>',
     actions(true,'Continuar'),1);
 }
@@ -482,8 +482,8 @@ root.addEventListener('click', async event => {
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){state.eventType=value;state.creation='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
-    if(action==='creation'){state.creation=value;render();return;}
+    if(action==='event'){state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
     if(action==='retrospective-info'){state.creation='retrospective';await go('unready');return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
@@ -565,6 +565,7 @@ async function init() {
   ]);
   catalog=result.catalog;
   ateliePackages=atelie.packages || [];
+  if(state.ateliePackage && !ateliePackages.some(p=>p.code===state.ateliePackage)) state.ateliePackage='';
   if(!catalog?.products?.length)throw new Error('O catálogo está indisponível. Confira a loja atual.');
   // Um código de produto desativado nunca deve ficar selecionado em rascunhos antigos.
   if(state.productCode&&!getProduct(state.productCode)){

@@ -143,9 +143,6 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
   if(payload.revision!==prior)
     throw error('As respostas foram atualizadas em outro lugar. Reabra o briefing antes de salvar.',409);
   const data=jsonValue(row?.data_json);
-  const submission=await db.prepare(
-    'SELECT status,submitted_at,submitted_revision,reopened_at FROM v3_atelie_briefing_submissions WHERE order_id=?'
-  ).bind(ctx.order.id).first();
   const schema=schemaFor(ctx,data);
   const fields=new Map(schema.sections.flatMap(s=>s.fields).map(f=>[f.key,f]));
   for(const [key,value] of Object.entries(patch)) {

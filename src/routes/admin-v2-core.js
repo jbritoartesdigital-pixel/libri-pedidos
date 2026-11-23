@@ -139,6 +139,10 @@ export async function handleAdminV2CoreApi(
                   'when',
                 )
               || '',
+            service:
+              url.searchParams.get('service') || '',
+            artStage:
+              url.searchParams.get('artStage') || '',
           },
         ),
     });

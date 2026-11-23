@@ -13,7 +13,7 @@ const ATELIE_STAGES = [
   ['briefing', 'Briefing'],
   ['art_direction', 'Direção de arte'],
   ['creation', 'Criação'],
-  ['review', 'Revisão'],
+  ['revision', 'Revisão'],
   ['approval', 'Aprovação'],
   ['delivery', 'Entrega']
 ];

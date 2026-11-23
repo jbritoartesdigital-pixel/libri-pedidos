@@ -1,5 +1,6 @@
 import { fail, json, readJson } from '../lib/http.js';
 import { listAteliePackages, updateAtelieDraft } from '../lib/v3-atelie-catalog.js';
+import { getAtelieArtProgress, updateAtelieArtProgress } from '../lib/v3-atelie-art-production.js';
 
 // As rotas são chamadas SOMENTE depois da autenticação Passkey comum do Admin V2.
 export async function handleAdminAtelieV3Api(request, env, url) {
@@ -17,6 +18,20 @@ export async function handleAdminAtelieV3Api(request, env, url) {
     } catch(error) {
       return fail(error.message||'Não foi possível salvar o pacote.',422);
     }
+  }
+  const artMatch=path.match(/^\/api\/admin\/v2\/atelie\/orders\/(LIBRI-\d{1,12})\/production$/);
+  if (artMatch && request.method==='GET') {
+    const item=await getAtelieArtProgress(env.DB,artMatch[1]);
+    if(!item)return fail('Pedido de identidade visual não encontrado.',404);
+    return json({ok:true,progress:item});
+  }
+  if (artMatch && request.method==='PATCH') {
+    try {
+      const body=await readJson(request);
+      if(JSON.stringify(body).length>4000)return fail('Dados de produção muito grandes.',413);
+      const progress=await updateAtelieArtProgress(env.DB,artMatch[1],body);
+      return json({ok:true,progress});
+    }catch(e){return fail(e.message||'Não foi possível atualizar a etapa artística.',422);}
   }
   return null;
 }

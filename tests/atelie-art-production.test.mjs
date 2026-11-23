@@ -13,6 +13,10 @@ function fixture() {
   sqlite.exec("CREATE TABLE v2_product_variants(id INTEGER PRIMARY KEY,product_id INTEGER,code TEXT UNIQUE)");
   sqlite.exec("CREATE TABLE v2_order_items(id INTEGER PRIMARY KEY,order_id INTEGER,item_type TEXT,item_code TEXT,configuration_json TEXT)");
   sqlite.exec("CREATE TABLE v2_payments(id INTEGER PRIMARY KEY,order_id INTEGER,status TEXT)");
+  sqlite.exec("CREATE TABLE v2_agenda_allocations(id INTEGER PRIMARY KEY,order_id INTEGER,allocation_type TEXT)");
+  sqlite.exec("CREATE TABLE v2_previews(id INTEGER PRIMARY KEY,order_id INTEGER,version_number INTEGER,status TEXT)");
+  sqlite.exec("CREATE TABLE v2_preview_approvals(id INTEGER PRIMARY KEY,preview_id INTEGER,approved_at TEXT)");
+  sqlite.exec(readFileSync('migrations/0037_atelie_v3_briefing_submission.sql','utf8'));
   sqlite.exec(readFileSync('migrations/0034_atelie_v3_art_production.sql','utf8'));
   sqlite.exec("INSERT INTO v2_products(id,code) VALUES(1,'interactive_essential'),(2,'atelie_essencia')");
   sqlite.exec("INSERT INTO v2_product_variants(id,product_id,code) VALUES(1,1,'interactive_essential_base'),(2,2,'atelie_essencia_base')");
@@ -26,6 +30,10 @@ function fixture() {
         JSON.stringify({productCode:product===1?'interactive_essential':'atelie_essencia',
           atelie:{revisionLimit:1}}));
     if(paid)sqlite.prepare("INSERT INTO v2_payments(order_id,status) VALUES(?,'approved')").run(id);
+    if(product===2&&paid) {
+      sqlite.prepare("INSERT INTO v2_agenda_allocations(order_id,allocation_type) VALUES(?,'confirmed')").run(id);
+      sqlite.prepare("INSERT INTO v3_atelie_briefing_submissions(order_id,status,submitted_revision) VALUES(?,'submitted',0)").run(id);
+    }
   }
   const db={
     prepare(sql){
@@ -98,6 +106,41 @@ test('Ateliê art stages, versions and revisions are logged without touching V2 
   assert.equal(sqlite.prepare("SELECT status FROM v2_orders WHERE order_code='LIBRI-2001'").get().status,'in_production');
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=2").get().n,1);
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM v3_atelie_art_history WHERE action='revision_used'").get().n,1);
+});
+test('Art direction requires a submitted briefing and confirmed agenda',async()=>{
+  const {db,sqlite}=fixture();
+  sqlite.exec('DELETE FROM v3_atelie_briefing_submissions WHERE order_id=2');
+  let art=await getAtelieArtProgress(db,'LIBRI-2001');
+  assert.equal(art.briefingSubmitted,false);
+  assert.ok(!art.nextStages.includes('art_direction'));
+  await assert.rejects(updateAtelieArtProgress(db,'LIBRI-2001',{
+    action:'stage',nextStage:'art_direction',version:0
+  }),/briefing e a reserva/);
+  sqlite.exec("INSERT INTO v3_atelie_briefing_submissions(order_id,status,submitted_revision) VALUES(2,'submitted',0)");
+  sqlite.exec('DELETE FROM v2_agenda_allocations WHERE order_id=2');
+  art=await getAtelieArtProgress(db,'LIBRI-2001');
+  assert.equal(art.agendaConfirmed,false);
+  await assert.rejects(updateAtelieArtProgress(db,'LIBRI-2001',{
+    action:'stage',nextStage:'art_direction',version:0
+  }),/briefing e a reserva/);
+});
+test('Only latest customer-approved preview permits delivery',async()=>{
+  const {db,sqlite}=fixture();
+  sqlite.exec("INSERT INTO v3_atelie_art_production(order_id,stage,version) VALUES(2,'approval',0)");
+  let art=await getAtelieArtProgress(db,'LIBRI-2001');
+  assert.equal(art.previewApproved,false);
+  await assert.rejects(updateAtelieArtProgress(db,'LIBRI-2001',{
+    action:'stage',nextStage:'delivery',version:0
+  }),/versão mais recente/);
+  sqlite.exec("INSERT INTO v2_previews(id,order_id,version_number,status) VALUES(11,2,1,'approved')");
+  sqlite.exec("INSERT INTO v2_preview_approvals(preview_id,approved_at) VALUES(11,datetime('now'))");
+  art=await getAtelieArtProgress(db,'LIBRI-2001');
+  assert.equal(art.previewApproved,true);
+  assert.ok(art.nextStages.includes('delivery'));
+  sqlite.exec("INSERT INTO v2_previews(id,order_id,version_number,status) VALUES(12,2,2,'active')");
+  art=await getAtelieArtProgress(db,'LIBRI-2001');
+  assert.equal(art.previewApproved,false);
+  assert.ok(!art.nextStages.includes('delivery'));
 });
 test('Invalid stage transition and missing extra detail are rejected',async()=>{
   const {db}=fixture();

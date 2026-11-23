@@ -20,6 +20,7 @@ function fixture() {
   sqlite.exec('CREATE TABLE v2_payments(id INTEGER PRIMARY KEY,order_id INTEGER,status TEXT)');
   sqlite.exec(readFileSync('migrations/0035_atelie_v3_briefing_draft.sql','utf8'));
   sqlite.exec(readFileSync('migrations/0036_atelie_v3_private_uploads.sql','utf8'));
+  sqlite.exec(readFileSync('migrations/0037_atelie_v3_briefing_submission.sql','utf8'));
   sqlite.exec("INSERT INTO v2_products(id,code) VALUES(1,'atelie_essencia'),(2,'interactive_essential')");
   sqlite.exec("INSERT INTO v2_product_variants(id,product_id,code) VALUES(1,1,'atelie_essencia_default'),(2,2,'essential_base')");
   for(const [id,code,tok,variant,status,requiresPhoto] of [

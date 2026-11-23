@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing } from '../src/lib/v3-atelie-customer-briefing.js';
+import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing, getAtelieAdminBriefing } from '../src/lib/v3-atelie-customer-briefing.js';
 
 const TOKEN='ord_'+'a'.repeat(36);
 const TOKEN_UNPAID='ord_'+'b'.repeat(36);
@@ -104,6 +104,16 @@ test('style questions are conditional, and data is never auto-published',async()
   assert.equal(p.schema.portfolioConsentDefault,false);
   assert.equal(p.uploadsEnabled,false);
   assert.equal(p.canSubmit,false);
+});
+test('Admin reads creative answers by order code without a customer token',async()=>{
+  const {db}=fixture();
+  await saveAtelieCustomerBriefing(db,TOKEN,{revision:0,currentSection:'direction',
+    data:{theme:'Jardim Encantado'}});
+  const result=await getAtelieAdminBriefing(db,'LIBRI-2001');
+  assert.equal(result.data.theme,'Jardim Encantado');
+  assert.ok(!('publicToken' in result));
+  assert.ok(!JSON.stringify(result).includes(TOKEN));
+  assert.equal(await getAtelieAdminBriefing(db,'LIBRI-2003'),null);
 });
 test('HTML routes remain integrated and do not replace customer payment, previews or contracts',()=>{
   const source=readFileSync('public/js/client-v2-area.js','utf8');

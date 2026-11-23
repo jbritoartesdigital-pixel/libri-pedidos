@@ -6,7 +6,8 @@ const source = path => readFileSync(new URL('../' + path, import.meta.url), 'utf
 
 test('V3 preview has a dedicated route; V2 store, admin and customer routes remain intact', () => {
   const worker = source('src/index.js');
-  assert.match(worker, /url\.pathname === '\/pedido-v3'/);
+  assert.match(worker, /\['\/loja','\/loja\/'/);
+  assert.match(worker, /'\/pedido-v3'/);
   assert.match(worker, /'\/client-v3\.html'/);
   assert.match(worker, /isClientV2Page\(/);
   assert.match(worker, /isAdminV2Page\(/);

@@ -322,6 +322,7 @@ function uploadRuleHtml(
 
 function nextStepCard(
   area,
+  atelieBriefing = null,
 ) {
   const atelie = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code || '');
   const status =
@@ -353,6 +354,11 @@ function nextStepCard(
       'summary';
     buttonLabel =
       'Ver pagamento';
+  } else if (atelie && atelieBriefing?.submitted && status==='briefing_pending') {
+    title = 'Briefing criativo recebido ✓';
+    body = 'Suas informações foram enviadas. A Libri vai conferir o escopo e a agenda antes de começar a direção de arte.';
+    tab = 'briefing';
+    buttonLabel = 'Conferir respostas';
   } else if (
     status
     === 'briefing_pending'
@@ -521,7 +527,7 @@ function tabButtons(
       id:
         'briefing',
       label:
-        'Preencher dados',
+        /^atelie_(essencia|encanto|universo)$/.test(area.product?.code||'') ? 'Briefing criativo' : 'Preencher dados',
       visible:
         true,
     },
@@ -1418,6 +1424,12 @@ export async function startCustomerArea(
     await loadArea();
   const isAtelieOrder = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code||'');
   let atelieBriefing = null;
+  if(isAtelieOrder){
+    try{
+      const response=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing');
+      atelieBriefing=response.briefing;
+    }catch{ /* A aba permite tentar carregar novamente, sem prejudicar o pagamento. */ }
+  }
 
   const draftKey = 'libri-v2-draft:' + token;
   function storedDraft() {
@@ -1450,7 +1462,7 @@ export async function startCustomerArea(
       }
     } catch {}
   }
-  if (!area.briefing.locked && !area.briefing.completed && Object.keys(storedDraft()).length) {
+  if (!isAtelieOrder && !area.briefing.locked && !area.briefing.completed && Object.keys(storedDraft()).length) {
     if (confirm('Encontramos informações não enviadas neste dispositivo. Quer recuperá-las?')) {
       const patch = storedDraft();
       area.briefing.data = { ...area.briefing.data, ...patch };
@@ -1589,7 +1601,7 @@ export async function startCustomerArea(
         ${statusSidebar(area)}
 
         <div>
-          ${nextStepCard(area)}
+          ${nextStepCard(area,atelieBriefing)}
           ${tabButtons(area, activeTab)}
           <div id="customerMain">
             ${body}

@@ -19,10 +19,10 @@ export async function renderAtelieStore(panel) {
     const tabs=packages.map(x=>'<button class="settings-tab '+(x.code===selected?'active':'')+'" type="button" data-atelie-package="'+esc(x.code)+'">'+esc(x.name)+'</button>').join('');
     const price=p.priceCents==null?'':(p.priceCents/100).toFixed(2).replace('.',',');
     panel.innerHTML='<section class="card"><h2>Libri Ateliê | Identidade Visual</h2>'+
-      '<p>Pacotes em estudo, no mesmo painel da Libri. <strong>Não estão disponíveis para compra.</strong></p>'+
-      '<div class="notice info">Preços internos não são publicados. Venda bloqueada até confirmar escopo V4.1, capacidade, termos, briefing e checkout.</div></section>'+
+      '<p>Gerencie os pacotes e valores do Ateliê na mesma loja. A publicação depende de uma ação explícita no Admin.</p>'+
+      '<div class="notice info">Preços e entregáveis em rascunho não aparecem para a cliente. Só o botão Liberar venda pode publicar um pacote completo.</div></section>'+
       '<div class="store-navigation-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">'+tabs+'</div>'+
-      '<section class="card"><h2>Pacote '+esc(p.name)+'</h2><form id="atelieForm">'+
+      '<section class="card"><h2>Pacote '+esc(p.name)+'</h2><form id="atelieForm"><fieldset '+(p.saleEnabled?'disabled':'')+' style="border:0;padding:0;margin:0">'+
       f('atDesc','Explicação simples para a cliente',textarea('atDesc',p.shortDescription,3))+
       f('atIncluded','Entregáveis exatos: um por linha',textarea('atIncluded',lines(p.includedDraft),6))+
       '<p class="muted">Aguardar a versão oficial do catálogo. Não copiar quantidades de uma tabela provisória.</p>'+
@@ -32,12 +32,36 @@ export async function renderAtelieStore(panel) {
       f('atPrice','Preço em R$ (interno)',input('atPrice',price,'Pendente'))+
       f('atPoints','Carga de agenda em pontos',input('atPoints',p.pointsUnits,'Pendente'))+
       f('atRevisions','Rodadas de ajustes',input('atRevisions',p.revisionLimit,'Pendente'))+'</div>'+
-      f('atNotes','Condições comerciais em estudo',textarea('atNotes',p.commercialNotes,4))+
+      f('atNotes','Observações comerciais internas',textarea('atNotes',p.commercialNotes,4))+
+      f('atTerms','Condições específicas para a cliente (entregas, revisões, direitos de uso e exclusões)',textarea('atTerms',p.specificTermsDraft,7))+
       box('atVisible','Exibir na prévia V3, sempre sem preço e sem venda.',p.showcaseVisible)+
       box('atApproved','Confirmei escopo, entregáveis, exclusões e rodadas contra o catálogo oficial.',p.scopeApproved)+
       '<div class="toolbar" style="margin-top:16px"><button class="btn btn-primary" type="submit" id="atSave">Salvar rascunho</button></div>'+
-      '</form></section>';
+      '</fieldset></form>'+
+      '<div class="notice '+(p.saleEnabled?'success':'info')+'" style="margin-top:14px">'+
+        (p.saleEnabled?'Pacote à venda no checkout existente. Para editar valores ou escopo, pause primeiro.':
+          ((p.releaseMissing||[]).length?
+            'Falta configurar: '+(p.releaseMissing||[]).map(esc).join('; ')+'.':
+            'Este pacote está pronto para ativação comercial mediante sua confirmação.'))+'</div>'+
+      '<div class="toolbar"><button type="button" class="btn '+(p.saleEnabled?'btn-secondary':'btn-primary')+
+        '" id="atelieToggleSale" '+(!p.saleEnabled&&(p.releaseMissing||[]).length?'disabled':'')+'>'+
+        (p.saleEnabled?'Pausar vendas deste pacote':'Liberar venda deste pacote')+'</button></div></section>';
     panel.querySelectorAll('[data-atelie-package]').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.ateliePackage;render();}));
+    panel.querySelector('#atelieToggleSale')?.addEventListener('click',async()=>{
+      const enabled=!p.saleEnabled;
+      if(!window.confirm(enabled
+        ? 'LIBERAR este pacote para compra com os valores, entregáveis, revisões e condições aprovados?'
+        : 'PAUSAR novas vendas deste pacote? Pedidos existentes não serão cancelados.'))return;
+      const button=panel.querySelector('#atelieToggleSale');
+      button.disabled=true;
+      try{
+        const response=await api('/api/admin/v2/atelie/packages/'+selected+'/sales',{
+          method:'POST',body:JSON.stringify({enabled})
+        });
+        packages.splice(0,packages.length,...response.packages);
+        showToast(enabled?'Venda liberada!':'Novas vendas pausadas.');render();
+      }catch(e){showToast(e.message||'Não foi possível alterar a venda.');button.disabled=false;}
+    });
     panel.querySelector('#atelieForm').addEventListener('submit',async ev=>{
       ev.preventDefault();
       const value=id=>panel.querySelector('#'+id).value;
@@ -52,7 +76,7 @@ export async function renderAtelieStore(panel) {
         priceCents:raw===''?null:Math.round(Number(raw)*100),
         pointsUnits:rawPoints===''?null:Number(rawPoints),
         revisionLimit:rawRevisions===''?null:Number(rawRevisions),
-        commercialNotes:value('atNotes'),
+        commercialNotes:value('atNotes'),specificTerms:value('atTerms'),
         showcaseVisible:panel.querySelector('#atVisible').checked,
         scopeApproved:panel.querySelector('#atApproved').checked
       };

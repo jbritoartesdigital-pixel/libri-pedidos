@@ -82,6 +82,20 @@ test('Read-only public endpoint hides all draft values', async () => {
   assert.equal(data.packages.length,3);
   assert.ok(data.packages.every(x=>x.purchaseAvailable===false));
 });
+test('Ateliê private drafts and production routes require existing Admin Passkey session', async () => {
+  const DB=database(),ctx={waitUntil(){}};
+  for(const [path,method] of [
+    ['/api/admin/v2/atelie/packages','GET'],
+    ['/api/admin/v2/atelie/packages/essencia','PATCH'],
+    ['/api/admin/v2/atelie/orders/LIBRI-2001/production','GET'],
+    ['/api/admin/v2/atelie/orders/LIBRI-2001/production','PATCH']
+  ]) {
+    const response=await worker.fetch(new Request(
+      'https://pedidos.libriconvites.com.br'+path,{method}
+    ),{DB},ctx);
+    assert.equal(response.status,401,method+' '+path+' deve exigir Passkey');
+  }
+});
 test('Ateliê briefing is isolated, adaptive, and private by default', () => {
   const base=buildAtelieBriefingBlueprint({
     packageCode:'essencia',event:{honoreeName:'Criança',type:'birthday',date:'2027-03-20'}

@@ -138,7 +138,8 @@ export async function streamAtelieCustomerImage(env,token,uploadId) {
 }
 export async function deleteAtelieCustomerImage(env,token,uploadId) {
   if(!env.FILES)throw error('Armazenamento indisponível.',503);
-  const access=await customerAccess(env,token,true);
+  // A pessoa pode retirar as próprias imagens mesmo após finalizar o pedido.
+  const access=await customerAccess(env,token);
   if(!access)return null;
   const row=await uploadedFile(env,access.orderId,uploadId);
   if(!row)return false;

@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { submitAtelieCreativeBriefing, reopenAtelieCreativeBriefing } from '../src/lib/v3-atelie-briefing-submission.js';
-import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing, getAtelieAdminBriefing } from '../src/lib/v3-atelie-customer-briefing.js';
-import { uploadAtelieCustomerImage } from '../src/lib/v3-atelie-uploads.js';
+import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing, getAtelieAdminBriefing, getAtelieUploadAccess } from '../src/lib/v3-atelie-customer-briefing.js';
 
 const TOKEN='ord_'+('a'.repeat(36));
 const UNPAID='ord_'+('b'.repeat(36));
@@ -81,6 +80,7 @@ test('Submission is idempotent, prevents edits and upload after submission',asyn
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM v3_atelie_briefing_events').get().n,1);
   const state=await getAtelieCustomerBriefing(db,TOKEN);
   assert.equal(state.submitted,true);
+  assert.equal((await getAtelieUploadAccess(db,TOKEN)).canWrite,false);
   const manager=await getAtelieAdminBriefing(db,'LIBRI-2201');
   assert.equal(manager.submitted,true);
 });

@@ -115,7 +115,7 @@ export async function uploadAtelieCustomerImage(request,env,token) {
       "SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM v3_atelie_uploads WHERE order_id=? AND field_key=?) < ? "+
       "AND EXISTS (SELECT 1 FROM v2_payments WHERE order_id=? AND status='approved') "+
       "AND EXISTS (SELECT 1 FROM v2_orders WHERE id=? AND status NOT IN ('cancelled','finalized')) "+
-      "AND (?='referenceFiles' OR EXISTS (SELECT 1 FROM v3_atelie_briefings WHERE order_id=? AND json_extract(data_json,'$.childPhotoPermission')='sim'))"
+      "AND (?='referenceFiles' OR EXISTS (SELECT 1 FROM v3_atelie_briefings WHERE order_id=? AND json_extract(data_json,'$.childPhotoPermission')='sim' AND json_extract(data_json,'$.guardianAuthorization')='sim'))"
     ).bind(access.orderId,fieldKey,originalFilename,mime,size,key,note,
       access.orderId,fieldKey,limit,access.orderId,access.orderId,fieldKey,access.orderId).run();
     if(Number(result?.meta?.changes||0)!==1)

@@ -114,9 +114,10 @@ export async function uploadAtelieCustomerImage(request,env,token) {
       "INSERT INTO v3_atelie_uploads(order_id,field_key,original_filename,mime_type,size_bytes,r2_key,note) "+
       "SELECT ?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM v3_atelie_uploads WHERE order_id=? AND field_key=?) < ? "+
       "AND EXISTS (SELECT 1 FROM v2_payments WHERE order_id=? AND status='approved') "+
+      "AND EXISTS (SELECT 1 FROM v2_orders WHERE id=? AND status NOT IN ('cancelled','finalized')) "+
       "AND (?='referenceFiles' OR EXISTS (SELECT 1 FROM v3_atelie_briefings WHERE order_id=? AND json_extract(data_json,'$.childPhotoPermission')='sim'))"
     ).bind(access.orderId,fieldKey,originalFilename,mime,size,key,note,
-      access.orderId,fieldKey,limit,access.orderId,fieldKey,access.orderId).run();
+      access.orderId,fieldKey,limit,access.orderId,access.orderId,fieldKey,access.orderId).run();
     if(Number(result?.meta?.changes||0)!==1)
       throw error('O limite ou a autorização mudou. Atualize e tente novamente.',409);
     inserted=Number(result.meta.last_row_id);

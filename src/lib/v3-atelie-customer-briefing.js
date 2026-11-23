@@ -78,9 +78,12 @@ export async function getAtelieUploadAccess(db,token) {
     'SELECT data_json FROM v3_atelie_briefings WHERE order_id=?'
   ).bind(ctx.order.id).first();
   const data=jsonValue(row?.data_json);
+  const sent=await db.prepare(
+    'SELECT status FROM v3_atelie_briefing_submissions WHERE order_id=?'
+  ).bind(ctx.order.id).first();
   return {
     orderId:ctx.order.id,orderCode:ctx.order.order_code,
-    paid:ctx.paid,canWrite:ctx.paid&&!CLOSED.has(ctx.order.status),
+    paid:ctx.paid,canWrite:ctx.paid&&!CLOSED.has(ctx.order.status)&&sent?.status!=='submitted',
     allowsChildPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'&&data.guardianAuthorization==='sim'
   };
 }

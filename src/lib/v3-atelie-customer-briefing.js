@@ -3,7 +3,7 @@ import { buildAtelieBriefingBlueprint } from './v3-atelie-briefing.js';
 const TOKEN_RE = /^ord_[a-f0-9]{36}$/;
 const ATELIE_CODES = new Set(['atelie_essencia','atelie_encanto','atelie_universo']);
 const CLOSED = new Set(['cancelled','finalized']);
-const SECTIONS = new Set(['celebracao','direction','references','applications','permissions']);
+const SECTIONS = new Set(['celebracao','theme','style','references','applications','permissions']);
 
 function jsonValue(value) {
   try { const v=JSON.parse(value||'{}'); return v&&typeof v==='object'&&!Array.isArray(v)?v:{}; }

@@ -53,6 +53,26 @@ async function progressRow(db,id) {
     'SELECT stage,revisions_used,revisions_included,version,updated_at FROM v3_atelie_art_production WHERE order_id=?'
   ).bind(id).first();
 }
+async function readiness(db,orderId) {
+  const brief=await db.prepare(
+    "SELECT status,submitted_at FROM v3_atelie_briefing_submissions WHERE order_id=?"
+  ).bind(orderId).first();
+  const allocation=await db.prepare(
+    "SELECT 1 AS booked FROM v2_agenda_allocations WHERE order_id=? AND allocation_type='confirmed' LIMIT 1"
+  ).bind(orderId).first();
+  const preview=await db.prepare(
+    "SELECT p.id,p.status,a.approved_at FROM v2_previews p "+
+    "LEFT JOIN v2_preview_approvals a ON a.preview_id=p.id "+
+    "WHERE p.order_id=? ORDER BY p.version_number DESC,p.id DESC LIMIT 1"
+  ).bind(orderId).first();
+  return {
+    briefingSubmitted:brief?.status==='submitted',
+    briefingSubmittedAt:brief?.status==='submitted'?brief.submitted_at:null,
+    agendaConfirmed:!!allocation,
+    previewAvailable:!!preview&&['active','approved'].includes(preview.status),
+    previewApproved:!!preview&&preview.status==='approved'&&!!preview.approved_at
+  };
+}
 async function history(db,id) {
   const r=await db.prepare(
     'SELECT action,from_stage,to_stage,note,created_at FROM v3_atelie_art_history WHERE order_id=? ORDER BY id DESC LIMIT 100'
@@ -63,14 +83,21 @@ export async function getAtelieArtProgress(db,code) {
   const order=await context(db,code);
   if(!order)return null;
   const row=await progressRow(db,order.id);
+  const ready=await readiness(db,order.id);
+  const stage=row?.stage||'briefing';
+  const allowed=(NEXT[stage]||[]).filter(code=>
+    !(stage==='briefing'&&code==='art_direction'&&(!ready.briefingSubmitted||!ready.agendaConfirmed)) &&
+    !(code==='approval'&&stage!=='delivery'&&!ready.previewAvailable) &&
+    !(stage==='approval'&&code==='delivery'&&!ready.previewApproved));
   return {
     orderCode:order.code,productCode:order.productCode,
-    stage:row?.stage||'briefing',
+    stage,
     revisionsUsed:Number(row?.revisions_used||0),
     revisionsIncluded:row?.revisions_included??order.revisionsIncluded,
     version:Number(row?.version||0),
     canEdit:order.canEdit,stages:ATELIE_STAGES,
-    nextStages:NEXT[row?.stage||'briefing']||[],
+    nextStages:allowed,
+    ...ready,
     history:await history(db,order.id),
     notice:'Controle artístico interno; não altera a situação, pagamento ou entrega do pedido.'
   };
@@ -93,6 +120,14 @@ export async function updateAtelieArtProgress(db,code,input={}) {
   let action='',increment=0;
   if(input.action==='stage'){
     if(!NEXT[stage]?.includes(input.nextStage))throw new Error('Etapa seguinte inválida.');
+    const ready=await readiness(db,order.id);
+    if(stage==='briefing'&&input.nextStage==='art_direction' &&
+      (!ready.briefingSubmitted||!ready.agendaConfirmed))
+      throw new Error('Confirme o recebimento do briefing e a reserva da agenda antes da direção de arte.');
+    if(input.nextStage==='approval'&&stage!=='delivery'&&!ready.previewAvailable)
+      throw new Error('Publique uma prévia ativa no sistema atual antes de solicitar aprovação.');
+    if(stage==='approval'&&input.nextStage==='delivery'&&!ready.previewApproved)
+      throw new Error('A cliente precisa aprovar a versão mais recente da prévia antes da entrega.');
     action='change_stage';stage=input.nextStage;
   }else if(input.action==='revision'){
     const max=existing?.revisions_included??order.revisionsIncluded;

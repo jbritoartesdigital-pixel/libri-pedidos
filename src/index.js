@@ -587,6 +587,11 @@ export default {
       );
     }
 
+    // Prévia privada da V3: nunca altera as rotas públicas V2, o Admin ou a área da cliente.
+    if (url.pathname === '/pedido-v3' || url.pathname === '/pedido-v3/') {
+      return serveStaticShell(request, env, '/client-v3.html');
+    }
+
     if (
       isClientV2Page(
         url.pathname,

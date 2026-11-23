@@ -77,11 +77,11 @@ export async function renderAtelieStore(panel) {
       if(raw!==''&&!/^\d+(\.\d{1,2})?$/.test(raw)){showToast('Preço inválido. Use um valor em reais com até duas casas decimais.');return;}
       const rawPoints=value('atPoints').trim().replace(',','.');
       const rawRevisions=value('atRevisions').trim();
-      if(rawPoints!=='' && (!/^\\d+(?:\\.\\d{1,2})?$/.test(rawPoints)||Number(rawPoints)<=0)){
+      if(rawPoints!=='' && (!/^\d+(?:\.\d{1,2})?$/.test(rawPoints)||Number(rawPoints)<=0)){
         showToast('Informe a carga de produção em pontos. Ex.: 1, 1,5 ou 2.');
         return;
       }
-      if(rawRevisions!=='' && (!/^\\d+$/.test(rawRevisions)||!Number.isSafeInteger(Number(rawRevisions)))){
+      if(rawRevisions!=='' && (!/^\d+$/.test(rawRevisions)||!Number.isSafeInteger(Number(rawRevisions)))){
         showToast('Informe o número inteiro de rodadas de revisão.');
         return;
       }

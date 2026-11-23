@@ -8,6 +8,27 @@ export function atelieBriefingHtml(briefing) {
       '<span class="eyebrow">Libri Ateliê</span><h1 class="page-title">Briefing criativo</h1>'+
       '<p class="page-subtitle">'+esc(briefing.reason||'Aguardando pagamento.')+'</p></div></section>';
   }
+  if(briefing.submitted) {
+    const summary=(briefing.schema?.sections||[]).map(section=>{
+      const values=(section.fields||[]).filter(field=>field.type!=='upload')
+        .filter(field=>String(briefing.data?.[field.key]??'').trim())
+        .map(field=>'<div class="row-card"><strong>'+esc(field.label)+'</strong><p>'+esc(briefing.data[field.key])+'</p></div>').join('');
+      return values?'<details style="margin-top:10px"><summary>'+esc(section.title)+'</summary>'+values+'</details>':'';
+    }).join('');
+    const files=(briefing.uploads||[]).map(item=>
+      '<div class="row-card" style="display:flex;justify-content:space-between;gap:12px"><span>'+
+      esc(item.originalFilename)+'</span><span><a href="'+esc(item.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver</a> '+
+      '<button class="btn btn-ghost btn-small" type="button" data-atelie-delete="'+Number(item.id)+'">Excluir foto</button></span></div>'
+    ).join('');
+    return '<section class="page-card"><span class="eyebrow">Libri Ateliê</span>'+
+      '<h1 class="page-title">Seu briefing foi enviado! 💗</h1>'+
+      '<p class="page-subtitle">Recebemos suas respostas e elas estão disponíveis para conferência da Libri. Isso não significa que a produção começou; a agenda e o escopo contratado ainda serão conferidos.</p>'+
+      '<div class="notice success">Enviado em '+esc(briefing.submittedAt||'data registrada')+'.</div>'+
+      '<h2>Suas respostas</h2>'+summary+
+      '<h2 style="margin-top:18px">Imagens privadas</h2>'+(files||'<p>Nenhuma imagem enviada.</p>')+
+      '<p class="field-help">Para mudar respostas, solicite a reabertura pelo atendimento. Você ainda pode excluir suas imagens.</p>'+
+      '</section>';
+  }
   const sections=briefing.schema?.sections||[];
   const index=Math.max(0,sections.findIndex(x=>x.id===briefing.currentSection));
   const section=sections[index];
@@ -72,7 +93,12 @@ export function atelieBriefingHtml(briefing) {
     (!frozen?'<button type="button" class="btn btn-primary" data-atelie-nav="'+Math.min(index+1,sections.length-1)+'">'+
       (index===sections.length-1?'Salvar esta etapa':'Salvar e continuar')+'</button>':'')+
     '</div>'+
-    (index===sections.length-1?'<div class="notice info">A conclusão final do briefing será habilitada após a ativação comercial do Ateliê. Suas respostas e imagens são guardadas no pedido.</div>':'')+
+    (index===sections.length-1?
+      (briefing.canSubmit?
+        '<div class="notice success">As respostas obrigatórias estão completas. Revise antes do envio.</div>'+
+        '<button type="button" class="btn btn-primary btn-large" id="atelieSubmitBriefing">Enviar briefing à Libri</button>':
+        '<div class="notice info">Salve esta etapa e complete as perguntas obrigatórias pendentes ('+
+        Number(briefing.missing?.length||0)+'). As respostas e imagens continuam guardadas no seu pedido.</div>'):'')+
     '</section>';
 }
 export function bindAtelieBriefing(container,token,briefing,onSaved) {
@@ -124,6 +150,21 @@ export function bindAtelieBriefing(container,token,briefing,onSaved) {
     }catch(e){showToast(e.message||'Não foi possível remover a imagem.');button.disabled=false;}
     finally{busy=false;}
   }));
+  container.querySelector('#atelieSubmitBriefing')?.addEventListener('click',async event=>{
+    if(busy)return;
+    if(!window.confirm('Enviar o briefing para conferência? Depois, mudanças de respostas precisarão de reabertura pela Libri.'))return;
+    busy=true;event.currentTarget.disabled=true;
+    try {
+      await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing/submit',{
+        method:'POST',body:JSON.stringify({revision:briefing.revision})
+      });
+      showToast('Briefing enviado para conferência!');
+      await onSaved();
+    }catch(e){
+      showToast(e.message||'Não foi possível enviar o briefing.');
+      event.currentTarget.disabled=false;
+    }finally{busy=false;}
+  });
   const url='/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing';
   container.querySelectorAll('[data-atelie-nav]').forEach(button=>
     button.addEventListener('click',async()=>{

@@ -16,6 +16,7 @@ function fixture(){
   sqlite.exec("CREATE TABLE v2_order_items(id INTEGER PRIMARY KEY,order_id INTEGER,item_type TEXT,item_code TEXT,configuration_json TEXT)");
   sqlite.exec("CREATE TABLE v2_payments(id INTEGER PRIMARY KEY,order_id INTEGER,status TEXT)");
   sqlite.exec(readFileSync('migrations/0035_atelie_v3_briefing_draft.sql','utf8'));
+  sqlite.exec(readFileSync('migrations/0036_atelie_v3_private_uploads.sql','utf8'));
   sqlite.exec("INSERT INTO v2_products(id,code) VALUES(1,'interactive_essential'),(2,'atelie_essencia')");
   sqlite.exec("INSERT INTO v2_product_variants(id,product_id,code) VALUES(1,1,'essential_default'),(2,2,'essencia_default')");
   for(const [id,token,code,variant,status] of [
@@ -63,7 +64,7 @@ test('prefilled fields and private save/continue with optimistic concurrency',as
   });
   assert.equal(saved.revision,1);
   assert.equal(saved.data.theme,'Jardim Encantado');
-  assert.equal(saved.currentSection,'direction');
+  assert.equal(saved.currentSection,'theme');
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKEN,{
     revision:0,currentSection:'theme',data:{theme:'Outro tema'}
   }),/atualizadas em outro lugar/);
@@ -102,7 +103,8 @@ test('style questions are conditional, and data is never auto-published',async()
   });
   assert.ok(!('styleDetails' in p.data));
   assert.equal(p.schema.portfolioConsentDefault,false);
-  assert.equal(p.uploadsEnabled,false);
+  assert.equal(p.uploadsEnabled,true);
+  assert.deepEqual(p.uploads,[]);
   assert.equal(p.canSubmit,false);
 });
 test('Admin reads creative answers by order code without a customer token',async()=>{

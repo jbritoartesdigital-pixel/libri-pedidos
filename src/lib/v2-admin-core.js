@@ -2496,7 +2496,7 @@ export async function listV2Production(
   )`;
   if(service==='atelie')clauses.push(atelieProduct);
   else if(service==='convites')clauses.push('NOT '+atelieProduct);
-  const validArtStages = new Set(['briefing','art_direction','creation','review','approval','delivery']);
+  const validArtStages = new Set(['briefing','art_direction','creation','revision','approval','delivery']);
   if(service==='atelie' && artStage && validArtStages.has(artStage)) {
     clauses.push("COALESCE((SELECT a.stage FROM v3_atelie_art_production a WHERE a.order_id=o.id),'briefing') = ?");
     binds.push(artStage);

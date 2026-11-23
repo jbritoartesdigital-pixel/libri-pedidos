@@ -323,9 +323,9 @@ function renderReview() {
   panel('Seu pedido está tomando forma!', 'Confira suas escolhas. O próximo passo conclui o pedido com segurança no checkout Libri.',
     '<div class="v3-notice"><b>' + clean(labelForEvent()) + '</b> · ' + clean(PRODUCTS[state.productCode]?.title || '') +
     '</div>' + linesHtml() + priceBar() + offerHtml() +
-    '<p class="v3-mini">Você ainda vai escolher a data da festa, conferir a agenda, revisar o total final e aceitar as condições na loja atual. Nenhum pagamento é criado nesta prévia.</p>',
+    '<p class="v3-mini">Você informará a data da festa, escolherá a entrega e concluirá o pedido com o checkout seguro Libri.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
-    '<button class="v3-btn v3-btn-primary" type="button" data-action="handoff">Continuar na loja atual</button></div>',4);
+    '<button class="v3-btn v3-btn-primary" type="button" data-action="handoff">Continuar para o pagamento</button></div>',4);
 }
 function render() {
   save();

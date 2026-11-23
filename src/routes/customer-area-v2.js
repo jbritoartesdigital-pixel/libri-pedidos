@@ -5,6 +5,7 @@ import {
 } from '../lib/http.js';
 import { resumeV2Payment } from '../lib/v2-checkout.js';
 import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing } from '../lib/v3-atelie-customer-briefing.js';
+import { submitAtelieCreativeBriefing } from '../lib/v3-atelie-briefing-submission.js';
 import { uploadAtelieCustomerImage, streamAtelieCustomerImage, deleteAtelieCustomerImage } from '../lib/v3-atelie-uploads.js';
 
 import {
@@ -63,6 +64,16 @@ export async function handleCustomerAreaV2Api(
         : await saveAtelieCustomerBriefing(env.DB,atelieMatch[1],await readJson(request));
       return result?json({ok:true,briefing:result}):fail('Pedido de Ateliê não encontrado.',404);
     }catch(error){return routeError(error);}
+  }
+
+  const atelieSubmit=url.pathname.match(
+    /^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/atelie\/briefing\/submit$/
+  );
+  if(atelieSubmit && method==='POST') {
+    try {
+      const result=await submitAtelieCreativeBriefing(env,atelieSubmit[1],await readJson(request));
+      return result?json({ok:true,result}):fail('Pedido do Ateliê não encontrado.',404);
+    }catch(e){return routeError(e);}
   }
 
   const atelieUploads=url.pathname.match(

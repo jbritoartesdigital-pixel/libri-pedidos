@@ -1,4 +1,5 @@
 import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261111-rose-v2-2';
+import { atelieBriefingHtml, bindAtelieBriefing } from './client-v2-atelie-briefing.js';
 
 import {
   api,
@@ -1414,6 +1415,8 @@ export async function startCustomerArea(
 
   let area =
     await loadArea();
+  const isAtelieOrder = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code||'');
+  let atelieBriefing = null;
 
   const draftKey = 'libri-v2-draft:' + token;
   function storedDraft() {
@@ -1547,8 +1550,13 @@ export async function startCustomerArea(
     if (
       activeTab === 'briefing'
     ) {
-      body =
-        briefingHtml(area);
+      if(isAtelieOrder) {
+        const reply=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing');
+        atelieBriefing=reply.briefing;
+        body=atelieBriefingHtml(atelieBriefing);
+      } else {
+        body=briefingHtml(area);
+      }
     } else if (
       activeTab === 'preview'
     ) {
@@ -1909,7 +1917,11 @@ export async function startCustomerArea(
         },
       );
 
-    bindBriefing();
+    if(isAtelieOrder) {
+      if(activeTab==='briefing'&&atelieBriefing) {
+        bindAtelieBriefing(app,token,atelieBriefing,async()=>{await render();});
+      }
+    }else bindBriefing();
     bindPreview();
     bindContract();
 

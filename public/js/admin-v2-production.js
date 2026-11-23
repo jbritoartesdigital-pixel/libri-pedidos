@@ -21,6 +21,7 @@ const ART_STAGE_LABELS = Object.fromEntries(ATELIE_STAGES);
 
 const STATUS_OPTIONS = [
   ['', 'Todos'],
+  ['briefing_pending', 'Briefing · Ateliê'],
   ['ready_for_production', 'Prontos'],
   ['in_production', 'Em produção'],
   ['waiting_customer', 'Aguardando cliente'],
@@ -241,6 +242,9 @@ export async function renderProduction(openOrder) {
 
   serviceControl.addEventListener('change',()=>{
     stageControl.value='';
+    const statusControl=document.getElementById('productionStatus');
+    if(serviceControl.value==='convites'&&statusControl.value==='briefing_pending')
+      statusControl.value='';
     syncService();
     load();
   });

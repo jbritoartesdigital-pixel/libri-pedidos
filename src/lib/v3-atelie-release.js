@@ -66,7 +66,7 @@ export async function setAtelieSaleStatus(db,code,enabled=false) {
       "ON CONFLICT(code) DO UPDATE SET price_cents=excluded.price_cents,points_units=excluded.points_units,"+
       "active=1,config_json=excluded.config_json,updated_at=datetime('now')"
     ).bind(product,variant,'Pacote '+row.name,row.price_cents,row.points_units,variantConfig),
-    db.prepare("UPDATE v3_atelie_packages SET sale_enabled=1,activated_at=datetime('now'),updated_at=datetime('now') "+
+    db.prepare("UPDATE v3_atelie_packages SET sale_enabled=1,activated_at=datetime('now') "+
       "WHERE code=? AND scope_approved=1 AND price_cents=? AND points_units=? AND revision_limit=?")
       .bind(code,row.price_cents,row.points_units,row.revision_limit)
   ]);

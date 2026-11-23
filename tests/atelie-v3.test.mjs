@@ -63,7 +63,7 @@ test('Ateliê cannot go through existing V2 checkout or invoice quote', async ()
   const db=database();
   await assert.rejects(calculateCommercialV2Quote(db,{
     productCode:'atelie_essencia',paymentMethod:'pix',addonCodes:['confirmation_libri']
-  }),/Produto não encontrado/);
+  }),/não está liberado para compra/);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_orders").get().n,0);
 });
 test('Read-only public endpoint hides all draft values', async () => {

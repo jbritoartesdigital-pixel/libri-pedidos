@@ -41,6 +41,16 @@ export async function mountAtelieProduction(container,orderCode) {
       '<div class="section-title"><div><span class="eyebrow">Identidade Visual · Libri Ateliê</span>'+
       '<h3>Etapas artísticas</h3></div><span class="status">'+esc(nameFor(progress,progress.stage))+'</span></div>'+
       '<p class="muted">Este acompanhamento é interno. Não altera o pagamento, a agenda ou o status geral do pedido.</p>'+
+      '<div class="notice info">'+
+        (progress.stage==='briefing'
+          ? 'Briefing '+(progress.briefingSubmitted?'enviado ✓':'ainda não enviado')+
+            ' · Agenda '+(progress.agendaConfirmed?'reservada ✓':'sem reserva confirmada')+
+            '. A direção de arte só começa quando ambos estiverem prontos.'
+          : progress.stage==='approval'
+            ? 'A versão mais recente da prévia '+(progress.previewApproved?'foi aprovada pela cliente ✓':'ainda precisa de aprovação da cliente')+
+              '. A entrega só pode avançar depois da aprovação.'
+            : 'Aprovação de arte usa as prévias e o aceite já existentes no Libri Pedidos. Alterar esta etapa não substitui a aprovação da cliente.')+
+      '</div>'+
       '<div class="kpi-grid"><div class="kpi"><span>Etapa atual</span><strong>'+esc(nameFor(progress,progress.stage))+'</strong></div>'+
       '<div class="kpi"><span>Revisões usadas</span><strong>'+progress.revisionsUsed+' / '+esc(max)+'</strong></div></div>'+
       (disabled?'<div class="notice info">Os registros de produção ficam bloqueados enquanto não houver pagamento confirmado ou o pedido estiver encerrado.</div>':

@@ -42,6 +42,23 @@ test('Draft price stays private, invalid scope is rejected and public excludes h
   assert.ok(!(await listAteliePackages(db)).some(x=>x.code==='universo'));
   assert.ok((await listAteliePackages(db,{admin:true})).some(x=>x.code==='universo'));
 });
+test('Changing approved package scope revokes publication until a new V4.1 review', async () => {
+  const db=database();
+  await updateAtelieDraft(db,'essencia',{
+    includedItems:['Brasão (escopo ilustrativo de teste)'],
+    excludedItems:['Impressão física'],revisionLimit:1,scopeReference:'V4.1'
+  });
+  await updateAtelieDraft(db,'essencia',{scopeApproved:true});
+  assert.deepEqual((await listAteliePackages(db)).find(x=>x.code==='essencia').includedItems,
+    ['Brasão (escopo ilustrativo de teste)']);
+  await assert.rejects(updateAtelieDraft(db,'essencia',{
+    includedItems:['Brasão','Logotipo'],scopeApproved:true
+  }),/O escopo mudou/);
+  await updateAtelieDraft(db,'essencia',{
+    includedItems:['Brasão','Logotipo'],scopeApproved:false
+  });
+  assert.deepEqual((await listAteliePackages(db)).find(x=>x.code==='essencia').includedItems,[]);
+});
 test('Ateliê cannot go through existing V2 checkout or invoice quote', async () => {
   const db=database();
   await assert.rejects(calculateCommercialV2Quote(db,{

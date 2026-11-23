@@ -83,8 +83,16 @@ export async function updateAtelieDraft(db,code,patch={}) {
   if (shortDescription.length<5 || shortDescription.length>400) throw new Error('Descrição precisa ter entre 5 e 400 caracteres.');
   if (scopeReference.length>120 || notes.length>3000) throw new Error('Texto de configuração muito longo.');
   if (typeof scopeApproved!=='boolean'||typeof visible!=='boolean') throw new Error('Ativação inválida.');
-  if (scopeApproved && (!scopeReference || !included.length || revisions===null)) {
-    throw new Error('Para validar o escopo, confirme a versão oficial, a lista exata de entregáveis e as revisões.');
+  const scopeChanged =
+    JSON.stringify(included)!==JSON.stringify(parseArray(rows.included_json)) ||
+    JSON.stringify(excluded)!==JSON.stringify(parseArray(rows.excluded_json)) ||
+    scopeReference!==rows.scope_reference ||
+    revisions!==rows.revision_limit;
+  if (scopeChanged && scopeApproved) {
+    throw new Error('O escopo mudou. Salve primeiro com a aprovação desmarcada; revise a nova versão antes de aprovar.');
+  }
+  if (scopeApproved && (!/\\bV4\\.1\\b/i.test(scopeReference) || !included.length || revisions===null)) {
+    throw new Error('Para validar o escopo, confirme o catálogo V4.1 oficial, os entregáveis e as revisões.');
   }
   if (scopeApproved && !excluded.length) throw new Error('Informe as exclusões do pacote antes de validar o escopo.');
   const values=[shortDescription,JSON.stringify(included),JSON.stringify(excluded),

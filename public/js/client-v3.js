@@ -320,7 +320,7 @@ function offerHtml() {
     '<button class="v3-btn v3-btn-primary" type="button" data-action="accept-offer">Quero adicionar</button></div></div>';
 }
 function renderReview() {
-  panel('Seu pedido está tomando forma!', 'Confira suas escolhas. Este é um teste da V3; o pagamento continua na loja atual.',
+  panel('Seu pedido está tomando forma!', 'Confira suas escolhas. O próximo passo conclui o pedido com segurança no checkout Libri.',
     '<div class="v3-notice"><b>' + clean(labelForEvent()) + '</b> · ' + clean(PRODUCTS[state.productCode]?.title || '') +
     '</div>' + linesHtml() + priceBar() + offerHtml() +
     '<p class="v3-mini">Você ainda vai escolher a data da festa, conferir a agenda, revisar o total final e aceitar as condições na loja atual. Nenhum pagamento é criado nesta prévia.</p>',

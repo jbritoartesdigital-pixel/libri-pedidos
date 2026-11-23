@@ -590,7 +590,7 @@ export default {
     }
 
     // Prévia privada da V3: nunca altera as rotas públicas V2, o Admin ou a área da cliente.
-    if (url.pathname === '/pedido-v3' || url.pathname === '/pedido-v3/') {
+    if (['/loja','/loja/','/pedido-v3','/pedido-v3/'].includes(url.pathname)) {
       return serveStaticShell(request, env, '/client-v3.html');
     }
 

@@ -15,7 +15,7 @@ function error(message,status=422) {
 function normalize(field,value) {
   if(typeof value!=='string')throw error('Informe um texto válido para '+field.label+'.');
   if(value.length>2000)throw error(field.label+': limite de 2.000 caracteres.');
-  if(field.type==='choice'&&!field.options.includes(value))
+  if(field.type==='choice'&&value!==''&&!field.options.includes(value))
     throw error('Escolha uma opção válida em '+field.label+'.');
   if(field.type==='date'&&value&&!/^\d{4}-\d{2}-\d{2}$/.test(value))
     throw error('Informe uma data válida.');

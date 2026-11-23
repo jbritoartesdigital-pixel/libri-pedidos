@@ -94,6 +94,9 @@ export async function getAtelieCustomerBriefing(db,token) {
     'SELECT data_json,current_section,revision,updated_at FROM v3_atelie_briefings WHERE order_id=?'
   ).bind(ctx.order.id).first();
   const data=jsonValue(row?.data_json);
+  const submission=await db.prepare(
+    'SELECT status,submitted_at,submitted_revision,reopened_at FROM v3_atelie_briefing_submissions WHERE order_id=?'
+  ).bind(ctx.order.id).first();
   const schema=schemaFor(ctx,data);
   const missing=missingFor(schema,data);
   const uploads=publicUploads(await listUploadRows(db,ctx.order.id),
@@ -101,11 +104,13 @@ export async function getAtelieCustomerBriefing(db,token) {
   const required=schema.sections.flatMap(s=>s.fields)
     .filter(x=>x.required&&x.type!=='upload').length;
   return {kind:'atelie',orderCode:ctx.order.order_code,locked:false,
-    editable:!CLOSED.has(ctx.order.status),
+    editable:!CLOSED.has(ctx.order.status)&&submission?.status!=='submitted',
+    submitted:submission?.status==='submitted',
+    submittedAt:submission?.status==='submitted'?submission.submitted_at:null,
     schema,data,revision:Number(row?.revision||0),
     currentSection:safeSection(row?.current_section),updatedAt:row?.updated_at||null,
     missing,progress:required?Math.round(100*(required-missing.length)/required):100,
-    uploadsEnabled:!CLOSED.has(ctx.order.status),canSubmit:false,
+    uploadsEnabled:!CLOSED.has(ctx.order.status),canSubmit:!missing.length&&submission?.status!=='submitted'&&!CLOSED.has(ctx.order.status),
     uploads,uploadLimits:{referenceFiles:6,childPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'&&data.guardianAuthorization==='sim'?4:0},
     notice:'Suas respostas ficam no pedido. Fotos e dados não são publicados no portfólio automaticamente.'};
 }
@@ -126,10 +131,18 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
   const row=await db.prepare(
     'SELECT data_json,current_section,revision FROM v3_atelie_briefings WHERE order_id=?'
   ).bind(ctx.order.id).first();
+  const submission=await db.prepare(
+    'SELECT status FROM v3_atelie_briefing_submissions WHERE order_id=?'
+  ).bind(ctx.order.id).first();
+  if(submission?.status==='submitted')
+    throw error('O briefing já foi enviado à Libri. Peça a reabertura no atendimento para alterar respostas.',409);
   const prior=Number(row?.revision||0);
   if(payload.revision!==prior)
     throw error('As respostas foram atualizadas em outro lugar. Reabra o briefing antes de salvar.',409);
   const data=jsonValue(row?.data_json);
+  const submission=await db.prepare(
+    'SELECT status,submitted_at,submitted_revision,reopened_at FROM v3_atelie_briefing_submissions WHERE order_id=?'
+  ).bind(ctx.order.id).first();
   const schema=schemaFor(ctx,data);
   const fields=new Map(schema.sections.flatMap(s=>s.fields).map(f=>[f.key,f]));
   for(const [key,value] of Object.entries(patch)) {
@@ -160,8 +173,9 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
     "INSERT OR IGNORE INTO v3_atelie_briefings(order_id,data_json,current_section,revision) VALUES(?,'{}','celebracao',0)"
   ).bind(ctx.order.id).run();
   const result=await db.prepare(
-    "UPDATE v3_atelie_briefings SET data_json=?,current_section=?,revision=revision+1,updated_at=datetime('now') WHERE order_id=? AND revision=?"
-  ).bind(encoded,section,ctx.order.id,prior).run();
+    "UPDATE v3_atelie_briefings SET data_json=?,current_section=?,revision=revision+1,updated_at=datetime('now') WHERE order_id=? AND revision=? "+
+    "AND NOT EXISTS(SELECT 1 FROM v3_atelie_briefing_submissions s WHERE s.order_id=? AND s.status='submitted')"
+  ).bind(encoded,section,ctx.order.id,prior,ctx.order.id).run();
   if(Number(result?.meta?.changes||0)!==1)
     throw error('Outra atualização foi salva. Atualize antes de tentar novamente.',409);
   return getAtelieCustomerBriefing(db,token);
@@ -198,6 +212,8 @@ export async function getAtelieAdminBriefing(db,orderCode) {
     schema,data,revision:Number(row?.revision||0),
     updatedAt:row?.updated_at||null,
     missing,uploads,
+    submitted:submission?.status==='submitted',
+    submittedAt:submission?.status==='submitted'?submission.submitted_at:null,
     uploadsEnabled:true,
     note:'Arquivos privados do R2, disponíveis somente na Área da Cliente ou no Admin autenticado. Portfólio exige autorização separada.'
   };

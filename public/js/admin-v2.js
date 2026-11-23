@@ -134,6 +134,10 @@ function syncViewQuery() {
   }
 
   if (state.view !== 'store') url.searchParams.delete('storeTab');
+  if (state.view !== 'production') {
+    url.searchParams.delete('service');
+    url.searchParams.delete('artStage');
+  }
 
   history.replaceState(
     {},

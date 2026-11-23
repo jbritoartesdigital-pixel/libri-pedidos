@@ -44,8 +44,14 @@ export function buildAtelieBriefingBlueprint({
         f('childPhotoPermission','Autoriza o uso privado das fotos enviadas para criar as artes contratadas?','choice',
           {options:['sim','não'],required:true}),
         ...(data.childPhotoPermission==='sim'
-          ?[f('childPhotos','Fotos da criança para criação contratada','upload',
-            {required:false,privateOnly:true})]:[])
+          ?[
+            f('guardianAuthorization','Você é responsável legal pela criança ou possui autorização dele para usar estas fotos na criação?','choice',
+              {options:['sim','não'],required:true,
+                hint:'É apenas para a criação contratada. Não autoriza divulgação ou portfólio.'}),
+            ...(data.guardianAuthorization==='sim'
+              ?[f('childPhotos','Fotos da criança para criação contratada','upload',
+                {required:false,privateOnly:true})]:[])
+          ]:[])
       ]:[]),
       f('referenceFiles','Imagens de inspiração','upload',
         {required:false,privateOnly:true}),

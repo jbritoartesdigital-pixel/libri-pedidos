@@ -4,6 +4,7 @@ import {
   readJson,
 } from '../lib/http.js';
 import { resumeV2Payment } from '../lib/v2-checkout.js';
+import { getAtelieCustomerBriefing, saveAtelieCustomerBriefing } from '../lib/v3-atelie-customer-briefing.js';
 
 import {
   deleteV2BriefingUpload,
@@ -48,6 +49,19 @@ export async function handleCustomerAreaV2Api(
   if (paymentMatch && method === 'POST') {
     try { return json(await resumeV2Payment(request, env, paymentMatch[1], await readJson(request))); }
     catch (error) { return routeError(error, 502); }
+  }
+
+  // Rascunho artístico na mesma Área da Cliente, sem tocar no briefing cinematográfico.
+  const atelieMatch=url.pathname.match(
+    /^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/atelie\/briefing$/
+  );
+  if(atelieMatch && ['GET','PATCH'].includes(method)) {
+    try {
+      const result=method==='GET'
+        ? await getAtelieCustomerBriefing(env.DB,atelieMatch[1])
+        : await saveAtelieCustomerBriefing(env.DB,atelieMatch[1],await readJson(request));
+      return result?json({ok:true,briefing:result}):fail('Pedido de Ateliê não encontrado.',404);
+    }catch(error){return routeError(error);}
   }
 
   const areaMatch =

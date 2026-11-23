@@ -15,7 +15,8 @@ test('V3 preview has a dedicated route; V2 store, admin and customer routes rema
 
 test('V3 preview is noindex and loads its own assets', () => {
   const html = source('public/client-v3.html');
-  assert.match(html, /noindex,nofollow/);
+  assert.match(html, /index,follow/);
+  assert.match(html, /rel="canonical"/);
   assert.match(html, /client-v3\.css/);
   assert.match(html, /client-v3\.js/);
   assert.match(html, /Loja atual/);

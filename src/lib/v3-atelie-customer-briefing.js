@@ -81,7 +81,7 @@ export async function getAtelieUploadAccess(db,token) {
   return {
     orderId:ctx.order.id,orderCode:ctx.order.order_code,
     paid:ctx.paid,canWrite:ctx.paid&&!CLOSED.has(ctx.order.status),
-    allowsChildPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'
+    allowsChildPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'&&data.guardianAuthorization==='sim'
   };
 }
 
@@ -106,7 +106,7 @@ export async function getAtelieCustomerBriefing(db,token) {
     currentSection:safeSection(row?.current_section),updatedAt:row?.updated_at||null,
     missing,progress:required?Math.round(100*(required-missing.length)/required):100,
     uploadsEnabled:!CLOSED.has(ctx.order.status),canSubmit:false,
-    uploads,uploadLimits:{referenceFiles:6,childPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'?4:0},
+    uploads,uploadLimits:{referenceFiles:6,childPhotos:ctx.requiresChildPhoto&&data.childPhotoPermission==='sim'&&data.guardianAuthorization==='sim'?4:0},
     notice:'Suas respostas ficam no pedido. Fotos e dados não são publicados no portfólio automaticamente.'};
 }
 export async function saveAtelieCustomerBriefing(db,token,payload={}) {
@@ -138,14 +138,19 @@ export async function saveAtelieCustomerBriefing(db,token,payload={}) {
     data[key]=normalize(field,value);
   }
   if(data.styleFreedom!=='quero escolher')delete data.styleDetails;
-  if(data.childPhotoPermission!=='sim')delete data.childPhotos;
-  if(ctx.requiresChildPhoto && data.childPhotoPermission!=='sim' &&
-    ('childPhotoPermission' in patch)) {
+  if(data.childPhotoPermission!=='sim'){
+    delete data.childPhotos;
+    delete data.guardianAuthorization;
+  }
+  if(data.guardianAuthorization!=='sim')delete data.childPhotos;
+  if(ctx.requiresChildPhoto &&
+    ((data.childPhotoPermission!=='sim' && 'childPhotoPermission' in patch) ||
+     (data.guardianAuthorization!=='sim' && 'guardianAuthorization' in patch))) {
     const count=await db.prepare(
       "SELECT COUNT(*) AS n FROM v3_atelie_uploads WHERE order_id=? AND field_key='childPhotos'"
     ).bind(ctx.order.id).first();
     if(Number(count?.n||0)>0)
-      throw error('Para retirar a autorização de uso das fotos, exclua primeiro as fotos da criança deste pedido.');
+      throw error('Para retirar a autorização, exclua primeiro as fotos da criança deste pedido.');
   }
   const section=payload.currentSection||safeSection(row?.current_section);
   if(!SECTIONS.has(section))throw error('Etapa do briefing inválida.');

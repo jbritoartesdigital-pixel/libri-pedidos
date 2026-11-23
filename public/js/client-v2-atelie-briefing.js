@@ -76,7 +76,7 @@ export function atelieBriefingHtml(briefing) {
     '</section>';
 }
 export function bindAtelieBriefing(container,token,briefing,onSaved) {
-  if(!container||!briefing||briefing.locked||!briefing.editable)return;
+  if(!container||!briefing||briefing.locked)return;
   const section=(briefing.schema.sections||[]).find(x=>x.id===briefing.currentSection);
   if(!section)return;
   let busy=false;

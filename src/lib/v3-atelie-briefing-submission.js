@@ -17,12 +17,14 @@ async function submission(db,orderId) {
 export async function submitAtelieCreativeBriefing(env,token,payload={}) {
   const access=await getAtelieUploadAccess(env.DB,token);
   if(!access)return null;
-  if(!access.paid || !access.canWrite)
+  if(!access.paid)
     throw invalid('Este pedido não está disponível para envio do briefing.',403);
   const brief=await getAtelieCustomerBriefing(env.DB,token);
   if(!brief||brief.locked)return null;
   if(brief.submitted)
     return {alreadySubmitted:true,briefing:brief};
+  if(!access.canWrite)
+    throw invalid('O briefing já foi enviado ou este pedido não permite alterações.',403);
   if(!Number.isSafeInteger(payload.revision)||payload.revision<0||payload.revision!==brief.revision)
     throw invalid('As respostas mudaram. Confira o briefing atualizado antes de enviar.',409);
   if(brief.missing.length)

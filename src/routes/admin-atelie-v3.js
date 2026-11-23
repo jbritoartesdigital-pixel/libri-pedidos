@@ -1,6 +1,7 @@
 import { fail, json, readJson } from '../lib/http.js';
 import { listAteliePackages, updateAtelieDraft } from '../lib/v3-atelie-catalog.js';
 import { getAtelieArtProgress, updateAtelieArtProgress } from '../lib/v3-atelie-art-production.js';
+import { getAtelieAdminBriefing } from '../lib/v3-atelie-customer-briefing.js';
 
 // As rotas são chamadas SOMENTE depois da autenticação Passkey comum do Admin V2.
 export async function handleAdminAtelieV3Api(request, env, url) {
@@ -18,6 +19,11 @@ export async function handleAdminAtelieV3Api(request, env, url) {
     } catch(error) {
       return fail(error.message||'Não foi possível salvar o pacote.',422);
     }
+  }
+  const briefingMatch=path.match(/^\/api\/admin\/v2\/atelie\/orders\/(LIBRI-\d{1,12})\/briefing$/);
+  if(briefingMatch && request.method==='GET') {
+    const briefing=await getAtelieAdminBriefing(env.DB,briefingMatch[1]);
+    return briefing?json({ok:true,briefing}):fail('Pedido de identidade visual não encontrado.',404);
   }
   const artMatch=path.match(/^\/api\/admin\/v2\/atelie\/orders\/(LIBRI-\d{1,12})\/production$/);
   if (artMatch && request.method==='GET') {

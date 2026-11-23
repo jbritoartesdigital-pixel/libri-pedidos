@@ -201,12 +201,16 @@ async function renderCurrent() {
   await refreshBell();
 }
 
-async function navigateTo(view, storeTab) {
+async function navigateTo(view, storeTab, service) {
   if (!ADMIN_VIEWS.has(view)) return;
   state.view = view;
   const more = document.getElementById('adminMoreMenu');
   if (more && !['archived', 'notifications', 'security'].includes(view)) more.open = false;
   const url = new URL(window.location.href);
+  if (view === 'production' && ['atelie','convites'].includes(service)) {
+    url.searchParams.set('service',service);
+    url.searchParams.delete('artStage');
+  }
   if (view === 'store' && storeTab) url.searchParams.set('storeTab', storeTab);
   else if (view !== 'store') url.searchParams.delete('storeTab');
   history.replaceState({}, '', url.pathname + url.search + url.hash);

@@ -92,14 +92,18 @@ test('Child photos require contract scope and private-use permission, not portfo
   await saveAtelieCustomerBriefing(db,TOKENS[0],{
     revision:0,currentSection:'references',data:{childPhotoPermission:'sim'}
   });
+  await assert.rejects(uploadAtelieCustomerImage(formRequest('childPhotos'),env,TOKENS[0]),/autorização/);
+  await saveAtelieCustomerBriefing(db,TOKENS[0],{
+    revision:1,currentSection:'references',data:{guardianAuthorization:'sim'}
+  });
   const photo=await uploadAtelieCustomerImage(formRequest('childPhotos'),env,TOKENS[0]);
   assert.equal(photo.upload.fieldKey,'childPhotos');
   await assert.rejects(saveAtelieCustomerBriefing(db,TOKENS[0],{
-    revision:1,currentSection:'references',data:{childPhotoPermission:'não'}
+    revision:2,currentSection:'references',data:{childPhotoPermission:'não'}
   }),/exclua primeiro/);
   await deleteAtelieCustomerImage(env,TOKENS[0],photo.upload.id);
   const after=await saveAtelieCustomerBriefing(db,TOKENS[0],{
-    revision:1,currentSection:'references',data:{childPhotoPermission:'não'}
+    revision:2,currentSection:'references',data:{childPhotoPermission:'não'}
   });
   assert.equal(after.data.childPhotoPermission,'não');
   assert.equal(after.schema.portfolioConsentDefault,false);
@@ -117,6 +121,10 @@ test('Child photo cannot be fetched using unapproved order token',async()=>{
   const {env,db}=fixture();
   await saveAtelieCustomerBriefing(db,TOKENS[0],{
     revision:0,currentSection:'references',data:{childPhotoPermission:'sim'}
+  });
+  await assert.rejects(uploadAtelieCustomerImage(formRequest('childPhotos'),env,TOKENS[0]),/autorização/);
+  await saveAtelieCustomerBriefing(db,TOKENS[0],{
+    revision:1,currentSection:'references',data:{guardianAuthorization:'sim'}
   });
   const photo=await uploadAtelieCustomerImage(formRequest('childPhotos'),env,TOKENS[0]);
   assert.equal((await streamAtelieCustomerImage(env,TOKENS[1],photo.upload.id)).status,404);

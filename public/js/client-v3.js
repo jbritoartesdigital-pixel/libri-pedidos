@@ -58,7 +58,7 @@ const money = cents => new Intl.NumberFormat('pt-BR', {style:'currency',currency
 const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-let catalog = null, quote = null, offer = null;
+let catalog = null, quote = null, offer = null, ateliePackages = [];
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -68,7 +68,7 @@ try {
 if (!state || typeof state !== 'object') state = {};
 state = {
   eventType: '', creation: '', intent: '', productCode: '', variantCode: '',
-  addonCodes: [], step: 'event', offerFinished: false, dismissed: [],
+  addonCodes: [], ateliePackage: '', step: 'event', offerFinished: false, dismissed: [],
   ...state
 };
 if (!Array.isArray(state.addonCodes)) state.addonCodes = [];
@@ -188,22 +188,51 @@ function renderEvent() {
     actions(false,'Continuar'),0);
 }
 function renderCreation() {
-  const cards = [
-    ['invitation','Convite digital','Um vídeo animado ou um convite que abre no celular e facilita a vida dos convidados.'],
-    ['identity','Identidade visual','Uma coleção de artes combinando com o tema da festa.'],
-    ['retrospective','Retrospectiva','Um vídeo com suas fotos e momentos especiais.']
-  ];
-  panel('O que gostaria de criar?', 'Escolha por onde quer começar. Depois mostramos as opções com calma.',
+  panel('O que gostaria de criar?',
+    'Escolha uma das duas linhas da Libri. As duas fazem parte do mesmo aplicativo.',
     '<div class="v3-choices-stack">' +
-    cards.map(item => choice(item[0],item[1],item[2],state.creation,'creation')).join('') + '</div>',
+    choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
+    choice('identity','Identidade Visual para Festas | Libri Ateliê',
+      'Criamos uma aparência que combina com toda a festa: brasão, nome decorado, cores, elementos e estampas, de acordo com o pacote.',state.creation,'creation') +
+    '</div><p class="v3-mini" style="margin-top:18px"><button type="button" class="v3-btn v3-btn-text" data-action="retrospective-info">Conhecer retrospectivas (em preparação)</button></p>',
     actions(true,'Continuar'),1);
 }
 function renderUnready() {
-  const identity = state.creation === 'identity';
-  panel(identity ? 'Identidade Visual' : 'Retrospectiva',
-    'Essa categoria fará parte da V3. Por enquanto, o novo cadastro de pacotes ainda está em desenvolvimento.',
-    '<div class="v3-notice"><strong>Sem valores inventados.</strong> A venda automática ficará disponível quando os pacotes e preços estiverem configurados no catálogo oficial. A loja atual segue funcionando normalmente.</div>',
-    '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button><a href="/pedido" class="v3-btn v3-btn-primary">Abrir loja atual</a></div>',1);
+  panel('Retrospectiva','O serviço de retrospectivas continua planejado, mas seus pacotes ainda não foram integrados ao novo catálogo.',
+    '<div class="v3-notice">Enquanto isso, os convites disponíveis continuam na loja atual, sem alterações.</div>',
+    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button><a href="/pedido" class="v3-btn v3-btn-secondary">Loja atual</a></div>',1);
+}
+function renderAtelie() {
+  const cards = ateliePackages.map(item =>
+    '<button type="button" class="v3-choice '+(item.code===state.ateliePackage?'is-selected':'')+
+      '" data-action="atelie-package" data-value="'+clean(item.code)+'" aria-pressed="'+(item.code===state.ateliePackage)+'">'+
+      '<strong>'+clean(item.name)+'</strong><small>'+clean(item.shortDescription)+'</small>'+
+      '<span class="v3-mini">Ver detalhes · valores ainda não publicados</span></button>'
+  ).join('');
+  panel('Sua festa, com tudo combinando',
+    'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
+    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação visual e uma simulação de decoração para imaginar como a identidade ficaria na festa. A simulação não é a decoração executada.</div>'+
+      '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
+      '<p class="v3-mini" style="margin-top:16px">Não inclui impressão ou fabricação, montagem da festa nem convite em vídeo ou interativo. Peças especiais, personagens elaborados a partir de fotos e alterações grandes precisam de orçamento individual.</p>',
+    '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>'+
+      '<button class="v3-btn v3-btn-primary" type="button" data-action="atelie-detail" '+(!state.ateliePackage?'disabled':'')+'>Conhecer pacote</button></div>',2);
+}
+function renderAtelieDetail() {
+  const item = ateliePackages.find(p=>p.code===state.ateliePackage);
+  if (!item) {state.step='atelie';renderAtelie();return;}
+  const includes=item.scopeApproved&&item.includedItems.length
+    ? '<div class="v3-lines">'+item.includedItems.map(x=>'<div class="v3-line"><span>'+clean(x)+'</span></div>').join('')+'</div>'
+    : '<p class="v3-text">Os itens e quantidades exatos ainda aguardam aprovação do catálogo oficial. Não vamos prometer entregas antes disso.</p>';
+  const exclusions=[...(item.excludedCommon||[]),...(item.excludedItems||[])];
+  const excluded='<ul class="v3-mini">'+exclusions.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>';
+  panel('Pacote '+clean(item.name),clean(item.shortDescription),
+    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual e uma simulação conceitual de decoração.</p></div>'+
+    '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
+    '<h2 class="v3-title" style="font-size:23px;margin-top:22px">O que não está incluído</h2>'+excluded+
+    '<div class="v3-notice"><strong>Compra ainda não liberada.</strong> Preço, quantidade de peças, revisões, agenda e condições serão apresentados quando houver aprovação comercial. Fotos de crianças não são autorização de divulgação.</div>'+
+    '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso e identificação de simulações conceituais.</p>',
+    '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
+    '<button class="v3-btn v3-btn-secondary" type="button" disabled>Contratação em preparação</button></div>',3);
 }
 function renderIntent() {
   panel('Como imagina seu convite?',
@@ -303,6 +332,8 @@ function render() {
     case 'event': renderEvent(); break;
     case 'creation': renderCreation(); break;
     case 'unready': renderUnready(); break;
+    case 'atelie': renderAtelie(); break;
+    case 'atelie-detail': renderAtelieDetail(); break;
     case 'intent': renderIntent(); break;
     case 'format': renderFormats(); break;
     case 'scenes': renderScenes(); break;
@@ -453,6 +484,9 @@ root.addEventListener('click', async event => {
     if(action==='retry'){await init();return;}
     if(action==='event'){state.eventType=value;state.creation='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='creation'){state.creation=value;render();return;}
+    if(action==='retrospective-info'){state.creation='retrospective';await go('unready');return;}
+    if(action==='atelie-package'){state.ateliePackage=value;render();return;}
+    if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='product'){
       const product=getProduct(value);if(!product)return;
@@ -496,7 +530,7 @@ root.addEventListener('click', async event => {
     if(action==='handoff'){handoff();return;}
     if(action==='back'){
       const previous={
-        creation:'event',unready:'creation',intent:'creation',
+        creation:'event',unready:'creation',atelie:'creation','atelie-detail':'atelie',intent:'creation',
         format:'intent',scenes:'format',
         extras:SCENE_PRODUCTS.has(state.productCode)?'scenes':'format',
         review:'extras'
@@ -504,7 +538,7 @@ root.addEventListener('click', async event => {
       await go(previous[state.step]||'event');return;
     }
     if(action==='next'){
-      const next={event:'creation',creation:state.creation==='invitation'?'intent':'unready',
+      const next={event:'creation',creation:state.creation==='invitation'?'intent':state.creation==='identity'?'atelie':'unready',
         intent:'format',
         format:SCENE_PRODUCTS.has(state.productCode)?'scenes':'extras',
         scenes:'extras',extras:'review'};
@@ -525,8 +559,12 @@ document.addEventListener('keydown', event => {
 });
 async function init() {
   root.setAttribute('aria-busy','true');
-  const result=await request('/api/v2/catalog');
+  const [result, atelie] = await Promise.all([
+    request('/api/v2/catalog'),
+    request('/api/v2/atelie/catalog').catch(()=>({packages:[]}))
+  ]);
   catalog=result.catalog;
+  ateliePackages=atelie.packages || [];
   if(!catalog?.products?.length)throw new Error('O catálogo está indisponível. Confira a loja atual.');
   // Um código de produto desativado nunca deve ficar selecionado em rascunhos antigos.
   if(state.productCode&&!getProduct(state.productCode)){

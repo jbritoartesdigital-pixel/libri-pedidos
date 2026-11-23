@@ -448,11 +448,12 @@ root.addEventListener('click', async event => {
       state.offerFinished=false;state.dismissed=[];
       quote=null;render();return;
     }
-    if(action==='variant'){state.variantCode=value;render();return;}
+    if(action==='variant'){state.variantCode=value;state.offerFinished=false;render();return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){
       state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==value);
+      state.offerFinished=false;
       modalClose();await go('extras');return;
     }
     if(action==='select-addon'){
@@ -460,6 +461,7 @@ root.addEventListener('click', async event => {
       state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==addon.group);
       if(addon.group==='moments')state.addonCodes=state.addonCodes.filter(c=>c!=='custom_filter');
       state.addonCodes.push(value);
+      state.offerFinished=false;
       modalClose();await go('extras');return;
     }
     if(action==='dismiss-offer'){
@@ -515,6 +517,10 @@ async function init() {
   // Um código de produto desativado nunca deve ficar selecionado em rascunhos antigos.
   if(state.productCode&&!getProduct(state.productCode)){
     state.productCode='';state.variantCode='';state.addonCodes=[];state.step='format';
+  }
+  if(state.productCode && !currentVariant()) {
+    state.variantCode='';
+    state.step=SCENE_PRODUCTS.has(state.productCode)?'scenes':'format';
   }
   if(!state.eventType)state.step='event';
   if(state.step==='extras'||state.step==='review'){await go(state.step);return;}

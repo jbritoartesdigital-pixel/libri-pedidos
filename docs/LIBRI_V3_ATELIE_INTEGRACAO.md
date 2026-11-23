@@ -82,7 +82,7 @@ A migração 0034 acrescenta tabelas artísticas vinculadas ao ID do pedido V2, 
 - Mesmo bucket FILES (R2) e chaves internas aleatórias sob orders/{id}/atelie/{campo}. Não há URL pública do bucket.
 - Área da Cliente: POST imagem, GET conteúdo, DELETE arquivo sob o mesmo token privado do pedido; requer produto Ateliê real e pagamento confirmado.
 - Imagens JPG/PNG/WebP/HEIC/HEIF, checagem de assinatura inicial, máximo de 15 MB e limites de 6 inspirações e 4 fotos da criança.
-- Fotos da criança exigem pacote compatível e autorização expressa de uso privado no briefing. Para revogar, exclua primeiro as imagens vinculadas.
+- Fotos da criança exigem pacote compatível, autorização de uso privado e confirmação de responsabilidade legal/autorização do responsável. Para revogar, exclua primeiro as imagens vinculadas. A cliente pode apagar suas imagens mesmo depois da conclusão do pedido.
 - Admin Passkey visualiza imagens e respostas no detalhe do mesmo pedido, sem precisar do link privado da cliente.
 - Cache privado/no-store, nosniff e ausência de publicação automática. Envios não mudam status V2, valores, prazo ou descontos.
 - Remoção de imagens exclui o objeto R2 e o registro no D1, com limpeza de objetos órfãos pendente de procedimento de auditoria.

@@ -70,6 +70,7 @@ export async function getAtelieArtProgress(db,code) {
     revisionsIncluded:row?.revisions_included??order.revisionsIncluded,
     version:Number(row?.version||0),
     canEdit:order.canEdit,stages:ATELIE_STAGES,
+    nextStages:NEXT[row?.stage||'briefing']||[],
     history:await history(db,order.id),
     notice:'Controle artístico interno; não altera a situação, pagamento ou entrega do pedido.'
   };

@@ -2494,6 +2494,12 @@ export async function listV2Production(
       OR si.item_code IN ('atelie_essencia_default','atelie_encanto_default','atelie_universo_default')
     )
   )`;
+  const paidAtelieBriefing=`(o.status='briefing_pending' AND ${atelieProduct}
+    AND EXISTS (
+      SELECT 1 FROM v2_payments pay
+      WHERE pay.order_id=o.id AND pay.status='approved'
+        AND pay.payment_type!='refund' AND pay.amount_cents>0
+    ))`;
   if(service==='atelie')clauses.push(atelieProduct);
   else if(service==='convites')clauses.push('NOT '+atelieProduct);
   const validArtStages = new Set(['briefing','art_direction','creation','revision','approval','delivery']);
@@ -2506,8 +2512,8 @@ export async function listV2Production(
   // Finalizados. Keep the operational default and Arquivados separate.
   if (status === 'finalized') {
     clauses.push("o.status = 'finalized'");
-  } else if (status === 'briefing_pending' && service === 'atelie') {
-    clauses.push("o.status = 'briefing_pending'");
+  } else if (status === 'briefing_pending' && service !== 'convites') {
+    clauses.push(paidAtelieBriefing);
   } else if (
     status
     && status !== 'all'
@@ -2527,7 +2533,7 @@ export async function listV2Production(
         'approved',
         'balance_pending',
         'ready_for_delivery'
-      ) OR (o.status = 'briefing_pending' AND ${atelieProduct}))`,
+      ) OR ${paidAtelieBriefing})`,
     );
   }
 

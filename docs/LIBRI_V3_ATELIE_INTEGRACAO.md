@@ -58,3 +58,19 @@ A migração 0034 acrescenta tabelas artísticas vinculadas ao ID do pedido V2, 
 - tests/atelie-v3.test.mjs: catálogo e preços protegidos, aprovação de escopo, briefing, autenticação Passkey.
 - Sintaxe dos módulos alterados verificada com parser JS de maneira isolada; smoke tests de lógica executados; SQL de concorrência e exclusão em cascata conferidos em SQLite local.
 - A suíte completa npm run check e npm test ainda depende de um checkout completo do repositório e ambiente de dependências; sem CI de PR reportado. **Nenhum deploy ou merge autorizado.**
+
+
+## Área da Cliente: rascunho criativo vinculado ao pedido (fase atual)
+
+- Migração 0035: tabela v3_atelie_briefings, associada ao mesmo ID de pedido V2, preservando os dados e briefings dos convites.
+- GET/PATCH /api/v2/customer-area/{token}/atelie/briefing: usa o link privado já criado pelo pedido; aceita somente produto principal real do Ateliê e pagamento aprovado. Pedido não pago permanece bloqueado.
+- O formulário na aba Preencher dados da Área da Cliente passa a mostrar perguntas do Ateliê nos pedidos Ateliê, sem substituir abas de pagamento, prévias, contratos e recursos dos convites.
+- Etapas curtas: celebração, tema e personagens, cores e estilo, referências, aplicações e privacidade. Pré-preenche nome e data do próprio pedido, sem duplicar compra.
+- Respostas são salvas ao avançar e ao voltar, com versão para evitar sobrescrever respostas em outras abas. Não armazena fotos em localStorage.
+- GET /api/admin/v2/atelie/orders/{código}/briefing: leitura interna pela Passkey existente, sem expor token da cliente. O detalhe do pedido mostra as respostas legíveis em abas e pode atualizar.
+- Não conclui o briefing, não altera status V2 nem gera evento financeiro. Uploads e submissão final **continuam desabilitados** até integração segura com R2, controle de consentimento e aprovação do catálogo comercial.
+- Arquivos de teste: tests/atelie-customer-briefing.test.mjs (salvar, continuar, privacidade, concorrência, bloqueio pré-pagamento, visualização do Admin e isolamento dos convites).
+
+### Condição de homologação
+
+É necessário um checkout completo do repositório com as dependências para executar npm run check, npm test, dry-run do Worker e testes reais em Android/iPhone. O ambiente de execução desta conversa não consegue baixar o repositório GitHub, e nenhum CI foi reportado no branch. Por isso a fase continua em PR de rascunho, sem merge, migração remota ou publicação.

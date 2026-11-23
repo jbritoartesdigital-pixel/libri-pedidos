@@ -91,7 +91,7 @@ export async function updateAtelieDraft(db,code,patch={}) {
   if (scopeChanged && scopeApproved) {
     throw new Error('O escopo mudou. Salve primeiro com a aprovação desmarcada; revise a nova versão antes de aprovar.');
   }
-  if (scopeApproved && (!/\\bV4\\.1\\b/i.test(scopeReference) || !included.length || revisions===null)) {
+  if (scopeApproved && (!/\bV4\.1\b/i.test(scopeReference) || !included.length || revisions===null)) {
     throw new Error('Para validar o escopo, confirme o catálogo V4.1 oficial, os entregáveis e as revisões.');
   }
   if (scopeApproved && !excluded.length) throw new Error('Informe as exclusões do pacote antes de validar o escopo.');

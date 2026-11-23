@@ -1941,7 +1941,7 @@ O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
 
   document
     .getElementById('copyProduction')
-    .addEventListener(
+    ?.addEventListener(
       'click',
       async () => {
         await writeClipboard(
@@ -1953,7 +1953,7 @@ O histórico será preservado. Isso NÃO registra novo pagamento.`)) return;
 
   document
     .getElementById('copyFull')
-    .addEventListener(
+    ?.addEventListener(
       'click',
       async () => {
         await writeClipboard(

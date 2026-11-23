@@ -1,4 +1,5 @@
 import { api, esc, showToast } from './client-v2-core.js';
+import { uploadCustomerPhoto } from './client-v2-upload.js';
 
 // Dentro da Área da Cliente já existente. Sem persistência local de fotos ou dados.
 export function atelieBriefingHtml(briefing) {
@@ -16,8 +17,28 @@ export function atelieBriefingHtml(briefing) {
     const val=briefing.data?.[field.key]??field.prefill??'';
     const label='<label for="atelie-'+esc(field.key)+'">'+esc(field.label)+(field.required?' *':'')+'</label>';
     const hint=field.hint?'<small class="field-help">'+esc(field.hint)+'</small>':'';
-    if(field.type==='upload')return '<div class="field full"><strong>'+esc(field.label)+'</strong>'+
-      '<div class="notice info">O envio protegido de imagens será habilitado depois da validação dos arquivos e permissões. Não envie fotos por esta tela ainda.</div></div>';
+    if(field.type==='upload') {
+      const fileList=(briefing.uploads||[]).filter(x=>x.fieldKey===field.key);
+      const limit=Number(briefing.uploadLimits?.[field.key]||0);
+      const list=fileList.map(item=>'<div class="row-card" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'+
+        (['image/jpeg','image/png','image/webp'].includes(item.mimeType)
+          ? '<img loading="lazy" alt="Arquivo de referência" src="'+esc(item.contentPath)+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px">'
+          : '')+
+        '<div style="flex:1;min-width:100px"><strong>'+esc(item.originalFilename)+'</strong>'+
+        '<small style="display:block">'+(Math.ceil(Number(item.sizeBytes||0)/1024))+' KB</small>'+
+        '<a href="'+esc(item.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem</a></div>'+
+        (!frozen?'<button type="button" class="btn btn-danger btn-small" data-atelie-delete="'+Number(item.id)+'">Remover</button>':'')+
+        '</div>').join('');
+      return '<div class="field full"><strong>'+esc(field.label)+'</strong>'+
+        '<p class="field-help">'+fileList.length+' de '+limit+' imagens · até 15 MB cada. Acesso privado ao seu pedido.</p>'+
+        (list?'<div class="upload-list">'+list+'</div>':'')+
+        (!frozen && limit>fileList.length?'<label class="btn btn-secondary" style="display:inline-block;margin-top:9px">'+
+          'Adicionar imagens<input type="file" class="hidden" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" data-atelie-upload="'+
+          esc(field.key)+'"></label>':'')+
+        '<p class="field-help" role="status" data-atelie-upload-status="'+esc(field.key)+'"></p>'+
+        (field.key==='childPhotos'?'<small class="field-help">Fotos de crianças serão utilizadas apenas para criar as artes contratadas. Publicação exige autorização separada.</small>':'')+
+        '</div>';
+    }
     const common=' data-atelie-field="'+esc(field.key)+'" '+(frozen?'disabled ':'');
     let input='';
     if(field.type==='choice') {
@@ -51,7 +72,7 @@ export function atelieBriefingHtml(briefing) {
     (!frozen?'<button type="button" class="btn btn-primary" data-atelie-nav="'+Math.min(index+1,sections.length-1)+'">'+
       (index===sections.length-1?'Salvar esta etapa':'Salvar e continuar')+'</button>':'')+
     '</div>'+
-    (index===sections.length-1?'<div class="notice info">A conclusão do briefing e o envio de arquivos ficarão disponíveis após a ativação comercial do Ateliê. Suas respostas podem ser guardadas como rascunho.</div>':'')+
+    (index===sections.length-1?'<div class="notice info">A conclusão final do briefing será habilitada após a ativação comercial do Ateliê. Suas respostas e imagens são guardadas no pedido.</div>':'')+
     '</section>';
 }
 export function bindAtelieBriefing(container,token,briefing,onSaved) {
@@ -59,6 +80,50 @@ export function bindAtelieBriefing(container,token,briefing,onSaved) {
   const section=(briefing.schema.sections||[]).find(x=>x.id===briefing.currentSection);
   if(!section)return;
   let busy=false;
+  const fileBusy=()=>busy;
+  const uploadEndpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing/uploads';
+  container.querySelectorAll('[data-atelie-upload]').forEach(input=>input.addEventListener('change',async()=>{
+    if(fileBusy())return;
+    const key=input.dataset.atelieUpload, files=Array.from(input.files||[]);
+    if(!files.length)return;
+    const max=Number(briefing.uploadLimits?.[key]||0);
+    const existing=(briefing.uploads||[]).filter(x=>x.fieldKey===key).length;
+    if(files.length>max-existing){showToast('Você pode enviar mais '+(max-existing)+' imagem(ns) neste campo.');return;}
+    const allowed=new Set(['image/jpeg','image/png','image/webp','image/heic','image/heif']);
+    if(files.some(f=>!allowed.has(f.type)||f.size<=0||f.size>15*1024*1024)){
+      showToast('Envie JPG, PNG, WebP, HEIC ou HEIF com até 15 MB por imagem.');return;
+    }
+    busy=true;
+    const status=container.querySelector('[data-atelie-upload-status="'+key+'"]');
+    container.querySelectorAll('[data-atelie-nav],[data-atelie-delete],[data-atelie-upload]').forEach(x=>x.disabled=true);
+    let completed=0, failed=false;
+    try{
+      for(const file of files){
+        const form=new FormData();form.append('fieldKey',key);form.append('file',file);
+        await uploadCustomerPhoto(uploadEndpoint,form,p=>{
+          if(status)status.textContent='Enviando '+(completed+1)+' de '+files.length+' · '+p+'%';
+        });
+        completed++;
+      }
+    }catch(e){failed=true;showToast(e.message||'Não foi possível enviar todas as imagens.');}
+    if(status)status.textContent=failed?'Conferindo os arquivos recebidos…':'Imagens enviadas ✓';
+    try{
+      await onSaved();
+    }catch(e){showToast('Atualize a página para conferir os arquivos recebidos.');}
+    finally{busy=false;}
+  }));
+  container.querySelectorAll('[data-atelie-delete]').forEach(button=>button.addEventListener('click',async()=>{
+    if(fileBusy())return;
+    const id=Number(button.dataset.atelieDelete);
+    if(!Number.isSafeInteger(id))return;
+    busy=true;button.disabled=true;
+    try{
+      await api(uploadEndpoint+'/'+id,{method:'DELETE'});
+      await onSaved();
+      showToast('Imagem removida do pedido.');
+    }catch(e){showToast(e.message||'Não foi possível remover a imagem.');button.disabled=false;}
+    finally{busy=false;}
+  }));
   const url='/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing';
   container.querySelectorAll('[data-atelie-nav]').forEach(button=>
     button.addEventListener('click',async()=>{

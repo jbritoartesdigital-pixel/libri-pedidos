@@ -203,6 +203,9 @@ export async function getAtelieAdminBriefing(db,orderCode) {
     'SELECT data_json,current_section,revision,updated_at FROM v3_atelie_briefings WHERE order_id=?'
   ).bind(order.id).first();
   const data=jsonValue(row?.data_json);
+  const submission=await db.prepare(
+    'SELECT status,submitted_at,submitted_revision,reopened_at FROM v3_atelie_briefing_submissions WHERE order_id=?'
+  ).bind(order.id).first();
   const schema=schemaFor(ctx,data);
   const missing=missingFor(schema,data);
   const uploads=publicUploads(await listUploadRows(db,order.id),

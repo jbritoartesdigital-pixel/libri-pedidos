@@ -1897,3 +1897,20 @@ button { -webkit-tap-highlight-color: transparent; }
   .admin-v3-production-filters{grid-template-columns:minmax(0,1fr)}
   .admin-v3-production-filters>input{grid-column:auto}
 }
+
+/* Ateliê: status comerciais claros sem misturar-se à gestão de convites. */
+.admin-v3-at-overview{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0 16px
+}
+.admin-v3-at-overview>div{
+  display:flex;flex-direction:column;gap:4px;padding:12px;
+  border-radius:12px;border:1px solid var(--line);background:var(--surface-soft)
+}
+.admin-v3-at-overview strong{font-size:24px;line-height:1.1;color:var(--rose-dark)}
+.admin-v3-at-overview span{font-size:11px;line-height:1.35;color:var(--muted)}
+.admin-v3-at-package-state{display:block;font-size:10px;font-weight:650;margin-top:3px;opacity:.76}
+@media(max-width:420px){
+  .admin-v3-at-overview{gap:6px}
+  .admin-v3-at-overview>div{padding:9px}
+  .admin-v3-at-overview strong{font-size:22px}
+}

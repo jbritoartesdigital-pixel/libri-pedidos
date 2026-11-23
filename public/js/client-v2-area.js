@@ -1,4 +1,5 @@
 import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261111-rose-v2-2';
+import { atelieBriefingHtml, bindAtelieBriefing } from './client-v2-atelie-briefing.js';
 
 import {
   api,
@@ -321,7 +322,9 @@ function uploadRuleHtml(
 
 function nextStepCard(
   area,
+  atelieBriefing = null,
 ) {
+  const atelie = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code || '');
   const status =
     area.order.status;
 
@@ -351,16 +354,21 @@ function nextStepCard(
       'summary';
     buttonLabel =
       'Ver pagamento';
+  } else if (atelie && atelieBriefing?.submitted && status==='briefing_pending') {
+    title = 'Briefing criativo recebido ✓';
+    body = 'Suas informações foram enviadas. A Libri vai conferir o escopo e a agenda antes de começar a direção de arte.';
+    tab = 'briefing';
+    buttonLabel = 'Conferir respostas';
   } else if (
     status
     === 'briefing_pending'
     && !area.briefing.completed
   ) {
     title =
-      'Preencher os dados do convite';
+      atelie ? 'Preencher o briefing criativo' : 'Preencher os dados do convite';
     body = area.payment?.capacityReview
-      ? 'Pagamento confirmado. Você já pode enviar os dados e fotos; a Libri ainda está revisando a janela de entrega antes da produção.'
-      : 'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.';
+      ? (atelie ? 'Pagamento confirmado. Você já pode responder o briefing artístico; a Libri ainda está conferindo a janela de produção.' : 'Pagamento confirmado. Você já pode enviar os dados e fotos; a Libri ainda está revisando a janela de entrega antes da produção.')
+      : (atelie ? 'Conte como imagina a festa. O envio de imagens será liberado com segurança depois.' : 'Conte os detalhes da festa e envie as fotos. A produção começa quando os dados estiverem completos.');
     tab =
       'briefing';
     buttonLabel =
@@ -394,7 +402,7 @@ function nextStepCard(
     title =
       'Quitar o saldo';
     body =
-      'O convite já avançou para a etapa final. Confira abaixo os dados do saldo pendente.';
+      atelie ? 'Seu projeto avançou para a etapa final. Confira o saldo pendente abaixo.' : 'O convite já avançou para a etapa final. Confira abaixo os dados do saldo pendente.';
     tab =
       'summary';
     buttonLabel =
@@ -424,7 +432,7 @@ function nextStepCard(
     title =
       'Produção em andamento';
     body =
-      'Neste momento, você não precisa enviar nada. A Libri está cuidando da produção do seu convite.';
+      atelie ? 'A Libri está cuidando da sua identidade visual.' : 'Neste momento, você não precisa enviar nada. A Libri está cuidando da produção do seu convite.';
   } else if (
     area.modules.contracts
       .available
@@ -519,7 +527,7 @@ function tabButtons(
       id:
         'briefing',
       label:
-        'Preencher dados',
+        /^atelie_(essencia|encanto|universo)$/.test(area.product?.code||'') ? 'Briefing criativo' : 'Preencher dados',
       visible:
         true,
     },
@@ -1414,6 +1422,14 @@ export async function startCustomerArea(
 
   let area =
     await loadArea();
+  const isAtelieOrder = /^atelie_(essencia|encanto|universo)$/.test(area.product?.code||'');
+  let atelieBriefing = null;
+  if(isAtelieOrder){
+    try{
+      const response=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing');
+      atelieBriefing=response.briefing;
+    }catch{ /* A aba permite tentar carregar novamente, sem prejudicar o pagamento. */ }
+  }
 
   const draftKey = 'libri-v2-draft:' + token;
   function storedDraft() {
@@ -1446,7 +1462,7 @@ export async function startCustomerArea(
       }
     } catch {}
   }
-  if (!area.briefing.locked && !area.briefing.completed && Object.keys(storedDraft()).length) {
+  if (!isAtelieOrder && !area.briefing.locked && !area.briefing.completed && Object.keys(storedDraft()).length) {
     if (confirm('Encontramos informações não enviadas neste dispositivo. Quer recuperá-las?')) {
       const patch = storedDraft();
       area.briefing.data = { ...area.briefing.data, ...patch };
@@ -1547,8 +1563,13 @@ export async function startCustomerArea(
     if (
       activeTab === 'briefing'
     ) {
-      body =
-        briefingHtml(area);
+      if(isAtelieOrder) {
+        const reply=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/atelie/briefing');
+        atelieBriefing=reply.briefing;
+        body=atelieBriefingHtml(atelieBriefing);
+      } else {
+        body=briefingHtml(area);
+      }
     } else if (
       activeTab === 'preview'
     ) {
@@ -1580,7 +1601,7 @@ export async function startCustomerArea(
         ${statusSidebar(area)}
 
         <div>
-          ${nextStepCard(area)}
+          ${nextStepCard(area,atelieBriefing)}
           ${tabButtons(area, activeTab)}
           <div id="customerMain">
             ${body}
@@ -1909,7 +1930,11 @@ export async function startCustomerArea(
         },
       );
 
-    bindBriefing();
+    if(isAtelieOrder) {
+      if(activeTab==='briefing'&&atelieBriefing) {
+        bindAtelieBriefing(app,token,atelieBriefing,async()=>{await render();});
+      }
+    }else bindBriefing();
     bindPreview();
     bindContract();
 

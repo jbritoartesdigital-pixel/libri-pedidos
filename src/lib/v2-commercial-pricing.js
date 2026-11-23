@@ -12,6 +12,7 @@ import {
 } from './v2-catalog.js';
 
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
+import { verifyAtelieQuoteSelection } from './v3-atelie-release.js';
 
 function cleanText(
   value,
@@ -703,6 +704,11 @@ export async function calculateCommercialV2Quote(
    * de produto, variante, adicionais e points.
    * Combo/cupom/urgência comercial entram aqui.
    */
+  // Guardar o Ateliê antes de resolver adicionais V2 evita qualquer seleção
+  // incompatível, até quando o cliente envia um código antigo diretamente na API.
+  const prechecked=String(selection.productCode||'').startsWith('atelie_')
+    ? await verifyAtelieQuoteSelection(db,selection,selection.productCode)
+    : false;
   const base =
     await calculateV2Quote(
       db,
@@ -713,6 +719,7 @@ export async function calculateCommercialV2Quote(
       },
     );
 
+  const atelie = prechecked || await verifyAtelieQuoteSelection(db,selection,base.product.code);
   const baseBeforeDiscounts =
     Number(
       base.productCents
@@ -758,7 +765,7 @@ export async function calculateCommercialV2Quote(
     );
 
   const suggestedCombo =
-    combo
+    combo || atelie
       ? null
       : await bestComboSuggestion(
         db,

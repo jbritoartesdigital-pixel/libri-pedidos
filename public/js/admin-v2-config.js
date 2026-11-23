@@ -21,6 +21,7 @@ import {
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
 import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261111-rose-v2-2';
+import { renderAtelieStore } from './admin-v2-atelie.js';
 
 export async function renderStore() {
   setViewMeta(
@@ -42,6 +43,7 @@ export async function renderStore() {
         <span class="store-navigation-label">Catálogo</span>
         <div class="store-navigation-buttons">
           <button type="button" class="settings-tab active" data-store-tab="products">Produtos</button>
+          <button type="button" class="settings-tab" data-store-tab="atelie">Libri Ateliê</button>
           <button type="button" class="settings-tab" data-store-tab="addons">Adicionais</button>
           <button type="button" class="settings-tab" data-store-tab="combos">Combos</button>
           <button type="button" class="settings-tab" data-store-tab="gallery">Galeria</button>
@@ -86,6 +88,11 @@ export async function renderStore() {
               === tab,
             ),
         );
+
+      if (tab === 'atelie') {
+        void renderAtelieStore(panel);
+        return;
+      }
 
       if (
         tab === 'products'
@@ -176,7 +183,7 @@ export async function renderStore() {
     };
 
   const availableTabs = new Set([
-    'products', 'addons', 'combos', 'gallery',
+    'products', 'atelie', 'addons', 'combos', 'gallery',
     'coupons', 'black-libri', 'settings', 'terms', 'contracts',
   ]);
   document.querySelectorAll('[data-store-tab]').forEach(button =>

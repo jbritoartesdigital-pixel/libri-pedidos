@@ -10,6 +10,7 @@ export const ADMIN_FEATURES = Object.freeze([
   { title: 'Registrar Pix recebido', section: 'Financeiro', view: 'central', detail: 'Encontre o pedido e abra o detalhe para registrar' },
   { title: 'Meta e faturamento', section: 'Financeiro', view: 'finance', detail: 'Indicadores financeiros e vendas' },
   { title: 'Produtos e preços', section: 'Loja', view: 'store', tab: 'products', detail: 'Catálogo, variações por cenas e valores' },
+  { title: 'Libri Ateliê', section: 'Loja', view: 'store', tab: 'atelie', keywords: 'identidade visual essencia encanto universo brasao monograma estampas', detail: 'Rascunhos dos pacotes, entregáveis, preços internos, revisões e capacidade. Vendas ainda bloqueadas.' },
   { title: 'Adicionais', section: 'Loja', view: 'store', tab: 'addons', detail: 'Itens opcionais de cada produto' },
   { title: 'Combos', section: 'Loja', view: 'store', tab: 'combos', detail: 'Pacotes e ofertas combinadas' },
   { title: 'Cupons', section: 'Loja', view: 'store', tab: 'coupons', keywords: 'cupom desconto promoção', detail: 'Criar e administrar descontos promocionais' },

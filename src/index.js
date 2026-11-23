@@ -75,6 +75,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -331,6 +332,7 @@ async function handleAdminV2Api(
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
+    handleAdminAtelieV3Api,
     handleAdminContractsV2Api,
     handleAdminBlackLibriV2Api,
   ];
@@ -585,6 +587,11 @@ export default {
         env,
         '/admin-v2.html',
       );
+    }
+
+    // Prévia privada da V3: nunca altera as rotas públicas V2, o Admin ou a área da cliente.
+    if (['/loja','/loja/','/pedido-v3','/pedido-v3/'].includes(url.pathname)) {
+      return serveStaticShell(request, env, '/client-v3.html');
     }
 
     if (

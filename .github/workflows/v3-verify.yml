@@ -1,0 +1,38 @@
+name: V3 | Verificar antes de publicar
+on:
+  push:
+    branches:
+      - feature/libri-v3-compra-guiada-fase1-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Checar V2 + V3 sem deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+      - name: Conferir sintaxe e imports
+        run: npm run check
+      - name: Testes automatizados
+        run: npm test
+      - name: Validar migrations em SQLite (sem produção)
+        run: |
+          python3 - <<'PY'
+          import pathlib,sqlite3
+          db=sqlite3.connect(':memory:')
+          for path in sorted(pathlib.Path('migrations').glob('*.sql')):
+              print('Validando',path.name)
+              db.executescript(path.read_text())
+          print('Tabelas:',db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0])
+          assert db.execute("SELECT count(*) FROM v2_products").fetchone()[0]==7
+          assert db.execute("SELECT count(*) FROM v3_atelie_packages").fetchone()[0]==3
+          print('Migrações e catálogo V2 consistentes')
+          PY

@@ -7,7 +7,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261123-admin-v3-1';
 
 import {
   ensureAuth,
@@ -16,11 +16,11 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261116-search-model-date-1';
+} from './admin-v2-central.js?v=20261123-admin-v3-1';
 
 import {
   renderProduction,
-} from './admin-v2-production.js?v=20261010-finalized-1';
+} from './admin-v2-production.js?v=20261123-admin-v3-1';
 
 import {
   renderManualOrder,
@@ -44,7 +44,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261111-rose-v2-2';
+} from './admin-v2-config.js?v=20261123-admin-v3-1';
 
 import {
   refreshBell,

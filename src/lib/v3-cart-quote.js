@@ -3,6 +3,7 @@
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
+import {calculateV3CombinedDiscount} from './v3-combined-discount.js';
 import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
 
@@ -107,6 +108,28 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
       ...(includeSnapshots?{commercialSnapshot:snapshot}:{})
     });
   }
+  const discount=calculateV3CombinedDiscount(quotes);
+  for(const line of quotes){
+    const originalCombo=line.discountCents;
+    const combined=discount.allocations[line.family]||0;
+    line.combinedDiscountCents=combined;
+    if(discount.selectedDiscount==='combined'){
+      line.availableComboCode=line.comboCode;
+      line.comboCode='';line.comboName='';
+      line.discountCents=combined;
+      line.subtotalCents=line.grossCents-combined;
+      line.totalCents=line.subtotalCents;
+      if(line.commercialSnapshot){
+        const snapshot=line.commercialSnapshot;
+        snapshot.originalComboDiscountCents=originalCombo;
+        snapshot.combo=null;snapshot.comboDiscountCents=0;
+        snapshot.combinedDiscountCents=combined;
+        snapshot.subtotalCents=line.subtotalCents;
+        snapshot.baseTotalCents=line.totalCents;snapshot.totalCents=line.totalCents;
+        snapshot.payment={...snapshot.payment,depositCents:line.totalCents,balanceCents:0};
+      }
+    }
+  }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);
   const baseTotalCents=sum('totalCents');
   const pricing=priceWithCardProcessingFee(baseTotalCents,paymentMethod);
@@ -125,6 +148,9 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
     pointsUnits:sum('pointsUnits'),
     productionDays:Math.max(...quotes.map(x=>x.productionDays)),
     discountCents:sum('discountCents'),
+    combinedDiscountCents:discount.combinedDiscountCents,
+    combinedDiscountPercent:discount.percent,
+    selectedDiscount:discount.selectedDiscount,
     pricedOnServer:true
   };
 }

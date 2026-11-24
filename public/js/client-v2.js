@@ -7,7 +7,7 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261124-atelier-gift-v3';
+} from './client-v2-store.js?v=20261124-v99';
 
 import {
   startCustomerArea,

@@ -1,4 +1,5 @@
 // These helpers are reachable only through the authenticated Admin dispatcher.
+import {supplementCatalog} from './v3-service-supplements.js';
 import {getV3OrderHistory} from './v3-order-overview.js';
 import {getV3Delivery} from './v3-service-delivery.js';
 import {contextV3Briefing,getV3ModularBriefing} from './v3-modular-briefing.js';
@@ -12,7 +13,7 @@ export async function getV3AdminBriefing(db,token){
  for(const m of brief.modules){
    for(const u of m.uploads||[])u.contentPath=base+m.module+'/uploads/'+u.id+'/content';
  }
- if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});}}
+ if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.supplementCatalog=await supplementCatalog(db,s);}}
  return brief;
 }
 export async function reviewV3ServiceBriefing(db,token,family,input={}){

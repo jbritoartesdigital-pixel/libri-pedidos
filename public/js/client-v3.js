@@ -7,6 +7,10 @@ import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
 // A etapa de pagamento continua exclusivamente no fluxo V2 existente.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
+const basket=document.getElementById('v3-live-basket');
+const basketBody=document.getElementById('v3-basket-body');
+const basketTotal=document.getElementById('v3-basket-total');
+if(basket)basket.open=window.matchMedia('(min-width: 900px)').matches;
 const STORE_KEY = 'libriV3Draft';
 const V2_KEY = 'libriV2StoreState';
 const EVENTS = [
@@ -82,6 +86,7 @@ if (!Array.isArray(state.dismissed)) state.dismissed = [];
 state.cartItems = Array.isArray(state.cartItems) ? state.cartItems.filter(x=>x&&typeof x.productCode==='string'&&typeof x.variantCode==='string'&&Array.isArray(x.addonCodes)).slice(0,3) : [];
 const cartFamily = code => code.startsWith('atelie_')?'identity':/^retrospectiva(?:_|$)/.test(code)?'retrospective':'invitation';
 function putCart(item) {
+  cartQuote=null;
   state.cartItems = state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(item.productCode)).concat(item);
   save();
 }
@@ -99,7 +104,7 @@ function save() {
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
 function message(text) {
-  root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido">Abrir a loja atual</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
+  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido">Abrir a loja atual</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {
@@ -160,9 +165,14 @@ async function priceFor(productCode, variantCode, addonCodes) {
   });
   return data.quote;
 }
+let liveQuoteKey='';
+const quoteKey=()=>JSON.stringify([state.eventType,state.productCode,state.variantCode,[...state.addonCodes].sort()]);
 async function refreshQuote() {
   if (!state.productCode || !state.variantCode) {quote = null;return;}
-  quote = await priceFor(state.productCode, state.variantCode, state.addonCodes);
+  const key=quoteKey();
+  const result=await priceFor(state.productCode, state.variantCode, state.addonCodes);
+  if(key===quoteKey()){quote=result;liveQuoteKey=key;}
+
 }
 const stepNames=['Evento','Serviço','Escolhas','Personalização','Carrinho'];
 const symbols={invitation:'mail',identity:'palette',retrospective:'film',birthday:'cake','15_years':'sparkles',wedding:'heart',celebration:'gift',other:'star',story:'film',simple:'mail'};
@@ -170,12 +180,30 @@ function choiceIcon(kind){const icons={mail:'<rect x="3" y="5" width="18" height
 function stepBar(index) {
   return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span><span>'+(index+1)+' de 5</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
 }
+function hideBasket(){if(basket)basket.hidden=true;}
+function renderBasket(){
+ if(!basket||!basketBody||!basketTotal)return;
+ if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
+ basket.hidden=false;
+ const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
+ const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
+ const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
+ const rows=state.cartItems.map(x=>'<li><span>'+clean(getProduct(x.productCode)?.name||ateliePackages.find(p=>'atelie_'+p.code===x.productCode)?.name||retrosPackages.find(p=>p.productCode===x.productCode)?.name||'Serviço selecionado')+'</span><small>Adicionado ao carrinho</small></li>').join('');
+ basketBody.innerHTML='<p class="v3-basket-event">'+clean(labelForEvent())+'</p>'+
+ (rows?'<ul class="v3-basket-list">'+rows+'</ul>':'')+
+ (staged?'<div class="v3-basket-draft"><small>Convite em configuração</small><strong>'+clean(PRODUCTS[state.productCode]?.title||currentProduct()?.name||'Convite')+'</strong>'+(currentVariant()?.sceneCount?'<span>'+Number(currentVariant().sceneCount)+' cenas</span>':'')+selectedAddons().map(x=>'<span>'+clean(x.name)+'</span>').join('')+(live?'<b>'+money(live.totalCents)+'</b><small>Total do convite no Pix</small>':'<small>Escolha a configuração para consultar o total.</small>')+'</div>':'')+
+ (item?'<div class="v3-basket-draft"><small>Pacote em seleção</small><strong>'+clean(item.name)+'</strong>'+(item.purchaseAvailable?'<b>'+money(item.priceCents)+'</b>':'')+'</div>':'')+
+ (!rows&&!staged&&!item?'<p class="v3-mini">Suas escolhas aparecem aqui, conforme você monta a comemoração.</p>':'')+
+ (rows?'<button type="button" class="v3-btn v3-btn-secondary" id="v3-basket-open">Ver carrinho ('+state.cartItems.length+')</button><p class="v3-mini">O valor conjunto e os descontos são confirmados no carrinho.</p>':'');
+ basketTotal.textContent=live&&!rows?money(live.totalCents):item?.purchaseAvailable&&!rows?money(item.priceCents):rows?state.cartItems.length+' serviço(s)':'Em construção';
+ basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy)openCart().catch(e=>message(e.message));});
+}
 function panel(title, subtitle, content, buttons, index=0) {
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
     '<span class="v3-eyebrow">Libri Convites · seu pedido</span>' +
     '<h1 class="v3-title">' + title + '</h1><p class="v3-text">' + subtitle + '</p>' +
     content + (buttons || '') + '</section>';
-  root.setAttribute('aria-busy','false');
+  root.setAttribute('aria-busy','false');renderBasket();
 }
 function actions(back, nextText, nextAction = 'next') {
   return '<div class="v3-action-row">' +
@@ -188,7 +216,7 @@ function choice(value, title, subtitle, current, action, price) {
     choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
 }
 function intro() {
-  root.innerHTML = '<section class="v3-panel v3-panel--entrance">' +
+  hideBasket();root.innerHTML = '<section class="v3-panel v3-panel--entrance">' +
     '<div class="v3-entrance-emblem" aria-hidden="true"><span>L</span></div>' +
     '<span class="v3-eyebrow">Libri Convites</span>' +
     '<h1 class="v3-title">Toda celebração começa com uma história.</h1>' +
@@ -328,7 +356,7 @@ function renderExtras(){
  state.addonQuestion=i;
  const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
  const variants=(catalog.addons||[]).filter(a=>a.group===group);
- const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · sem custo</strong><p>O convidado abre uma mensagem pronta e envia pelo WhatsApp. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
+ const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · R$ 0,00</strong><p>O convidado abre uma mensagem pronta e envia pelo WhatsApp. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
  const choiceList=variants.map(a=>choice(a.code,a.name,group==='confirmation'?'Confirmação pelo próprio convite, com painel de respostas.':a.config?.photoLimit?'Até '+a.config.photoLimit+' fotos':a.code.endsWith('_animated')?'Com movimento':a.code.endsWith('_static')?'Sem movimento':'',selected?.code,'guided-addon',a.priceCents)).join('');
  panel(ADDON_QUESTIONS[group]||g[1],g[2],
   '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">'+choiceList+choice(group,group==='confirmation'?'Continuar com WhatsApp':'Agora não','Sem adicionar custo',selected?null:group,'guided-skip')+'</div></div>'+priceBar(),
@@ -434,7 +462,7 @@ function renderCart() {
 }
 async function openCart(){
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
-  state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
+  hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
   root.setAttribute('aria-busy','true');
   root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
   if(state.cartItems.length){
@@ -457,7 +485,7 @@ function render() {
     case 'atelie-detail': renderAtelieDetail(); break;
     case 'atelie-checkout': {
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
-      mountAtelieCheckout(root,{item,eventType:state.eventType,onBack:()=>go('atelie-detail')});
+      hideBasket();mountAtelieCheckout(root,{item,eventType:state.eventType,onBack:()=>go('atelie-detail')});
       break;
     }
     case 'intent': renderIntent(); break;
@@ -631,9 +659,9 @@ root.addEventListener('click', async event => {
       state.variantCode=product.pricingMode==='scene_count'?'':product.variants[0]?.code||'';
       state.addonCodes=[];state.addonQuestion=0;
       state.offerFinished=false;state.dismissed=[];
-      quote=null;render();return;
+      quote=null;liveQuoteKey='';if(state.variantCode)await refreshQuote();render();return;
     }
-    if(action==='variant'){state.variantCode=value;state.offerFinished=false;render();return;}
+    if(action==='variant'){state.variantCode=value;state.offerFinished=false;state.addonQuestion=0;await refreshQuote();render();return;}
     if(action==='guided-addon'||action==='guided-skip'){button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
     if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
@@ -709,7 +737,7 @@ root.addEventListener('click', async event => {
     if(action==='cart-unified-checkout'){
       if(!cartQuote||cartError||!needsUnifiedCheckout(state.cartItems))return;
       state.step='cart';save();
-      mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventDate:cartEventDate,request,onBack:()=>openCart()});
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventDate:cartEventDate,request,onBack:()=>openCart()});
       return;
     }
     if(action==='cart-single-checkout'){

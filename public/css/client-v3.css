@@ -493,3 +493,8 @@ html[data-v3-theme=dark] body:has(.v3-site) :is(.libri-privacy-banner,.libri-pri
 html[data-v3-theme=dark] :is(.libri-privacy-links button,.libri-privacy-dialog a,.libri-privacy-head button){color:var(--wine)}
 html[data-v3-theme=dark] .v3-status-line,html[data-v3-theme=dark] .v3-inline-line{background:#694b4f}
 @media(max-width:380px){.v3-header-shell .v3-brand-official{max-width:48vw}.v3-site .libri-privacy-links{gap:2px 8px}.v3-site .libri-privacy-links button{font-size:10px}}
+
+/* V80 final: distribute spare vertical space without hiding overflowing choices. */
+.v3-panel--guided:is(.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) .v3-stage-body{display:flex;flex-direction:column;justify-content:safe center}
+.v3-panel--guided:is(.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) .v3-stage-body>:is(.v3-choices-stack,.v3-format-list){flex:0 0 auto}
+.v3-panel--guided .v3-stage-body:has(.v3-custom-scenes){justify-content:flex-start}

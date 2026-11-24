@@ -8,7 +8,7 @@ export async function runV3DeliveryRetention(env,{now=new Date(),limit=20}={}){
  const rows=(await db.prepare(`SELECT s.id,s.order_id,s.family,o.order_code,s.download_until
  FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id
  WHERE s.production_status='delivered' AND s.download_until>? AND s.download_until<=?
- AND EXISTS(SELECT 1 FROM v3_service_final_files f WHERE f.service_id=s.id AND f.purged_at IS NULL)
+ AND (s.external_delivery_channel='drive' OR EXISTS(SELECT 1 FROM v3_service_final_files f WHERE f.service_id=s.id AND f.purged_at IS NULL))
  AND NOT EXISTS(SELECT 1 FROM v3_delivery_notices n WHERE n.service_id=s.id AND n.notice_code=?)
  ORDER BY s.download_until LIMIT ?`).bind(stamp,plus(days),code,limit).all()).results||[];
  for(const r of rows){
@@ -18,10 +18,13 @@ export async function runV3DeliveryRetention(env,{now=new Date(),limit=20}={}){
   }catch{result.failed++;}
  }
  }
+ // The app can remove stored external links, not revoke access in Drive or WhatsApp.
+ await db.prepare("UPDATE v3_service_previews SET external_url=NULL,purged_at=datetime('now') WHERE external_channel IS NOT NULL AND purged_at IS NULL AND service_id IN(SELECT id FROM v3_order_services WHERE production_status='delivered' AND originals_until<=?)").bind(stamp).run();
+ await db.prepare("UPDATE v3_order_services SET external_delivery_url=NULL WHERE external_delivery_url IS NOT NULL AND production_status='delivered' AND download_until<=?").bind(stamp).run();
  if(!env.FILES)return result;
  const groups=[
   {kind:'originals',query:`SELECT u.id,u.r2_key FROM v3_service_uploads u JOIN v3_order_services s ON s.order_id=u.order_id AND s.family=u.family WHERE s.production_status='delivered' AND s.originals_until<=? ORDER BY u.id LIMIT ?`,update:"DELETE FROM v3_service_uploads WHERE id=?"},
-  {kind:'previews',query:`SELECT p.id,p.r2_key FROM v3_service_previews p JOIN v3_order_services s ON s.id=p.service_id WHERE s.production_status='delivered' AND s.originals_until<=? AND p.purged_at IS NULL ORDER BY p.id LIMIT ?`,update:"UPDATE v3_service_previews SET purged_at=datetime('now') WHERE id=? AND purged_at IS NULL"},
+  {kind:'previews',query:`SELECT p.id,p.r2_key FROM v3_service_previews p JOIN v3_order_services s ON s.id=p.service_id WHERE s.production_status='delivered' AND s.originals_until<=? AND p.purged_at IS NULL AND p.external_channel IS NULL ORDER BY p.id LIMIT ?`,update:"UPDATE v3_service_previews SET purged_at=datetime('now') WHERE id=? AND purged_at IS NULL"},
   {kind:'finals',query:`SELECT f.id,f.r2_key FROM v3_service_final_files f JOIN v3_order_services s ON s.id=f.service_id WHERE s.production_status='delivered' AND s.download_until<=? AND f.purged_at IS NULL ORDER BY f.id LIMIT ?`,update:"UPDATE v3_service_final_files SET purged_at=datetime('now'),filename='Arquivo expirado' WHERE id=? AND purged_at IS NULL"}
  ];
  for(const g of groups){

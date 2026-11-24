@@ -357,9 +357,9 @@ function renderExtras(){
  const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
  const variants=(catalog.addons||[]).filter(a=>a.group===group);
  const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · R$ 0,00</strong><p>O convidado abre uma mensagem pronta e envia pelo WhatsApp. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
- const choiceList=variants.map(a=>choice(a.code,a.name,group==='confirmation'?'Confirmação pelo próprio convite, com painel de respostas.':a.config?.photoLimit?'Até '+a.config.photoLimit+' fotos':a.code.endsWith('_animated')?'Com movimento':a.code.endsWith('_static')?'Sem movimento':'',selected?.code,'guided-addon',a.priceCents)).join('');
+ const choiceList=group==='confirmation'?choice(group,'Continuar com WhatsApp','Sem custo adicional',selected?null:group,'guided-skip')+choice(group,'Quero acompanhar pelo painel da Libri',selected?'Selecionado: '+selected.name:'Veja as opções de Confirmação Libri',selected?group:null,'guided-options'):choice(group,selected?'Alterar '+g[1]:'Sim, quero ver as opções',selected?selected.name+' · '+money(selected.priceCents):'Confira os valores antes de decidir',selected?group:null,'guided-options')+choice(group,'Agora não','Sem adicionar custo',selected?null:group,'guided-skip');
  panel(ADDON_QUESTIONS[group]||g[1],g[2],
-  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">'+choiceList+choice(group,group==='confirmation'?'Continuar com WhatsApp':'Agora não','Sem adicionar custo',selected?null:group,'guided-skip')+'</div></div>'+priceBar(),
+  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">' +choiceList+'</div></div>'+priceBar(),
   '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
 let guidedBusy=false;
@@ -501,7 +501,7 @@ function modalClose() {
   modalRoot.hidden = true;
   modalRoot.innerHTML = '';
 }
-function openAddonGroup(group) {
+function openAddonGroup(group,guided=false) {
   const variants = (catalog?.addons || []).filter(a => a.group === group);
   if (!variants.length) return;
   const groupItem = ADDON_GROUPS.find(x=>x[0]===group);
@@ -517,11 +517,11 @@ function openAddonGroup(group) {
     '<h2 id="v3-modal-title">'+clean(groupItem?.[1]||'Adicional')+'</h2><p>'+clean(explanations[group]||groupItem?.[2]||'')+'</p>' +
     '<div class="v3-modal-actions">' + variants.map(a=>{
       const extra = a.config?.photoLimit ? ' · até '+a.config.photoLimit+' fotos' : '';
-      return '<button type="button" class="v3-choice '+(selected===a.code?'is-selected':'')+'" data-action="select-addon" data-value="'+clean(a.code)+'">' +
+      return '<button type="button" class="v3-choice '+(selected===a.code?'is-selected':'')+'" data-action="'+(guided?'guided-addon':'select-addon')+'" data-value="'+clean(a.code)+'">' +
         '<strong>'+clean(a.name)+'</strong><small>'+clean(extra || (a.code.endsWith('_animated')?'Com movimento':a.code.endsWith('_static')?'Sem movimento':''))+'</small>' +
         '<span class="v3-price">+ '+money(a.priceCents)+'</span></button>';
     }).join('') +
-    (selected ? '<button class="v3-btn v3-btn-secondary" data-action="remove-addon" data-value="'+clean(group)+'">Retirar esse adicional</button>' : '') +
+    (selected ? '<button class="v3-btn v3-btn-secondary" data-action="'+(guided?'guided-skip':'remove-addon')+'" data-value="'+clean(group)+'">Retirar esse adicional</button>' : '') +
     '<button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar sem alterar</button></div></div>';
   modalRoot.hidden = false;
   modalRoot.querySelector('[role="dialog"]')?.focus();
@@ -630,14 +630,14 @@ function handoff() {
   }
   window.location.assign('/pedido');
 }
-root.addEventListener('click', async event => {
+async function handleStoreClick(event) {
   const button=event.target.closest('[data-action]');
   if (!button) return;
   const action=button.dataset.action, value=button.dataset.value;
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='event'){if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
@@ -652,7 +652,7 @@ root.addEventListener('click', async event => {
       putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]});
       await openCart();return;
     }
-    if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
     if(action==='product'){
       const product=getProduct(value);if(!product)return;
       state.productCode=value;
@@ -662,7 +662,8 @@ root.addEventListener('click', async event => {
       quote=null;liveQuoteKey='';if(state.variantCode)await refreshQuote();render();return;
     }
     if(action==='variant'){state.variantCode=value;state.offerFinished=false;state.addonQuestion=0;await refreshQuote();render();return;}
-    if(action==='guided-addon'||action==='guided-skip'){button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
+    if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
+    if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
     if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
@@ -778,9 +779,10 @@ root.addEventListener('click', async event => {
       await go(next[state.step]||'event');
     }
   }catch(err){message(err.message || 'Não foi possível continuar.');}
-});
-modalRoot.addEventListener('click', event => {
-  if(event.target===modalRoot)modalClose();
+}
+root.addEventListener('click',handleStoreClick);
+modalRoot.addEventListener('click',event=>{
+ if(event.target===modalRoot)modalClose();else handleStoreClick(event);
 });
 document.addEventListener('keydown', event => {
   if(event.key==='Escape'&&!modalRoot.hidden)modalClose();

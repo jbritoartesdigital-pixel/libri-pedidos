@@ -168,3 +168,24 @@ html .v3-modal-root .v101-retro-detail .v3-action-row .v3-btn{min-height:44px;fo
 @keyframes studio-halo-in{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:none}}
 @media(hover:hover){html .v3-panel--guided :is(.v3-choice,.v3-format-card),html .v101-retro-row{transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .22s,border-color .22s}html .v3-panel--guided :is(.v3-choice,.v3-format-card):hover,html .v101-retro-row:hover{transform:translateY(-2px);border-color:var(--store-accent);box-shadow:0 9px 24px #432a3018!important}}
 @media(prefers-reduced-motion:reduce){html .v3-panel--guided .v3-stage-heading:after{animation:none}html .v3-panel--guided :is(.v3-choice,.v3-format-card),html .v101-retro-row{transition:none}}
+
+/* Signature composition: original CSS paper sculpture, no stock images or extra requests. */
+.studio-art{display:none}
+@media(min-width:960px) and (min-height:690px){
+ html .studio-art{display:block;position:relative;isolation:isolate;flex:1;min-height:180px;width:100%;margin-top:26px;perspective:900px;pointer-events:none}
+ .studio-orbit{position:absolute;inset:14% 8% 10%;border-radius:50%;background:radial-gradient(ellipse,#c68d9b45,transparent 68%);filter:blur(14px)}
+ .studio-paper{position:absolute;width:clamp(125px,16vw,218px);aspect-ratio:1.16;left:50%;top:48%;border-radius:18px;border:1px solid #fff9;box-shadow:0 20px 38px #75494226;transform-origin:center;animation:studio-paper-reveal .7s cubic-bezier(.16,1,.3,1) both}
+ .studio-paper-back{background:linear-gradient(155deg,#d9a7b4,#b68089);transform:translate(-63%,-48%) rotate(-13deg);--paper-entry:translate(-74%,-38%) rotate(-20deg)}
+ .studio-paper-front{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(145deg,#fffdfa,#f1dfd8);transform:translate(-48%,-57%) rotate(8deg);--paper-entry:translate(-39%,-65%) rotate(13deg);animation-delay:.09s}
+ .studio-paper-front img{width:44px;height:44px;border-radius:50%;object-fit:cover;box-shadow:0 3px 10px #75494220}
+ .studio-paper-line{width:38%;height:3px;border-radius:99px;background:#ad7d6c55}
+ .studio-paper-line-short{width:24%;height:2px;background:#ad7d6c33}
+ .studio-paper-glass{background:linear-gradient(145deg,#fff9,#f1dfd83b);backdrop-filter:blur(7px);transform:translate(-34%,-29%) rotate(-6deg);--paper-entry:translate(-23%,-14%) rotate(-13deg);animation-delay:.16s;width:clamp(95px,12vw,160px);aspect-ratio:1.4;box-shadow:inset 0 1px #fff9,0 12px 30px #75494220}
+ .studio-art--identity .studio-paper-back{border-radius:50%;aspect-ratio:1}
+ .studio-art--retrospective .studio-paper-front{aspect-ratio:.77;width:clamp(100px,12vw,162px)}
+ html[data-v3-theme=dark] .studio-paper-back{background:#754942}
+ html[data-v3-theme=dark] .studio-paper-front{background:linear-gradient(145deg,#5e4045,#302427)}
+ html[data-v3-theme=dark] .studio-paper-glass{background:#d4a09420}
+}
+@keyframes studio-paper-reveal{from{opacity:0;transform:var(--paper-entry)}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.studio-paper{animation:none}}

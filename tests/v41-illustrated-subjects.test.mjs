@@ -7,8 +7,8 @@ import {updateAtelieDraft} from '../src/lib/v3-atelie-catalog.js';
 import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
 
 const keys=schema=>schema.sections.flatMap(section=>section.fields.map(field=>field.key));
-test('Ateliê offers 1/2/3 mascot poses and separates main illustration from extras',()=>{
-  for(const [code,n] of [['essencia',1],['encanto',2],['universo',3]]){
+test('Ateliê offers 3/4/5 mascot poses and separates main illustration from extras',()=>{
+  for(const [code,n] of [['essencia',3],['encanto',4],['universo',5]]){
     const schema=buildAtelieBriefingBlueprint({packageCode:code,requiresChildPhoto:true,data:{}});
     assert.ok(keys(schema).includes('mascotMode'));
     assert.ok(keys(schema).includes('additionalSubjects'));
@@ -54,7 +54,7 @@ test('Personagens do tema previstos na composição não são classificados como
 
 test('Ateliê release records one principal illustrated subject and poses by package',async()=>{
   const db=database();
-  for(const [code,n] of [['essencia',1],['encanto',2],['universo',3]]){
+  for(const [code,n] of [['essencia',3],['encanto',4],['universo',5]]){
     await updateAtelieDraft(db,code,{
       includedItems:['Marca',n+' poses do mascote'],excludedItems:['Produção física'],
       priceCents:15900,pointsUnits:100,revisionLimit:1,scopeReference:'Ateliê V4.1',

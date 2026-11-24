@@ -91,7 +91,7 @@ async function invite(p,fromCreation=false){
  // Optional additions stay on one screen; no sequential upsell.
  const confirmation=p.locator('[data-action="guided-options"][data-value="confirmation"]');await confirmation.click();await confirmation.and(p.locator('[aria-pressed="true"]')).waitFor();assert.equal(await p.locator('#v3-modal').isVisible(),false);await confirmation.click();await confirmation.and(p.locator('[aria-pressed="false"]')).waitFor();
  await p.locator('[data-action="guided-back"]').waitFor();await click(p,'guided-finish');
- await p.locator('[data-action="add-invitation"]').waitFor();await click(p,'add-invitation');
+ await p.locator('[data-action="add-invitation"]').waitFor();if(await p.locator('[data-action="dismiss-offer"]').count()){await p.locator('.v3-offer-card[role="dialog"]').waitFor();await click(p,'dismiss-offer');}await click(p,'add-invitation');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
 }
 async function checkout(p){
@@ -110,7 +110,7 @@ async function checkout(p){
 }
 try{
  const durations=await pageFor(390,844);const dp=durations.page;
- await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('.v3-demo-cinematic_video').waitFor();await dp.locator('.v3-demo-cinematic_interactive').waitFor();await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
+ await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon,.v3-arrow').count(),0);assert.equal(await dp.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);await dp.evaluate(()=>document.fonts.ready);assert.equal(await dp.evaluate(()=>document.fonts.check('500 18px Manrope')),true);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});
  const short=await dp.locator('[data-scenes="3"]').getAttribute('data-value');await dp.locator('[data-scenes="3"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),short);
  await click(dp,'guided-back');const long=await dp.locator('[data-scenes="6"]').getAttribute('data-value');await dp.locator('[data-scenes="6"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),long);

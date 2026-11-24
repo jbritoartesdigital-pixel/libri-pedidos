@@ -459,3 +459,7 @@ V75 — CI 45461720246 concluído com sucesso (sintaxe, testes automatizados, SQ
 
 CHECKPOINT 24/11/2026 | V74 da loja pública | Branch fix/v3-glass-e-data-entrega-20261124
 Refinamento pós-merge: cards de vidro escuro, tipografia system-ui, sem ícones decorativos, painel de etapas com altura estável, rolagem interna e progresso inferior. As demonstrações animadas de formato continuam. Consulta de outra data pelo último dia desejado da janela de 3 dias, validada pelo endpoint existente antes da seleção, com revalidação em mudanças de pagamento/cupom. Nenhuma alteração nas regras de agenda, preços, reserva ou pagamentos. Decisões de implementação: fontes locais sem dependência externa; janela comercial de três dias preservada. Próximo passo: verificar CI e navegação, depois publicar mediante autorização/validação. Não confundir a consulta com reserva.
+
+
+CHECKPOINT 24/11/2026 | V76 loja | correção visual pós-deploy
+PR #148 publicado no run 45466620377, mas interface recusada pela usuária: tipografia, cores fora da paleta, falta de translucidez, ícones e rolagem do contêiner. Novo ajuste: Manrope variável local (OFL), vidro rosé fumê com transparência real e fundo vinho/champagne, remoção dos ícones e das ilustrações decorativas, viewport travado nas etapas guiadas e scroll interno, sugestão de aumento de ticket em modal animado opcional com delta de preço real. Revisar CI e publicação; nenhuma mudança de regras comerciais ou agenda.

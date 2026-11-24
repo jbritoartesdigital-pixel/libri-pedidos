@@ -20,10 +20,16 @@ export async function safeLinkStoreOrder(db,id,orderId){try{await linkStoreOrder
 export async function handleStoreFunnel(request,env,url){
  if(url.pathname!=='/api/v3/store/stage')return null;
  if(request.method!=='POST')return new Response(null,{status:405});
- const origin=request.headers.get('origin');if(origin&&origin!==url.origin)return new Response(null,{status:403});
+ const origin=request.headers.get('origin');if((origin&&origin!==url.origin)||['cross-site','same-site'].includes(request.headers.get('sec-fetch-site')))return new Response(null,{status:403});
  if(Number(request.headers.get('content-length')||0)>512||!(request.headers.get('content-type')||'').includes('application/json'))return new Response(null,{status:400});
  try{
-  const raw=await request.text();if(raw.length>512)return new Response(null,{status:413});
+  // Bound body reads even when Content-Length is absent. The limiter only affects telemetry.
+  if(env.FUNNEL_RATE_LIMIT){const result=await env.FUNNEL_RATE_LIMIT.limit({key:'libri-pedidos-funnel'});if(!result.success)return new Response(null,{status:429,headers:{'retry-after':'60'}});}
+  else if(env.ENVIRONMENT==='production')return new Response(null,{status:503});
+  const reader=request.body?.getReader();if(!reader)return new Response(null,{status:400});
+  let size=0,raw='';const decoder=new TextDecoder();
+  for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>512){await reader.cancel();return new Response(null,{status:413});}raw+=decoder.decode(value,{stream:true});}
+  raw+=decoder.decode();
   const body=JSON.parse(raw);
   if(!body||typeof body!=='object'||Object.keys(body).some(k=>!['id','stage'].includes(k))||!valid(body.id)||!FUNNEL_STAGES.includes(body.stage))return new Response(null,{status:422});
   await recordStoreStage(env.DB,body.id,body.stage);return new Response(null,{status:204,headers:{'cache-control':'no-store'}});

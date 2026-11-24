@@ -1,3 +1,4 @@
+import {v3ServiceWhatsappActions} from './v3-service-reminders.js';
 import {getV3Cancellation} from './v3-paid-cancellation.js';
 // These helpers are reachable only through the authenticated Admin dispatcher.
 import {changeCatalog} from './v3-supplement-changes.js';
@@ -19,7 +20,7 @@ export async function getV3AdminBriefing(db,token){
  brief.cancellation=await getV3Cancellation(db,financialCtx.order.id,{admin:true});
  brief.adminPayment={canCancelPaid:!brief.cancellation&&!financialCtx.order.archived_at&&brief.orderStatus!=='cancelled'&&financialCtx.finance?.payments.some(p=>p.paid_at||['approved','refunded'].includes(p.status)),canChangeDeposit:brief.locked&&brief.payment.method==='pix'&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canCancelUnpaid:brief.locked&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canRecordBalance:!brief.locked&&brief.payment.depositPercent===50&&brief.payment.remainingCents>0};
  if(brief.cancellation){brief.adminPayment={};brief.history=await getV3OrderHistory(db,financialCtx.order.id);}
- if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.supplementCatalog=await supplementCatalog(db,s);line.changeCatalog=await changeCatalog(db,ctx,s);}}
+ if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);const customer=await db.prepare('SELECT name,whatsapp FROM v2_customers WHERE id=?').bind(ctx.order.customer_id).first();for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.supplementCatalog=await supplementCatalog(db,s);line.changeCatalog=await changeCatalog(db,ctx,s);line.whatsappActions=ctx.order.archived_at?[]:v3ServiceWhatsappActions({service:line,customer,order:ctx.order});}}
  return brief;
 }
 export async function reviewV3ServiceBriefing(db,token,family,input={}){

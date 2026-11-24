@@ -10,6 +10,7 @@ import {
   loadV2Catalog,
 } from '../lib/v2-catalog.js';
 import { listAteliePackages } from '../lib/v3-atelie-catalog.js';
+import { productionDaysForQuote } from '../lib/v3-production-policy.js';
 import { buildV2BriefingSimulationSchema } from '../lib/v2-customer-area.js';
 
 import {
@@ -651,6 +652,7 @@ export async function handlePublicV2Api(
 
             pointsUnits:
               quote.pointsUnits,
+            productionDays: productionDaysForQuote(quote),
 
             limit:
               body.limit

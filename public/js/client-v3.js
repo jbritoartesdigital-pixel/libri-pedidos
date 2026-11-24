@@ -205,7 +205,7 @@ function renderCreation() {
     'Escolha um serviço para começar. Você pode reunir outros no mesmo pedido.',
     '<div class="v3-choices-stack">' +
     choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
-    choice('identity','Libri Ateliê · Identidade visual',
+    choice('identity','Identidade Visual para Festas | Libri Ateliê',
       'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
     choice('retrospective','Retrospectiva de fotos e vídeos',
       'Uma homenagem em vídeo com suas lembranças, músicas e dedicatória. Você escolhe conforme a quantidade de fotos e vídeos.',state.creation,'creation') +

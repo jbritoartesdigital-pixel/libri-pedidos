@@ -7,13 +7,14 @@ import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
 import {nowIso} from './http.js';
 
+const terminalStatuses=new Set(['expired','cancelled','rejected']);
 const fail=(message,code)=>{throw new V2CheckoutError(message,{status:409,code});};
-export async function prepareV3Payment(request,env,orderId){
+export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
   if(!Number.isSafeInteger(orderId)||orderId<=0)fail('Pedido inválido.','v3_order_invalid');
   const db=env.DB;
   return withV2PaymentLock(db,orderId,async()=>{
     const row=await db.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.briefing_status,
-       o.event_date,o.delivery_start,o.delivery_end,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
+       o.event_date,o.delivery_start,o.delivery_end,o.archived_at,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
        p.balance_cents,p.payment_method,s.quote_json
        FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
        JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id
@@ -27,25 +28,40 @@ export async function prepareV3Payment(request,env,orderId){
       row.deposit_cents!==row.total_cents||row.deposit_percent!==100||row.balance_cents!==0||
       row.payment_method!==quote.paymentMethod||!['pix','card'].includes(row.payment_method))
       fail('O pedido precisa de revisão antes do pagamento.','v3_order_inconsistent');
-    const existing=(await db.prepare('SELECT provider_order_id,checkout_url,status,amount_cents,method FROM v2_payments WHERE order_id=? ORDER BY id DESC').bind(orderId).all()).results||[];
+    const existing=(await db.prepare('SELECT provider,provider_order_id,checkout_url,status,amount_cents,method FROM v2_payments WHERE order_id=? ORDER BY id DESC').bind(orderId).all()).results||[];
     if(existing.some(x=>x.status==='approved'))return {ok:true,alreadyPaid:true,orderCode:row.order_code};
-    if(!['configuring','awaiting_payment'].includes(row.status)||row.briefing_status!=='locked')
+    if(row.archived_at||!['configuring','awaiting_payment'].includes(row.status)||row.briefing_status!=='locked')
       fail('O pedido não está disponível para cobrança.','v3_payment_unavailable');
     const hold=await db.prepare(`SELECT h.id,h.token,h.status,h.expires_at,
       COALESCE((SELECT SUM(points_units) FROM v2_checkout_hold_allocations WHERE hold_id=h.id),0) AS points
       FROM v2_checkout_holds h WHERE h.order_id=? ORDER BY h.id DESC LIMIT 1`).bind(orderId).first();
-    const liveHold=hold?.status==='active'&&hold.expires_at>nowIso()&&hold.points===quote.pointsUnits;
+    let liveHold=hold?.status==='active'&&hold.expires_at>nowIso()&&hold.points===quote.pointsUnits;
+    const holdCount=Number((await db.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id=?').bind(orderId).first()).n);
+    if(existing.some(x=>x.provider!=='mercado_pago'||!x.provider_order_id||x.amount_cents!==row.total_cents||x.method!==row.payment_method))
+      fail('O histórico financeiro precisa de revisão.','v3_payment_reconciliation_required');
     if(existing.length){
       const pending=existing.filter(x=>x.status==='pending');
-      if(pending.length===1&&existing.length===1&&liveHold&&pending[0].amount_cents===row.total_cents&&
-        pending[0].method===row.payment_method&&pending[0].checkout_url)
+      if(pending.length===1&&existing[0]===pending[0]&&existing.slice(1).every(x=>terminalStatuses.has(x.status))&&
+        holdCount===existing.length&&liveHold&&pending[0].checkout_url)
         return {ok:true,recovered:true,orderCode:row.order_code,providerOrderId:pending[0].provider_order_id,
           checkoutUrl:pending[0].checkout_url,totalCents:row.total_cents};
-      // A new attempt after a terminal or expired payment must reconcile the old
-      // provider order first. Never generate a second provider order here.
-      fail('A tentativa anterior precisa ser conciliada antes de uma nova cobrança.','v3_payment_reconciliation_required');
+      if(!renew||holdCount!==existing.length)
+        fail('A tentativa anterior precisa ser conciliada antes de uma nova cobrança.','v3_payment_reconciliation_required');
+      // Only an explicit renewal may create a new hold after ALL previous
+      // provider orders are confirmed terminal under the same payment lock.
+      for(const p of [...existing].reverse()){
+        const remote=await syncMercadoPagoOrder(env,p.provider_order_id,{lock:false});
+        if(remote.approved)return {ok:true,alreadyPaid:true,orderCode:row.order_code,capacityReview:!!remote.capacityReview};
+        if(!terminalStatuses.has(remote.paymentStatus))
+          fail('O pagamento anterior ainda não foi encerrado.','v3_payment_reconciliation_required');
+      }
+      liveHold=false;
+      await db.prepare("UPDATE v2_checkout_holds SET status='cancelled',updated_at=? WHERE order_id=? AND status='active'").bind(nowIso(),orderId).run();
+    }else if(hold){
+      // Unknown response: do not create another provider order, even if a
+      // payload/configuration change could generate a new idempotency key.
+      fail('A reserva anterior precisa ser conciliada antes de tentar novamente.','v3_hold_reconciliation_required');
     }
-    if(hold&&!liveHold)fail('A reserva anterior precisa ser conciliada antes de tentar novamente.','v3_hold_reconciliation_required');
     if(!liveHold){
       const capacity={eventDate:row.event_date,start:row.delivery_start,end:row.delivery_end,
         pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
@@ -78,24 +94,32 @@ export async function reconcileV3Payment(env,orderId){
     const order=await db.prepare(`SELECT o.status FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
       WHERE o.id=?`).bind(orderId).first();
     if(!order)fail('Pedido combinado não encontrado.','v3_order_missing');
-    const rows=(await db.prepare(`SELECT provider_order_id,status FROM v2_payments
-      WHERE order_id=? AND provider='mercado_pago' ORDER BY id DESC`).bind(orderId).all()).results||[];
+    const rows=(await db.prepare(`SELECT provider_order_id,status,provider,checkout_url,amount_cents,method FROM v2_payments
+      WHERE order_id=? ORDER BY id DESC`).bind(orderId).all()).results||[];
     const hold=await db.prepare('SELECT status,expires_at FROM v2_checkout_holds WHERE order_id=? ORDER BY id DESC LIMIT 1').bind(orderId).first();
-    if(rows.length!==1||!rows[0].provider_order_id)
-      return {ok:false,needsReview:true,reason:rows.length?'ambiguous_payment':'provider_payment_unknown',canRetry:false};
+    const holdCount=Number((await db.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id=?').bind(orderId).first()).n);
+    if(!rows.length&&!hold&&order.status==='configuring')return {ok:true,notStarted:true,canRetry:true};
+    if(!rows.length||holdCount!==rows.length||rows.some(p=>p.provider!=='mercado_pago'||!p.provider_order_id))
+      return {ok:false,needsReview:true,reason:'provider_payment_unknown',canRetry:false};
+    // Inspect oldest first. Old terminal callbacks cannot release a newer
+    // live hold; the V2 synchronizer already guards superseded payments.
+    for(const p of rows.slice(1).reverse()){
+      const remote=await syncMercadoPagoOrder(env,p.provider_order_id,{lock:false});
+      if(remote.approved)return {ok:true,alreadyPaid:true,capacityReview:!!remote.capacityReview,canRetry:false};
+      if(!terminalStatuses.has(remote.paymentStatus))return {ok:false,needsReview:true,reason:'ambiguous_payment',canRetry:false};
+    }
     const providerId=rows[0].provider_order_id;
     let remote=await syncMercadoPagoOrder(env,providerId,{lock:false});
     if(remote.approved)return {ok:true,alreadyPaid:true,capacityReview:!!remote.capacityReview,canRetry:false};
     if(remote.paymentStatus==='pending'){
       if(hold?.status==='active'&&hold.expires_at>nowIso()&&order.status!=='cancelled')
-        return {ok:true,pending:true,canRetry:false};
-      // A cancellation can race a payment approval. Always query the provider
-      // again, including when the cancel request itself fails.
+        return {ok:true,pending:true,checkoutUrl:rows[0].checkout_url,canRetry:false};
+      // A cancellation can race a payment approval. Always query again.
       try{await cancelMercadoPagoOrder(env,providerId);}catch{}
       remote=await syncMercadoPagoOrder(env,providerId,{lock:false});
       if(remote.approved)return {ok:true,alreadyPaid:true,capacityReview:!!remote.capacityReview,canRetry:false};
     }
-    const terminal=['expired','cancelled','rejected'].includes(remote.paymentStatus);
+    const terminal=terminalStatuses.has(remote.paymentStatus);
     return {ok:terminal,needsReview:!terminal,terminal,paymentStatus:remote.paymentStatus,canRetry:false};
   });
 }

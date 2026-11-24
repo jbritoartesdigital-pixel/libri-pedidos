@@ -2,6 +2,7 @@
 // A V2 continua responsável pelo checkout efetivo até a validação integral
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
+import { productionDaysForQuote } from './v3-production-policy.js';
 
 export class V3CartValidationError extends Error {
   constructor(message, code='invalid_cart') {
@@ -80,7 +81,7 @@ export async function quoteV3Cart(db, cart={}) {
       subtotalCents:quote.subtotalCents,
       totalCents:quote.totalCents,
       pointsUnits:quote.pointsUnits,
-      productionDays:Number(quote.productionDays||0)
+      productionDays:productionDaysForQuote(quote)
     });
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);

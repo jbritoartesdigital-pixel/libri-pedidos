@@ -204,7 +204,7 @@ try{
  await admin.screenshot({path:'artifacts/v3-browser/admin-central-desktop.png',fullPage:true});
  await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
  assert.equal(await admin.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(32, 24, 27)');
- await admin.locator('[data-view="orders"]').click();await admin.locator('#viewTitle').filter({hasText:'Pedidos'}).waitFor();await admin.locator('#advancedOrderSearch').waitFor();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('#central-parties-today').count(),0);
+ await admin.locator('[data-view="orders"]').click();await admin.locator('#viewTitle').filter({hasText:'Pedidos'}).waitFor();await admin.locator('#advancedOrderSearch').waitFor();await admin.locator('#central-new').waitFor();await admin.locator('[data-searched-order]').first().waitFor();assert.equal(await admin.locator('#advOrderArchived').inputValue(),'no');assert.equal(await admin.locator('#central-parties-today').count(),0);
  await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-desktop.png',fullPage:true});
  await admin.reload();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
  await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);

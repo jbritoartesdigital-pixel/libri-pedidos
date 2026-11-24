@@ -205,7 +205,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
     </section>
 
     <section class="card admin-order-search" id="advancedOrderSearch">
-      <div class="section-title"><h2>Encontrar um pedido</h2></div>
+      <div class="section-title"><h2>${ordersOnly?'Todos os pedidos':'Encontrar um pedido'}</h2></div>
       <div class="field">
         <label for="advOrderQuery">Nome, WhatsApp ou código</label>
         <input class="input" id="advOrderQuery" type="search"
@@ -241,7 +241,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
           <small class="muted">Ex.: Interativo cinematográfico + 2 cenas.</small>
         </div>
         <div class="field"><label for="advOrderArchived">Arquivados</label><select class="select" id="advOrderArchived">
-          <option value="all">Todos</option><option value="no">Somente ativos</option>
+          <option value="all" ${ordersOnly?'':'selected'}>Todos</option><option value="no" ${ordersOnly?'selected':''}>Somente não arquivados</option>
           <option value="yes">Somente arquivados</option></select></div>
         <div class="field"><label for="advOrderDate">Data exata da festa</label>
           <input class="input" id="advOrderDate" type="date">
@@ -524,13 +524,16 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   const extraFilters = document.getElementById('advancedOrderFilters');
   let searchDebounce;
   let searchRevision = 0;
+  let searchPage = 0;
+  const pageSize=30;
+  const defaultArchived=ordersOnly?'no':'all';
   const filterIds = [
     'advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderDate', 'advOrderFrom', 'advOrderTo',
   ];
   const isFilterActive = () => filterIds.some(id =>
     Boolean(document.getElementById(id)?.value))
-    || document.getElementById('advOrderArchived')?.value !== 'all';
+    || document.getElementById('advOrderArchived')?.value !== defaultArchived;
 
   const refreshFilterIndicator = () => {
     const active = isFilterActive();
@@ -539,14 +542,16 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
       ? 'Mostrar mais filtros • ativos' : 'Mostrar mais filtros';
   };
 
-  async function runOrderSearch() {
+  async function runOrderSearch(page=0) {
+    if(!searchResults.isConnected)return;
+    searchPage=Number.isInteger(page)?Math.max(0,page):0;
     const revision = ++searchRevision;
     clearTimeout(searchDebounce);
     const hasQuery = Boolean(quickSearch?.value.trim());
     const hasExtraFilters = isFilterActive();
     refreshFilterIndicator();
     // Do not fetch (or show) every historical order when the name search is blank.
-    if (!hasQuery && !hasExtraFilters) {
+    if (!ordersOnly && !hasQuery && !hasExtraFilters) {
       searchResults.innerHTML = '';
       return;
     }
@@ -557,13 +562,15 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
     ];
     const params = new URLSearchParams(values.map(([key,id]) =>
       [key, document.getElementById(id).value.trim()]));
+    if(ordersOnly){params.set('limit',String(pageSize+1));params.set('offset',String(searchPage*pageSize));}
     const results = searchResults;
     searchButton.disabled = true;
     results.innerHTML = '<small>Buscando...</small>';
     try {
       const data = await api('/api/admin/v2/orders/search?' + params);
-      if (revision !== searchRevision) return;
-      results.innerHTML = (data.orders || []).map(item => `
+      if (revision !== searchRevision || !results.isConnected) return;
+      const all=data.orders||[],rows=ordersOnly?all.slice(0,pageSize):all;
+      results.innerHTML = rows.map(item => `
         <button class="row-card" type="button" data-searched-order="${esc(item.code)}"
           style="text-align:left;cursor:pointer">
           <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
@@ -574,6 +581,11 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
             • ${esc(item.statusLabel||({awaiting_payment:'Aguardando pagamento',briefing_pending:'Dados pendentes',ready_for_production:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando cliente',adjustments:'Ajustes',approved:'Aprovado',balance_pending:'Saldo pendente',ready_for_delivery:'Pronto para entrega',finalized:'Finalizado',capacity_review:'Agenda em revisão',cancellation_review:'Cancelamento em revisão',cancelled:'Cancelado'})[item.status]||item.status)} ${item.archived ? '• Arquivado' : ''}</small>
           ${item.modular?(item.services||[]).map(s=>`<small><strong>${esc(s.productName||SEARCH_MODEL_LABELS[s.productCode]||s.productCode)}</strong> · ${esc(s.statusLabel||'Aguardando')} ${s.sceneCount>0?'· '+Number(s.sceneCount)+' cenas':''}</small>`).join(''):''}
         </button>`).join('') || empty('Nenhum pedido encontrado.');
+      if(ordersOnly){
+        const controls=document.createElement('div');controls.className='order-pagination';
+        controls.innerHTML='<small>'+(rows.length?'Mostrando '+(searchPage*pageSize+1)+'–'+(searchPage*pageSize+rows.length):'Nenhum resultado')+'</small><div><button type="button" class="btn btn-ghost" data-order-page="prev" '+(!searchPage?'disabled':'')+'>Anterior</button> <button type="button" class="btn btn-secondary" data-order-page="next" '+(all.length<=pageSize?'disabled':'')+'>Próxima</button></div>';
+        results.append(controls);controls.querySelector('[data-order-page="prev"]').onclick=()=>runOrderSearch(searchPage-1);controls.querySelector('[data-order-page="next"]').onclick=()=>runOrderSearch(searchPage+1);
+      }
       results.querySelectorAll('[data-searched-order]').forEach(button =>
         button.addEventListener('click', () => openOrder(button.dataset.searchedOrder)));
     } catch (error) {
@@ -592,7 +604,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
     // a newer search or reappears after clearing the field.
     ++searchRevision;
     if (!quickSearch.value.trim()) {
-      if (isFilterActive()) {
+      if (ordersOnly || isFilterActive()) {
         searchDebounce = setTimeout(runOrderSearch, 350);
       } else {
         searchResults.innerHTML = '';
@@ -622,13 +634,15 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   ['advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderArchived', 'advOrderDate', 'advOrderFrom', 'advOrderTo']
     .forEach(id => document.getElementById(id)
-      ?.addEventListener('change', refreshFilterIndicator));
+      ?.addEventListener('change', ()=>{refreshFilterIndicator();if(ordersOnly){++searchRevision;clearTimeout(searchDebounce);searchDebounce=setTimeout(runOrderSearch,200);}}));
   document.getElementById('clearAdvancedOrderSearch')?.addEventListener('click', () => {
     for (const id of filterIds) document.getElementById(id).value = '';
-    document.getElementById('advOrderArchived').value = 'all';
+    document.getElementById('advOrderArchived').value = defaultArchived;
     refreshFilterIndicator();
     void runOrderSearch();
   });
+
+  if(ordersOnly)void runOrderSearch();
 
   viewRoot
     .querySelectorAll('[data-open-order]')

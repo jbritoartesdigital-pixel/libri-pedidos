@@ -68,3 +68,5 @@ V80 confirmada no run 45471175718. Decisão recuperada: Central, Pedidos, Produ�
 V82: financeiro segmentado e correção de regex de abertura de pedido, produção com abas por família, agenda com ferramentas avançadas contextualizadas, catálogo com variantes recolhíveis, ficha V3 com Alterações separadas e ação por estado. Pendências: validar Chromium, admin de retrospectivas (catálogo próprio não é igual ao addon legado), fluxo manual, ficha legada, contraste de componentes específicos e testes da loja. Não alterar preços ou política de venda.
 
 V83: catálogo de retrospectivas real disponível no Admin em leitura autenticada. O gate atual de release impede edição comercial fora da especificação e reativa pacotes pausados; gestão de preço/pausa precisa decisão e correção do gate, não foi alterada. Tests de acesso e navegação ampliados.
+
+V84: corrigida ausência de listagem inicial real de Pedidos; paginação e filtros efetivos, não apenas fila modular parcial. Backend busca com parâmetros validados. Verificar CI e capturas antes de declarar concluído.

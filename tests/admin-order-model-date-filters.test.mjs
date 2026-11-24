@@ -104,3 +104,5 @@ test('painel mantém filtros recolhidos e oferece data exata, intervalo e cenas'
   assert.match(central,/item\.sceneCount/);
   assert.match(central,/data-searched-order/);
 });
+
+ test('paginação administrativa mantém ordem e filtros sem repetir pedidos',async()=>{const DB=fixtures();const expected=await searchV2AdminOrders(DB,{archived:'no'});const a=await searchV2AdminOrders(DB,{archived:'no',limit:3,offset:0});const b=await searchV2AdminOrders(DB,{archived:'no',limit:3,offset:3});assert.deepEqual(codes([...a,...b]),codes(expected));await assert.rejects(searchV2AdminOrders(DB,{limit:101}),/Página/);await assert.rejects(searchV2AdminOrders(DB,{offset:-1}),/Página/);});

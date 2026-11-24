@@ -88,15 +88,21 @@ async function manualUpsell(db,row,r){
  const line=data.items[index],previous=old.items.find(i=>i.family==='convite');
  if(!previous)return null;
  const catalogue=await loadV2Catalog(db),owned=new Set(line.addonCodes||[]),groups=new Set(catalogue.addons.filter(a=>owned.has(a.code)).map(a=>a.group));
- const names={confirmation:'Acompanhe as confirmações de presença em um painel.',save_the_date:'Avise a data aos convidados com antecedência.',reminder:'Relembre os convidados perto da festa.',moments:'Reúna as fotos dos convidados em um álbum digital.'};
+ const names={filter:'Ofereça um filtro personalizado na câmera Libri.',confirmation:'Acompanhe as confirmações de presença em um painel.',save_the_date:'Avise a data aos convidados com antecedência.',reminder:'Relembre os convidados perto da festa.',moments:'Reúna as fotos dos convidados em um álbum digital.'};
  const candidates=[];
  const target={cinematic_video:'cinematic_interactive',interactive_essential:'interactive_animated'}[line.productCode];
  const product=catalogue.products.find(p=>p.code===target),v=product?.variants.find(v=>target==='cinematic_interactive'?Number(v.sceneCount)===Number(previous.commercialSnapshot.variant.sceneCount):true);
  if(v)candidates.push({key:'upgrade:'+v.code,title:target==='cinematic_interactive'?'Que tal deixar seu vídeo interativo?':'Que tal uma abertura animada?',description:target==='cinematic_interactive'?'A mesma quantidade de cenas, com acesso às informações da festa pelo convite.':'Uma animação especial revela a arte do convite.',line:{...line,productCode:target,variantCode:v.code}});
- for(const group of ['confirmation','save_the_date','reminder','moments']){
-  if(groups.has(group)||group==='confirmation'&&line.productCode==='cinematic_video'||group==='moments'&&groups.has('filter'))continue;
+ for(const group of ['confirmation','filter','moments','save_the_date','reminder']){
+  if(groups.has(group)||group==='filter'&&groups.has('moments')||group==='confirmation'&&line.productCode==='cinematic_video'||group==='moments'&&groups.has('filter'))continue;
   const a=catalogue.addons.filter(a=>a.group===group&&!owned.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
   if(a)candidates.push({key:'addon:'+a.code,title:'Gostaria de adicionar '+a.name+'?',description:names[group],line:{...line,addonCodes:[...owned,a.code]}});
+ }
+ if(line.productCode!=='cinematic_video'){
+  const confirmation=candidates.findIndex(c=>c.key.startsWith('addon:')&&catalogue.addons.some(a=>a.group==='confirmation'&&c.key==='addon:'+a.code));
+  if(confirmation>0)candidates.unshift(candidates.splice(confirmation,1)[0]);
+  const filter=candidates.findIndex(c=>catalogue.addons.some(a=>a.group==='filter'&&c.key==='addon:'+a.code));
+  if(confirmation<0&&filter>0)candidates.unshift(candidates.splice(filter,1)[0]);
  }
  for(const c of candidates.slice(0,4)){
   try{

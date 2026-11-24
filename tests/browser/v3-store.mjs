@@ -143,7 +143,7 @@ try{
  const liveBlack=await pageFor(390,844);const bp=liveBlack.page;
  await bp.setExtraHTTPHeaders({'x-libri-test-black':'1'});
  await click(bp,'event','birthday');await click(bp,'creation','invitation');await click(bp,'intent','simple');await click(bp,'product','interactive_essential');await click(bp,'guided-finish');
- await bp.locator('#v3-modal [data-action="dismiss-offer"],#v3-modal [data-action="added-view"]').first().waitFor();if(await bp.locator('[data-action="dismiss-offer"]').count())await click(bp,'dismiss-offer');await click(bp,'added-view');
+ await bp.locator('#v3-offer-title').waitFor();assert.match(await bp.locator('#v3-offer-title').innerText(),/confirmações em um painel/);const originalDraft=await bp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).addonCodes);await click(bp,'dismiss-offer');await click(bp,'added-view');assert.deepEqual(await bp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).cartItems[0].addonCodes),originalDraft);
  await click(bp,'cart-unified-checkout');await bp.locator('#v3-app[aria-busy="false"]').waitFor();await bp.locator('#v3c-eventDate').fill(day(65));await bp.locator('[name="deliveryWindow"]').first().waitFor();await bp.locator('#v3-app[aria-busy="false"]').waitFor();
  await bp.locator('#v3c-name').fill('Cliente teste');await bp.locator('#v3c-whatsapp').fill('5561987654321');await bp.locator('#v3c-honoreeName').fill('Festa teste');
  await bp.locator('[data-v3-term]').first().check();await bp.locator('#v3-unified-checkout button[type="submit"]').click();
@@ -196,6 +196,20 @@ try{
  await rp.locator('[data-action="retro-buy"]').first().click();await click(rp,'added-view');await rp.locator('[data-action="cart-unified-checkout"]').waitFor();
  assert.equal(await rp.locator('.v3-cart-item').count(),1);await checkout(rp);
  await rp.screenshot({path:'artifacts/v3-browser/retro-checkout-mobile.png',fullPage:true});await standalone.context.close();
+ // A real eligible combo must outrank a decorative upgrade; never advertise a zero discount.
+ const oldCombos=db.sqlite.prepare('SELECT code,discount_type,discount_value FROM v2_combos').all();
+ try{
+  db.sqlite.exec("UPDATE v2_combos SET discount_type='percent',discount_value=CASE WHEN code='organizacao' THEN 10 ELSE 0 END");
+  const comboCase=await pageFor(390,844);const cp=comboCase.page;
+  await click(cp,'event','birthday');await click(cp,'creation','invitation');await click(cp,'intent','simple');await click(cp,'product','interactive_essential');
+  await click(cp,'guided-options','reminder');await cp.locator('#v3-modal [data-action="guided-addon"][data-value="reminder_static"]').click();
+  await cp.locator('[data-action="guided-options"][data-value="reminder"][aria-pressed="true"]').waitFor();
+  await click(cp,'guided-finish');await cp.locator('#v3-offer-title').waitFor();
+  assert.match(await cp.locator('#v3-offer-title').innerText(),/Complete o combo Organização/);
+  await click(cp,'accept-offer');await click(cp,'added-view');await cp.locator('[data-action="cart-unified-checkout"]').waitFor();
+  const comboDraft=await cp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).cartItems[0]);assert.equal(comboDraft.comboCode,'organizacao');assert.equal(comboDraft.addonCodes.length,2);assert.ok(comboDraft.addonCodes.includes('reminder_static'));
+  await comboCase.context.close();
+ }finally{for(const c of oldCombos)db.sqlite.prepare('UPDATE v2_combos SET discount_type=?,discount_value=? WHERE code=?').run(c.discount_type,c.discount_value,c.code);}
  // Actual private shell, actual persisted three-family briefing.
  const privateContext=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
  await privateContext.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());

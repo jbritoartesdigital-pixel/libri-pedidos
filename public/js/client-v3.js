@@ -57,8 +57,8 @@ const ADDON_GROUPS = [
   ['save_the_date', 'Save the Date', 'Uma arte extra para avisar a data da festa com antecedência.'],
   ['reminder', 'Lembrete da festa', 'Uma arte para enviar quando a comemoração estiver chegando.'],
   ['confirmation', 'Formulário de confirmação de presença personalizado', 'Os convidados respondem pelo convite e você acompanha tudo em um painel, sem lotar seu WhatsApp.'],
-  ['moments', 'Álbum de fotos', 'Seus convidados registram e compartilham os momentos da festa em um álbum digital. Inclui filtro personalizado.'],
-  ['filter', 'Filtro de fotos personalizado', 'Um efeito com o tema da festa para tirar fotos na câmera Libri.']
+  ['filter', 'Filtro de fotos personalizado', 'Um efeito com o tema da festa para tirar fotos na câmera Libri.'],
+  ['moments', 'Álbum de fotos', 'Seus convidados registram e compartilham os momentos da festa em um álbum digital. Inclui filtro personalizado na câmera Libri.']
 ];
 const INTERACTIVE = new Set([
   'cinematic_interactive', 'interactive_essential', 'interactive_gif',
@@ -594,7 +594,7 @@ function openAddonGroup(group,guided=false) {
   const explanations = {
     save_the_date:'Escolha se prefere uma imagem sem movimento ou uma pequena animação.',
     reminder:'Escolha se prefere uma imagem sem movimento ou uma pequena animação.',
-    moments:'Escolha um plano conforme a quantidade de fotos e o período em que o álbum ficará disponível.',
+    moments:'Escolha um plano conforme a quantidade de fotos e o período em que o álbum ficará disponível. O filtro da câmera Libri está incluído.'+(hasGroup('filter')?' O filtro avulso será substituído pelo filtro incluído no álbum, e o valor será recalculado.':'') ,
     confirmation:'O convidado responde no próprio convite, e você acompanha as confirmações em um painel.',
     filter:'O filtro personalizado já vem incluído no álbum de fotos.'
   };
@@ -617,35 +617,72 @@ function variantFor(productCode, sceneCount) {
 async function determineOffer() {
   if (!quote || state.offerFinished) return null;
   const current = state.productCode;
+  const available = availableGroups()
+    .filter(g => !hasGroup(g[0]) && !state.dismissed.includes('addon:'+g[0]));
+  // When one compatible additional choice unlocks a better official combo,
+  // show the actual benefit first. Never promise a discount from the catalogue alone.
+  const ownedGroups=new Set(selectedAddons().map(a=>a.group));
+  const eligibleGroups=new Set(available.map(g=>g[0]));
+  const preferredGroup=INTERACTIVE.has(current)?['confirmation','filter','moments'].find(g=>eligibleGroups.has(g)):null;
+  const comboCandidates=new Map();
+  for(const combo of catalog?.combos||[]){
+    if(!ownedGroups.size||Number(combo.discountValue||0)<=0)continue;
+    const missing=(combo.items||[]).filter(item=>item.required!==false&&!(
+      item.itemType==='addon_group'&&ownedGroups.has(item.itemCode)||
+      item.itemType==='addon'&&state.addonCodes.includes(item.itemCode)||
+      item.itemType==='main_product'&&current===item.itemCode));
+    if(missing.length!==1)continue;
+    const m=missing[0];
+    if(!['addon','addon_group'].includes(m.itemType))continue;
+    const options=catalog.addons.filter(a=>eligibleGroups.has(a.group)&&(!preferredGroup||a.group===preferredGroup)&&
+      (m.itemType==='addon'?a.code===m.itemCode:a.group===m.itemCode))
+      .filter(a=>a.group!=='moments'||!ownedGroups.has('filter'))
+      .sort((a,b)=>a.priceCents-b.priceCents);
+    if(options[0])comboCandidates.set(options[0].code,options[0]);
+  }
+  const offers=[];
+  for(const addon of comboCandidates.values()){
+    try{
+      const alternative=await priceFor(current,state.variantCode,[...state.addonCodes,addon.code]);
+      const gain=Number(alternative.comboDiscountCents||0)-Number(quote.comboDiscountCents||0);
+      if(gain<=0||!alternative.combo?.name)continue;
+      offers.push({id:'addon:'+addon.group,kind:'addon',addonCode:addon.code,
+        delta:alternative.totalCents-quote.totalCents,gain,
+        title:'Complete o combo '+alternative.combo.name,
+        description:'Adicione '+addon.name+' e aproveite '+money(gain)+' a mais de desconto no convite. O valor abaixo já considera o desconto.'});
+    }catch{/* Invalid or unavailable combos never block checkout. */}
+  }
+  if(offers.length)return offers.sort((a,b)=>a.delta-b.delta||b.gain-a.gain)[0];
+  // Interactive customers already have WhatsApp confirmation for free.
+  // Recommend the optional managed form before any decorative upgrade.
+  const confirmation=INTERACTIVE.has(current)&&available.find(g=>g[0]==='confirmation');
+  if(confirmation){
+    const addon=catalog.addons.filter(a=>a.group==='confirmation').sort((a,b)=>a.priceCents-b.priceCents)[0];
+    if(addon){
+      try{
+        const alternative=await priceFor(current,state.variantCode,[...state.addonCodes,addon.code]);
+        return {id:'addon:confirmation',kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
+          title:'Quer acompanhar as confirmações em um painel?',
+          description:'A confirmação pelo WhatsApp continua grátis. Com o formulário personalizado, os convidados respondem pelo convite e você acompanha tudo em um painel.'};
+      }catch{/* An unavailable suggestion never blocks the original purchase. */}
+    }
+  }
   if (current === 'cinematic_video' && !state.dismissed.includes('upgrade:cinematic_interactive')) {
     const item = variantFor('cinematic_interactive',currentVariant()?.sceneCount);
     if (item) {
-      const alternative = await priceFor('cinematic_interactive',item.code,state.addonCodes);
-      return {
-        id:'upgrade:cinematic_interactive',kind:'upgrade',
-        title:'Que tal deixar seu vídeo interativo?',
-        description:'O mesmo vídeo e as mesmas cenas. No final, os convidados poderão tocar nos botões para acessar as informações da festa.',
-        productCode:'cinematic_interactive',variantCode:item.code,
-        delta:alternative.totalCents-quote.totalCents
-      };
+      try{
+        const alternative = await priceFor('cinematic_interactive',item.code,state.addonCodes);
+        return {
+          id:'upgrade:cinematic_interactive',kind:'upgrade',
+          title:'Que tal deixar seu vídeo interativo?',
+          description:'O mesmo vídeo e as mesmas cenas. No final, os convidados poderão tocar nos botões para acessar as informações da festa.',
+          productCode:'cinematic_interactive',variantCode:item.code,
+          delta:alternative.totalCents-quote.totalCents
+        };
+      }catch{/* Continue to eligible add-ons. */}
     }
   }
-  if (current === 'interactive_essential' && !state.dismissed.includes('upgrade:interactive_animated')) {
-    const product = getProduct('interactive_animated');
-    const variant = product?.variants?.[0];
-    if (variant) {
-      const alternative = await priceFor(product.code, variant.code, state.addonCodes);
-      return {
-        id:'upgrade:interactive_animated',kind:'upgrade',
-        title:'Quer uma abertura animada para seu convite?',
-        description:'Seu convite continua com os mesmos recursos. Só acrescentamos uma pequena animação especial antes de mostrar a arte principal.',
-        productCode:product.code,variantCode:variant.code,
-        delta:alternative.totalCents-quote.totalCents
-      };
-    }
-  }
-  const available = availableGroups()
-    .filter(g => !hasGroup(g[0]) && !state.dismissed.includes('addon:'+g[0]));
+
   const groups = new Set(selectedAddons().map(a=>a.group));
   const currentCode = state.productCode;
   const nearCombo = (catalog?.combos || []).filter(c=>Number(c.discountValue||0)>0).map(c=>{
@@ -656,9 +693,9 @@ async function determineOffer() {
     return {combo:c,missing};
   }).filter(x=>x.missing.length===1);
   const ranked = available.sort((a,b)=>{
-    const preference = {moments:5,confirmation:4,save_the_date:3,reminder:2,filter:1};
-    const nearA=nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
-    const nearB=nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
+    const preference = {confirmation:5,filter:4,moments:3,save_the_date:2,reminder:1};
+    const nearA=!preferredGroup&&nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
+    const nearB=!preferredGroup&&nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
     return (nearB+(preference[b[0]]||0))-(nearA+(preference[a[0]]||0));
   });
   for (const group of ranked) {
@@ -670,13 +707,29 @@ async function determineOffer() {
       .filter(c=>group[0]!=='moments'||c!=='custom_filter');
     try {
       const alternative = await priceFor(currentCode,state.variantCode,nextCodes);
-      const combo = alternative.combo?.name;
+      const combo = Number(alternative.comboDiscountCents||0)>Number(quote.comboDiscountCents||0)?alternative.combo?.name:null;
       return {
         id:'addon:'+group[0],kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
         title:combo ? 'Complete o pacote '+combo : 'Gostaria de acrescentar '+group[1]+'?',
-        description:group[2]+(combo?' Com essa escolha, o desconto do pacote já entra no cálculo.':'')
+        description:group[2]+(group[0]==='moments'&&ownedGroups.has('filter')?' O álbum substitui o filtro avulso pelo filtro incluído na câmera Libri; a diferença abaixo já desconta o filtro avulso.':'')+(combo?' Com essa escolha, o desconto do pacote já entra no cálculo.':'')
       };
     } catch { /* Ignorar somente uma oferta inválida. */ }
+  }
+  if (current === 'interactive_essential' && !state.dismissed.includes('upgrade:interactive_animated')) {
+    const product = getProduct('interactive_animated');
+    const variant = product?.variants?.[0];
+    if (variant) {
+      try{
+        const alternative = await priceFor(product.code, variant.code, state.addonCodes);
+        return {
+          id:'upgrade:interactive_animated',kind:'upgrade',
+          title:'Quer uma abertura animada para seu convite?',
+          description:'Seu convite continua com os mesmos recursos. Só acrescentamos uma pequena animação especial antes de mostrar a arte principal.',
+          productCode:product.code,variantCode:variant.code,
+          delta:alternative.totalCents-quote.totalCents
+        };
+      }catch{/* Continue to eligible add-ons. */}
+    }
   }
   return null;
 }
@@ -734,7 +787,7 @@ async function handleStoreClick(event) {
     if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
+    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

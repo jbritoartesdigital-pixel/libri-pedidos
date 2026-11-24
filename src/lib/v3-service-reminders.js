@@ -57,3 +57,28 @@ export async function runV3ApprovalReminders(env,{now=new Date(),limit=30}={}){
  }catch{result.failed++;}}
  return result;
 }
+
+export async function runV3DeliveryDeadlineReminders(env,{now=new Date(),limit=30}={}){
+ const db=env.DB,stamp=now.toISOString();
+ const tomorrow=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now.getTime()+DAY));
+ const result={created:0,resolved:0,failed:0};
+ const stale=await db.prepare(`UPDATE v2_notifications SET resolved_at=?,read_at=COALESCE(read_at,?)
+ WHERE event_code='V3_SERVICE_DELIVERY_DUE' AND resolved_at IS NULL AND NOT EXISTS(
+ SELECT 1 FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id
+ WHERE s.production_status NOT IN ('delivered','cancelled') AND s.scheduled_at IS NOT NULL AND o.status!='cancelled' AND o.archived_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
+ AND v2_notifications.dedupe_key='v3-due:'||s.id||':'||s.delivery_end)`).bind(stamp,stamp).run();
+ result.resolved=Number(stale.meta?.changes||0);
+ const rows=(await db.prepare(`SELECT s.id,s.family,s.delivery_end,o.id AS order_id,o.order_code
+ FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id
+ WHERE s.production_status NOT IN ('delivered','cancelled') AND s.scheduled_at IS NOT NULL AND s.delivery_end<=?
+ AND o.status!='cancelled' AND o.archived_at IS NULL AND o.briefing_status!='locked'
+ AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
+ AND NOT EXISTS(SELECT 1 FROM v2_notifications n WHERE n.dedupe_key='v3-due:'||s.id||':'||s.delivery_end)
+ ORDER BY s.delivery_end,s.id LIMIT ?`).bind(tomorrow,Math.max(1,Math.min(100,Number(limit)||30))).all()).results||[];
+ for(const r of rows){try{
+  const notice=await createV2AdminNotification(env,{eventCode:'V3_SERVICE_DELIVERY_DUE',orderId:r.order_id,title:'Prazo de entrega do serviço',body:r.order_code+' · '+(labels[r.family]||r.family)+' · '+r.delivery_end.split('-').reverse().join('/')+'. Confira a produção e a aprovação.',priority:'high',actionUrl:'/admin-v2?order='+encodeURIComponent(r.order_code),dedupeKey:'v3-due:'+r.id+':'+r.delivery_end,pushEligible:true});
+  if(notice.created)result.created++;
+ }catch{result.failed++;}}
+ return result;
+}

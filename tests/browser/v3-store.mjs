@@ -26,8 +26,8 @@ const server=createServer(async(req,res)=>{
    res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));return;
   }
   const p=url.pathname==='/loja'?'client-v3.html':url.pathname.slice(1);
-  if(!/^(client-v3\.html|(?:js|css)\/[a-z0-9_.-]+)$/.test(p)){res.writeHead(404);res.end();return;}
-  const mime=p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html';
+  if(!/^(client-v3\.html|(?:js|css|images)\/[a-z0-9_.-]+)$/.test(p)){res.writeHead(404);res.end();return;}
+  const mime=p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':p.endsWith('.png')?'image/png':'text/html';
   res.writeHead(200,{'content-type':mime});res.end(await readFile(path.join('public',p)));
  }catch(e){console.error(e);if(!res.headersSent)res.writeHead(500);res.end('fixture error');}
 });
@@ -63,6 +63,8 @@ async function checkout(p){
  await click(p,'cart-unified-checkout');
  await p.locator('#v3-unified-checkout').waitFor();
  assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));
+ await p.locator('#v3-app[aria-busy="false"]').waitFor();
+ await p.locator('[data-v3-checkout="agenda"]').scrollIntoViewIfNeeded();
  await p.locator('[data-v3-checkout="agenda"]').click();
  await p.locator('[name="deliveryWindow"]').first().waitFor();
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);

@@ -7,9 +7,9 @@ const day=v=>String(v).split('-').reverse().join('/');
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
-export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBack}){
+export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',request,onBack}){
   trackStoreStage('dados');
-  const cart={items:JSON.parse(JSON.stringify(items)),eventType};
+  const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
   let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
   let blackChecked=false,blackClaim=null,checkingBlack=false;
@@ -36,6 +36,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
   }
   function render(){
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
+    document.getElementById('v3-landing')?.setAttribute('hidden','');
     root.innerHTML='<section class="v3-panel"><span class="v3-eyebrow">Libri · contratação</span><h1 class="v3-title">Finalizar seu pedido</h1><p class="v3-text">Um pagamento, acompanhamento individual dos serviços.</p>'+
       (!enabled?'<div class="v3-notice">Prévia do novo checkout. O pagamento ainda não está liberado.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+

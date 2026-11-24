@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 51 | 24/11/2026 (Brasil)
+Versão 52 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -353,3 +353,7 @@ AUDITORIA INTEGRAL — V50/V51
 - Fonte recuperada: plano original, correções nas conversas, TXT, código. Matriz de decisão/evidência/pendência em docs/LIBRI_PEDIDOS_V3_AUDITORIA_INTEGRAL.md. Não confundir CI com aprovação visual ou entrega integral.
 - V49 CI 45421872762 aprovado. 3657e7f unificou o checkout público V3 para um ou mais serviços, manteve rotas V2 intactas; data de festa preservada do carrinho ao checkout; corrigiu concorrência do recálculo; adicionou browser real no workflow já existente, isolado com dados de teste e sem pagamentos. CI 45423470153 encontrou guard de pedidos avulsos no servidor. 74dc404 removeu somente guard específico mantendo demais validações; extras do Ateliê/Retro viraram perguntas por intenção e quantidades, sem alterar valores, com cotação antes de aceite e sem cobrança. V51 resumo de carrinho combinado cotado continuamente pelo servidor, edição do carrinho sem perda silenciosa dos extras, confirmação antes de substituir pacote, proteção de cliques concorrentes. Teste browser estendido para modal de adicionais, edição e checkout avulso. CI final a verificar.
 - Lacuna de urgência V3: V2 possui solicitação de urgência e taxa aprovada de 30%; V3 agenda retorna needsUrgencyReview mas não tem solicitação integrada. Bloqueador de publicação. Não reduzir mínimo de 15 dias Ateliê/Retro nem cobrar urgência sem aprovação/capacidade. Pendências adicionais na matriz. Sem merge, publicação ou flags ativadas. Próximo: confirmar CI/browser, resolver urgência e demais bloqueadores, testar área cliente/Admin de verdade. Evitar novas microaprovações, preservar decisões aprovadas.
+
+
+V52 — FONTES VISUAIS MAIS RECENTES, NÃO O PRIMEIRO PROTÓTIPO
+Recuperação posterior confirmou HTML de 20:40 com marcas oficiais e abertura cinematográfica escura; imagem PNG wordmark e emblema extraídos diretamente do arquivo da biblioteca, sem inventar marca. Aplicados no código real, paleta do protótipo posterior, estrutura do resumo e escolhas de subtipo (chá de panela/bebê/revelação, formatura e bodas; mantém enum V2 e salva eventSubtype no checkout). Reforça R$ total e mensagem pronta/toque Enviar. CI V51 45424092816 passou backend/migrations e falhou em estabilidade do clique de agenda no navegador. Ajuste do teste de espera/scroll; CI final ainda não confirmado. Não confundir recuperação parcial de conversas com leitura completa. Privacidade/cookies, exemplos e urgência permanecem bloqueadores. Sem publicação.

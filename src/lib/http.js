@@ -47,7 +47,7 @@ export function normalizeDigits(value = '') {
 
 export function normalizeWhatsapp(value = '') {
   let digits = normalizeDigits(value);
-  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
+  if (!String(value??'').trim().startsWith('+') && (digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
     digits = `55${digits}`;
   }
   return digits;

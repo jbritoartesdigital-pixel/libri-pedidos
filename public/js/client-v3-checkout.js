@@ -4,13 +4,6 @@ import {trackStoreStage,storeJourneyId,finishStoreJourney} from './store-funnel.
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
 const day=v=>String(v).split('-').reverse().join('/');
-function windowEndingOn(end){
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(end))return null;
-  const date=new Date(end+'T00:00:00Z');
-  if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==end)return null;
-  date.setUTCDate(date.getUTCDate()-2);
-  return {start:date.toISOString().slice(0,10),end};
-}
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
@@ -19,7 +12,6 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
   let form={name:String(preferredName||'').trim().slice(0,60),whatsapp:'',email:'',instagram:'',honoreeName:'',...contactDraft,eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
-  let requestedEnd='',deliveryFeedback='';
   let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false,blackConflict=false;
   const hasInvite=cart.items.some(i=>! /^(atelie_|retrospectiva)/.test(i.productCode));
   const blackSelection=()=>blackClaim?{blackLibriClaimId:blackClaim.id,clientRequestId:attemptKey,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email}}:{};
@@ -28,7 +20,6 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     for(const k of ['name','whatsapp','instagram','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
-    const custom=root.querySelector('[name="requestedDeliveryEnd"]');if(custom)requestedEnd=custom.value;
     const checked=root.querySelector('[name="deliveryWindow"]:checked');
     if(checked)form.deliveryWindow=options[Number(checked.value)]||null;
     accepted=new Set(Array.from(root.querySelectorAll('[data-v3-term]:checked'),x=>x.value));
@@ -85,24 +76,6 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
         if(!options.length&&!urgentQuote)error='Não há uma janela automática para esta data. Consulte a Libri antes de contratar.';
       }
     }catch(e){error=e.message;quote=null;}finally{busy=false;render();}
-  }
-  async function checkCustomDelivery(){
-    if(busy||attempt||!options.length)return;
-    readForm();deliveryFeedback='';
-    const window=windowEndingOn(requestedEnd);
-    if(!window||!form.eventDate||window.end>=form.eventDate){deliveryFeedback='Informe uma data válida antes do evento.';render();return;}
-    const existing=options.find(o=>o.start===window.start&&o.end===window.end);
-    if(existing){form.deliveryWindow=existing;deliveryFeedback='Janela selecionada.';render();return;}
-    busy=true;render();
-    try{
-      const result=await request('/api/v3/cart/delivery-options',{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode,...blackSelection(),eventDate:form.eventDate,deliveryWindow:window});
-      const selected=result.delivery.selected;
-      if(selected?.start!==window.start||selected?.end!==window.end)throw Error('Não foi possível confirmar essa janela.');
-      options=[...options,selected];form.deliveryWindow=selected;quote=result.quote;
-      deliveryFeedback='Janela disponível e selecionada. A reserva ocorre na contratação.';
-      trackStoreStage('agenda');
-    }catch(e){deliveryFeedback=(e.message||'Data indisponível.')+' Escolha outra data.';}
-    finally{busy=false;render();}
   }
   async function pay(){
     if(busy||checkingBlack||!enabled)return;
@@ -165,16 +138,15 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     if(action==='back'&&!busy&&!attempt){readForm();detach();onBack({name:form.name,whatsapp:form.whatsapp,instagram:form.instagram,honoreeName:form.honoreeName,eventDate:form.eventDate});}
 
     if(action==='coupon')refresh({agenda:!!form.eventDate});
-    if(action==='custom-delivery')checkCustomDelivery();
     if(action==='black-recover')recoverBlack();
     if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);root.addEventListener('focusin',observeStage);root.addEventListener('pointerdown',observeStage);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;
     if(e.target.name==='whatsapp'&&!blackClaim){blackChecked=false;blackConflict=false;}
-    if(e.target.name==='eventDate'){readForm();requestedEnd='';deliveryFeedback='';options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
+    if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
     if(e.target.name==='urgencyAccepted'){readForm();render();return;}
-    if(e.target.name==='deliveryWindow'){readForm();deliveryFeedback='';trackStoreStage('agenda');}
+    if(e.target.name==='deliveryWindow'){readForm();trackStoreStage('agenda');}
     if(e.target.hasAttribute('data-v3-term')){readForm();trackStoreStage('revisao');}
     if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh({agenda:!!form.eventDate});}
   }

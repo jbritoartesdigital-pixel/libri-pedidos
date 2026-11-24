@@ -1,4 +1,4 @@
-import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision} from '../lib/v3-order-revisions.js';
+import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/v3-service-supplements.js';
@@ -86,6 +86,16 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+ const manual=url.pathname.match(/^\/api\/admin\/v2\/orders\/v3\/manual\/(catalog|preview|create)$/);
+ if(manual){
+  if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Pedido manual V3 ainda indisponível.',503);
+  try{
+   const action=manual[1];if(action==='catalog'&&request.method==='GET')return json({ok:true,result:await getV3RevisionEditor(env.DB)});
+   if(request.method!=='POST'||action==='catalog')return fail('Método não permitido.',405);
+   const body=await boundedJson(request);
+   return json({ok:true,result:action==='preview'?await previewV3ManualOrder(env.DB,body):await createV3ManualOrder(env,body)});
+  }catch(e){return errorResponse(e);}
+ }
  const revision=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/revision\/(editor|preview|create|withdraw)$/);
  if(revision){
   if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Editor V3 ainda indisponível.',503);

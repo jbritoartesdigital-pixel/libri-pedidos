@@ -39,7 +39,7 @@ function canonicalItems(items){
       addonCodes:[...new Set(item.addonCodes??[])].sort(),extras:normalizeV3ExtraSelection(item.extras),comboCode:item.comboCode||''};
   }).sort((a,b)=>a.productCode.localeCompare(b.productCode));
 }
-export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={},contactSnapshot=null}){
+export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={},contactSnapshot=null,manualDraft=null}){
   // customerId, orderCode and publicToken must come from the trusted checkout
   // orchestrator, never from a public JSON payload.
   if(!Number.isSafeInteger(customerId)||customerId<=0)fail('Cliente inválida.','order_customer_invalid');
@@ -47,7 +47,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     fail('Identificador do pedido inválido.','order_identity_invalid');
   const requestKey=required(body?.clientRequestId,120,'Tentativa');
   if(!/^[a-zA-Z0-9_-]{12,120}$/.test(requestKey))fail('Tentativa inválida.','order_request_invalid');
-  if(body.termsAccepted!==true)fail('Aceite as condições do pedido.','terms_required');
+  if(!manualDraft&&body.termsAccepted!==true)fail('Aceite as condições do pedido.','terms_required');
   if(body.comboCode)fail('Descontos conjuntos ainda não estão configurados.','cart_promotion_pending');
   if(!['pix','card'].includes(body.paymentMethod))fail('Escolha Pix ou cartão.','order_payment_invalid');
   if(!Number.isSafeInteger(body.expectedTotalCents)||body.expectedTotalCents<=0)fail('Confira o total do pedido.','order_total_invalid');
@@ -57,11 +57,11 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const items=canonicalItems(body.items);
   const couponCode=normalizeV3Coupon(body.couponCode);
   const blackLibriClaimId=body.blackLibriClaimId||'';
-  if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
+  if(!manualDraft&&items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
-  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),...(blackLibriClaimId?{blackLibriClaimId}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
+  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),...(blackLibriClaimId?{blackLibriClaimId}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(manualDraft?{manualDraft}:{}),...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
   const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode,blackLibriClaimId,customer:body.customer,clientRequestId:requestKey},{includeSnapshots:true,requireSale:true,customerId});
@@ -90,8 +90,11 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const plan=await planV2AllocationForWindow(db,capacity);
   if(!plan.fits)fail('A agenda mudou. Escolha outra janela.','order_capacity_unavailable');
   const stamp=new Date().toISOString();
+  const percent=manualDraft?.depositPercent||100;
+  if(![50,100].includes(percent)||percent===50&&body.paymentMethod!=='pix')fail('Entrada inválida.','order_payment_invalid');
+  const deposit=percent===50?Math.ceil(quote.totalCents/2):quote.totalCents;
   const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,...(contactSnapshot?{contactSnapshot}:{}),
-    payment:{method:quote.paymentMethod,depositPercent:100,depositCents:quote.totalCents,balanceCents:0},
+    payment:{method:quote.paymentMethod,depositPercent:percent,depositCents:deposit,balanceCents:quote.totalCents-deposit},
     comboDiscountCents:quote.discountCents-quote.couponDiscountCents,couponDiscountCents:quote.couponDiscountCents};
   // No existing V2 payment endpoint can reach this internal helper. Until the
   // shared orchestrator is finished, the order is only a configuring record.
@@ -99,21 +102,27 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const statements=[
     db.prepare(`INSERT INTO v2_orders(order_code,public_token,customer_id,event_type,event_subtype,honoree_display_name,event_date,
        status,next_action,delivery_start,delivery_end,urgency_enabled,briefing_status,source,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,'configuring','Preparando contratação conjunta',?,?,0,'locked','store',?,?)`)
-       .bind(orderCode,publicToken,customerId,event.type,event.subtype,event.honoree,event.date,delivery.start,delivery.end,stamp,stamp),
+       VALUES(?,?,?,?,?,?,?,'configuring','Preparando contratação conjunta',?,?,0,'locked',?,?,?)`)
+       .bind(orderCode,publicToken,customerId,event.type,event.subtype,event.honoree,event.date,delivery.start,delivery.end,manualDraft?'manual_whatsapp':'store',stamp,stamp),
     db.prepare(`INSERT INTO v3_order_checkout_snapshots(order_id,request_key,request_hash,quote_json,terms_version,created_at)
       VALUES(${idSql},?,?,?,?,?)`).bind(orderCode,requestKey,requestHash,JSON.stringify(pricing),terms.version,stamp),
     db.prepare(`INSERT INTO v2_order_pricing(order_id,subtotal_cents,combo_discount_cents,coupon_discount_cents,urgency_percent,
       urgency_amount_cents,total_cents,payment_method,deposit_percent,deposit_cents,balance_cents,currency,pricing_snapshot_json,updated_at)
-      VALUES(${idSql},?,?,?,0,0,?,?,100,?,0,'BRL',?,?)`)
-      .bind(orderCode,quote.subtotalCents,quote.discountCents-quote.couponDiscountCents,quote.couponDiscountCents,quote.totalCents,quote.paymentMethod,quote.totalCents,JSON.stringify(pricing),stamp),
+      VALUES(${idSql},?,?,?,0,0,?,?,?,?,?,'BRL',?,?)`)
+      .bind(orderCode,quote.subtotalCents,quote.discountCents-quote.couponDiscountCents,quote.couponDiscountCents,quote.totalCents,quote.paymentMethod,percent,deposit,quote.totalCents-deposit,JSON.stringify(pricing),stamp),
     db.prepare(`INSERT INTO v2_briefings(order_id,schema_version,data_json,completion_percent,updated_at)
       VALUES(${idSql},'3.0','{}',0,?)`).bind(orderCode,stamp),
-    db.prepare(`INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json)
-      VALUES(${idSql},?,?,?,?)`).bind(orderCode,terms.version,termsHash,stamp,JSON.stringify(evidence)),
+    ...(!manualDraft?[db.prepare(`INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json)
+      VALUES(${idSql},?,?,?,?)`).bind(orderCode,terms.version,termsHash,stamp,JSON.stringify(evidence))]:[]),
     db.prepare(`INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
       VALUES(${idSql},'order_created','Pedido combinado V3 preparado.',?,?)`).bind(orderCode,JSON.stringify({families:quote.items.map(x=>x.family),totalCents:quote.totalCents}),stamp)
   ];
+  if(manualDraft){
+    const serviceTerms=quote.items.flatMap(l=>{const t=l.commercialSnapshot.variant.config?.atelie||l.commercialSnapshot.variant.config?.retrospective;return t?[{family:l.family,version:t.termsVersion,body:t.specificTerms}]:[];});
+    statements.push(db.prepare(`INSERT INTO v3_order_revisions(order_id,request_key,kind,input_json,quote_json,terms_json,reason,created_at) VALUES(${idSql},?,'manual',?,?,?,?,?)`).bind(orderCode,requestKey,JSON.stringify({items,deliveryWindow:delivery,depositPercent:percent}),JSON.stringify(pricing),JSON.stringify({general:terms,services:serviceTerms}),manualDraft.reason,stamp));
+    if(percent===50)statements.push(db.prepare(`INSERT INTO v3_admin_payment_policies(order_id,deposit_percent,reason,updated_at) VALUES(${idSql},50,?,?)`).bind(orderCode,manualDraft.reason,stamp));
+    statements.push(db.prepare(`UPDATE v2_orders SET next_action='Aguardando aceite da contratação' WHERE id=${idSql}`).bind(orderCode));
+  }
   statements.push(...v3LineStatements(db,quote,idSql,orderCode,stamp));
   try{
     await db.batch(statements);

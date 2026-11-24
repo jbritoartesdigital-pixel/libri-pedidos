@@ -1,3 +1,7 @@
+import {normalizeWhatsapp,randomToken} from './http.js';
+import {nextOrderCode} from './v2-checkout.js';
+import {findOrCreateCustomer} from './v3-checkout.js';
+import {createV3OrderRecords} from './v3-order-records.js';
 import {listV3Extras} from './v3-extras-catalog.js';
 import {quoteV3Cart} from './v3-cart-quote.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow,findV2DeliveryOptions} from './v2-agenda.js';
@@ -100,16 +104,16 @@ export async function acceptV3Revision(db,token,input={}){
  });
 }
 
-export async function getV3RevisionEditor(db,code){
- const row=await load(db,code);await eligible(db,row);
- const q=JSON.parse(row.quote_json);
+export async function getV3RevisionEditor(db,code=null){
+ const row=code?await load(db,code):null;if(row)await eligible(db,row);
+ const q=row?JSON.parse(row.quote_json):{items:[]};
  const variants=(await db.prepare("SELECT p.code AS productCode,p.name,v.code AS variantCode,v.label AS variantName,v.price_cents AS priceCents FROM v2_products p JOIN v2_product_variants v ON v.product_id=p.id WHERE p.active=1 AND v.active=1 ORDER BY p.sort_order,v.sort_order,p.code,v.code").all()).results||[];
  const retros=(await db.prepare("SELECT code,name,price_cents FROM v3_retrospective_packages WHERE scope_approved=1 AND sale_enabled=1 AND revision_limit IS NOT NULL AND specific_terms!='' ORDER BY max_photos").all()).results||[];
  for(const r of retros){const productCode='retrospectiva_'+r.code.slice(6);variants.push({productCode,variantCode:productCode+'_default',name:r.name,variantName:r.name,priceCents:r.price_cents});}
  for(const v of variants){v.family=v.productCode.startsWith('atelie_')?'identidade_visual':v.productCode.startsWith('retrospectiva_')?'retrospectiva':'convite';v.extras=listV3Extras(v.family,v.productCode);}
  const addons=(await db.prepare("SELECT code,name,price_cents AS priceCents FROM v2_addons WHERE active=1 ORDER BY sort_order,code").all()).results||[];
  const items=q.items.map(l=>({family:l.family,productCode:l.productCode,variantCode:l.variantCode,addonCodes:l.commercialSnapshot.addons.filter(a=>!a.config?.blackLibriGift).map(a=>a.code),extras:(l.extras||[]).map(x=>({code:x.code,quantity:x.quantity})),comboCode:l.comboCode||l.availableComboCode||''}));
- return {items,variants,addons,couponCode:q.couponComparison?.code||q.coupon?.code||'',paymentMethod:row.payment_method,blackLibri:q.blackLibri};
+ return {items,variants,addons,couponCode:q.couponComparison?.code||q.coupon?.code||'',paymentMethod:row?.payment_method||'pix',blackLibri:q.blackLibri||null};
 }
 export async function withdrawV3Revision(db,code,input){
  const row=await load(db,code);
@@ -120,4 +124,36 @@ export async function withdrawV3Revision(db,code,input){
   if(!r)fail('Nenhuma revisão disponível.');
   await db.batch([db.prepare("UPDATE v3_order_revisions SET status='cancelled' WHERE id=?").bind(r.id),db.prepare("UPDATE v2_orders SET next_action='Aguardando pagamento',updated_at=? WHERE id=?").bind(nowIso(),row.id),db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,created_at) VALUES(?,'v3_revision_withdrawn','Revisão retirada; condições originais preservadas.',?)").bind(row.id,nowIso())]);return {withdrawn:true};
  });
+}
+
+function manualInput(input){
+ const customer={name:String(input.customer?.name||'').trim(),whatsapp:normalizeWhatsapp(input.customer?.whatsapp),email:String(input.customer?.email||'').trim()};
+ if(!customer.name||customer.name.length>160||!/^\d{10,15}$/.test(customer.whatsapp)||customer.email.length>240||customer.email&&!/^\S+@\S+\.\S+$/.test(customer.email))fail('Confira os dados da cliente.',422);
+ const event=input.event||{};
+ if(!event.honoreeName||!/^\d{4}-\d{2}-\d{2}$/.test(event.date||'')||!event.type)fail('Confira os dados da comemoração.',422);
+ const depositPercent=input.depositPercent??100;
+ if(!['pix','card'].includes(input.paymentMethod)||![50,100].includes(depositPercent)||depositPercent===50&&input.paymentMethod!=='pix')fail('Confira a forma de pagamento.',422);
+ if(depositPercent===50&&(typeof input.reason!=='string'||input.reason.trim().length<5))fail('Informe o motivo da autorização excepcional de 50%.',422);
+ return {customer,event,depositPercent,reason:String(input.reason||'Contratação preparada pelo atendimento Libri.').trim().slice(0,500)};
+}
+export async function previewV3ManualOrder(db,input){
+ const x=manualInput(input);
+ const owner=await db.prepare('SELECT id FROM v2_customers WHERE whatsapp=? ORDER BY id DESC LIMIT 1').bind(x.customer.whatsapp).first();
+ const q=await quoteV3Cart(db,{items:input.items,eventType:x.event.type,paymentMethod:input.paymentMethod,couponCode:input.couponCode},{includeSnapshots:true,requireSale:true,customerId:owner?.id||null});
+ const capacity={eventDate:x.event.date,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
+ const windows=await findV2DeliveryOptions(db,{...capacity,limit:8});
+ const depositCents=x.depositPercent===50?Math.ceil(q.totalCents/2):q.totalCents;
+ return {totalCents:q.totalCents,pointsUnits:q.pointsUnits,depositCents,balanceCents:q.totalCents-depositCents,options:windows.options.map(w=>({start:w.start,end:w.end})),terms:await termsFor(db,q)};
+}
+export async function createV3ManualOrder(env,input){
+ const db=env.DB,x=manualInput(input);
+ if(input.confirmed!==true||! /^[a-f0-9]{36}$/.test(input.requestKey||''))fail('Confirme a criação da proposta.',422);
+ const old=await db.prepare("SELECT o.id,o.order_code,o.public_token FROM v3_order_revisions r JOIN v2_orders o ON o.id=r.order_id WHERE r.request_key=? AND r.kind='manual'").bind(input.requestKey).first();
+ if(old)return {orderCode:old.order_code,customerAreaPath:'/meu-pedido/'+old.public_token,recovered:true};
+ const p=await previewV3ManualOrder(db,input),w=input.deliveryWindow;
+ if(p.totalCents!==input.expectedTotalCents||!w||!p.options.some(y=>y.start===w.start&&y.end===w.end))fail('O valor ou a agenda mudou. Calcule novamente.');
+ const customerId=await findOrCreateCustomer(db,x.customer),orderCode=await nextOrderCode(db),publicToken=randomToken('ord_');
+ const atelie=p.terms.services.find(s=>s.family==='identidade_visual'),retro=p.terms.services.find(s=>s.family==='retrospectiva');
+ const result=await createV3OrderRecords(db,{customerId,orderCode,publicToken,contactSnapshot:x.customer,manualDraft:{depositPercent:x.depositPercent,reason:x.reason},body:{clientRequestId:input.requestKey,items:input.items,couponCode:input.couponCode,eventType:x.event.type,eventSubtype:x.event.subtype||'',honoreeName:x.event.honoreeName,eventDate:x.event.date,paymentMethod:input.paymentMethod,deliveryWindow:w,expectedTotalCents:p.totalCents,termsVersion:p.terms.general.version,atelieTermsAccepted:!!atelie,atelieTermsVersion:atelie?.version,retrospectiveTermsAccepted:!!retro,retrospectiveTermsVersion:retro?.version}});
+ return {orderCode:result.orderCode,customerAreaPath:'/meu-pedido/'+result.publicToken,recovered:result.recovered};
 }

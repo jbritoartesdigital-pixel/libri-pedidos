@@ -19,7 +19,7 @@ export async function getV3CheckoutTerms(db,body){
   });
   return {general,services};
 }
-async function findOrCreateCustomer(db,{name,whatsapp,email}){
+export async function findOrCreateCustomer(db,{name,whatsapp,email}){
   // A public checkout must not overwrite another customer's saved contact.
   const lookup=()=>db.prepare('SELECT id FROM v2_customers WHERE whatsapp=? ORDER BY id DESC LIMIT 1').bind(whatsapp).first();
   const existing=await lookup();

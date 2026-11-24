@@ -3,6 +3,7 @@
 // Retrospectiva never creates R2 objects; only receipt metadata is persisted.
 import {buildV2BriefingSimulationSchema} from './v2-customer-area.js';
 import {buildAtelieBriefingBlueprint} from './v3-atelie-briefing.js';
+import {getV3ServiceProgress} from './v3-service-production.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 const fail=(message,status=422)=>{const e=new Error(message);e.status=status;throw e;};
 const obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
@@ -104,6 +105,7 @@ export async function getV3ModularBriefing(db,token){
   const base={orderCode:order.order_code,locked,orderStatus:order.status,payment:{totalCents:order.total_cents,method:order.payment_method},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[]};
+  for(let i=0;i<services.length;i++)purchased[i].progress=await getV3ServiceProgress(db,services[i]);
   const modules=['shared',...services.map(s=>s.family)].map(module=>({
     module,revision:revisions[module]||0,data:drafts[module]||{},editable:['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&
       (module==='shared'?!services.some(s=>s.briefing_status==='completed'):services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status))),schema:buildV3ModuleSchema(order,services,module,drafts)

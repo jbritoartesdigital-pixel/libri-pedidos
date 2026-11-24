@@ -21,7 +21,7 @@ async function enableAtelie(db) {
   await setAtelieSaleStatus(db,'essencia',true);
 }
 test('V3 usa catálogo real para cotar um convite e não cria cobrança',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   const cart=await quoteV3Cart(db,{...base,items:[invitation]});
   assert.equal(cart.items.length,1);
   assert.equal(cart.items[0].family,'convite');
@@ -33,7 +33,7 @@ test('V3 usa catálogo real para cotar um convite e não cria cobrança',async()
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
 });
 test('V3 combina convite com Ateliê ativado SEM duplicar produto, pagamento ou descontos',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await enableAtelie(db);
   const cart=await quoteV3Cart(db,{...base,items:[
     invitation,
@@ -47,7 +47,7 @@ test('V3 combina convite com Ateliê ativado SEM duplicar produto, pagamento ou 
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);
 });
 test('V3 não permite linha duplicada, preços enviados pelo cliente ou promoções não implementadas',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await assert.rejects(quoteV3Cart(db,{...base,items:[invitation,invitation]}),/no máximo um produto/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,couponCode:'X'}]}),/Descontos combinados/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[]}),/1 a 3 produtos/);
@@ -55,7 +55,7 @@ test('V3 não permite linha duplicada, preços enviados pelo cliente ou promoç�
   await assert.rejects(quoteV3Cart(db,{...base,items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}]}));
 });
 test('API V3 é pública somente para cotação e não afeta rotas V2',async()=>{
-  const DB=database(),env={DB},ctx={waitUntil(){}};
+  const DB=database({beforeApprovedAtelie:true}),env={DB},ctx={waitUntil(){}};
   const response=await worker.fetch(new Request('https://test/api/v3/cart/quote',{
     method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({...base,items:[invitation]})
@@ -73,7 +73,7 @@ test('API V3 é pública somente para cotação e não afeta rotas V2',async()=>
 });
 
 test('V3 applies explicit eligible invite combo once and calculates card fee on aggregate',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await enableAtelie(db);
   db.sqlite.exec("INSERT INTO v2_combos(code,name,discount_type,discount_value,active) VALUES ('cart_test','Combo teste','fixed',100,1)");
   const items=[{...invitation,comboCode:'cart_test'},
@@ -90,7 +90,7 @@ test('V3 applies explicit eligible invite combo once and calculates card fee on 
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
 });
 test('V3 rejects cart-wide discounts, ineligible combos and Ateliê combos',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await assert.rejects(quoteV3Cart(db,{...base,items:[invitation],couponCode:'TEST'}),/Descontos combinados/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,comboCode:'missing_combo'}]}),/Combo não encontrado/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[],comboCode:'cart_test'}]}),/Descontos combinados/);

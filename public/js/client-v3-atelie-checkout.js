@@ -1,3 +1,4 @@
+import {trackStoreStage,storeJourneyId,finishStoreJourney} from './store-funnel.js';
 // Compra do Ateliê dentro da V3: mesmo quote, agenda, termos e Mercado Pago da V2.
 // Nenhum catálogo ou preço inventado; usa somente pacote explicitamente liberado.
 const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
@@ -40,6 +41,7 @@ export function mountAtelieCheckout(root,{item,eventType,onBack}) {
     root.setAttribute('aria-busy','false');
   }
   function renderContact(){
+    trackStoreStage('dados');
     stage='contact';
     frame('Vamos preparar seu pedido','Primeiro, os dados básicos. A parte criativa será preenchida depois do pagamento.',
       '<form id="atContactForm" class="v3-at-form">'+
@@ -81,6 +83,7 @@ export function mountAtelieCheckout(root,{item,eventType,onBack}) {
     });
   }
   function renderPayment(){
+    trackStoreStage('pagamento');
     stage='payment';
     if(!quote||!terms)return renderContact();
     const extra=quote.variant?.config?.atelie||{};
@@ -141,12 +144,14 @@ export function mountAtelieCheckout(root,{item,eventType,onBack}) {
         const specific=updated.quote.variant?.config?.atelie;
         if(!specific||specific.termsVersion!==(quote.variant?.config?.atelie?.termsVersion))
           throw new Error('As condições do pacote mudaram. Atualize os detalhes antes de pagar.');
+        trackStoreStage('tentativa');
         const result=await api('/api/v2/checkout/start',{
-          clientRequestId:order.clientRequestId,customer:order.customer,event:order.event,
+          storeJourneyId:storeJourneyId(),clientRequestId:order.clientRequestId,customer:order.customer,event:order.event,
           selection:order.selection,deliveryWindow:order.deliveryWindow,
           termsAccepted:true,termsVersion:terms.version,
           atelieTermsAccepted:true,atelieTermsVersion:specific.termsVersion
         });
+        if(result.order?.customerAreaPath)finishStoreJourney();
         if(!result.payment?.checkoutUrl)throw new Error('Não foi possível abrir o Mercado Pago.');
         if(payTab&&!payTab.closed) {
           payTab.location.replace(result.payment.checkoutUrl);

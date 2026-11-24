@@ -2090,3 +2090,17 @@ a {
   .manual-addon-group summary, .manual-addon-single { padding: 10px; }
   .manual-addon-price { font-size: 12px; }
 }
+
+/* Oferta comercial do link manual, compartilhando a linguagem do Studio. */
+.manual-upsell-card{display:grid;gap:12px;max-width:460px;margin:auto;text-align:center}
+.manual-upsell-kicker{font:700 10px/1.4 Manrope,system-ui,sans-serif;letter-spacing:.15em;color:#8d5d56}
+.manual-upsell-card p{margin:0;line-height:1.55}
+.manual-upsell-delta{display:grid;gap:5px;padding:18px;background:radial-gradient(ellipse at 90% 0,#d7a58b66,transparent 65%),linear-gradient(125deg,#3b2529,#78554d);color:#fff8ef;border-radius:16px}
+.manual-upsell-delta small{font-size:12px}.manual-upsell-delta strong{font:400 39px/1 Georgia,serif}
+.manual-upsell-totals{display:grid;gap:5px;padding:10px;border:1px solid #e3cfc5;border-radius:12px;background:#fff9f4;color:#432b29}
+.manual-upsell-totals span{display:flex;justify-content:space-between;gap:12px;font-size:13px}
+.manual-upsell-card .action-row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.manual-upsell-card .action-row .btn{flex:1 1 auto;min-height:44px}
+.manual-upsell-card{animation:manual-upsell-in .32s ease-out both}
+@keyframes manual-upsell-in{from{opacity:.7;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.manual-upsell-card{animation:none}}

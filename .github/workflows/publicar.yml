@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release 23/11: melhorias de briefing V4.1, irmãos, mascotinhos e fotos privadas; sem migrations.
 # Release 23/11: Admin V3, filas por serviço e etapa artística, cache mobile; sem migrations.
 # V3 23/11/2026: loja /loja + Ateliê com vendas bloqueadas até aprovação no Admin; /pedido preservado.
 # Release V2 11/11: arte editorial e logo original Black Libri; cache revisado, sem migrations.

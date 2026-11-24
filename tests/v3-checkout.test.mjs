@@ -124,3 +124,23 @@ test('recovery fails closed for unmatched capacity holds',async t=>{
   assert.equal((await call({clientRequestId:body.clientRequestId},env,'renew')).status,409);
   assert.equal(mp.posts,1);
 });
+
+test('coupon chosen at checkout is snapshotted and redeemed only once on approval',async t=>{
+ const {DB,body,env,call}=await setup(),mp=providerMock(t);
+ DB.sqlite.exec("INSERT INTO v2_coupons(code,discount_type,discount_value) VALUES('RETRO10','percent',10)");
+ const payload={...body,couponCode:'retro10',expectedTotalCents:13410};
+ const response=await call(payload);assert.equal(response.status,200);
+ const value=await response.json();assert.equal(value.totalCents,13410);
+ const p=DB.sqlite.prepare('SELECT coupon_discount_cents,combo_discount_cents,pricing_snapshot_json FROM v2_order_pricing').get();
+ assert.equal(p.coupon_discount_cents,1490);assert.equal(p.combo_discount_cents,0);
+ assert.equal(JSON.parse(p.pricing_snapshot_json).coupon.code,'RETRO10');
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,0);
+ DB.sqlite.exec("UPDATE v2_coupons SET active=0 WHERE code='RETRO10'");
+ assert.equal((await (await call(payload)).json()).totalCents,13410);
+ assert.equal(mp.posts,1);
+ mp.approve(value.providerOrderId);
+ assert.equal((await (await call({clientRequestId:body.clientRequestId},env,'recover')).json()).state,'paid');
+ await call({clientRequestId:body.clientRequestId},env,'recover');
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,1);
+ assert.equal(DB.sqlite.prepare('SELECT discount_cents FROM v2_coupon_uses').get().discount_cents,1490);
+});

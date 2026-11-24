@@ -41,6 +41,17 @@ test('Convite de irmãos permite vários nomes sem multiplicar personagens cobra
   const no=buildV2BriefingSimulationSchema({...base,data:{appearance_choice:'no'}});
   assert.ok(keys(no).includes('additional_illustrated_subjects'));
 });
+test('Personagens do tema previstos na composição não são classificados como extras',()=>{
+  const atelie=buildAtelieBriefingBlueprint({packageCode:'essencia',requiresChildPhoto:true,data:{}});
+  const themed=atelie.sections.flatMap(section=>section.fields).find(field=>field.key==='charactersWanted');
+  const extraAtelie=atelie.sections.flatMap(section=>section.fields).find(field=>field.key==='additionalSubjects');
+  assert.match(themed.hint,/sem virarem automaticamente adicionais/);
+  assert.match(extraAtelie.hint,/Personagens do tema já previstos na composição não são adicionais/);
+  const convite=buildV2BriefingSimulationSchema({type:'birthday',eventType:'birthday',data:{}});
+  const extraConvite=convite.sections.flatMap(section=>section.fields).find(field=>field.key==='additional_illustrated_subjects');
+  assert.match(extraConvite.help,/Figuras do tema já previstas na composição não são adicionais/);
+});
+
 test('Ateliê release records one principal illustrated subject and poses by package',async()=>{
   const db=database();
   for(const [code,n] of [['essencia',1],['encanto',2],['universo',3]]){

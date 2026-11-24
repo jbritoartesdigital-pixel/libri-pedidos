@@ -19,8 +19,8 @@ export async function runV3DeliveryRetention(env,{now=new Date(),limit=20}={}){
  }
  }
  // The app can remove stored external links, not revoke access in Drive or WhatsApp.
- await db.prepare("UPDATE v3_service_previews SET external_url=NULL,purged_at=datetime('now') WHERE external_channel IS NOT NULL AND purged_at IS NULL AND service_id IN(SELECT id FROM v3_order_services WHERE production_status='delivered' AND originals_until<=?)").bind(stamp).run();
- await db.prepare("UPDATE v3_order_services SET external_delivery_url=NULL WHERE external_delivery_url IS NOT NULL AND production_status='delivered' AND download_until<=?").bind(stamp).run();
+ await db.prepare("UPDATE v3_service_previews SET external_url=NULL,purged_at=datetime('now') WHERE external_channel IS NOT NULL AND purged_at IS NULL AND id IN(SELECT p.id FROM v3_service_previews p JOIN v3_order_services s ON s.id=p.service_id WHERE p.external_channel IS NOT NULL AND p.purged_at IS NULL AND s.production_status='delivered' AND s.originals_until<=? ORDER BY p.id LIMIT ?)").bind(stamp,limit).run();
+ await db.prepare("UPDATE v3_order_services SET external_delivery_url=NULL WHERE id IN(SELECT id FROM v3_order_services WHERE external_delivery_url IS NOT NULL AND production_status='delivered' AND download_until<=? ORDER BY id LIMIT ?)").bind(stamp,limit).run();
  if(!env.FILES)return result;
  const groups=[
   {kind:'originals',query:`SELECT u.id,u.r2_key FROM v3_service_uploads u JOIN v3_order_services s ON s.order_id=u.order_id AND s.family=u.family WHERE s.production_status='delivered' AND s.originals_until<=? ORDER BY u.id LIMIT ?`,update:"DELETE FROM v3_service_uploads WHERE id=?"},

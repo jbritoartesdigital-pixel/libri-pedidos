@@ -83,11 +83,13 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   async function save(){
     const m=current();if(!m?.editable||busy)return false;
     const data=collect(m);busy=true;error='';notice='';
+    const controls=Array.from(root.querySelectorAll('#v3-module-form input,#v3-module-form textarea,#v3-module-form button')).filter(el=>!el.disabled);
+    controls.forEach(el=>{el.disabled=true;});
     try{
       const r=await api(endpoint+'/'+m.module,{method:'PATCH',body:JSON.stringify({revision:m.revision,data})});
       area=r.briefing;notice='Rascunho salvo. Confira se novas perguntas apareceram.';busy=false;render();return true;
     }catch(e){
-      busy=false;error=e.message;
+      busy=false;error=e.message;controls.forEach(el=>{el.disabled=false;});
       // Keep unsaved form values in the DOM; never silently replace a draft.
       let alert=root.querySelector('[data-v3-save-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3SaveError='';alert.setAttribute('role','alert');root.prepend(alert);}alert.textContent=error;
       return false;

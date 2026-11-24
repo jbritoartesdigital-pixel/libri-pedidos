@@ -47,7 +47,7 @@ test('Personagens do tema previstos na composição não são classificados como
   const extraAtelie=atelie.sections.flatMap(section=>section.fields).find(field=>field.key==='additionalSubjects');
   assert.match(themed.hint,/sem virarem automaticamente adicionais/);
   assert.match(extraAtelie.hint,/Personagens do tema já previstos na composição não são adicionais/);
-  const convite=buildV2BriefingSimulationSchema({type:'birthday',eventType:'birthday',data:{}});
+  const convite=buildV2BriefingSimulationSchema({product:{code:'cinematic_interactive',name:'Convite interativo'},eventType:'birthday',addons:[],data:{}});
   const extraConvite=convite.sections.flatMap(section=>section.fields).find(field=>field.key==='additional_illustrated_subjects');
   assert.match(extraConvite.help,/Figuras do tema já previstas na composição não são adicionais/);
 });

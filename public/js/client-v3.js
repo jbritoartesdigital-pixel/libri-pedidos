@@ -457,9 +457,8 @@ let extraFlow=null;
 function cartExtrasHtml(item,i){
  const extras=cartExtrasCatalog[item.productCode]||[];if(!extras.length)return '';
  const selected=(item.extras||[]).map(x=>{const extra=extras.find(e=>e.code===x.code);return extra?'<li>'+Number(x.quantity)+' × '+clean(extra.name)+'</li>':'';}).join('');
- return '<div class="v3-package-personalize"><strong>Quer personalizar além do pacote?</strong>'+
- (selected?'<ul class="v3-included">'+selected+'</ul>':'<p class="v3-mini">Seu pacote já está completo. Os extras são opcionais.</p>')+
- '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar adicionais':'Ver opções de personalização')+'</button></div>';
+ return '<div class="v105-cart-extras">'+(selected?'<ul class="v3-included">'+selected+'</ul>':'')+
+ '<button type="button" class="v3-btn v3-btn-text" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar extras':'+ Personalizar pacote')+'</button></div>';
 }
 function renderExtraQuestion(){
  trackStoreStage('adicionais');
@@ -498,28 +497,30 @@ async function moveExtraFlow({skip=false}={}){
 function renderCart() {
   trackStoreStage('carrinho');
   const items=state.cartItems;
+  const familyNames={convite:'Convite digital',identidade_visual:'Identidade visual',retrospectiva:'Retrospectiva'};
   const lines=items.map((item,i)=>{
     const priced=cartQuote?.items?.find(x=>x.productCode===item.productCode&&x.variantCode===item.variantCode);
     const product=getProduct(item.productCode);
     const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
     const upgrade=priced?.upgradeSuggestion;
-    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade-preview" data-value="'+i+'">Ver sugestão</button></div>':'';
-    return '<article class="v3-cart-item"><div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
-      (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
-      (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
-      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
+    const addons=(priced?.addonCodes||item.addonCodes||[]).map(code=>getAddon(code)?.name||code).map(clean);
+    const suggestion=upgrade?'<div class="v105-cart-upgrade"><span>'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' com o pacote '+clean(upgrade.name):'Pacote '+clean(upgrade.name)+' pelo mesmo valor')+'</span><button type="button" class="v3-btn v3-btn-text" data-action="cart-upgrade-preview" data-value="'+i+'">Conferir</button></div>':'';
+    return '<article class="v3-cart-item"><div class="v105-cart-item-head"><div class="v105-cart-item-copy"><span class="v105-cart-family">'+clean(familyNames[priced?.family]||'Seu serviço')+'</span><strong>'+clean(name)+'</strong>'+
+      (priced?.variantName&&priced.variantName!==name?'<p class="v3-mini">'+clean(priced.variantName)+'</p>':'')+'</div>'+
+      (priced?'<b class="v105-cart-price">'+money(priced.totalCents)+'</b>':'')+'</div>'+
+      (addons.length?'<details class="v105-cart-details" data-cart-group="addons-'+i+'" '+(cartOpenDetails.has('addons-'+i)?'open':'')+'><summary>'+addons.length+' '+(addons.length===1?'adicional incluído':'adicionais incluídos')+'</summary><ul>'+addons.map(n=>'<li>'+n+'</li>').join('')+'</ul></details>':'')+
+      cartExtrasHtml(item,i)+suggestion+
+      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-text" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></article>';
   }).join('');
-  const totals=cartQuote?'<div class="v3-lines">'+(cartQuote.discountCents?'<div class="v3-line"><span>Subtotal</span><b>'+money(cartQuote.grossCents)+'</b></div>':'')+
-    (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
-    '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
+  const totals=cartQuote?'<div class="v105-cart-total"><div><strong>Total no Pix</strong><small>Antes da definição da entrega</small></div><b>'+money(cartQuote.totalCents)+'</b></div>'+
+    (cartQuote.discountCents?'<div class="v105-cart-saving"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':''):'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
-  panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v3-cart-scroll"><div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div></div>',
-    '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
+  panel('Seu carrinho','Confira suas escolhas e siga para os dados da festa.',
+    '<div class="v3-cart-scroll"><div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'<button class="v3-btn v3-btn-text v105-cart-more" type="button" data-action="cart-more">'+(items.length?'+ Adicionar outro serviço':'Escolher serviço')+'</button></div></div></div><aside class="v97-cart-summary">'+totals+notice+'</aside>',
+    items.length&&cartQuote&&!cartError?'<div class="v3-action-row"><button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar pedido</button></div>':'',4);
 }
 function showCartAdded(){
- modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Seu serviço está na sacola. Você pode adicionar outros.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Escolher outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+ modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Serviço adicionado!</h2><p>Você pode revisar o pedido ou incluir outro serviço.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Adicionar outro</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 async function openCart(){
   const revision=cartRevision+1;

@@ -2584,8 +2584,8 @@ test('public catalog exposes official combo composition', async () => {
   const catalog = await loadV2Catalog(DB);
   assert.equal(catalog.combos.length, 5);
   const complete = catalog.combos.find(item => item.code === 'libri_completo');
-  assert.equal(complete.discountValue, 0);
-  assert.equal(complete.discountType, 'percent');
+  assert.equal(complete.discountValue, 1500);
+  assert.equal(complete.discountType, 'fixed');
   assert.deepEqual(
     complete.items.map(item => item.itemCode).sort(),
     ['confirmation', 'moments', 'reminder', 'save_the_date'],
@@ -2718,9 +2718,11 @@ test('combo is suggested only after its real addons are selected and never injec
     );
 
   assert.equal(
-    missingRequirement.suggestedCombo,
-    null,
+    missingRequirement.suggestedCombo.code,
+    'convite_save',
   );
+  assert.equal(missingRequirement.suggestedCombo.discountCents,500);
+  assert.deepEqual(missingRequirement.addons.map(item=>item.code),['save_animated']);
 });
 
 test('most complete eligible configured combo is the single public suggestion', async () => {

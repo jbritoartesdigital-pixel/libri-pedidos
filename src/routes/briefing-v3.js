@@ -15,7 +15,7 @@ export async function handleCustomerBriefingV3Api(request,env,url){
     const [,token,family,id,content]=upload;
     try{
       if(request.method==='POST'&&!id){const result=await uploadV3ServiceImage(request,env,token,family);return result?json({ok:true,result},201):fail('Pedido não encontrado.',404);}
-      if(request.method==='GET'&&id&&content)return getV3ServiceImage(env,token,family,Number(id));
+      if(request.method==='GET'&&id&&content)return await getV3ServiceImage(env,token,family,Number(id));
       if(request.method==='DELETE'&&id&&!content){const result=await deleteV3ServiceImage(env,token,family,Number(id));return result?json({ok:true}):fail('Arquivo não encontrado.',404);}
       return fail('Método não permitido.',405);
     }catch(e){return errorResponse(e);}

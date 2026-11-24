@@ -59,7 +59,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const base='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/delivery/'+esc(s.family)+'/files/';
     return '<section class="card"><h4>Seu serviço foi entregue!</h4><p>Entrega em '+day(d.deliveredAt.slice(0,10))+'</p>'+
     (d.files.length?'<p>Arquivos finais disponíveis para download até '+day(d.downloadUntil.slice(0,10))+'.</p>':'')+
-    (d.warning&&d.files.length?'<p role="status"><strong>'+esc(d.warning)+'</strong></p>':'')+
+    (d.warning&&(d.files.length||d.externalChannel==='drive')?'<p role="status"><strong>'+esc(d.warning)+'</strong></p>':'')+
     d.files.map(f=>'<p>'+esc(f.filename)+' '+(f.available?'<a class="btn primary" href="'+esc(base+f.id)+'">Baixar arquivo</a>':'· Prazo de download encerrado')+'</p>').join('')+
     (d.externalChannel==='whatsapp'?'<p>Arquivo final enviado pelo WhatsApp. Confira a conversa com a Libri.</p>':d.externalChannel==='drive'?(d.externalUrl?'<p>Baixe o arquivo até '+day(d.downloadUntil.slice(0,10))+'.</p><a class="btn primary" href="'+esc(d.externalUrl)+'" target="_blank" rel="noopener noreferrer">Abrir no Google Drive</a>':'<p>O prazo de acesso ao link pelo aplicativo encerrou.</p>'):'')+
     (d.interactiveUrl?'<p><a class="btn primary" href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir meu convite interativo</a></p><p>A validade do convite segue a contratação, independentemente do prazo de download.</p>':'')+'</section>';

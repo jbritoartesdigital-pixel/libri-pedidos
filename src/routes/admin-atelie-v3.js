@@ -14,8 +14,7 @@ export async function handleAdminAtelieV3Api(request, env, url) {
     return json({ok:true,packages:await listAteliePackages(env.DB,{admin:true}),
       salesStatus:'blocked_pending_catalog_v4_1_checkout_and_capacity'});
   }
-  // Importação deliberada e autenticada: escopo e preço aprovados, pontos
-  // zerados até medição da capacidade. Não ativa venda nem altera pedidos.
+  // Importação deliberada e autenticada: escopo, preço e pontos aprovados. Não ativa venda nem altera pedidos.
   const approvedMatch=path.match(/^\/api\/admin\/v2\/atelie\/packages\/(essencia|encanto|universo)\/approved-catalog$/);
   if(approvedMatch && request.method==='POST') {
     try {
@@ -23,7 +22,7 @@ export async function handleAdminAtelieV3Api(request, env, url) {
       const draft=getAtelieV41CatalogDraft(code);
       await updateAtelieDraft(env.DB,code,{...draft,scopeApproved:false});
       const saved=await updateAtelieDraft(env.DB,code,{scopeApproved:true});
-      return json({ok:true,package:saved,notice:'Catálogo V4.1 aprovado salvo, sem pontos definidos e sem vendas liberadas.'});
+      return json({ok:true,package:saved,notice:'Catálogo V4.1 aprovado salvo, com pontos definidos e sem vendas liberadas.'});
     } catch(e) {
       return fail(e.message||'Não foi possível importar o catálogo aprovado.',422);
     }

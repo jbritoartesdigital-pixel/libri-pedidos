@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 17 | 23/11/2026 (Brasil)
+Versão 18 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -152,5 +152,12 @@ RETOMADA V16 — RECUPERAÇÃO E RENOVAÇÃO SEGURA DE PAGAMENTO
 RETOMADA V17 — ÁREA DA CLIENTE MODULAR
 - 1130689: API privada V3 inclui resumo financeiro, previsão inicial, status e extras por serviço, permissões de edição; sem expor dados de outros pedidos. Não cria prazo individual ainda, nem declara entrega definitiva.
 - 582ee86/c3b1f42: área cliente V3 no link /meu-pedido/:token, detectada antes de iniciar área V2; somente 404 permite fallback para legado. Resumo e navegação exclusivamente por módulos contratados + dados compartilhados, campos adaptativos com salvamento versionado, preservação de rascunho na falha. Cliente pode verificar pagamento/retomar pelo token via recovery V3; sem cobrar por rota antiga. Retrospectiva mostra limites ampliados, canal WhatsApp e recebimento registrado, sem upload ao R2.
-- 6768496/dee0f94: impede edição durante salvamento, testes de renderização, isolamento dos serviços, escaping, links WhatsApp e ausência de upload retro. CI a confirmar. Teste visual real ainda pendente.
+- 6768496/dee0f94: impede edição durante salvamento, testes de renderização, isolamento dos serviços, escaping, links WhatsApp e ausência de upload retro. CI 45320901326 concluído com sucesso. Teste visual real ainda pendente.
 - Próximos: integração segura de uploads privados Convite/Ateliê, envio definitivo e validação dos briefings por serviço, recebimento completo Retro no Admin, agenda independente e dependências, aprovação/revisões/entrega, Admin V3, promoções e cobranças complementares. Rascunho não inicia produção; envio definitivo/arquivos ainda indisponíveis na UI. Não ativar vendas/flag nem publicar parcial. PR #143 draft.
+
+RETOMADA V18 — UPLOADS PRIVADOS E ENVIO DEFINITIVO DO BRIEFING
+- 5230767/9bde851/518bfaf: migration 0045, metadados segregados por pedido/família, R2 privado; regras de upload derivadas do briefing (Convite e Ateliê), autorização de fotos pessoais, limite de 15 MB por imagem e quantidade por campo, validação básica de assinatura do formato; lock por pedido, sem imagens Retro no R2. Conteúdo inacessível quando autorização/campo deixa de estar ativo. Sem alterações nas tabelas de uploads legados.
+- d141e88/bb4249a/4d7a91d: rotas privadas para upload, conteúdo e remoção com checagem de token, pagamento e família; contagem de migrations 46. Admin ainda precisa de listagem e acesso autenticado próprio, política de remoção/retencão e tratamento de arquivos órfãos.
+- 1e65012/e28cad0: conclusão por serviço, valida campos obrigatórios, autorizações, quantidade mínima de imagens, revisões compartilhada e individual. Após primeiro envio, dados compartilhados ficam bloqueados para evitar alteração silenciosa de briefing finalizado. Outros módulos continuam editáveis. Envio não libera produção automaticamente; reabertura pelo Admin, validações específicas legadas adicionais (ex. chave Pix) e confirmação completa de materiais ainda precisam ser integradas.
+- 6bd1ed5: UI de envio/consulta/remoção privada de imagens e botão Enviar briefing definitivo, salva rascunho antes da ação e pede confirmação. Retro mantém WhatsApp. 067b434: testes de isolamento, autorização e envio independente; CI desta rodada a confirmar.
+- Próximo: concluir Admin de materiais/briefing (incluindo acesso privado, reabertura e confirmação explícita de materiais completos), validação comercial e agenda individual por serviço após briefing/materiais; depois revisões, aprovações, entregas, retenção, promoções, cobranças complementares e indicadores. Não ativar flag nem publicar parcialmente. PR #143 draft.

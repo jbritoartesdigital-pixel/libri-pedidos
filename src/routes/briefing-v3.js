@@ -1,3 +1,4 @@
+import {stageV3FinalFile,removeV3FinalFile,deliverV3Service,downloadV3FinalFile} from '../lib/v3-service-delivery.js';
 import {changeV3Production,publishV3ServicePreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
 import {previewV3ServiceAgenda,scheduleV3Service} from '../lib/v3-service-agenda.js';
@@ -13,6 +14,8 @@ async function boundedJson(request){
   return body;
 }
 export async function handleCustomerBriefingV3Api(request,env,url){
+  const final=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/delivery\/(convite|identidade_visual|retrospectiva)\/files\/(\d+)$/);
+  if(final){if(request.method!=='GET')return fail('Método não permitido.',405);try{return await downloadV3FinalFile(env,final[1],final[2],Number(final[3]));}catch(e){return errorResponse(e);}}
   const production=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/production\/(convite|identidade_visual|retrospectiva)(?:\/preview\/(\d+))?$/);
   if(production){
     const [,token,family,id]=production;
@@ -53,6 +56,21 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+  const final=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/delivery\/(convite|identidade_visual|retrospectiva)\/(publish|files)(?:\/(\d+))?$/);
+  if(final){
+    const [,code,family,action,id]=final;
+    try{
+      const row=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(code).first();
+      if(!row)return fail('Pedido V3 não encontrado.',404);
+      if(action==='files'&&id&&request.method==='GET')return await downloadV3FinalFile(env,row.public_token,family,Number(id),{admin:true});
+      let result;
+      if(action==='publish'&&!id&&request.method==='POST')result=await deliverV3Service(env,row.public_token,family,await boundedJson(request));
+      else if(action==='files'&&!id&&request.method==='POST')result=await stageV3FinalFile(request,env,row.public_token,family);
+      else if(action==='files'&&id&&request.method==='DELETE')result=await removeV3FinalFile(env,row.public_token,family,Number(id),(await boundedJson(request)).version);
+      else return fail('Método não permitido.',405);
+      return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+    }catch(e){return errorResponse(e);}
+  }
   const production=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/production\/(convite|identidade_visual|retrospectiva)(?:\/preview(?:\/(\d+))?)?$/);
   if(production){
     const [,code,family,id]=production;

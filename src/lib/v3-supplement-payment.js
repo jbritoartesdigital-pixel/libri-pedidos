@@ -192,3 +192,11 @@ export async function reconcileV3Supplements(env,{limit=10}={}){
  for(const row of rows){try{await syncV3SupplementPayment(env,row.provider_order_id);result.synced++;}catch{result.failed++;}}
  return result;
 }
+
+export async function verifyV3SupplementPayment(env,token,family,id){
+ const x=await access(env.DB,token,family,id);if(!x)return null;
+ const p=await loadAttempt(env.DB,id);
+ if(!p)return {found:true,status:'not_started'};
+ if(!p.provider_order_id)return {found:true,status:p.status,needsReview:Date.parse(p.expires_at)<=Date.now()};
+ return syncV3SupplementPayment(env,p.provider_order_id);
+}

@@ -172,6 +172,9 @@ export async function renderCentral(openOrder) {
       || item.status === 'ready_for_production');
 
   const modular=(c.modularOrders||[]);
+  const pendingPayments=[...(c.pendingPayments||[]),...(c.modularQueues?.pendingPayments||[])];
+  const newOrders=[...(c.newOrders||[]),...(c.modularQueues?.newOrders||[])];
+  const exceptions=c.modularQueues?.exceptions||[];
   const serviceNames={convite:'Convites',identidade_visual:'Ateliê',retrospectiva:'Retrospectivas'};
   const active=modular.flatMap(o=>o.services.filter(s=>!['delivered','cancelled'].includes(s.productionStatus)).map(s=>({...s,code:o.code,honoreeName:o.honoreeName})));
   const soon=active.filter(s=>s.deliveryWindow&&s.deliveryWindow.end<=new Date(new Date(c.today+'T12:00:00Z').getTime()+6*86400000).toISOString().slice(0,10)).sort((a,b)=>a.deliveryWindow.end.localeCompare(b.deliveryWindow.end));
@@ -270,6 +273,7 @@ export async function renderCentral(openOrder) {
       <div class="kpi-grid">${[['paid','Com pagamento confirmado'],['order_pending','Pedido sem pagamento'],['inactive','Possível abandono'],['active','Em andamento'],['cancelled','Cancelado sem pagamento']].map(([k,label])=>`<article class="kpi"><span>${label}</span><strong>${Number(c.funnel?.outcomes?.[k]||0)}</strong></article>`).join('')}</div>
       <details class="order-optional"><summary>Ver etapas alcançadas e última etapa sem atividade</summary><div class="list">${(c.funnel?.stages||[]).map(s=>`<div class="row-card"><strong>${esc(({evento:'Evento',servico:'Serviço',modelo:'Modelo',configuracao:'Configuração',carrinho:'Carrinho',dados:'Dados',agenda:'Agenda',adicionais:'Adicionais',revisao:'Revisão',pagamento:'Pagamento',tentativa:'Tentativa de pagamento'})[s.stage]||s.stage)}</strong><small>${Number(s.reached)} chegaram · ${Number(s.inactive)} inativas nesta etapa</small><div class="metric-bar"><span style="width:${Math.min(100,Math.round(100*s.reached/Math.max(1,c.funnel.total)))}%"></span></div></div>`).join('')}</div></details>
     </section>
+    ${exceptions.length?`<section class="card" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
     <section class="card attention-center">
       <div class="section-title">
         <div>
@@ -367,13 +371,13 @@ export async function renderCentral(openOrder) {
       <section class="card">
         <div class="section-title">
           <h2>Pagamentos pendentes</h2>
-          <span class="status">${(c.pendingPayments || []).length}</span>
+          <span class="status">${pendingPayments.length}</span>
         </div>
 
         <div class="list">
           ${
-            (c.pendingPayments || []).length
-              ? c.pendingPayments.map(
+            pendingPayments.length
+              ? pendingPayments.map(
                 (item) => `
                   <button
                     class="row-card"
@@ -387,7 +391,7 @@ export async function renderCentral(openOrder) {
                     <small>
                       ${esc(item.customerName)}
                       • ${esc(item.paymentMethod || '')}
-                      • agora ${money(item.dueCents)}
+                      • ${esc(item.statusLabel||'Aguardando pagamento')} · ${money(item.dueCents)}
                     </small>
                   </button>
                 `,
@@ -398,14 +402,14 @@ export async function renderCentral(openOrder) {
       </section>
 
       <details class="card order-optional">
-        <summary>Novos pedidos (${(c.newOrders || []).length})</summary>
+        <summary>Novos pedidos (${newOrders.length})</summary>
         <p class="muted" style="font-size:12px;margin:0 0 10px">
           Os pedidos que precisam de ação também aparecem nas prioridades.
         </p>
         <div class="list">
           ${
-            (c.newOrders || []).length
-              ? c.newOrders.map(attentionRow).join('')
+            newOrders.length
+              ? newOrders.map(attentionRow).join('')
               : empty('Nenhum pedido novo.')
           }
         </div>

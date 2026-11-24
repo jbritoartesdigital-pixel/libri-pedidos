@@ -32,7 +32,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       '</div><div class="v3-total"><strong>Total integral</strong><b>'+money(quote.totalCents)+'</b></div>';
   }
   function field(name,label,type='text',required=true,max=180){
-    return '<label class="v3-mini" for="v3c-'+name+'">'+label+'</label><input class="v3-at-input" id="v3c-'+name+'" name="'+name+'" type="'+type+'" value="'+esc(form[name])+'" maxlength="'+max+'" '+(name==='whatsapp'&&blackClaim?'readonly ':'')+(required?'required':'')+'>';
+    return '<label for="v3c-'+name+'">'+label+'</label><input class="v3-at-input" id="v3c-'+name+'" name="'+name+'" type="'+type+'" value="'+esc(form[name])+'" maxlength="'+max+'" '+(name==='whatsapp'?'autocomplete="tel" inputmode="tel" ':name==='email'?'autocomplete="email" ':name==='name'?'autocomplete="name" ':'')+(name==='whatsapp'&&blackClaim?'readonly ':'')+(required?'required':'')+'>';
   }
   function render(){
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
@@ -40,13 +40,13 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       (!enabled?'<div class="v3-notice">Prévia do novo checkout. O pagamento ainda não está liberado.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<h2>1. Seus dados</h2>'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+
-      '<h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
+      '<section class="v3-checkout-block"><h2>1. Seus dados</h2>'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+
+      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
       '<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="agenda">Consultar agenda</button>'+
       (options.length?'<div class="v3-notice"><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label style="display:block;padding:8px 0"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · sugerida':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
-      '<h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+field('couponCode','Cupom (opcional)','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Conferir cupom</button>'+summary()+
-      '<h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-notice"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
-      '</fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
+      '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+field('couponCode','Cupom (opcional)','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Conferir cupom</button>'+summary()+
+      '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-notice"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
+      '</section></fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
       '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length)?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':'Confirmar e pagar')+'</button></div></form></section>';
     root.setAttribute('aria-busy',String(busy));
   }

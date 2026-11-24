@@ -1,3 +1,4 @@
+import {reserveCheckoutCoupon,bindCheckoutCouponProvider,releaseCheckoutCouponAfterTerminal} from './shared-coupon-reservations.js';
 import {
   nowIso,
 } from './http.js';
@@ -475,6 +476,7 @@ export async function createMercadoPagoCheckout(
   const idempotencyKey =
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 
+  await reserveCheckoutCoupon(env.DB,orderId,hold.token);
   const mpOrder =
     await mpFetch(
       env,
@@ -515,6 +517,7 @@ export async function createMercadoPagoCheckout(
     );
   }
 
+  await bindCheckoutCouponProvider(env.DB,orderId,hold.token,providerOrderId);
   const stamp =
     nowIso();
 
@@ -2142,6 +2145,7 @@ async function syncMercadoPagoOrderUnlocked(
       AND id > ? AND status IN ('pending', 'approved') LIMIT 1`)
       .bind(localPayment.order_id, localPayment.payment_id).first();
     if (newer) return { found: true, approved: false, paymentStatus, superseded: true };
+    await releaseCheckoutCouponAfterTerminal(env.DB,localPayment.order_id,providerOrderId);
     await releaseHold(
       env.DB,
       localPayment

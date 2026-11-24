@@ -81,9 +81,9 @@ async function pageFor(width,height,preferredName='',consent='deny'){
  const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});
  // No outgoing requests to production or payment providers.
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
- const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+ if(consent==='allow_named')await context.addInitScript(()=>localStorage.setItem('libriPrivacyV1','allow_named'));const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/loja');await page.locator('#v3-welcome-name').waitFor();if(preferredName){await page.locator('#v3-welcome-name').fill(preferredName);await page.locator('#v3-welcome-form button[type="submit"]').click();await page.locator('.v3-title').filter({hasText:preferredName}).waitFor();assert.equal(await page.evaluate(name=>JSON.stringify(localStorage.getItem('libriV3Draft')).includes(name),preferredName),false);}else await page.locator('[data-action="welcome-skip"]').click();await page.locator('[data-action="event"]').first().waitFor();assert.equal(await page.locator('a[href*="versao=2"]').count(),0);assert.equal(await page.locator('#v3-live-basket').isVisible(),false);
- await page.locator('.libri-privacy-banner [data-privacy="'+consent+'"]').click();
+ if(consent!=='allow_named'){assert.equal(await page.locator('.libri-privacy-banner .libri-privacy-actions button').count(),2);await page.locator('.libri-privacy-banner [data-privacy="'+consent+'"]').click();}
  assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),consent);
  return {context,page};
 }
@@ -114,7 +114,7 @@ async function checkout(p){
  assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
  assert.equal(await p.locator('[name="email"]').count(),0);
  await p.locator('[name="deliveryWindow"]').first().waitFor();assert.ok(await p.locator('[name="deliveryWindow"]').count()<=3);assert.equal(await p.locator('[name="requestedDeliveryEnd"]').count(),0);
- await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.waitForFunction(()=>{const el=document.querySelector('.v3-checkout-block h2');return el&&getComputedStyle(el).fontFamily.includes('Manrope')});
+ await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.waitForFunction(()=>{const el=document.querySelector('.v3-checkout-block h2');return el&&getComputedStyle(el).fontFamily.includes('Georgia')});
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);await p.locator('#v3-theme-toggle').click();assert.equal(await p.locator('html').getAttribute('data-v3-theme'),'dark');assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));assert.equal(await p.locator('#v3c-eventDate').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(36, 27, 30)');await p.locator('#v3-theme-toggle').click();
  assert.match(p.url(),/\/loja$/);
 }

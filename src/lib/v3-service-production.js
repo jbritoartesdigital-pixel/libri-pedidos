@@ -22,10 +22,10 @@ async function current(db,token,family){
  return {ctx,s,preview};
 }
 export async function getV3ServiceProgress(db,s){
- const p=await db.prepare('SELECT id,version,mime_type,status,published_at,adjustment_deadline,approved_at FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1').bind(s.id).first();
+ const p=await db.prepare('SELECT id,version,mime_type,status,published_at,adjustment_deadline,approved_at,purged_at FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1').bind(s.id).first();
  const events=(await db.prepare('SELECT action,actor,note,preview_id,created_at FROM v3_service_production_events WHERE service_id=? ORDER BY id DESC LIMIT 50').bind(s.id).all()).results||[];
  return {version:s.production_version,revisionsUsed:s.revisions_used,revisionsIncluded:v3RevisionLimit(s),
- preview:p?{id:p.id,version:p.version,mimeType:p.mime_type,status:p.status,publishedAt:p.published_at,adjustmentDeadline:p.adjustment_deadline,approvedAt:p.approved_at}:null,events};
+ preview:p?{available:!p.purged_at&&(!s.originals_until||Date.now()<Date.parse(s.originals_until)),id:p.id,version:p.version,mimeType:p.mime_type,status:p.status,publishedAt:p.published_at,adjustmentDeadline:p.adjustment_deadline,approvedAt:p.approved_at}:null,events};
 }
 function event(db,s,actor,action,note='',previewId=null){
  return db.prepare('INSERT INTO v3_service_production_events(service_id,actor,action,note,preview_id) VALUES(?,?,?,?,?)').bind(s.id,actor,action,note,previewId);
@@ -103,6 +103,7 @@ export async function publishV3ServicePreview(request,env,token,family){
 }
 export async function streamV3ServicePreview(env,token,family,id,request){
  const c=await current(env.DB,token,family);if(!c||c.preview?.id!==id||c.preview.status==='replaced')return httpFail('Prévia não encontrada.',404);
+ if(c.preview.purged_at||c.s.originals_until&&Date.now()>=Date.parse(c.s.originals_until))return httpFail('Prazo de armazenamento encerrado.',410);
  if(!env.FILES)return httpFail('Armazenamento indisponível.',503);
  const p=c.preview;
  // R2 range reads permit video playback and avoid loading the whole file.

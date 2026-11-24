@@ -1,6 +1,6 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 84 | 24/11/2026 (Brasil)
-ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V84 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
+Versão 85 | 24/11/2026 (Brasil)
+ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V85 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -492,3 +492,9 @@ V83 follow-up: CI V82 45473356701 falhou em asserções antigas de cache e valid
 CHECKPOINT V84 — Pedidos: lista real paginada com 30 registros por página e não arquivados por padrão; filtros aplicados automaticamente, busca textual, anterior/próxima, possibilidade de incluir arquivados. API mantém compatibilidade padrão de 100 resultados, recebe limite/offset validados. Teste de paginação sem duplicidade e lista inicial no Chromium. Central mantém busca sob demanda. CI a conferir. Nenhum dado de produção alterado.
 
 CI V83 45473644616: quatro asserções de cache remanescentes exigiam a versão antiga do módulo de ficha Admin. Corrigidas para v83, preservando as asserções de comportamento, segurança e navegação. Ainda não houve execução de Chromium desta revisão. Aguardar CI V84.
+
+
+CHECKPOINT V85 — APROVAÇÃO EXPRESSA DE DIREÇÃO DE ARTE E PRATICIDADE (24/11/2026)
+Usuária aprovou integralmente as 25 propostas, após rejeitar a estética genérica e enviar vídeo de referência. A referência de loja de tênis é linguagem visual, NÃO paleta verde, nem cópia do produto. Preservar identidade Libri, regras comerciais, dados e seis áreas. Escopo obrigatório:
+01 Estética editorial tecnológica; 02 Tipografia com personalidade; 03 Layout Bento Grid; 04 Microanimações; 05 Modo noturno completo; 06 Menu lateral flutuante; 07 Menu inferior no celular; 08 Busca universal (pedido, cliente e função); 09 Atalhos personalizáveis; 10 Memória de navegação (filtros e posição); 11 Resumo executivo; 12 Minha missão de hoje (tarefas reais); 13 Linha do tempo; 14 Ações rápidas; 15 Central de alertas; 16 Lista ou Kanban (não arrastar para alterar estado sem validação); 17 Ficha em painel deslizante; 18 Próxima ação inteligente; 19 Histórico em linha do tempo; 20 Filtros rápidos; 21 Financeiro visual; 22 Agenda em calendário ou lista; 23 Mapa de capacidade; 24 Catálogo organizado por serviço; 25 Funil de vendas visual (dados observados, não inventar métricas).
+Plano de execução proposto: A fundação/navegação/acessibilidade (1–10,17); B Central e prioridades (3,11–15,25); C Pedidos/produção/ficha (16,18–20); D financeiro/agenda/loja (21–24); E testes completos, capturas reais mobile/desktop claro/escuro e revisão de consistência. Itens não concluídos devem continuar marcados como pendentes, sem afirmar aprovação estética ou publicação. Preferências locais sem armazenar dados de clientes. Não mudar preço, agenda ou pagamento, nem permitir alterações de estado só pela UI. PR #151, branch feature/v81-admin-integrado-20261124; V84 ainda não publicada. CI 45473931817 falhou em asserção estática que esperava busca vazia sempre bloqueada; atualizada para manter busca sob demanda na Central e permitir lista inicial em Pedidos. Próximo: validar CI e implementar os blocos acima, mantendo TXT atualizado.

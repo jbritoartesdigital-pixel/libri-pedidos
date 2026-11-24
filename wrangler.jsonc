@@ -36,6 +36,10 @@
     ]
   },
 
+  "ratelimits": [
+    {"name":"FUNNEL_RATE_LIMIT","namespace_id":"20261124043","simple":{"limit":120,"period":60}}
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",

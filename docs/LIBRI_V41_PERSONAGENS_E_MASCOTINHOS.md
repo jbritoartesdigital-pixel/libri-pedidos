@@ -2,16 +2,20 @@
 
 **Decisões comerciais expressas em 23/11/2026.** Este documento complementa o catálogo V4.1 e o plano da V3, sem alterar nem liberar os produtos já vendidos. Não atribuir automaticamente preços a extras.
 
-## 1. Valores-base propostos para manter
-| Pacote | Valor-base indicado pela proprietária | Ilustração principal inclusa | Poses da mesma ilustração |
-| --- | ---: | --- | ---: |
-| Essência | R$ 159 | 1 | 1 |
-| Encanto | R$ 299 | 1 | 2 |
-| Universo | R$ 549 | 1 | 3 |
+## 1. Catálogo comercial revisado em 23/11/2026
+| Pacote | Preço autorizado | Ilustração principal | Poses/variações do mesmo sujeito | Elementos | Estampas | Papelaria | Revisões |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| Essência | R$ 159 | 1 criança OU ilustração temática | 3 | 2 | 1 | 0 | 1 |
+| Encanto | R$ 299 | 1 criança OU ilustração temática | 4 | 5 | 2 | 2 | 1 |
+| Universo | R$ 549 | 1 criança OU ilustração temática | 5 | 8 | 3 | 4 | 2 |
 
-Um sujeito ilustrado principal pode ser **mascotinho da criança** (desenhado com referências fotográficas e autorização) OU **ilustração temática principal equivalente** quando a cliente não quiser fotos da criança. A opção é feita no briefing. Poses são variações do MESMO sujeito, não personagens novos. A assinatura comemorativa (nome + ocasião) também integra todos os pacotes, além de brasão, logotipo e monograma.
+**Todos os pacotes** incluem brasão principal, logotipo com nome decorado, monograma, assinatura comemorativa, paleta com códigos de cores, seleção tipográfica, apresentação em PDF e simulação conceitual digital de decoração. Universo inclui uma segunda variação do brasão e outra do monograma. O mascotinho representa **a mesma criança em poses diferentes**, nunca personagens diferentes. Sem mascotinho, a cliente recebe uma ilustração temática com variações equivalentes, sem desconto.
 
-**Atenção:** preços escolhidos não significam que preço, quantidade de horas, capacidade e termos estejam cadastrados ou liberados no Admin. A carga e margem devem ser medidas. Nunca ativar pacote apenas pela aprovação de valores em conversa.
+**Formato:** arquivos digitais organizados; PNG transparente de elementos e marca quando adequado; estampas PNG/JPG; papelaria contratada em PDF dimensionado; apresentação em PDF, sem marca-d'água. Uso pessoal na festa e impressão dos personalizados próprios, sem revenda ou arquivos editáveis. Fontes comerciais não são transferidas.
+
+**Produção:** mínimo de 15 dias corridos após pagamento confirmado e briefing completo, ou prazo posterior se a agenda exigir. Distribuição real dos pontos ainda precisa ser calibrada e validada. A previsão anterior ao briefing não pode ser tratada como prazo garantido caso haja atraso nos materiais.
+
+**Atenção:** preço e escopo aprovados não significam vendas ativas, alteração do banco de produção, alocação definitiva de pontos ou fluxo de adicionais implantado. O catálogo está preparado para importação controlada no Admin e permanece com a venda bloqueada.
 
 ## 2. Quando pedir orçamento de personagem adicional
 - Segunda criança ilustrada, irmão/irmã ilustrado(a), cão, gato, papagaio ou outro animal ilustrado com identidade própria;

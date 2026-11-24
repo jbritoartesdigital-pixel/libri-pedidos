@@ -1,3 +1,4 @@
+import { mountV3Checkout } from './client-v3-checkout.js';
 import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
 // Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
 // O catálogo, os preços e o cálculo de descontos permanecem nas APIs V2.
@@ -371,6 +372,7 @@ function cartExtrasHtml(item,i){
         '<div><button type="button" aria-label="Diminuir '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-minus" data-value="'+i+':'+clean(x.code)+'" '+(!n?'disabled':'')+'>−</button> <strong>'+n+'</strong> <button type="button" aria-label="Aumentar '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-plus" data-value="'+i+':'+clean(x.code)+'" '+(n>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
     }).join('')+'</details>').join('')+'</div>';
 }
+function needsUnifiedCheckout(items){return items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'||(x.extras||[]).length);}
 function renderCart() {
   const items=state.cartItems;
   const lines=items.map((item,i)=>{
@@ -388,12 +390,13 @@ function renderCart() {
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
-    (items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'))?'<div class="v3-notice">A contratação pela V3 está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
-    items.some(x=>(x.extras||[]).length)?'<div class="v3-notice">O pagamento com os novos adicionais está em preparação. Nenhuma cobrança foi criada.</div>':items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
+    (items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'))?'<div class="v3-notice">Confira os dados, os prazos e as condições da sua contratação no checkout. Nenhuma cobrança foi criada.</div>':
+    items.some(x=>(x.extras||[]).length)?'<div class="v3-notice">Confira os dados e as condições dos seus adicionais no checkout. Nenhuma cobrança foi criada.</div>':items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
     '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length===1&&cartQuote&&!cartError&&cartFamily(items[0].productCode)!=='retrospective'&&!(items[0].extras||[]).length?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
+    (items.length&&cartQuote&&!cartError&&needsUnifiedCheckout(items)?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+
+    (items.length===1&&cartQuote&&!cartError&&!needsUnifiedCheckout(items)?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
 }
 async function openCart(){
   state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
@@ -663,6 +666,12 @@ root.addEventListener('click', async event => {
       const quantity=Math.max(0,Math.min(extra.maxQuantity,(selected.get(code)||0)+(action==='cart-extra-plus'?1:-1)));
       if(quantity)selected.set(code,quantity);else selected.delete(code);
       item.extras=Array.from(selected,([code,quantity])=>({code,quantity}));await openCart();return;
+    }
+    if(action==='cart-unified-checkout'){
+      if(!cartQuote||cartError||!needsUnifiedCheckout(state.cartItems))return;
+      state.step='cart';save();
+      mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventDate:cartEventDate,request,onBack:()=>openCart()});
+      return;
     }
     if(action==='cart-single-checkout'){
       if(state.cartItems.length!==1||!cartQuote||cartError)return;

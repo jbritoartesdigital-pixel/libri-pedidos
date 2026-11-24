@@ -1,3 +1,4 @@
+import {reconcileV3Supplements} from './v3-supplement-payment.js';
 import {runV3DeliveryRetention} from './v3-delivery-retention.js';
 import { nowIso } from './http.js';
 import { expireBlackLibriClaims } from './v2-black-libri.js';
@@ -43,6 +44,7 @@ export async function runV2Scheduler(env) {
         .bind(nowIso(), payment.provider_order_id).run();
     }
   }
+  try{result.supplements=await reconcileV3Supplements(env);}catch(error){result.supplements={failed:true};console.error('Supplement reconciliation failed',error.message);}
   const stamp = nowIso();
   await env.DB.batch([
     env.DB.prepare(`UPDATE v2_checkout_holds SET status = 'expired', updated_at = ?

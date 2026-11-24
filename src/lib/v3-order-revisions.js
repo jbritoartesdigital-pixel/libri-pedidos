@@ -98,6 +98,10 @@ async function manualUpsell(db,row,r){
   const a=catalogue.addons.filter(a=>a.group===group&&!owned.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
   if(a)candidates.push({key:'addon:'+a.code,title:'Gostaria de adicionar '+a.name+'?',description:names[group],line:{...line,addonCodes:[...owned,a.code]}});
  }
+ if(line.productCode!=='cinematic_video'){
+  const confirmation=candidates.findIndex(c=>c.key.startsWith('addon:')&&catalogue.addons.some(a=>a.group==='confirmation'&&c.key==='addon:'+a.code));
+  if(confirmation>0)candidates.unshift(candidates.splice(confirmation,1)[0]);
+ }
  for(const c of candidates.slice(0,4)){
   try{
    const items=data.items.map((item,i)=>i===index?c.line:item);

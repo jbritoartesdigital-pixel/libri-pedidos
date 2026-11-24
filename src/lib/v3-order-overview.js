@@ -1,3 +1,4 @@
+import {originalV3FinancialState} from './v3-admin-payment-policy.js';
 // Operational read model. Never mutate the parent payment/briefing state
 // just because one service has reached a different production stage.
 export const V3_SERVICE_LABELS=Object.freeze({pending:'Aguardando briefing ou conferência',ready:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue',cancelled:'Cancelado'});
@@ -57,4 +58,30 @@ export async function getV3OrderHistory(db,orderId){
  db.prepare(`SELECT e.action,e.actor,e.note,e.created_at,s.family FROM v3_service_production_events e JOIN v3_order_services s ON s.id=e.service_id WHERE s.order_id=? ORDER BY e.id DESC LIMIT 100`).bind(orderId).all()
  ]);
  return [...(general.results||[]),...(production.results||[])].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,150);
+}
+
+export async function getV3CentralQueues(db,production){
+ const newOrders=production.filter(o=>o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+(s.productionStatus==='ready'?'Iniciar produção':s.briefingStatus==='completed'?(s.reviewedAt?'Confirmar agenda':'Conferir briefing'):'Aguardar briefing')).join(' · ')}));
+ const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.status,o.briefing_status,c.name AS customer_name,p.payment_method,p.total_cents,p.deposit_cents,
+  (SELECT status FROM v3_paid_cancellations WHERE order_id=o.id) AS cancellation,
+  EXISTS(SELECT 1 FROM v3_order_revisions WHERE order_id=o.id AND status='offered') AS revision,
+  EXISTS(SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=o.id AND a.status='review') AS supplement_review
+ FROM v3_order_checkout_snapshots snap JOIN v2_orders o ON o.id=snap.order_id JOIN v2_customers c ON c.id=o.customer_id JOIN v2_order_pricing p ON p.order_id=o.id
+ WHERE o.archived_at IS NULL AND o.status!='cancelled'
+ ORDER BY o.created_at DESC,o.id DESC`).all()).results||[];
+ const exceptions=[],pendingPayments=[];
+ for(const r of rows){
+  const base={code:r.order_code,honoreeName:r.honoree_display_name,customerName:r.customer_name,paymentMethod:r.payment_method,totalCents:r.total_cents,modular:true};
+  const add=(status,label,reason)=>exceptions.push({...base,status,statusLabel:label,attentionReason:reason});
+  if(r.cancellation){if(r.cancellation==='review')add('cancellation_review','Cancelamento em revisão','Conferir cobranças e devoluções');continue;}
+  if(r.revision){add('awaiting_payment','Proposta revisada','Aguardando aceite da cliente');continue;}
+  const f=await originalV3FinancialState(db,r.id);
+  if(!f)continue;
+  if(!f.valid&&f.payments.some(p=>['approved','refunded'].includes(p.status))){add('capacity_review','Financeiro em conferência','Verificar pagamentos antes de liberar produção');continue;}
+  if(!f.depositConfirmed){pendingPayments.push({...base,status:'awaiting_payment',dueCents:r.deposit_cents,statusLabel:r.status==='configuring'?'Pedido ainda não enviado ao pagamento':'Aguardando pagamento'});continue;}
+  if(r.status==='capacity_review'||r.briefing_status==='locked')add('capacity_review','Agenda em revisão','Confirmar capacidade e liberação do briefing');
+  if(r.supplement_review)add('capacity_review','Complemento em conferência','Verificar cobrança complementar');
+  if(f.remainingCents>0)pendingPayments.push({...base,status:'balance_pending',dueCents:f.remainingCents,statusLabel:'Saldo Pix pendente'});
+ }
+ return {newOrders,exceptions,pendingPayments};
 }

@@ -31,7 +31,12 @@ export async function handleStoreFunnel(request,env,url){
   for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>512){await reader.cancel();return new Response(null,{status:413});}raw+=decoder.decode(value,{stream:true});}
   raw+=decoder.decode();
   const body=JSON.parse(raw);
-  if(!body||typeof body!=='object'||Object.keys(body).some(k=>!['id','stage'].includes(k))||!valid(body.id)||!FUNNEL_STAGES.includes(body.stage))return new Response(null,{status:422});
+  if(!body||typeof body!=='object'||Array.isArray(body)||!valid(body.id))return new Response(null,{status:422});
+  if(body.action==='forget_name'&&Object.keys(body).every(k=>['id','action'].includes(k))){await env.DB.prepare('DELETE FROM v3_store_journey_names WHERE journey_id=?').bind(body.id).run();return new Response(null,{status:204,headers:{'cache-control':'no-store'}});}
+  if(body.action==='identify'&&Object.keys(body).every(k=>['id','action','name','consent'].includes(k))&&body.consent==='named-v1'&&typeof body.name==='string'&&body.name.trim().length>0&&body.name.trim().length<=60&&!/[\u0000-\u001f\u007f]/.test(body.name)){
+    const stamp=new Date().toISOString();await env.DB.prepare(`INSERT INTO v3_store_journey_names(journey_id,preferred_name,consent_version,consented_at) SELECT id,?,'named-v1',? FROM v3_store_journeys WHERE id=? AND had_order=0 ON CONFLICT(journey_id) DO UPDATE SET preferred_name=excluded.preferred_name,consent_version=excluded.consent_version,consented_at=excluded.consented_at`).bind(body.name.trim(),stamp,body.id).run();return new Response(null,{status:204,headers:{'cache-control':'no-store'}});
+  }
+  if(Object.keys(body).some(k=>!['id','stage'].includes(k))||!FUNNEL_STAGES.includes(body.stage))return new Response(null,{status:422});
   await recordStoreStage(env.DB,body.id,body.stage);return new Response(null,{status:204,headers:{'cache-control':'no-store'}});
  }catch{return new Response(null,{status:400});}
 }
@@ -46,7 +51,8 @@ export async function getStoreFunnel(db,{now=new Date()}={}){
  ) SELECT j.stage,j.outcome,COUNT(*) AS n,${visits} FROM classified j GROUP BY j.stage,j.outcome`).bind(idle,since).all();
  const stages=FUNNEL_STAGES.map(stage=>({stage,reached:0,inactive:0,last:0,active:0})),outcomes={paid:0,cancelled:0,order_pending:0,inactive:0,active:0};let total=0;
  for(const row of rows.results||[]){total+=Number(row.n);outcomes[row.outcome]+=Number(row.n);for(let i=0;i<stages.length;i++)stages[i].reached+=Number(row['s'+i]||0);{const stage=stages.find(x=>x.stage===row.stage);if(stage){stage.last+=Number(row.n);if(row.outcome==='inactive')stage.inactive+=Number(row.n);if(row.outcome==='active')stage.active+=Number(row.n);}}}
- return {since,total,outcomes,stages,idleHours:24,windowDays:30};
+ const named=(await db.prepare(`SELECT n.preferred_name AS name,j.stage,j.last_seen_at AS lastSeenAt,CASE WHEN EXISTS(SELECT 1 FROM v2_payments p WHERE p.order_id=j.order_id AND p.payment_type!='refund' AND (p.status='approved' OR (p.status='refunded' AND p.paid_at IS NOT NULL))) THEN 'paid' WHEN o.status='cancelled' OR (j.had_order=1 AND j.order_id IS NULL) THEN 'cancelled' WHEN j.order_id IS NOT NULL THEN 'order_pending' WHEN j.last_seen_at<=? THEN 'inactive' ELSE 'active' END AS outcome FROM v3_store_journey_names n JOIN v3_store_journeys j ON j.id=n.journey_id LEFT JOIN v2_orders o ON o.id=j.order_id WHERE j.started_at>=? ORDER BY j.last_seen_at DESC LIMIT 100`).bind(idle,since).all()).results||[];
+ return {since,total,outcomes,stages,named,idleHours:24,windowDays:30};
 }
 export async function purgeStoreFunnel(db,now=new Date()){
  await db.prepare('DELETE FROM v3_store_journeys WHERE id IN (SELECT id FROM v3_store_journeys WHERE last_seen_at<? ORDER BY last_seen_at LIMIT 500)').bind(new Date(now.getTime()-90*DAY).toISOString()).run();

@@ -1,4 +1,4 @@
-import {trackStoreStage} from './store-funnel.js';
+import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
 import { mountV3Checkout } from './client-v3-checkout.js?v=89';
@@ -15,7 +15,7 @@ const STORE_KEY = 'libriV3Draft';
 let conversationName='',welcomeAnswered=false;
 try{welcomeAnswered=sessionStorage.getItem('libriV3WelcomeSeen')==='1';}catch{}
 function personalTitle(text){return conversationName?clean(conversationName)+', '+text:text.charAt(0).toUpperCase()+text.slice(1);}
-function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;try{sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
+function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;setJourneyName(conversationName);try{sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
 function shouldAskName(){return !welcomeAnswered&&state.step==='event'&&!state.eventType&&!state.cartItems.length;}
 const EVENTS = [
  ['birthday','Aniversário','Infantil ou adulto'],['15_years','15 anos','Uma celebração especial'],['wedding','Casamento','A história do casal'],['celebration','Chá ou celebração','Bebê, revelação, chá de panela e outros'],['other','Outra celebração','Formatura, bodas e mais']

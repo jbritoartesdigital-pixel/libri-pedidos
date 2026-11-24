@@ -22,7 +22,7 @@ async function setup(){
   const input={customerId,orderCode:'LIBRI-9000',publicToken:'ord_'+crypto.randomUUID(),body};
   return {db,input};
 }
-import {prepareV3Payment} from '../src/lib/v3-order-payment.js';
+import {prepareV3Payment,reconcileV3Payment} from '../src/lib/v3-order-payment.js';
 import {resumeV2Payment} from '../src/lib/v2-checkout.js';
 
 test('V3 uses one real capacity hold and one provider checkout for the whole order',async t=>{
@@ -104,4 +104,35 @@ test('V3 payment with altered parent pricing never unlocks modules',async t=>{
   await assert.rejects(syncMercadoPagoOrder(env,payment.providerOrderId),/divergente/);
   assert.ok(db.sqlite.prepare('SELECT briefing_status FROM v3_order_services').all().every(x=>x.briefing_status==='locked'));
   assert.equal(db.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id=?').get(order.orderId).briefing_status,'locked');
+});
+
+test('V3 expired checkout is reconciled at provider without replacement charge',async t=>{
+  const {db,input}=await setup();
+  const mp=providerMock(t);
+  const order=await createV3OrderRecords(db,input);
+  const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+  const request=new Request('https://test/internal-v3');
+  const payment=await prepareV3Payment(request,env,order.orderId);
+  assert.equal((await reconcileV3Payment(env,order.orderId)).pending,true);
+  db.sqlite.exec("UPDATE v2_checkout_holds SET expires_at='2000-01-01T00:00:00.000Z'");
+  const result=await reconcileV3Payment(env,order.orderId);
+  assert.equal(result.terminal,true);
+  assert.equal(result.canRetry,false);
+  assert.equal(mp.orders.get(payment.providerOrderId).status,'cancelled');
+  assert.equal(mp.posts,1);
+  assert.ok(db.sqlite.prepare('SELECT briefing_status FROM v3_order_services').all().every(x=>x.briefing_status==='locked'));
+});
+test('V3 reconciliation preserves payment approved after hold expiry',async t=>{
+  const {db,input}=await setup();
+  const mp=providerMock(t);
+  const order=await createV3OrderRecords(db,input);
+  const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+  const payment=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+  db.sqlite.exec("UPDATE v2_checkout_holds SET expires_at='2000-01-01T00:00:00.000Z'");
+  mp.approve(payment.providerOrderId);
+  const result=await reconcileV3Payment(env,order.orderId);
+  assert.equal(result.alreadyPaid,true);
+  assert.equal(mp.posts,1);
+  assert.equal(mp.orders.get(payment.providerOrderId).status,'processed');
+  assert.ok(db.sqlite.prepare('SELECT briefing_status FROM v3_order_services').all().every(x=>x.briefing_status==='available'));
 });

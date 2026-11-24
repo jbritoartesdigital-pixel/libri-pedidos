@@ -94,7 +94,7 @@ test('V3 applies explicit eligible invite combo once and calculates card fee on 
 });
 test('V3 rejects cart-wide discounts, ineligible combos and Ateliê combos',async()=>{
   const db=database({beforeApprovedAtelie:true});
-  await assert.rejects(quoteV3Cart(db,{...base,items:[invitation],couponCode:'TEST'}),/Descontos combinados/);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[invitation],couponCode:'TEST'}),/Cupom inválido/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,comboCode:'missing_combo'}]}),/Combo não encontrado/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[],comboCode:'cart_test'}]}),/Descontos combinados/);
 });

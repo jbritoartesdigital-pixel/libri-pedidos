@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=97';
+import { mountV3Checkout } from './client-v3-checkout.js?v=98';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -195,7 +195,7 @@ let basketRequestKey='',basketRequestQuote=null,basketRequestSeq=0;
 function hideBasket(){if(basket)basket.hidden=true;basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
 function renderBasket(){
  if(!basket||!basketBody||!basketTotal)return;
- if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
+ if(state.step==='cart'||state.step==='atelie-checkout'||(['extras','review'].includes(state.step)&&!state.cartItems.some(x=>cartFamily(x.productCode)!=='invitation'))){hideBasket();return;}
  const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
  const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
  const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
@@ -377,9 +377,14 @@ function renderExtras(){
  }).join('');
  const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
  panel('Quer acrescentar algo ao seu convite?','Escolha apenas o que faz sentido para sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
- '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+ '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div>',3);
 }
-let guidedBusy=false;
+let guidedBusy=false,pendingAdd=false;
+function addConfiguredInvite(){
+ if(!currentVariant()||!quote||liveQuoteKey!==quoteKey()){pendingAdd=false;return message('Confira a configuração do convite.');}
+ pendingAdd=false;
+ if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))showCartAdded();
+}
 async function advanceGuided(group,code){
  if(guidedBusy)return;
  guidedBusy=true;
@@ -387,13 +392,14 @@ async function advanceGuided(group,code){
  const groups=availableGroups(),index=groups.findIndex(g=>g[0]===group);
  if(index<0)return;
  if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
+ const scrollPosition=root.querySelector('.v3-stage-body')?.scrollTop||0;
  const before=[...state.addonCodes],dismissed=[...state.dismissed];
  state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
  if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);state.dismissed=state.dismissed.filter(x=>x!=='addon:'+group);}
  else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
  try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
  state.offerFinished=false;
- state.addonQuestion=0;render();root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
+ state.addonQuestion=0;render();const body=root.querySelector('.v3-stage-body');if(body)body.scrollTop=scrollPosition;root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
  }finally{guidedBusy=false;}
 }
 function linesHtml() {
@@ -426,8 +432,7 @@ function openOfferModal(){
   modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 function cartDateHtml(){
-  if(!cartQuote||cartError||!state.cartItems.length)return '';
-  return '<div class="v3-cart-date"><label for="v3CartEventDate">Data da festa</label><input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input"><small>Confira o prazo na próxima etapa.</small></div>';
+  return ''; // A data é informada uma única vez, na contratação.
 }
 let cartExtrasCatalog=Object.create(null);
 const EXTRA_INTENTS={
@@ -544,6 +549,7 @@ function render() {
   }
 }
 function modalClose() {
+  pendingAdd=false;
   if(modalRoot.querySelector('.v3-offer-card')&&offer&&!state.offerFinished){
     state.dismissed.push(offer.id);state.offerFinished=true;offer=null;save();
   }
@@ -717,7 +723,7 @@ async function handleStoreClick(event) {
     if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);await go('review');return;}
+    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){
@@ -734,7 +740,7 @@ async function handleStoreClick(event) {
       modalClose();await go('extras');return;
     }
     if(action==='dismiss-offer'){
-      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;modalClose();render();return;
+      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;const add=pendingAdd;modalClose();if(add)addConfiguredInvite();else render();return;
     }
     if(action==='accept-offer'){
       if(!offer)return;
@@ -746,11 +752,10 @@ async function handleStoreClick(event) {
         if(item.group==='moments')state.addonCodes=state.addonCodes.filter(code=>code!=='custom_filter');
         state.addonCodes.push(item.code);
       }
-      state.offerFinished=true;offer=null;modalClose();await go('review');return;
+      state.offerFinished=true;offer=null;const add=pendingAdd;modalClose();if(add){await refreshQuote();addConfiguredInvite();}else await go('review');return;
     }
     if(action==='add-invitation'){
-      if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
-      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))showCartAdded();return;
+      addConfiguredInvite();return;
     }
     if(action==='added-more'){modalClose();await go('creation');return;} if(action==='added-view'){modalClose();await openCart();return;} if(action==='open-cart'){await openCart();return;}
     if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}

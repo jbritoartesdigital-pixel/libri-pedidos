@@ -56,14 +56,15 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const delivery={start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
   const items=canonicalItems(body.items);
   const couponCode=normalizeV3Coupon(body.couponCode);
+  const blackLibriClaimId=body.blackLibriClaimId||'';
   if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
-  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
+  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),...(blackLibriClaimId?{blackLibriClaimId}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
-  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode},{includeSnapshots:true,requireSale:true,customerId});
+  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode,blackLibriClaimId,customer:body.customer,clientRequestId:requestKey},{includeSnapshots:true,requireSale:true,customerId});
   if(quote.totalCents!==body.expectedTotalCents)fail('O total mudou. Revise o carrinho antes de confirmar.','order_total_changed');
   const terms=await db.prepare('SELECT version,body,content_hash FROM v2_terms_versions WHERE active=1 ORDER BY published_at DESC LIMIT 1').first();
   if(!terms||terms.version!==accepted.version)fail('As condições foram atualizadas. Confira novamente.','terms_changed');
@@ -134,6 +135,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   }catch(error){
     const retry=await existingOrder(db,requestKey,requestHash);
     if(retry)return retry;
+    if(String(error.message).includes('v3_black_reservation_changed'))fail('A reserva da surpresa mudou. Confira com a Libri.','black_libri_reservation_changed');
     throw error;
   }
   const created=await existingOrder(db,requestKey,requestHash);

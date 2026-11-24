@@ -1,3 +1,4 @@
+import {getStoreFunnel} from './v3-store-funnel.js';
 import {listV3Production} from './v3-order-overview.js';
 import {
   nowIso,
@@ -3889,6 +3890,7 @@ export async function getV2Central(
     finance,
     workload,
     modularOrders,
+    funnel,
   ] =
     await Promise.all([
       centralAttention(
@@ -3925,6 +3927,7 @@ export async function getV2Central(
       financeSnapshot(db),
       sevenDayWorkload(db, today),
       listV3Production(db,{}),
+      getStoreFunnel(db),
     ]);
 
   return {
@@ -3941,6 +3944,7 @@ export async function getV2Central(
     finance,
     workload,
     modularOrders,
+    funnel,
   };
 }
 

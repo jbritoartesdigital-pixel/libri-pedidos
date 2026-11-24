@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=90';
+import { mountV3Checkout } from './client-v3-checkout.js?v=91';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -441,6 +441,7 @@ function cartExtrasHtml(item,i){
  '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar adicionais':'Ver opções de personalização')+'</button></div>';
 }
 function renderExtraQuestion(){
+ trackStoreStage('adicionais');
  const f=extraFlow;if(!f)return;
  const item=state.cartItems[f.index];if(!item||item.productCode!==f.productCode){modalClose();return;}
  const all=cartExtrasCatalog[item.productCode]||[],group=f.groups[f.step],choices=all.filter(x=>x.category===group);
@@ -791,7 +792,7 @@ async function handleStoreClick(event) {
       if(!cartQuote||cartError||!state.cartItems.length)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
-      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,contactDraft:checkoutContactDraft,request,onBack:draft=>{checkoutContactDraft=draft||{};return openCart();}});
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,contactDraft:checkoutContactDraft,request,onBack:draft=>{checkoutContactDraft=draft||{};if(draft?.eventDate)cartEventDate=draft.eventDate;return openCart();}});
       return;
     }
     if(action==='back'){

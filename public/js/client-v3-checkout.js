@@ -54,13 +54,13 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       (blackConflict?'<div class="v3-black-recovery"><strong>Você já tem uma surpresa registrada!</strong><p>Seu presente não será sorteado novamente. Se a Libri enviou um código de recuperação, informe abaixo.</p><label for="v3-black-code">Código de recuperação</label><input id="v3-black-code" class="v3-at-input" autocomplete="off"><button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="black-recover">Recuperar presente</button><p class="v3-mini">Se não tiver o código, fale com a Libri antes de pagar para preservar o benefício.</p></div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'<details class="v3-instagram-optional" '+(form.instagram?'open':'')+'><summary>Adicionar Instagram (opcional)</summary>'+field('instagram','Seu perfil no Instagram','text',false,31)+'<small>Para contato sobre sua encomenda, se desejar. Não autoriza mensagens promocionais.</small></details></div>'+
-      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName',eventType==='birthday'?'Nome da criança ou aniversariante':'Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
+      '<section class="v3-checkout-block" data-checkout-stage="dados"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'<details class="v3-instagram-optional" '+(form.instagram?'open':'')+'><summary>Adicionar Instagram (opcional)</summary>'+field('instagram','Seu perfil no Instagram','text',false,31)+'<small>Para contato sobre sua encomenda, se desejar. Não autoriza mensagens promocionais.</small></details></div>'+
+      '</section><section class="v3-checkout-block" data-checkout-stage="dados"><h2>2. Sua comemoração</h2>'+field('honoreeName',eventType==='birthday'?'Nome da criança ou aniversariante':'Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
       (busy&&form.eventDate?'<p class="v3-agenda-loading v3-inline-loading" role="status"><span class="v3-inline-line" aria-hidden="true"></span>Consultando a agenda da Libri…</p>':'')+
-      (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label class="v3-agenda-option"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · Sugerida':o.earliest?' · Primeira disponível':'')+'</label>').join('')+'<div class="v3-delivery-custom"><label for="v3c-requested-end">Quer receber em outra data?</label><input class="v3-at-input" id="v3c-requested-end" name="requestedDeliveryEnd" type="date" value="'+esc(requestedEnd)+'" max="'+esc(form.eventDate)+'"><button class="v3-btn v3-btn-secondary" type="button" data-v3-checkout="custom-delivery">Consultar outra data</button><p class="v3-mini">Informe o último dia desejado da janela de entrega de 3 dias. A agenda confirma se há disponibilidade.</p>'+(deliveryFeedback?'<p class="v3-mini" role="status">'+esc(deliveryFeedback)+'</p>':'')+'</div><p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
-      (urgentQuote?'<div class="v3-notice" data-v3-delivery-options><strong>Precisa de um encaixe?</strong><p>Não há janela normal para esta data. A Libri pode avaliar um encaixe com adicional de '+urgentQuote.urgencyPercent+'% ('+money(urgentQuote.urgencyAmountCents)+'). Nenhuma cobrança ou reserva será criada antes da aprovação.</p><label><input type="checkbox" name="urgencyAccepted" '+(urgentAccepted?'checked':'')+'> Solicitar análise pelo total de '+money(urgentQuote.totalCents)+'</label></div>':'')+
-      '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
-      '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
+      (options.length?'<div class="v3-notice" data-v3-delivery-options data-checkout-stage="agenda"><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label class="v3-agenda-option"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · Sugerida':o.earliest?' · Primeira disponível':'')+'</label>').join('')+'<div class="v3-delivery-custom"><label for="v3c-requested-end">Quer receber em outra data?</label><input class="v3-at-input" id="v3c-requested-end" name="requestedDeliveryEnd" type="date" value="'+esc(requestedEnd)+'" max="'+esc(form.eventDate)+'"><button class="v3-btn v3-btn-secondary" type="button" data-v3-checkout="custom-delivery">Consultar outra data</button><p class="v3-mini">Informe o último dia desejado da janela de entrega de 3 dias. A agenda confirma se há disponibilidade.</p>'+(deliveryFeedback?'<p class="v3-mini" role="status">'+esc(deliveryFeedback)+'</p>':'')+'</div><p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
+      (urgentQuote?'<div class="v3-notice" data-v3-delivery-options data-checkout-stage="agenda"><strong>Precisa de um encaixe?</strong><p>Não há janela normal para esta data. A Libri pode avaliar um encaixe com adicional de '+urgentQuote.urgencyPercent+'% ('+money(urgentQuote.urgencyAmountCents)+'). Nenhuma cobrança ou reserva será criada antes da aprovação.</p><label><input type="checkbox" name="urgencyAccepted" '+(urgentAccepted?'checked':'')+'> Solicitar análise pelo total de '+money(urgentQuote.totalCents)+'</label></div>':'')+
+      '</section><section class="v3-checkout-block" data-checkout-stage="pagamento"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
+      '</section><section class="v3-checkout-block" data-checkout-stage="revisao"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
       '</section></fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
       '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length&&!(urgentQuote&&urgentAccepted))?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':urgentQuote&&urgentAccepted?'Solicitar encaixe, sem pagar agora':'Confirmar e pagar')+'</button></div></form></section>';
     root.setAttribute('aria-busy',String(busy));
@@ -76,7 +76,6 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       if(JSON.stringify(next)!==JSON.stringify(terms))accepted.clear();
       terms=next;enabled=t.checkoutEnabled===true;
       if(agenda||hadUrgency){
-        trackStoreStage('agenda');
         const previousWindow=form.deliveryWindow;options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
         if(!form.eventDate)throw Error('Informe a data do evento.');
         const result=await request('/api/v3/cart/delivery-options',{...selection,eventDate:form.eventDate});
@@ -90,7 +89,6 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
             }else deliveryFeedback='A data escolhida precisa ser consultada novamente.';
           }catch{deliveryFeedback='A janela escolhida não está mais disponível. Selecione outra.';}
         }
-        if(options.length||urgentQuote)trackStoreStage('pagamento');
         if(!options.length&&!urgentQuote)error='Não há uma janela automática para esta data. Consulte a Libri antes de contratar.';
       }
     }catch(e){error=e.message;quote=null;}finally{busy=false;render();}
@@ -109,7 +107,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       if(selected?.start!==window.start||selected?.end!==window.end)throw Error('Não foi possível confirmar essa janela.');
       options=[...options,selected];form.deliveryWindow=selected;quote=result.quote;
       deliveryFeedback='Janela disponível e selecionada. A reserva ocorre na contratação.';
-      trackStoreStage('pagamento');
+      trackStoreStage('agenda');
     }catch(e){deliveryFeedback=(e.message||'Data indisponível.')+' Escolha outra data.';}
     finally{busy=false;render();}
   }
@@ -166,24 +164,25 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   }
   root.addEventListener('click',handleClick);
   root.addEventListener('change',handleChange);
-  root.addEventListener('submit',handleSubmit);
-  function detach(){root.removeEventListener('click',handleClick);root.removeEventListener('change',handleChange);root.removeEventListener('submit',handleSubmit);}
+  root.addEventListener('submit',handleSubmit);root.addEventListener('focusin',observeStage);root.addEventListener('pointerdown',observeStage);
+  function observeStage(e){const stage=e.target.closest?.('[data-checkout-stage]')?.dataset.checkoutStage;if(stage&&!busy&&!attempt)trackStoreStage(stage);}
+  function detach(){root.removeEventListener('click',handleClick);root.removeEventListener('change',handleChange);root.removeEventListener('submit',handleSubmit);root.removeEventListener('focusin',observeStage);root.removeEventListener('pointerdown',observeStage);}
   function handleClick(e){
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
-    if(action==='back'&&!busy&&!attempt){readForm();detach();onBack({name:form.name,whatsapp:form.whatsapp,instagram:form.instagram,honoreeName:form.honoreeName});}
+    if(action==='back'&&!busy&&!attempt){readForm();detach();onBack({name:form.name,whatsapp:form.whatsapp,instagram:form.instagram,honoreeName:form.honoreeName,eventDate:form.eventDate});}
 
     if(action==='coupon')refresh({agenda:!!form.eventDate});
     if(action==='custom-delivery')checkCustomDelivery();
     if(action==='black-recover')recoverBlack();
-    if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
+    if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);root.addEventListener('focusin',observeStage);root.addEventListener('pointerdown',observeStage);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;
     if(e.target.name==='whatsapp'&&!blackClaim){blackChecked=false;blackConflict=false;}
     if(e.target.name==='eventDate'){readForm();requestedEnd='';deliveryFeedback='';options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
     if(e.target.name==='urgencyAccepted'){readForm();render();return;}
-    if(e.target.name==='deliveryWindow'){readForm();deliveryFeedback='';trackStoreStage('pagamento');}
-    if(e.target.hasAttribute('data-v3-term')){readForm();trackStoreStage(terms&&accepted.has('general')&&terms.services.every(t=>accepted.has(t.family))?'pagamento':'revisao');}
+    if(e.target.name==='deliveryWindow'){readForm();deliveryFeedback='';trackStoreStage('agenda');}
+    if(e.target.hasAttribute('data-v3-term')){readForm();trackStoreStage('revisao');}
     if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh({agenda:!!form.eventDate});}
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}

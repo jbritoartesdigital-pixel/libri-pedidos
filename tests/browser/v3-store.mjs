@@ -1,3 +1,4 @@
+import {handleStoreFunnel,getStoreFunnel} from '../../src/lib/v3-store-funnel.js';
 // Real Chromium, actual public JS/CSS and server catalogue, isolated SQLite.
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
@@ -48,7 +49,8 @@ const server=createServer(async(req,res)=>{
    const chunks=[];for await(const c of req)chunks.push(c);
    const request=new Request(url,{method:req.method,headers:req.headers,...(req.method==='GET'?{}:{body:Buffer.concat(chunks)})});
    let result;
-   if(allowed.has(url.pathname))result=await (url.pathname.startsWith('/api/v3/')?handlePublicCartV3Api(request,env,url):handlePublicV2Api(request,env,url));
+   if(url.pathname==='/api/v3/store/stage')result=await handleStoreFunnel(request,readEnv,url);
+   else if(allowed.has(url.pathname))result=await (url.pathname.startsWith('/api/v3/')?handlePublicCartV3Api(request,env,url):handlePublicV2Api(request,env,url));
    else if(url.pathname==='/api/admin/v2/auth/status'&&req.method==='GET')result=Response.json({ok:true,auth:{authenticated:true}});
    // Test-only authentication fixture, never in the Worker. Restrict local
    // administrative access to read-only central, notifications and fixture.
@@ -75,14 +77,14 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true});
 const errors=[];await mkdir('artifacts/v3-browser',{recursive:true});
-async function pageFor(width,height,preferredName=''){
+async function pageFor(width,height,preferredName='',consent='deny'){
  const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});
  // No outgoing requests to production or payment providers.
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/loja');await page.locator('#v3-welcome-name').waitFor();if(preferredName){await page.locator('#v3-welcome-name').fill(preferredName);await page.locator('#v3-welcome-form button[type="submit"]').click();await page.locator('.v3-title').filter({hasText:preferredName}).waitFor();assert.equal(await page.evaluate(name=>JSON.stringify(localStorage.getItem('libriV3Draft')).includes(name),preferredName),false);}else await page.locator('[data-action="welcome-skip"]').click();await page.locator('[data-action="event"]').first().waitFor();assert.equal(await page.locator('a[href*="versao=2"]').count(),0);assert.equal(await page.locator('#v3-live-basket').isVisible(),false);
- await page.locator('.libri-privacy-banner [data-privacy="deny"]').click();
- assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),'deny');
+ await page.locator('.libri-privacy-banner [data-privacy="'+consent+'"]').click();
+ assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),consent);
  return {context,page};
 }
 const click=(p,a,v)=>p.locator('[data-action="'+a+'"]'+(v?'[data-value="'+v+'"]':'')).first().click();
@@ -129,6 +131,7 @@ try{
  assert.equal(await loadPage.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);
  await loadPage.screenshot({path:'artifacts/v3-browser/loading-mobile.png',fullPage:true});
  releaseCatalog();await loadPage.locator('#v3-welcome-name').waitFor();await loadPage.screenshot({path:'artifacts/v3-browser/welcome-mobile.png',fullPage:true});await loadPage.locator('[data-action="welcome-skip"]').click();await loadPage.locator('[data-action="event"]').first().waitFor();await loadContext.close();
+ const named=await pageFor(390,844,'Tereza consentiu','allow_named');await named.page.waitForFunction(()=>!!sessionStorage.getItem('libriStoreJourneyV1'));await named.page.locator('[data-action="event"][data-value="birthday"]').click();for(let i=0;i<30;i++){if((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'&&x.stage==='servico'))break;await new Promise(r=>setTimeout(r,100));}assert.ok((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'&&x.stage==='servico'));await named.page.locator('#libri-privacy [data-privacy="preferences"]').click();await named.page.locator('.libri-privacy-dialog [data-privacy="deny"]').click();for(let i=0;i<30;i++){if(!(await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'))break;await new Promise(r=>setTimeout(r,100));}assert.equal((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'),false);await named.context.close();
  const durations=await pageFor(390,844,'Tereza');const dp=durations.page;
  await click(dp,'event','birthday');assert.equal(await dp.locator('.v3-title').innerText(),'O que gostaria de criar?');await click(dp,'creation','invitation');assert.match(await dp.locator('.v3-title').innerText(),/Tereza, como imagina seu convite/);await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon,.v3-arrow').count(),0);assert.equal(await dp.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);await dp.evaluate(()=>document.fonts.ready);assert.equal(await dp.evaluate(()=>[...document.fonts].some(f=>f.family==='Manrope'&&f.status==='loaded')),true,'Manrope precisa carregar o arquivo local');const glass=await dp.evaluate(()=>{const panel=getComputedStyle(document.querySelector('.v3-panel--guided'));const card=getComputedStyle(document.querySelector('.v3-format-card'));return {panelImage:panel.backgroundImage,cardImage:card.backgroundImage,cardBlur:card.backdropFilter}});assert.equal(glass.panelImage,'none','O contêiner deve manter o fundo claro original');assert.match(glass.cardImage,/linear-gradient/);assert.match(glass.cardBlur,/blur\(22px\)/);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();const stageBefore=await dp.locator('.v3-title').innerText();const night=dp.locator('#v3-theme-toggle');await night.click();assert.equal(await dp.locator('html').getAttribute('data-v3-theme'),'dark');assert.equal(await night.getAttribute('aria-pressed'),'true');assert.equal(await dp.locator('.v3-title').innerText(),stageBefore);assert.equal(await dp.evaluate(()=>localStorage.getItem('libriV3Theme')),'dark');assert.equal(await dp.evaluate(()=>getComputedStyle(document.querySelector('.v3-panel--guided')).backgroundColor),'rgb(48, 36, 39)');await dp.screenshot({path:'artifacts/v3-browser/night-mode-mobile.png',fullPage:true});await night.click();assert.equal(await dp.locator('html').getAttribute('data-v3-theme'),'light');assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});assert.equal(await dp.evaluate(()=>{const m=document.querySelector('.v3-main'),p=document.querySelector('.v3-panel--guided'),b=document.querySelector('#v3-live-basket');const a=m.getBoundingClientRect(),q=b.getBoundingClientRect();return getComputedStyle(m).flexDirection==='column'&&getComputedStyle(p).backgroundImage==='none'&&Math.abs(a.x-q.x)<=2&&Math.abs(a.width-q.width)<=2&&document.scrollingElement.scrollHeight<=innerHeight+1}),true,'Uma única coluna com resumo integrado e viewport travado');
@@ -140,7 +143,7 @@ try{
  await page.screenshot({path:'artifacts/v3-browser/cart-mobile.png',fullPage:true});
  await click(page,'cart-edit','0');await page.locator('[data-action="add-invitation"]').waitFor();await click(page,'add-invitation');await page.locator('[data-action="cart-unified-checkout"]').waitFor();
  await checkout(page);
- assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza');await page.locator('.v3-instagram-optional summary').click();await page.locator('#v3c-instagram').fill('@tereza.teste');assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('#v3c-name').fill('Tereza da Silva');assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza da Silva');
+ assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza');await page.locator('.v3-instagram-optional summary').click();await page.locator('#v3c-instagram').fill('@tereza.teste');assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('[data-v3-checkout="back"]').click();await page.locator('[data-action="cart-unified-checkout"]').waitFor();await click(page,'cart-unified-checkout');await page.locator('#v3-app[aria-busy="false"]').waitFor();assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('#v3c-name').fill('Tereza da Silva');assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza da Silva');
  await page.screenshot({path:'artifacts/v3-browser/checkout-mobile.png',fullPage:true});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await context.close();

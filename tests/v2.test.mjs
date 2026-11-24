@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1, V2 and disabled V3 staging intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 64);
+  const DB = database(); assert.equal(DB.migrationCount, 65);
   assert.ok(DB.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v3_store_journey_names'").get());
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
@@ -2592,7 +2592,7 @@ test('public catalog exposes official combo composition', async () => {
   );
 });
 
-test('official combos are seeded with the approved compositions and configurable zero discount', () => {
+test('official combos are seeded with approved compositions and initial fixed discounts', () => {
   const DB = database();
   const rows = DB.sqlite.prepare(`
     SELECT c.code, c.name, c.discount_value, i.item_type, i.item_code
@@ -2610,7 +2610,12 @@ test('official combos are seeded with the approved compositions and configurable
   assert.deepEqual(byCode.organizacao.map(row => row.item_code), ['confirmation', 'reminder']);
   assert.deepEqual(byCode.festa_completa.map(row => row.item_code), ['confirmation', 'moments']);
   assert.deepEqual(byCode.libri_completo.map(row => row.item_code), ['confirmation', 'moments', 'reminder', 'save_the_date']);
-  assert.ok(rows.every(row => row.discount_value === 0));
+  assert.deepEqual(Object.fromEntries(Object.entries(byCode).map(([code,items])=>[code,items[0].discount_value])),{antes_festa:800,convite_save:500,festa_completa:1000,libri_completo:1500,organizacao:800});
+  const migration=readFileSync('migrations/0065_v104_combo_minimum_discounts.sql','utf8');
+  DB.sqlite.exec("UPDATE v2_combos SET discount_value=1234 WHERE code='convite_save'; UPDATE v2_combos SET active=0,discount_value=0 WHERE code='organizacao';");
+  DB.sqlite.exec(migration);
+  assert.equal(DB.sqlite.prepare("SELECT discount_value FROM v2_combos WHERE code='convite_save'").get().discount_value,1234);
+  assert.equal(DB.sqlite.prepare("SELECT discount_value FROM v2_combos WHERE code='organizacao'").get().discount_value,0);
 });
 
 test('combo is suggested only after its real addons are selected and never injects items', async () => {

@@ -1,4 +1,4 @@
-import {getV3SupplementFinance,combineV3FinanceSummary} from './v3-finance-report.js';
+import {getV3SupplementFinance,getV3RefundFinance,combineV3FinanceSummary} from './v3-finance-report.js';
 import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 import { reconcileV2LegacyPixStatus } from './v2-legacy-payment-reconcile.js';
 
@@ -320,6 +320,12 @@ function numberValue(
   );
 }
 
+// Only finance read paths can treat a proven, refunded V3 receipt as a
+// historical inflow. Never reuse this predicate to authorize production.
+function historicalReceipt(alias='p'){
+ return `(${alias}.status='approved' OR (${alias}.status='refunded' AND ${alias}.payment_type!='refund' AND EXISTS (SELECT 1 FROM v3_cancellation_charges cc WHERE cc.order_id=${alias}.order_id AND cc.charge_key='original:'||${alias}.id AND cc.status='refunded' AND cc.refund_confirmed_at IS NOT NULL)))`;
+}
+
 async function summaryForRange(
   db,
   range,
@@ -334,7 +340,7 @@ async function summaryForRange(
               MIN(p.paid_at) AS sale_at
             FROM v2_payments p
             WHERE
-              p.status = 'approved'
+              ${historicalReceipt('p')}
               AND p.payment_type != 'refund'
               AND p.paid_at IS NOT NULL
             GROUP BY p.order_id
@@ -500,9 +506,9 @@ async function summaryForRange(
               ),
               0
             ) AS net_cash_before_refunds_cents
-          FROM v2_payments
+          FROM v2_payments p
           WHERE
-            status = 'approved'
+            ${historicalReceipt('p')}
             AND paid_at >= ?
             AND paid_at < ?
         `,
@@ -695,7 +701,7 @@ async function salesByProduct(
               MIN(p.paid_at) AS sale_at
             FROM v2_payments p
             WHERE
-              p.status = 'approved'
+              ${historicalReceipt('p')}
               AND p.payment_type != 'refund'
               AND p.paid_at IS NOT NULL
             GROUP BY p.order_id
@@ -807,7 +813,7 @@ async function salesByPaymentMethod(
               MIN(p.paid_at) AS sale_at
             FROM v2_payments p
             WHERE
-              p.status = 'approved'
+              ${historicalReceipt('p')}
               AND p.payment_type != 'refund'
               AND p.paid_at IS NOT NULL
             GROUP BY p.order_id
@@ -907,9 +913,9 @@ async function cashByProvider(
               ),
               0
             ) AS fee_cents
-          FROM v2_payments
+          FROM v2_payments p
           WHERE
-            status = 'approved'
+            ${historicalReceipt('p')}
             AND paid_at >= ?
             AND paid_at < ?
           GROUP BY
@@ -1022,7 +1028,7 @@ async function movementsForRange(
   } = {},
 ) {
   const clauses = [
-    `p.status = 'approved'`,
+    historicalReceipt('p'),
     'p.paid_at >= ?',
     'p.paid_at < ?',
   ];
@@ -2327,7 +2333,7 @@ export async function getV2FinanceDashboard(
       ),
     ]);
 
-  const supplemental=await getV3SupplementFinance(db,range);
+  const [supplemental,refunds]=await Promise.all([getV3SupplementFinance(db,range),getV3RefundFinance(db,range)]);
   let productionCosts = {};
   try {
     const row = await db.prepare(
@@ -2353,8 +2359,9 @@ export async function getV2FinanceDashboard(
   return {
     range,
 
-    summary:combineV3FinanceSummary(summary,supplemental),
+    summary:combineV3FinanceSummary(summary,supplemental,refunds),
     supplemental,
+    refunds,
 
     breakdown: {
       byProduct: enrichedProducts,
@@ -2382,6 +2389,6 @@ export async function getV2FinanceSummary(
   return {
     range,
 
-    summary:combineV3FinanceSummary(await summaryForRange(db,range),await getV3SupplementFinance(db,range)),
+    summary:combineV3FinanceSummary(await summaryForRange(db,range),await getV3SupplementFinance(db,range),await getV3RefundFinance(db,range)),
   };
 }

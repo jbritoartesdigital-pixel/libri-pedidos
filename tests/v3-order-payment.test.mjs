@@ -67,3 +67,41 @@ test('V3 does not issue a replacement charge when the earlier hold expires',asyn
   await assert.rejects(prepareV3Payment(request,env,order.orderId),/conciliada/);
   assert.equal(mp.posts,1);
 });
+
+import {syncMercadoPagoOrder} from '../src/lib/v2-mercadopago.js';
+
+test('V3 verified approval unlocks purchased modules only and repeated webhook preserves progress',async t=>{
+  const {db,input}=await setup();
+  const mp=providerMock(t);
+  const order=await createV3OrderRecords(db,input);
+  const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+  const payment=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+  const statuses=()=>db.sqlite.prepare('SELECT family,briefing_status,production_status FROM v3_order_services WHERE order_id=? ORDER BY family').all(order.orderId);
+  assert.deepEqual(statuses().map(x=>x.briefing_status),['locked','locked']);
+  await syncMercadoPagoOrder(env,payment.providerOrderId);
+  assert.deepEqual(statuses().map(x=>x.briefing_status),['locked','locked']);
+  mp.approve(payment.providerOrderId);
+  const approved=await syncMercadoPagoOrder(env,payment.providerOrderId);
+  assert.equal(approved.approved,true);
+  assert.deepEqual(statuses().map(x=>x.family),['convite','identidade_visual']);
+  assert.deepEqual(statuses().map(x=>x.briefing_status),['available','available']);
+  assert.ok(statuses().every(x=>x.production_status==='pending'));
+  assert.equal(db.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id=?').get(order.orderId).briefing_status,'available');
+  db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='in_progress' WHERE order_id=? AND family='convite'").run(order.orderId);
+  await syncMercadoPagoOrder(env,payment.providerOrderId);
+  assert.deepEqual(statuses().map(x=>x.briefing_status),['in_progress','available']);
+  assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,400);
+  assert.equal(mp.posts,1);
+});
+test('V3 payment with altered parent pricing never unlocks modules',async t=>{
+  const {db,input}=await setup();
+  const mp=providerMock(t);
+  const order=await createV3OrderRecords(db,input);
+  const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+  const payment=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+  db.sqlite.prepare('UPDATE v2_order_pricing SET deposit_cents=100 WHERE order_id=?').run(order.orderId);
+  mp.approve(payment.providerOrderId);
+  await assert.rejects(syncMercadoPagoOrder(env,payment.providerOrderId),/divergente/);
+  assert.ok(db.sqlite.prepare('SELECT briefing_status FROM v3_order_services').all().every(x=>x.briefing_status==='locked'));
+  assert.equal(db.sqlite.prepare('SELECT briefing_status FROM v2_orders WHERE id=?').get(order.orderId).briefing_status,'locked');
+});

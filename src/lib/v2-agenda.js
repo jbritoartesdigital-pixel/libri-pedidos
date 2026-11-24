@@ -538,7 +538,6 @@ export async function validateV2DeliveryWindow(
     start,
     end,
     productionDays = 0,
-    includeEarliest = false,
   },
 ) {
   const eventDay =
@@ -620,6 +619,7 @@ export async function findV2DeliveryOptions(
     pointsUnits,
     limit = 5,
     productionDays = 0,
+    includeEarliest = false,
   },
 ) {
   const eventDay =

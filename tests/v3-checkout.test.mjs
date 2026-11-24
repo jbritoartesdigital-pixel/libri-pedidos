@@ -346,3 +346,18 @@ test('urgency rejects non-invitation and normal windows; rejected request permit
  await decideV2Urgency(DB,order.orderCode,{decision:'reject',note:'Sem capacidade'});
  const recovery=await (await call({publicToken:order.publicToken},env,'recover')).json();assert.equal(recovery.state,'urgency_rejected');assert.equal(recovery.canStartNew,true);assert.equal(mp.posts,0);
 });
+
+import {recoverBlackReservationAdmin} from '../src/lib/v2-black-libri.js';
+test('reserved legacy gift transfers with original private key; admin recovery retains exact prize and deadline',async()=>{
+ const {DB,body,env,call}=await setup();env.LIBRI_V3_BLACK_LIBRI_ENABLED='true';
+ await saveBlackLibriCampaign(env,{adminEnabled:true,complianceConfirmed:true,authorizationReference:'TESTE-INTERNO',adminNote:'Dados sintéticos',validFrom:'2020-01-01',validUntil:'2030-12-31'});
+ DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
+ const legacy='checkout_'+crypto.randomUUID(),cart={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},...body.items]};
+ const first=(await revealBlackLibri(env,cart.customer,legacy)).claim;
+ assert.equal((await call(cart,env,'black/status')).status,409);
+ const result=await call({...cart,legacyRequestId:legacy},env,'black/status');assert.equal(result.status,200);const recovered=(await result.json()).claim;assert.equal(recovered.id,first.id);assert.equal(recovered.expiresAt,first.expiresAt);
+ await assert.rejects(recoverBlackReservationAdmin(env,{whatsapp:cart.customer.whatsapp}),/Confirme/);
+ const newCode=await recoverBlackReservationAdmin(env,{whatsapp:cart.customer.whatsapp,identityVerified:true});
+ const again=await call({...cart,clientRequestId:newCode.recoveryCode},env,'black/status');assert.equal(again.status,200);assert.equal((await again.json()).claim.id,first.id);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) n FROM v2_black_libri_claims').get().n,1);
+});

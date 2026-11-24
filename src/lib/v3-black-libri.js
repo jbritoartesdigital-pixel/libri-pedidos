@@ -1,4 +1,4 @@
-import {blackLibriOperational,findBlackLibriClaim,revealBlackLibri,matchingBlackLibriGift} from './v2-black-libri.js';
+import {blackLibriOperational,findBlackLibriClaim,revealBlackLibri,matchingBlackLibriGift,transferLegacyBlackClaim} from './v2-black-libri.js';
 import {normalizeWhatsapp} from './http.js';
 const fail=(message,code='black_libri_invalid',status=422)=>{throw Object.assign(new Error(message),{code,status});};
 const mapped={save_static:'save_static',save_animated:'save_animated',reminder_static:'reminder_static',reminder_animated:'reminder_animated',photo_filter:'custom_filter'};
@@ -45,11 +45,13 @@ export async function getV3BlackClaim(db,body){
  return claim;
 }
 export async function v3BlackStatus(env,body,{reveal=false}={}){
- const enabled=await blackV3Ready(env,body);
- if(!enabled)return {enabled:false,claim:null};
+ if(env.LIBRI_V3_CHECKOUT_ENABLED!=='true'||env.LIBRI_V3_BLACK_LIBRI_ENABLED!=='true'||!eligibleBlackV3(body))return {enabled:false,claim:null};
  const requestId=key(body);
+ if(body.legacyRequestId)await transferLegacyBlackClaim(env,body.customer,body.legacyRequestId,requestId);
  const existing=await findBlackLibriClaim(env,body.customer,{privateRequestId:requestId,checkConflict:true});
- if(existing||!reveal)return {enabled:true,claim:view(existing)};
+ if(existing)return {enabled:true,claim:view(existing)};
+ const enabled=await blackV3Ready(env,body);if(!enabled)return {enabled:false,claim:null};
+ if(!reveal)return {enabled:true,claim:null};
  if(!Number.isInteger(body.balloon)||body.balloon<0||body.balloon>=12)fail('Escolha um balão.');
  return revealBlackLibri(env,body.customer,requestId,{privateV3:true});
 }

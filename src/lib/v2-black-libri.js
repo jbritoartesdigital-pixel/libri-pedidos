@@ -300,3 +300,24 @@ export async function expireBlackLibriClaims(db) {
     WHERE status IN ('reserved','attached') AND expires_at<=? AND NOT(status='attached' AND client_request_id LIKE 'v3:%')
   `).bind(stamp,stamp).run();
 }
+
+// Possession of the original random UUID authorizes migrating an unbound reservation.
+export async function transferLegacyBlackClaim(env,customer,legacyRequestId,newRequestId){
+ if(!/^checkout_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(legacyRequestId||'')||!/^v3:[a-f0-9]{36}$/.test(newRequestId))return false;
+ const customerHash=await customerKey(env,customer),stamp=nowIso();
+ const r=await env.DB.prepare("UPDATE v2_black_libri_claims SET client_request_id=?,updated_at=? WHERE customer_key=? AND client_request_id=? AND status='reserved' AND order_id IS NULL AND expires_at>?").bind(newRequestId,stamp,customerHash,legacyRequestId,stamp).run();
+ return Number(r.meta?.changes||0)===1;
+}
+export async function recoverBlackReservationAdmin(env,body){
+ if(body?.identityVerified!==true)throw Object.assign(new Error('Confirme a identidade da cliente pelo WhatsApp antes de recuperar.'),{status:422});
+ const key=await customerKey(env,{whatsapp:body.whatsapp});
+ const claim=await env.DB.prepare(currentClaimSql).bind(key).first();
+ if(!claim)throw Object.assign(new Error('Nenhuma surpresa registrada para este telefone.'),{status:404});
+ const current=await updateClaimStatus(env.DB,claim);
+ if(current.status!=='reserved'||current.order_id)throw Object.assign(new Error(current.order_id?'Este presente já está vinculado a um pedido. Abra o pedido existente.':'A reserva original expirou ou foi utilizada. Confira a participação antes de alterar.'),{status:409});
+ const token=Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join(''),stamp=nowIso();
+ const result=await env.DB.prepare("UPDATE v2_black_libri_claims SET client_request_id=?,updated_at=? WHERE id=? AND client_request_id=? AND status='reserved' AND order_id IS NULL AND expires_at>?").bind('v3:'+token,stamp,current.id,current.client_request_id,stamp).run();
+ if(Number(result.meta?.changes||0)!==1)throw Object.assign(new Error('A reserva mudou. Confira novamente.'),{status:409});
+ await env.DB.prepare("INSERT INTO v2_black_libri_audit(action_code,target_code,before_json,after_json,created_at) VALUES('reservation_recovery',?,?,?,?)").bind(current.id,JSON.stringify({status:'reserved'}),JSON.stringify({status:'reserved',prizeCode:current.prize_code,identityVerified:true}),stamp).run();
+ return {ok:true,recoveryCode:token,label:current.label,expiresAt:current.expires_at};
+}

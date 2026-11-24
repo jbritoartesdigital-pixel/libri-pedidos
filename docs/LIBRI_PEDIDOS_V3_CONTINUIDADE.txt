@@ -447,3 +447,5 @@ V71 CI 45456201178 falhou apenas por asserção que exigia o atalho removido da 
 
 V73 (etapa 1) — REFINAMENTO DA LOJA APÓS V72 PUBLICADA
 V72 produção 45458142573 success. Cards centralizados em maiúsculas, paleta suave (rosé, champanhe, lavanda como proposta), entrada curta com reduced-motion, explicações para leigos, benefícios concretos, formulário e álbum em português, adicionais de opção única sem modal. Retirado e-mail do checkout público; nome, WhatsApp, homenageado e data obrigatórios. Consulta de agenda automática, recomendada no topo seguida da primeira disponível. Preços, capacidade, contratos preservados. Próxima parte: recuperar surpresa e funil. CI pendente.
+
+V73 (etapa 2): funil inclui surpresa e encaminhamento de pagamento, contagem da última etapa/ativas/inativas. Recuperação de reserva legada por chave UUID original; código privado administrativo para reserva válida e não vinculada, identidade verificada, preserva prêmio e vencimento original. Reserva vinculada/expirada exige conferir o pedido; sem alterar prazo da campanha. CI pendente, nenhuma mudança publicada ainda. Corrigido local do parâmetro includeEarliest.

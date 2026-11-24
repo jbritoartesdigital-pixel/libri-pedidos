@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 02 | 23/11/2026 (Brasil)
+Versão 03 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -35,7 +35,7 @@ IMPLEMENTADO NO PR #143
 - Não houve alteração na main nem no banco de produção nesta retomada.
 
 PRÓXIMO PASSO EXATO
-1. CI do código concluído com sucesso; verificar o CI do último SHA e testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
+1. Verificar CI da rodada mais recente e testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
 2. Implementar modelo persistente V3 de pedido-pai e itens principais, snapshot de cotação/termos e chave de idempotência. Reutilizar serviço Mercado Pago existente com um único total, confirmação de webhook e reserva de agenda atômica; não criar pedidos filhos cobrados separadamente. Inspecionar migrations, checkout V2, pagamentos, reservas e reconciliação antes de codificar.
 3. Completar Retrospectivas como linha real (catálogo aprovado, limites, direitos, briefing e uploads privados), integrar preço, pontos, prazo e carrinho.
 4. Briefing modular único pós-pagamento, status por serviço e replanejamento a partir de briefing completo, inclusive múltiplas crianças/personagens.
@@ -49,6 +49,13 @@ RETOMADA V02 — CATÁLOGO APROVADO
 - 03ab6fa/fa9596e: mensagens Admin corrigidas, importação eventual restaura capacidade aprovada.
 - 10722cb/9ef3a2f/64cf6c3/d2dd5f8/0e6c587/04833cc: fixtures e testes históricos ajustados para distinguir catálogo inicial antigo da configuração nova.
 - bb61210: testes da migração automática, igualdade com catálogo JS, proteção de pacote já ativo e ausência de pedidos/pagamentos criados.
-- CI desta rodada ainda não confirmado no momento do registro. Não declarar deploy ou sucesso sem leitura do estado real. A migration não foi executada em produção. O PR segue em rascunho. Próxima prioridade: checkout multiproduto, Retrospectivas, briefing modular, agenda e Admin integral; não reabrir preços/pontos já aprovados.
+- CI do commit bb61210 concluído com sucesso, execução 45313574055. Não declarar deploy ou sucesso sem leitura do estado real. A migration não foi executada em produção. O PR segue em rascunho. Próxima prioridade: checkout multiproduto, Retrospectivas, briefing modular, agenda e Admin integral; não reabrir preços/pontos já aprovados.
 
 IMPORTANTE: esta versão documenta avanço parcial. Não afirmar que a compra conjunta, retrospectivas, Admin integral ou publicação estão concluídos.
+
+RETOMADA V03 — AGENDA DO CARRINHO COMBINADO
+- 9cb85d9: cotação agregada inclui o maior prazo mínimo de produção entre os serviços.
+- 912a4e6 / 3b5da67: previewV3CartDelivery e POST /api/v3/cart/delivery-options consultam a agenda V2 com soma de pontos e validam janela escolhida; não reservam capacidade, não geram ordem ou pagamento.
+- 47c1322: tela do carrinho combinado consulta prazos por data do evento, mostra janelas reais e explicita a previsão sujeita a briefing completo; não altera checkout individual.
+- b9d0230: testes de capacidade somada, prazo mínimo 15 dias, datas inválidas, seleção de janela, ausência de pedidos/pagamentos/reservas. CI a confirmar.
+- Auditoria de src/lib/v2-checkout.js: startV2Checkout já possui claimCheckoutRequest, createOrderRecords, createCapacityHold, createMercadoPagoCheckout e recuperação de falhas. Atualmente assume quote.product/variant únicos. Reusar essas peças, não criar checkout independente. Próximo passo: modelo de serviços vinculados a v2_orders, snapshot individual de escopo/termos e preços, idempotência ligada ao payload, escrita atômica e adaptação de todos os leitores de produto único (briefing, admin, agenda, reconciliação, reprecificação). Não habilitar cobrança conjunta até os leitores e regras ficarem compatíveis. Agenda pós-briefing continua pendente; consulta atual não é reserva.

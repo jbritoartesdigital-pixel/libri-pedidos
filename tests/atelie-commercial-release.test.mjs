@@ -22,13 +22,13 @@ async function activate(db,code='essencia') {
   return setAtelieSaleStatus(db,code,true);
 }
 test('Nenhum pacote entra à venda sem escopo, preço, revisões e termos aprovados',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await assert.rejects(setAtelieSaleStatus(db,'essencia',true),/Antes de liberar/);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_products").get().n,7);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v3_atelie_packages WHERE sale_enabled=1").get().n,0);
 });
 test('Ateliê publicado usa produto principal V2 sem expor convites a catálogos trocados',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   const release=await activate(db);
   assert.equal(release.enabled,true);
   const product=db.sqlite.prepare("SELECT active,pricing_mode FROM v2_products WHERE code='atelie_essencia'").get();
@@ -67,7 +67,7 @@ test('Ateliê publicado usa produto principal V2 sem expor convites a catálogos
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_orders").get().n,0);
 });
 test('Ateliê no Mercado Pago exige termos próprios e mantém os fluxos Pix existentes',async t=>{
-  const db=database(), provider=providerMock(t);
+  const db=database({beforeApprovedAtelie:true}), provider=providerMock(t);
   await activate(db);
   const version=db.sqlite.prepare("SELECT version FROM v2_terms_versions WHERE active=1").get().version;
   const pkg=db.sqlite.prepare("SELECT updated_at FROM v3_atelie_packages WHERE code='essencia'").get();

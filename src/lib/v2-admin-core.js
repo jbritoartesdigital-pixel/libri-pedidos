@@ -1,3 +1,4 @@
+import {listV3Production} from './v3-order-overview.js';
 import {
   nowIso,
   parseJson,
@@ -2877,6 +2878,7 @@ async function centralAttention(
             ON pr.order_id = o.id
           WHERE
             o.archived_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
             AND (
               o.status IN (
                 'awaiting_urgency_decision',
@@ -3341,6 +3343,7 @@ async function centralNewOrders(
             ON c.id = o.customer_id
           WHERE
             o.archived_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
             AND o.status IN (
               'briefing_pending',
               'ready_for_production'
@@ -3407,6 +3410,7 @@ async function upcomingDeliveries(
           JOIN v2_order_pricing pr ON pr.order_id = o.id
           WHERE
             o.archived_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
             AND o.status NOT IN (
               'cancelled',
               'finalized'
@@ -3658,6 +3662,7 @@ async function sevenDayWorkload(db, today) {
     FROM v2_orders o
     LEFT JOIN v2_order_items oi ON oi.order_id = o.id AND oi.item_type = 'product'
     WHERE o.archived_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
       AND o.status NOT IN ('cancelled', 'finalized', 'awaiting_payment', 'awaiting_urgency_decision')
       AND o.delivery_start <= ? AND o.delivery_end >= ?
     GROUP BY o.id
@@ -3883,6 +3888,7 @@ export async function getV2Central(
     capacity,
     finance,
     workload,
+    modularOrders,
   ] =
     await Promise.all([
       centralAttention(
@@ -3918,6 +3924,7 @@ export async function getV2Central(
       ),
       financeSnapshot(db),
       sevenDayWorkload(db, today),
+      listV3Production(db,{}),
     ]);
 
   return {
@@ -3933,6 +3940,7 @@ export async function getV2Central(
     capacity,
     finance,
     workload,
+    modularOrders,
   };
 }
 

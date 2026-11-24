@@ -54,10 +54,11 @@ function prizePanel(claim,quote,{readonly=false,paid=false}={}){
   ${claim.description?`<p>${esc(claim.description)}</p>`:''}
   <p>${note}</p>
   ${!expired&&discount>0?`<p class="black-libri-saved">
-    ${claim.convertedToDiscount?'Crédito aplicado: ':'Desconto aplicado: '}${money(discount)}
+    ${(quote?.blackLibri?.convertedToDiscount||claim.convertedToDiscount)?'Crédito aplicado: ':'Desconto aplicado: '}${money(discount)}
   </p>`:''}
+  ${quote?.blackLibri?.applied===false&&!expired?'<p>O benefício já disponível é igual ou maior, ou este serviço já está incluído. Mantivemos a melhor condição.</p>':''}
   ${quote?.totalCents!=null&&!expired&&!redeemed?`
-    <p class="black-libri-saved">Total do convite: ${money(quote.totalCents)}</p>
+    <p class="black-libri-saved">Total do pedido: ${money(quote.totalCents)}</p>
   `:''}
  </div>`;
 }
@@ -115,12 +116,12 @@ export async function openBlackLibriPrizeDetails(prize,{paid=false}={}){
 
 // Mantém o callback de pagamento e a seleção criptográfica no servidor.
 export async function openBlackLibriBeforePayment({
- customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null
+ customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null,v3Cart=null
 }){
- const endpoint=manualToken
+ const endpoint=v3Cart?'/api/v3/cart/black':manualToken
   ?'/api/v2/manual-order/'+encodeURIComponent(manualToken)+'/black-libri'
   :'/api/v2/black-libri';
- const payload=manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
+ const payload=v3Cart?{...v3Cart,customer,clientRequestId}:manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
  let response=await api(endpoint+'/status',{method:'POST',body:JSON.stringify(payload)});
  if(!response.enabled){onContinue();return;}
  await ensureStyles();
@@ -130,7 +131,7 @@ export async function openBlackLibriBeforePayment({
  const preview=async()=>{
   if(!claim||claim.status==='expired'||claim.status==='redeemed')return;
   try{
-   const result=await api(endpoint+'/preview',{method:'POST',body:JSON.stringify(payload)});
+   const result=await api(endpoint+'/preview',{method:'POST',body:JSON.stringify(v3Cart?{...payload,blackLibriClaimId:claim.id}:payload)});
    quote=result.quote||null;
   }catch(error){quote=null;showToast(error.message||'Não foi possível conferir o valor do presente.');}
  };

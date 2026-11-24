@@ -291,8 +291,11 @@ export async function renderFinance(openOrderDetail = null) {
         finance.receivables
         || [];
 
+      const sales=Number(summary.salesCents||0),received=Number(summary.cashInCents||0),refunds=Number(summary.refundsCents||0),count=Number(summary.salesCount||0),ticket=count>0?Math.round(sales/count):null;
+      const graphValues=[['Vendas',sales],['Recebido bruto',received],['Devoluções',refunds]],max=Math.max(1,...graphValues.map(x=>Math.abs(x[1])));
+      const productRows=finance.breakdown?.byProduct||[],productMax=Math.max(1,...productRows.map(p=>Math.abs(Number(p.salesCents||0))));
       content.innerHTML = `
-        <div data-finance-page="summary" class="finance-page"><div class="kpi-grid">
+        <div data-finance-page="summary" class="finance-page"><div class="finance-visual-grid"><section class="finance-hero"><span class="hero-kicker">LIBRI / CAIXA</span><small>Recebido bruto no período</small><strong>${money(received)}</strong><div class="finance-hero-facts"><div><span>Vendas</span><b>${money(sales)}</b></div><div><span>Ticket médio das vendas</span><b>${ticket===null?'Sem vendas':money(ticket)}</b></div></div><small>Recebimentos e vendas são medidos por datas diferentes.</small></section><section class="card finance-compare"><h2>Visão do período</h2>${graphValues.map(([label,value])=>`<div class="financial-bar-row"><span>${esc(label)}</span><strong>${money(value)}</strong><div class="financial-bar-track"><i style="width:${Math.min(100,100*Math.abs(value)/max)}%"></i></div></div>`).join('')}<small class="muted">Valores independentes, não somados. Devoluções são saídas.</small></section></div><div class="kpi-grid">
           <article class="kpi">
             <span>Vendas realizadas</span>
             <strong>
@@ -366,6 +369,7 @@ export async function renderFinance(openOrderDetail = null) {
               <small>Contratações originais iniciadas no período. Valores do pedido e recebimentos rateados por produto, com centavos preservados. Complementos separados. O líquido considera recebimentos e devoluções conhecidos até hoje, não apenas no mês selecionado.</small>
             </div>
           </div>
+          <div class="finance-product-chart" aria-label="Vendas por produto">${productRows.map(p=>`<div class="financial-bar-row"><span>${esc(p.productName)}</span><strong>${money(p.salesCents)}</strong><div class="financial-bar-track"><i style="width:${Math.min(100,100*Math.abs(Number(p.salesCents||0))/productMax)}%"></i></div></div>`).join('')||empty('Sem vendas no período.')}</div>
           <div class="finance-performance-grid">
             ${(finance.breakdown?.byProduct || []).map(product => `
               <div class="finance-performance-card">

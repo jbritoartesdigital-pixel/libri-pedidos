@@ -74,3 +74,5 @@ V84: corrigida ausência de listagem inicial real de Pedidos; paginação e filt
 V86: aprovadas todas as 25 propostas. Fundação de navegação e identidade implementada, Central editorial inicial com dados reais e linha do tempo. Novos testes de busca universal, atalho, drawer e navegação mobile. Ainda pendem inspeção visual, Kanban, histórico, filtros rápidos, gráficos, agenda e funil, além da gestão comercial Retro. Sem deploy. Não declarar entrega integral.
 
 V87: Kanban de consulta por serviço, filtros rápidos da produção e histórico/ação na ficha V3 implementados; aguardam CI, inspeção e validação sem alteração de estado. Pendem financeiro visual, agenda lista/mapa, funil e auditoria geral.
+
+V88: financeiro visual com dados existentes, calendário semanal/lista/mapa de capacidade, funil visual observacional. Implementação em branch; validação de comportamento e revisão visual ainda pendentes. Sem mudanças de dados, preço ou regra.

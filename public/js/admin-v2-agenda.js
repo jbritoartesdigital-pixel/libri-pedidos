@@ -36,6 +36,11 @@ let activeMonth =
   null;
 
 let lastPeriodFeedback = null;
+let agendaMode='calendar';try{const m=localStorage.getItem('libriAdminAgendaMode');if(['calendar','week','list','capacity'].includes(m))agendaMode=m;}catch{}
+let agendaWeek=0;
+function capacityState(day){const capacity=Number(day.sellableCapacityUnits||0),used=Number(day.productionUnits||0)+Number(day.cascadeReservedUnits||0)+Number(day.checkoutHeldUnits||0),free=Number(day.publicFreeUnits||0);return {capacity,used,free,key:day.blocked?'blocked':used>capacity?'over':capacity<=0||free<=0?'full':used>0?'busy':'free',label:day.blocked?'Bloqueado':used>capacity?'Acima da capacidade':capacity<=0||free<=0?'Sem vagas':used>0?'Parcialmente ocupado':'Livre'};}
+function agendaListHtml(days){return days.map(day=>{const events=day.events||[],deliveries=day.deliveries||[],s=capacityState(day);return '<article class="agenda-list-day"><header><strong>'+dateBr(day.day)+'</strong><small>'+esc(s.label)+' · '+(s.free/100).toFixed(1)+' pt livres</small><button type="button" class="btn btn-ghost btn-small" data-edit-day="'+esc(day.day)+'">Ver dia</button></header><div class="agenda-list-events">'+[...events.map(x=>({x,label:'Festa'})),...deliveries.map(x=>({x,label:FAMILY_LABELS[x.serviceFamily]||'Entrega'}))].map(({x,label})=>'<button type="button" class="agenda-list-event" data-open-order="'+esc(x.code)+'"><span>'+esc(label)+'</span><strong>'+esc(x.honoreeName||x.customerName)+'</strong><small>'+esc(x.productName||x.customerName||'')+'</small></button>').join('')+'</div></article>';}).join('')||empty('Nenhuma festa ou entrega no período.');}
+function capacityMapHtml(days){return '<div class="capacity-map-legend">'+[['free','Livre'],['busy','Parcial'],['full','Sem vagas'],['over','Acima da capacidade'],['blocked','Bloqueado']].map(([k,label])=>'<span><i class="capacity-swatch capacity-'+k+'"></i>'+label+'</span>').join('')+'</div><div class="capacity-map">'+days.map(day=>{const s=capacityState(day);return '<button type="button" class="capacity-tile capacity-'+s.key+'" data-edit-day="'+esc(day.day)+'" aria-label="'+esc(dateBr(day.day)+' '+s.label+' '+(s.free/100).toFixed(1)+' pontos livres')+'"><strong>'+esc(day.day.slice(8))+'</strong><span>'+esc(s.label)+'</span><small>'+(s.free/100).toFixed(1)+' pt livres</small><span class="capacity-tile-bar"><i style="width:'+Math.max(0,Math.min(100,s.capacity?100*s.used/s.capacity:0))+'%"></i></span></button>';}).join('')+'</div><small class="muted">A capacidade inclui produção, reservas de cascata e checkout. Toque em um dia para conferir a distribuição de pontos e editar.</small>';}
 
 function isoDay(
   date,
@@ -422,8 +427,9 @@ function dayEventsHtml(
 function bindDayEditor(
   agenda,
   openOrder,
+  root=viewRoot,
 ) {
-  viewRoot
+  root
     .querySelectorAll(
       '[data-edit-day]',
     )
@@ -830,7 +836,8 @@ export async function renderAgenda(
       </div>
     ` : ''}
 
-    <section class="card agenda-calendar-card">
+    <nav class="admin-segmented agenda-view-switch" aria-label="Visualização da agenda">${[['calendar','Mês'],['week','Semana'],['list','Lista'],['capacity','Capacidade']].map(([id,label])=>`<button type="button" data-agenda-mode="${id}" aria-pressed="false">${label}</button>`).join('')}</nav>
+    <section class="card agenda-calendar-card" data-agenda-page="calendar">
       <div class="section-title">
         <h2>Festas e entregas</h2>
         <span class="status blue">
@@ -871,6 +878,9 @@ export async function renderAgenda(
       </div>
     </section>
 
+    <section class="card agenda-week-card" data-agenda-page="week" hidden><div class="section-title"><h2>Semana</h2><div class="agenda-week-controls"><button type="button" class="btn btn-ghost" id="agendaWeekPrev" aria-label="Semana anterior">‹</button><span id="agendaWeekLabel"></span><button type="button" class="btn btn-ghost" id="agendaWeekNext" aria-label="Próxima semana">›</button></div></div><div id="agendaWeekRows"></div></section>
+    <section class="card agenda-list-card" data-agenda-page="list" hidden><div class="section-title"><h2>Festas e entregas do mês</h2></div>${agendaListHtml((agenda.days||[]).filter(d=>d.day.slice(0,7)===activeMonth.slice(0,7)&&((d.events||[]).length||(d.deliveries||[]).length)))}</section>
+    <section class="card agenda-capacity-card" data-agenda-page="capacity" hidden><div class="section-title"><h2>Mapa de capacidade</h2><small>Pontos por dia</small></div>${capacityMapHtml((agenda.days||[]).filter(d=>d.day.slice(0,7)===activeMonth.slice(0,7)))}</section>
     <details class="card agenda-advanced" style="margin-top:14px" ${suggestions.length||releaseable.length?'open':''}>
       <summary>Antecipações e liberação de capacidade (${suggestions.length+releaseable.length})</summary>
 
@@ -1034,17 +1044,20 @@ export async function renderAgenda(
         ),
     );
 
-  bindDayEditor(
-    agenda,
-    openOrder,
-  );
+  const days=agenda.days||[],weekCount=Math.max(1,Math.ceil(days.length/7));
+  const todayIndex=days.findIndex(d=>d.day===todayIso());if(month||agendaWeek>=weekCount)agendaWeek=todayIndex>=0?Math.floor(todayIndex/7):0;
+  function renderWeek(){const selected=days.slice(agendaWeek*7,agendaWeek*7+7);document.getElementById('agendaWeekLabel').textContent=selected.length?dateBr(selected[0].day)+' a '+dateBr(selected.at(-1).day):'';document.getElementById('agendaWeekPrev').disabled=agendaWeek===0;document.getElementById('agendaWeekNext').disabled=agendaWeek>=weekCount-1;document.getElementById('agendaWeekRows').innerHTML=agendaListHtml(selected);bindDayEditor(agenda,openOrder,document.getElementById('agendaWeekRows'));document.querySelectorAll('#agendaWeekRows [data-open-order]').forEach(b=>b.onclick=()=>openOrder?.(b.dataset.openOrder));}
+  function setMode(mode){agendaMode=mode;viewRoot.querySelectorAll('[data-agenda-page]').forEach(el=>el.hidden=el.dataset.agendaPage!==mode);viewRoot.querySelectorAll('[data-agenda-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.agendaMode===mode)));try{localStorage.setItem('libriAdminAgendaMode',mode);}catch{}}
+  viewRoot.querySelectorAll('[data-agenda-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.agendaMode));document.getElementById('agendaWeekPrev').onclick=()=>{if(agendaWeek>0){agendaWeek--;renderWeek();}};document.getElementById('agendaWeekNext').onclick=()=>{if(agendaWeek<weekCount-1){agendaWeek++;renderWeek();}};
+  bindDayEditor(agenda,openOrder);renderWeek();setMode(agendaMode);
 
   viewRoot
     .querySelectorAll(
       '[data-open-order]',
     )
     .forEach(
-      (button) =>
+      (button) => {
+        if(button.closest('#agendaWeekRows'))return;
         button.addEventListener(
           'click',
           async () => {
@@ -1054,7 +1067,7 @@ export async function renderAgenda(
               );
             }
           },
-        ),
+        );},
     );
 
   viewRoot

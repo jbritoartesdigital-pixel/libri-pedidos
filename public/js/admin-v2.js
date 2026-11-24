@@ -18,7 +18,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-87';
+} from './admin-v2-central.js?v=20261124-admin-v3-88';
 
 import {
   renderProduction,
@@ -34,11 +34,11 @@ import {
 
 import {
   renderAgenda,
-} from './admin-v2-agenda.js?v=20261124-admin-v3-82';
+} from './admin-v2-agenda.js?v=20261124-admin-v3-88';
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261124-admin-v3-82';
+} from './admin-v2-finance.js?v=20261124-admin-v3-82&visual=88';
 
 import {
   renderArchived,

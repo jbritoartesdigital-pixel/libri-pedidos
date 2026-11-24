@@ -1,0 +1,70 @@
+// INTERNAL ONLY: no HTTP entry point until modular briefing, admin and
+// promotions are compatible. Reuses V2 capacity and provider idempotency.
+import {createCapacityHold,V2CheckoutError} from './v2-checkout.js';
+import {createMercadoPagoCheckout} from './v2-mercadopago.js';
+import {withV2PaymentLock} from './v2-payment-lock.js';
+import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
+import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
+import {nowIso} from './http.js';
+
+const fail=(message,code)=>{throw new V2CheckoutError(message,{status:409,code});};
+export async function prepareV3Payment(request,env,orderId){
+  if(!Number.isSafeInteger(orderId)||orderId<=0)fail('Pedido inválido.','v3_order_invalid');
+  const db=env.DB;
+  return withV2PaymentLock(db,orderId,async()=>{
+    const row=await db.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.briefing_status,
+       o.event_date,o.delivery_start,o.delivery_end,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
+       p.balance_cents,p.payment_method,s.quote_json
+       FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
+       JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id
+       WHERE o.id=?`).bind(orderId).first();
+    if(!row)fail('Pedido combinado não encontrado.','v3_order_missing');
+    const quote=JSON.parse(row.quote_json);
+    const lines=(await db.prepare('SELECT total_cents,points_units FROM v3_order_services WHERE order_id=?').bind(orderId).all()).results||[];
+    const sum=key=>lines.reduce((n,x)=>n+Number(x[key]),0);
+    if(lines.length<2||lines.length>3||sum('points_units')!==quote.pointsUnits||
+      sum('total_cents')+quote.cardFeeCents!==quote.totalCents||row.total_cents!==quote.totalCents||
+      row.deposit_cents!==row.total_cents||row.deposit_percent!==100||row.balance_cents!==0||
+      row.payment_method!==quote.paymentMethod||!['pix','card'].includes(row.payment_method))
+      fail('O pedido precisa de revisão antes do pagamento.','v3_order_inconsistent');
+    const existing=(await db.prepare('SELECT provider_order_id,checkout_url,status,amount_cents,method FROM v2_payments WHERE order_id=? ORDER BY id DESC').bind(orderId).all()).results||[];
+    if(existing.some(x=>x.status==='approved'))return {ok:true,alreadyPaid:true,orderCode:row.order_code};
+    if(!['configuring','awaiting_payment'].includes(row.status)||row.briefing_status!=='locked')
+      fail('O pedido não está disponível para cobrança.','v3_payment_unavailable');
+    const hold=await db.prepare(`SELECT h.id,h.token,h.status,h.expires_at,
+      COALESCE((SELECT SUM(points_units) FROM v2_checkout_hold_allocations WHERE hold_id=h.id),0) AS points
+      FROM v2_checkout_holds h WHERE h.order_id=? ORDER BY h.id DESC LIMIT 1`).bind(orderId).first();
+    const liveHold=hold?.status==='active'&&hold.expires_at>nowIso()&&hold.points===quote.pointsUnits;
+    if(existing.length){
+      const pending=existing.filter(x=>x.status==='pending');
+      if(pending.length===1&&existing.length===1&&liveHold&&pending[0].amount_cents===row.total_cents&&
+        pending[0].method===row.payment_method&&pending[0].checkout_url)
+        return {ok:true,recovered:true,orderCode:row.order_code,providerOrderId:pending[0].provider_order_id,
+          checkoutUrl:pending[0].checkout_url,totalCents:row.total_cents};
+      // A new attempt after a terminal or expired payment must reconcile the old
+      // provider order first. Never generate a second provider order here.
+      fail('A tentativa anterior precisa ser conciliada antes de uma nova cobrança.','v3_payment_reconciliation_required');
+    }
+    if(hold&&!liveHold)fail('A reserva anterior precisa ser conciliada antes de tentar novamente.','v3_hold_reconciliation_required');
+    if(!liveHold){
+      const capacity={eventDate:row.event_date,start:row.delivery_start,end:row.delivery_end,
+        pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
+      await validateV2DeliveryWindow(db,capacity);
+      const plan=await planV2AllocationForWindow(db,capacity);
+      if(!plan.fits)fail('A agenda não tem mais capacidade para o conjunto.','delivery_window_unavailable');
+      const settings=await loadV2Settings(db);
+      const minutes=Math.max(v2IntSetting(settings,'checkout_hold_minutes',30),
+        Math.min(180,Math.max(5,v2IntSetting(settings,'mercado_pago_order_expiry_minutes',25)))+5);
+      await createCapacityHold(db,{orderId,allocation:plan.allocation,
+        expiresAt:new Date(Date.now()+minutes*60000).toISOString(),
+        defaultCapacityUnits:v2IntSetting(settings,'default_sellable_points_per_day_units',400)});
+    }
+    // Keep the hold for uncertain provider failures. Repeating with the same
+    // hold token and payload reuses the existing Mercado Pago idempotency key.
+    await db.prepare("UPDATE v2_orders SET status='awaiting_payment',next_action='Aguardando pagamento',updated_at=? WHERE id=? AND status='configuring'").bind(nowIso(),orderId).run();
+    const checkout=await createMercadoPagoCheckout(request,env,{orderId,orderCode:row.order_code,publicToken:row.public_token,
+      paymentMethod:row.payment_method,amountDueNowCents:row.total_cents,customerEmail:row.email});
+    return {ok:true,recovered:!!liveHold,orderCode:row.order_code,providerOrderId:checkout.providerOrderId,
+      checkoutUrl:checkout.checkoutUrl,totalCents:row.total_cents};
+  });
+}

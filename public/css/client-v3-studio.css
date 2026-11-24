@@ -515,3 +515,36 @@ html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-tot
   font-size:clamp(22px,7.2cqw,26px)!important;
  }
 }
+
+/* V107: fit the five-additional interactive configuration in the same shell.
+   Compact the controls rather than changing the editorial typeface or hiding options. */
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"]{gap:5px}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-optional-card{
+ padding:7px 10px;min-height:0;grid-template-columns:minmax(0,1fr) 112px;gap:7px;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-optional-action{
+ padding:0;gap:2px;max-width:none;min-height:0;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-optional-action b{
+ font-size:11px;line-height:1.15;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v97-extra-cta{
+ padding:4px 8px;min-height:25px;line-height:1.1;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-choice-copy{gap:2px}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-choice-copy small{
+ font-size:11px;line-height:1.25;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-choice-copy strong{
+ font-size:clamp(15px,4.3cqw,19px)!important;line-height:1.1!important;
+}
+@media(max-width:959px){
+ html body .v3-main .v3-panel--guided.v3-stage-extras:has(.v3-optional-list[data-count="5"]){gap:5px}
+ html body .v3-main .v3-panel--guided.v3-stage-extras:has(.v3-optional-list[data-count="5"]) .v3-stage-body{padding-block:1px 2px}
+ html body .v3-main .v3-panel--guided.v3-stage-extras:has(.v3-optional-list[data-count="5"]) .v3-stage-heading{padding-bottom:0}
+ html body .v3-main .v3-panel--guided.v3-stage-extras:has(.v3-optional-list[data-count="5"]) .v3-free-confirmation{padding:4px 7px;margin-bottom:4px;font-size:10px;line-height:1.2}
+ html body .v3-main .v3-panel--guided.v3-stage-extras:has(.v3-optional-list[data-count="5"]) .v107-extras-footer .v3-total{padding:6px 10px}
+}
+@media(max-width:360px){
+ html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-optional-card{grid-template-columns:minmax(0,1fr) 94px;padding-inline:8px}
+}

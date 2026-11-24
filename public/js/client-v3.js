@@ -874,5 +874,5 @@ async function init({skipRecovery=false}={}) {
 if(!simulationMode)mountStorePrivacy();
 // V3 keeps the privacy controls accessible inside its single viewport.
 const site=document.querySelector('.v3-site'),privacy=document.getElementById('libri-privacy');
-if(site&&privacy)site.append(privacy);
+if(site&&privacy){site.append(privacy);const banner=document.querySelector('.libri-privacy-banner');if(banner)site.querySelector('.v3-header-shell')?.after(banner);}
 init().catch(err=>message(err.message));

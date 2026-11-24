@@ -49,7 +49,7 @@ function validateItems(items) {
   });
 }
 
-export async function quoteV3Cart(db, cart={}) {
+export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
@@ -96,7 +96,8 @@ export async function quoteV3Cart(db, cart={}) {
       subtotalCents:quote.subtotalCents,
       totalCents:quote.totalCents,
       pointsUnits:quote.pointsUnits,
-      productionDays:productionDaysForQuote(quote)
+      productionDays:productionDaysForQuote(quote),
+      ...(includeSnapshots?{commercialSnapshot:quote}:{})
     });
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);

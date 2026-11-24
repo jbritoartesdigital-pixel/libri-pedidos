@@ -12,7 +12,7 @@ const SHARED_EXCLUDED = [
   'Montagem ou projeto executivo de decoração',
   'Arquivo Silhouette e arquivos editáveis não contratados',
   'Convite cinematográfico ou interativo',
-  'Personagens complexos a partir de fotos e peças especiais sem orçamento'
+  'Novas ilustrações individuais fora do escopo, personagens adicionais e peças especiais sem orçamento'
 ];
 function parseArray(json) {
   let value;

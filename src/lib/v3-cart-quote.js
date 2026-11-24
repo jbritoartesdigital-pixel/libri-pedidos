@@ -5,6 +5,7 @@ import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
 import {quoteV3Retrospective} from './v3-retrospective-catalog.js';
 import {suggestV3Upgrade} from './v3-upgrade-suggestion.js';
+import {activeV3CombinedCampaign,quoteV3Coupon,normalizeV3Coupon} from './v3-promotions.js';
 import {calculateV3CombinedDiscount} from './v3-combined-discount.js';
 import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
@@ -57,7 +58,8 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
-  if(cart.couponCode||cart.comboCode)
+  const couponCode=normalizeV3Coupon(cart.couponCode);
+  if(cart.comboCode)
     throw new V3CartValidationError('Descontos combinados ainda não estão disponíveis para carrinhos com vários serviços.','cart_promotion_pending');
   // Não cobrar a mesma retrospectiva como produto principal e adicional de convite.
   if(items.some(item=>item.family==='retrospectiva') &&
@@ -108,25 +110,32 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
       totalCents:snapshot.totalCents,
       pointsUnits:snapshot.pointsUnits,
       productionDays:productionDaysForQuote(quote),
-      ...(includeSnapshots?{commercialSnapshot:snapshot}:{})
+      commercialSnapshot:snapshot
     });
   }
-  const discount=calculateV3CombinedDiscount(quotes);
+  const campaign=await activeV3CombinedCampaign(db);
+  const discount=calculateV3CombinedDiscount(quotes,campaign||undefined);
+  const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType);
+  const bestExisting=discount.selectedDiscount==='combined'?discount.combinedDiscountCents:quotes.reduce((n,l)=>n+l.discountCents,0);
+  const useCoupon=!!coupon&&coupon.discountCents>bestExisting;
+  if(useCoupon){discount.selectedDiscount='coupon';discount.percent=0;discount.combinedDiscountCents=0;discount.allocations={};}
   for(const line of quotes){
     const originalCombo=line.discountCents;
     const combined=discount.allocations[line.family]||0;
     line.combinedDiscountCents=combined;
-    if(discount.selectedDiscount==='combined'){
+    if(useCoupon||discount.selectedDiscount==='combined'){
       line.availableComboCode=line.comboCode;
       line.comboCode='';line.comboName='';
-      line.discountCents=combined;
-      line.subtotalCents=line.grossCents-combined;
+      line.couponDiscountCents=useCoupon?(coupon.allocations[line.family]||0):0;
+      line.discountCents=useCoupon?line.couponDiscountCents:combined;
+      line.subtotalCents=line.grossCents-line.discountCents;
       line.totalCents=line.subtotalCents;
       if(line.commercialSnapshot){
         const snapshot=line.commercialSnapshot;
         snapshot.originalComboDiscountCents=originalCombo;
         snapshot.combo=null;snapshot.comboDiscountCents=0;
         snapshot.combinedDiscountCents=combined;
+        snapshot.coupon=useCoupon?{id:coupon.id,code:coupon.code}:null;snapshot.couponDiscountCents=line.couponDiscountCents;
         snapshot.subtotalCents=line.subtotalCents;
         snapshot.baseTotalCents=line.totalCents;snapshot.totalCents=line.totalCents;
         snapshot.payment={...snapshot.payment,depositCents:line.totalCents,balanceCents:0};
@@ -135,6 +144,7 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);
   const baseTotalCents=sum('totalCents');
+  if(!includeSnapshots)for(const line of quotes)delete line.commercialSnapshot;
   const pricing=priceWithCardProcessingFee(baseTotalCents,paymentMethod);
   // A cotação é informativa: nunca vira ordem de pagamento com base nesse total.
   return {
@@ -154,6 +164,10 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
     combinedDiscountCents:discount.combinedDiscountCents,
     combinedDiscountPercent:discount.percent,
     selectedDiscount:discount.selectedDiscount,
+    campaign:campaign?{id:campaign.id,name:campaign.name,endsAt:campaign.endsAt}:null,
+    coupon:useCoupon?{id:coupon.id,code:coupon.code}:null,
+    couponDiscountCents:useCoupon?coupon.discountCents:0,
+    couponComparison:coupon?{code:coupon.code,applied:useCoupon,availableDiscountCents:coupon.discountCents}:null,
     pricedOnServer:true
   };
 }

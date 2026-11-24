@@ -219,6 +219,7 @@ function renderBasket(){
  else{basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
  basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
+function studioArtwork(){const kind=state.creation==='identity'?'identity':state.creation==='retrospective'?'retrospective':'invitation';return '<div class="studio-art studio-art--'+kind+'" aria-hidden="true"><div class="studio-orbit"></div><div class="studio-paper studio-paper-back"></div><div class="studio-paper studio-paper-front"><img src="/images/libri-emblem.png" alt="" width="48" height="48"><span class="studio-paper-line"></span><span class="studio-paper-line studio-paper-line-short"></span></div><div class="studio-paper studio-paper-glass"></div></div>';}
 function panel(title, subtitle, content, buttons, index=0) {
   const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
   const stageLabel={event:'Sua celebração','event-subtype':'Sua celebração',creation:'Escolha seu serviço',intent:'Seu convite',format:'Formato do convite',scenes:'Duração da história',atelie:'Libri Ateliê','atelie-detail':'Detalhes do pacote',unready:'Retrospectivas',extras:'Personalize seu pedido',review:'Confira suas escolhas',cart:'Sua sacola'}[state.step]||'';
@@ -226,10 +227,11 @@ function panel(title, subtitle, content, buttons, index=0) {
     (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
     (fixed?'<div class="v3-stage-heading">':'')+
     (stageLabel?'<span class="v97-stage-label">'+clean(stageLabel)+'</span>':'')+'<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
-    (fixed?'</div><div class="v3-stage-body">':'')+
+    (fixed?studioArtwork()+'</div><div class="v3-stage-body">':'')+
     content + (fixed?'</div>':'') + (buttons || '') +
     (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
   root.setAttribute('aria-busy','false');renderBasket();
+  if(root.dataset.studioStep!==state.step){root.dataset.studioStep=state.step;const stage=root.querySelector('.v3-panel');if(stage&&!matchMedia('(prefers-reduced-motion: reduce)').matches){stage.animate([{opacity:.78,transform:'translateY(5px)'},{opacity:1,transform:'none'}],{duration:230,easing:'cubic-bezier(.2,.8,.2,1)'});}}
 }
 function actions(back, nextText, nextAction = 'next') {
   return '<div class="v3-action-row">' +

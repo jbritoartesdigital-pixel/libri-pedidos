@@ -26,6 +26,17 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<button class="btn btn-secondary" data-v3-admin="agenda" data-family="'+esc(s.family)+'">Consultar agenda</button>'+
  (a?.options?.length?'<label>Janela de entrega <select data-window="'+esc(s.family)+'">'+a.options.map((o,i)=>'<option value="'+i+'">'+esc(o.start)+' a '+esc(o.end)+'</option>').join('')+'</select></label><button class="btn btn-primary" data-v3-admin="schedule" data-family="'+esc(s.family)+'">Confirmar e liberar serviço</button>':a?'<p>Não há janela disponível. Revise a agenda antes de prometer uma data.</p>':'')+'</div>';
  }
+ function deliveryHtml(s){
+ const d=s.delivery;if(!d||!['approved','delivered'].includes(s.productionStatus))return '';
+ const family=esc(s.family),base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/delivery/'+family;
+ const files=d.files.map(f=>'<p>'+esc(f.filename)+' · '+esc(Math.ceil(f.sizeBytes/1024))+' KB '+(f.available?'<a href="'+esc(base+'/files/'+f.id)+'">Baixar</a>':'Expirado')+
+ (!d.delivered?'<button class="btn btn-secondary" data-v3-admin="remove-final" data-family="'+family+'" data-file-id="'+esc(f.id)+'">Remover</button>':'')+'</p>').join('');
+ return '<div class="notice"><h4>Entrega final</h4>'+files+(d.delivered?
+ '<p>Entregue em '+esc(d.deliveredAt.slice(0,10))+' · Download até '+esc(d.downloadUntil.slice(0,10))+'</p><p>Originais disponíveis até '+esc(d.originalsUntil.slice(0,10))+'</p>'+(d.warning?'<p>'+esc(d.warning)+'</p>':'')+(d.interactiveUrl?'<a href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir convite interativo</a>':''):
+ '<label>Arquivo final sem marca d’água (até 80 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf,.zip" data-final-file="'+family+'"></label><button class="btn btn-secondary" data-v3-admin="stage-final" data-family="'+family+'">Adicionar arquivo</button>'+
+ (d.interactiveRequired?'<label>Link publicado do convite <input type="url" data-interactive-url="'+family+'" placeholder="https://...libriconvites.com.br/..."></label><p>A validade do convite interativo não muda com o prazo de download.</p>':'')+
+ '<button class="btn btn-primary" data-v3-admin="deliver" data-family="'+family+'">Confirmar entrega definitiva</button>')+'</div>';
+ }
  function productionHtml(s){
  const p=s.progress;if(!p)return '';
  const family=esc(s.family),preview=p.preview;
@@ -33,7 +44,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const button=(action,label)=>'<button class="btn btn-secondary" data-v3-admin="'+action+'" data-family="'+family+'">'+label+'</button>';
  const url='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family+'/preview/'+preview?.id;
  return '<div class="notice"><h4>Produção · '+esc(statuses[s.productionStatus]||'Aguardando programação')+'</h4><p>Rodadas utilizadas: '+esc(p.revisionsUsed)+' / '+esc(p.revisionsIncluded??'conforme contrato')+'</p>'+
- (preview?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a> · Ajustes até '+esc(preview.adjustmentDeadline.slice(0,10))+'</p>':'')+
+ (preview&&preview.available!==false?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a> · Ajustes até '+esc(preview.adjustmentDeadline.slice(0,10))+'</p>':'')+
  (s.productionStatus==='ready'?button('start','Iniciar produção'):'')+
  (s.productionStatus==='in_production'?'<label>Prévia protegida (até 60 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf" data-preview-file="'+family+'"></label><label><input type="checkbox" data-watermark="'+family+'"> O arquivo já contém marca d’água</label>'+button('publish','Publicar prévia'):'')+
  (s.productionStatus==='adjustments'?'<p>Solicitação: '+esc(p.events.find(e=>e.action==='adjustments_requested')?.note||'')+'</p><label>Observação da conferência<textarea maxlength="2000" data-production-note="'+family+'"></textarea></label>'+
@@ -45,7 +56,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  host.innerHTML='<section class="card"><h3>Pedido V3</h3><p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Total: '+money(brief.payment.totalCents)+'</p><p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
  (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
- (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+'</section>').join('')+
+ (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
  (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a></p>').join('')+
@@ -56,8 +67,22 @@ export async function openV3AdminOrder(code,initial,onChanged){
  host.addEventListener('click',async e=>{
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
- let path=base,payload=null;
- if(['start','publish','included_revision','libri_correction','extra_quote','return_preview'].includes(action)){
+ let path=base,payload=null,method='POST';
+ if(['stage-final','remove-final','deliver'].includes(action)){
+   const s=brief.services.find(x=>x.family===family);if(!s?.progress)return;
+   path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/delivery/'+family;
+   payload={version:s.progress.version};
+   if(action==='stage-final'){
+     const file=host.querySelector('[data-final-file="'+family+'"]')?.files?.[0];if(!file){showToast('Selecione um arquivo final.');return;}
+     const form=new FormData();form.append('file',file);form.append('version',String(s.progress.version));payload=form;path+='/files';
+   }else if(action==='remove-final'){
+     if(!confirm('Remover este arquivo da preparação da entrega?'))return;
+     method='DELETE';path+='/files/'+encodeURIComponent(b.dataset.fileId);
+   }else{
+     if(!confirm('Confirma que os arquivos finais estão completos e conferidos? A entrega iniciará os prazos de retenção.'))return;
+     path+='/publish';payload={...payload,confirmed:true,interactiveUrl:host.querySelector('[data-interactive-url="'+family+'"]')?.value.trim()||''};
+   }
+ }else if(['start','publish','included_revision','libri_correction','extra_quote','return_preview'].includes(action)){
    const s=brief.services.find(x=>x.family===family);if(!s?.progress)return;
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family;
    payload={action,version:s.progress.version,note:host.querySelector('[data-production-note="'+family+'"]')?.value||''};
@@ -87,7 +112,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method:'POST',body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

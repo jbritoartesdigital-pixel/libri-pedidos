@@ -369,3 +369,49 @@ test('legacy guard blocks V3 edits, payment mutations and cascade, but permits V
  const safe=new URL('https://test/api/v2/customer-area/ord_'+'a'.repeat(36)+'/briefing');
  assert.equal(await guardV3LegacyCustomer(new Request(safe),db,safe),null);
 });
+
+import {previewV3Supplement,createV3Supplement,decideV3Supplement,supplementCatalog} from '../src/lib/v3-service-supplements.js';
+test('supplemental offer is independently priced, accepted once and does not alter paid scope or capacity',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,family='identidade_visual';
+ const before=()=>({
+  pricing:db.sqlite.prepare('SELECT * FROM v2_order_pricing WHERE order_id=?').get(order.orderId),
+  services:db.sqlite.prepare('SELECT * FROM v3_order_services WHERE order_id=? ORDER BY id').all(order.orderId),
+  agenda:db.sqlite.prepare('SELECT * FROM v2_agenda_allocations WHERE order_id=? ORDER BY id').all(order.orderId),
+  payments:db.sqlite.prepare('SELECT * FROM v2_payments WHERE order_id=? ORDER BY id').all(order.orderId)
+ });
+ const original=before();
+ const input={items:[{code:'atelie_pose',quantity:2}],paymentMethod:'pix',note:'Duas poses extras'};
+ const q=await previewV3Supplement(db,token,family,input);
+ assert.equal(q.totalCents,4000);assert.equal(q.pointsUnits,100);
+ const payload={...input,expectedTotalCents:4000,requestKey:'a'.repeat(36)};
+ await assert.rejects(createV3Supplement(db,token,family,{...payload,expectedTotalCents:1}),/valor mudou/);
+ const offered=await createV3Supplement(db,token,family,payload);
+ assert.equal(offered.status,'offered');assert.equal(offered.paymentAvailable,false);
+ assert.equal((await createV3Supplement(db,token,family,payload)).id,offered.id);
+ await assert.rejects(createV3Supplement(db,token,family,{...payload,requestKey:'b'.repeat(36)}),/já existe/i);
+ assert.deepEqual(before(),original);
+ await assert.rejects(decideV3Supplement(db,token,'convite',offered.id,{action:'accept',confirmed:true,expectedTotalCents:4000}),/não encontrada/);
+ await assert.rejects(decideV3Supplement(db,token,family,offered.id,{action:'accept',confirmed:true,expectedTotalCents:1}),/Confirme/);
+ const accepted=await decideV3Supplement(db,token,family,offered.id,{action:'accept',confirmed:true,expectedTotalCents:4000});
+ assert.equal(accepted.status,'accepted');
+ assert.equal((await decideV3Supplement(db,token,family,offered.id,{action:'accept',confirmed:true,expectedTotalCents:4000})).status,'accepted');
+ assert.deepEqual(before(),original);
+ assert.equal((await getV3ModularBriefing(db,token)).supplements[0].status,'accepted');
+ await assert.rejects(decideV3Supplement(db,token,family,offered.id,{action:'cancel'}),/Ação inválida/);
+ const cancelled=await decideV3Supplement(db,token,family,offered.id,{action:'cancel'},'admin');
+ assert.equal(cancelled.status,'cancelled');
+ const next=await createV3Supplement(db,token,family,{...payload,requestKey:'c'.repeat(36)});
+ db.sqlite.prepare('UPDATE v3_order_services SET production_version=production_version+1 WHERE order_id=? AND family=?').run(order.orderId,family);
+ await assert.rejects(decideV3Supplement(db,token,family,next.id,{action:'accept',confirmed:true,expectedTotalCents:4000}),/produção mudou/);
+ assert.equal((await decideV3Supplement(db,token,family,next.id,{action:'decline'})).status,'declined');
+});
+test('supplement quotes reject invalid quantity, stage and duplicate scope',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken;
+ const q=(family,items)=>previewV3Supplement(db,token,family,{items,paymentMethod:'pix'});
+ await assert.rejects(q('identidade_visual',[{code:'atelie_pose',quantity:21}]),/Quantidade/);
+ await assert.rejects(q('identidade_visual',[{code:'retro_more_photos',quantity:1}]),/indisponível/);
+ const invite=await q('convite',[{code:'save_static',quantity:1}]);
+ assert.equal(invite.totalCents,2000);assert.equal(invite.pointsUnits,50);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
+ await assert.rejects(q('identidade_visual',[{code:'atelie_pose',quantity:1}]),/indisponível/);
+});

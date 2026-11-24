@@ -8,10 +8,10 @@ const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toStr
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBack}){
   const cart={items:JSON.parse(JSON.stringify(items)),eventType};
-  let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',deliveryWindow:null};
+  let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
   function readForm(){
-    for(const k of ['name','whatsapp','email','honoreeName','eventDate','paymentMethod']){
+    for(const k of ['name','whatsapp','email','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
     const checked=root.querySelector('[name="deliveryWindow"]:checked');
@@ -21,7 +21,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
   function summary(){
     if(!quote)return '';
     return '<div class="v3-lines">'+quote.items.map(x=>'<div class="v3-line"><span>'+esc(x.productName)+'</span><b>'+money(x.grossCents)+'</b></div>').join('')+
-      (quote.discountCents?'<div class="v3-line"><span>Desconto</span><b>− '+money(quote.discountCents)+'</b></div>':'')+
+      (quote.discountCents?'<div class="v3-line"><span>'+esc(quote.selectedDiscount==='coupon'?'Cupom '+quote.coupon.code:quote.selectedDiscount==='combined'?'Desconto combinado ('+quote.combinedDiscountPercent+'%)':'Desconto do convite')+'</span><b>− '+money(quote.discountCents)+'</b></div>':'')+
       (quote.cardFeeCents?'<div class="v3-line"><span>Taxa de cartão</span><b>'+money(quote.cardFeeCents)+'</b></div>':'')+
       '</div><div class="v3-total"><strong>Total integral</strong><b>'+money(quote.totalCents)+'</b></div>';
   }
@@ -38,7 +38,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       '<h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
       '<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="agenda">Consultar agenda</button>'+
       (options.length?'<div class="v3-notice"><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label style="display:block;padding:8px 0"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · sugerida':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
-      '<h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+summary()+
+      '<h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+field('couponCode','Cupom (opcional)','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Conferir cupom</button>'+summary()+
       '<h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-notice"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
       '</fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
       '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length)?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':'Confirmar e pagar')+'</button></div></form></section>';
@@ -48,7 +48,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
     if(busy||attempt)return;
     readForm();busy=true;error='';render();
     try{
-      const selection={...cart,paymentMethod:form.paymentMethod};
+      const selection={...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode};
       const [p,t]=await Promise.all([request('/api/v3/cart/quote',selection),request('/api/v3/cart/terms',selection)]);
       quote=p.quote;
       const next=t.terms;
@@ -75,7 +75,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
         keepV3CheckoutKey(attemptKey);
       }catch{error='O navegador não permite guardar a tentativa com segurança. Abra a loja em outro navegador.';render();return;}
       attempt={...cart,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},honoreeName:form.honoreeName,eventDate:form.eventDate,
-        paymentMethod:form.paymentMethod,deliveryWindow:{start:form.deliveryWindow.start,end:form.deliveryWindow.end},expectedTotalCents:quote.totalCents,
+        paymentMethod:form.paymentMethod,couponCode:form.couponCode,deliveryWindow:{start:form.deliveryWindow.start,end:form.deliveryWindow.end},expectedTotalCents:quote.totalCents,
         clientRequestId:attemptKey,termsAccepted:true,termsVersion:terms.general.version};
       for(const t of terms.services){
         if(t.family==='identidade_visual'){attempt.atelieTermsAccepted=true;attempt.atelieTermsVersion=t.version;}
@@ -103,12 +103,13 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
     if(action==='back'&&!busy&&!attempt){detach();onBack();}
     if(action==='agenda')refresh({agenda:true});
+    if(action==='coupon')refresh();
     if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;
     if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;render();}
-    if(e.target.name==='paymentMethod')refresh();
+    if(e.target.name==='paymentMethod'||e.target.name==='couponCode')refresh();
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}
   render();refresh();

@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 15 | 23/11/2026 (Brasil)
+Versão 16 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -139,5 +139,12 @@ RETOMADA V14 — ORQUESTRADOR DO CHECKOUT V3
 RETOMADA V15 — INTERFACE CHECKOUT UNIFICADO
 - 5d5bbb2/e8f00b0: Ateliê avulso com novos extras aceita registro V3; termos públicos informam se a flag de checkout está ativa, padrão continua desativado.
 - 6e393e2/970afbb: tela modular de contratação com identificação, nome do evento, data, consulta/seleção de janela, Pix/cartão integral, cotação e termos reais por serviço; carrinho combinado, retro avulsa e Ateliê com extras seguem ao formulário V3. Convites e Ateliê avulsos sem extras mantêm fluxo V2 até revisão de promoções. Interface bloqueia pagamento quando flag desativada. Dados pessoais ficam em memória, não localStorage; chave privada de tentativa na sessionStorage, payload idêntico em retry na mesma tela. Não permite reenvio com mudanças após tentativa incerta. URL de pagamento validada. Recuperação após reload/expiração e limpeza segura da chave ainda pendentes; não habilitar antes disso.
-- 7332d91/48e1f00: teste de Ateliê avulso com extras preservando valores e pontos unitários; teste de renderização do checkout, termos escapados, valor e bloqueio de pagamento. CI a confirmar; teste visual real de navegador ainda pendente.
+- 7332d91/48e1f00: teste de Ateliê avulso com extras preservando valores e pontos unitários; teste de renderização do checkout, termos escapados, valor e bloqueio de pagamento. CI 45320094341 concluído com sucesso; teste visual real de navegador ainda pendente.
 - Próximo: recuperação de checkout por chave privada, reconciliação de tentativas expiradas e pagamento já confirmado; telas reais de briefing cliente/Admin, submissão e arquivos privados, agenda por serviço, promoções/Black, complementos e entrega. Não publicar parcial, não ativar flag ou catálogo manualmente. PR #143 draft.
+
+RETOMADA V16 — RECUPERAÇÃO E RENOVAÇÃO SEGURA DE PAGAMENTO
+- 286c91f: concilia todas as cobranças conhecidas com o Mercado Pago; recupera cobrança ativa, identifica pagamento confirmado, cancela tentativa pendente com reserva vencida e verifica novamente; renovação explícita só após todas anteriores terminais, sob lock, mesma ordem/total/método e revalidação da janela/capacidade. Divergência de reservas e cobranças ou resposta incerta bloqueia renovação para revisão, sem novo pagamento automático.
+- f120297/8c515ba: POST /api/v3/cart/recover e /api/v3/cart/renew por chave aleatória privada de 36 hex ou token privado do pedido. Consulta sem criação de cobrança; botão de renovação exige flag e estado elegível. Não expõe dados de contato nem busca por número público de pedido. Preserva número e link da área cliente.
+- 6243fa0/cf2abd4/2d74206: tela de recuperação integrada à loja e retry; guarda apenas credencial opaca no armazenamento local/sessão, sem dados pessoais, preços ou URL; permite retomar após reload/fechamento no mesmo navegador. Chave permanece se tentativa ainda não localizada; limpa após confirmação de pagamento e acesso à área. Links validados.
+- 0995fee: teste de recuperação por credencial, cobrança única enquanto válida, renovação após encerramento, aprovação, reserva órfã e bloqueio de duplicidade. CI a confirmar. Testes reais de navegador e integração da área cliente ainda pendentes.
+- Próximos: validar CI V16, montar área cliente modular e retomada por token no meu-pedido, Admin de materiais e briefing, submissão e uploads privados, agenda e acompanhamento por serviço, promoções/Black/cupom/campanha, complementos e entrega. Não ativar flag/checkout nem publicar parcial. PR #143 draft.

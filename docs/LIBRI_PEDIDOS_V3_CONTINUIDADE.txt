@@ -455,3 +455,7 @@ V74 — revisão dos refinamentos antes da validação: etapa de link recebido a
 V75 — CI V74 45460944574: sintaxe/imports aprovados; única falha registrada em teste Ateliê que exigia nome antigo 'Convites Digitais'. Atualizada asserção para categoria convite digital, mantendo proteção das rotas e categorias. CI V75 pendente, publicação ainda não iniciada. Não houve alteração de regras comerciais.
 
 V75 — CI 45461720246 concluído com sucesso (sintaxe, testes automatizados, SQLite e Chromium). Publicação autorizada pela usuária. PR #146 mesclado em 7665ba15fab009ace3962d3b69602f48bdd985ee. Marcador de publicação explícito adicionado; não altera lógica de deploy ou configuração comercial. Resultado Cloudflare ainda precisa ser confirmado.
+
+
+CHECKPOINT 24/11/2026 | V74 da loja pública | Branch fix/v3-glass-e-data-entrega-20261124
+Refinamento pós-merge: cards de vidro escuro, tipografia system-ui, sem ícones decorativos, painel de etapas com altura estável, rolagem interna e progresso inferior. As demonstrações animadas de formato continuam. Consulta de outra data pelo último dia desejado da janela de 3 dias, validada pelo endpoint existente antes da seleção, com revalidação em mudanças de pagamento/cupom. Nenhuma alteração nas regras de agenda, preços, reserva ou pagamentos. Decisões de implementação: fontes locais sem dependência externa; janela comercial de três dias preservada. Próximo passo: verificar CI e navegação, depois publicar mediante autorização/validação. Não confundir a consulta com reserva.

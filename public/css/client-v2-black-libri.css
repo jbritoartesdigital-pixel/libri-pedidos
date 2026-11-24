@@ -89,3 +89,5 @@
 @media(max-width:360px){.black-libri-panel{padding-inline:12px}.black-libri-grid{gap:3px;padding-inline:6px}.black-libri-balloon{min-height:85px}.black-libri-balloon .bulb{width:min(88%,64px)}}
 @media(max-height:660px){.black-libri-panel{padding-top:12px;padding-bottom:12px}.black-libri-brand-slot{min-height:25px;margin-bottom:2px}.black-libri-brand-slot .black-libri-brand{height:24px}.black-libri-campaign{font-size:37px;margin:5px 0}.black-libri-heading{font-size:23px;margin-top:5px}.black-libri-grid{margin-top:6px;padding:5px;gap:2px}.black-libri-balloon{min-height:76px}.black-libri-balloon .bulb{width:min(82%,54px)}.black-libri-balloon .string{height:11px}.black-libri-foot{margin-top:6px}}
 @media(prefers-reduced-motion:reduce){.black-libri-balloon,.black-libri-result,.black-libri-balloon.chosen::after{animation:none}}
+
+.black-libri-error{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(92%,460px);padding:12px 16px;border:1px solid #e3b99488;background:#4e3035;color:#fff4e8;border-radius:12px;text-align:center;z-index:2;box-shadow:0 6px 20px #130d1166}

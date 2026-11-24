@@ -1,4 +1,11 @@
-import {api,esc,money,showToast} from './client-v2-core.js';
+import {api,esc,money,showToast as legacyToast} from './client-v2-core.js';
+// V3 has no V2 toast element. Keep errors visible without throwing another exception.
+function showToast(message){
+ if(document.getElementById('toast'))return legacyToast(message);
+ const overlay=document.querySelector('.black-libri-overlay');if(!overlay)return;
+ let alert=overlay.querySelector('.black-libri-error');if(!alert){alert=document.createElement('p');alert.className='black-libri-error';alert.setAttribute('role','alert');overlay.append(alert);}
+ alert.textContent=message;
+}
 
 const palette=['#c88ca4','#edc5d0','#c9a46e','#a56786',
  '#e2bbaf','#d398ae','#af7591','#eed6b3',
@@ -8,7 +15,7 @@ async function ensureStyles(){
  if(document.getElementById('blackLibriClientStyles'))return;
  const link=document.createElement('link');
  link.id='blackLibriClientStyles';link.rel='stylesheet';
- link.href='/css/client-v2-black-libri.css?v=93-studio';
+ link.href='/css/client-v2-black-libri.css?v=95-studio';
  await new Promise(resolve=>{link.onload=resolve;link.onerror=resolve;document.head.appendChild(link);});
 }
 
@@ -125,7 +132,7 @@ export async function openBlackLibriBeforePayment({
  let response=await api(endpoint+'/status',{method:'POST',body:JSON.stringify(payload)});
  if(!response.enabled){onContinue();return;}
  await ensureStyles();
- let claim=response.claim||null,quote=null,active=false,chosen=-1,soundOn=true;
+ let claim=response.claim||null,quote=null,active=false,chosen=-1,soundOn=true,blackError='';
  const {overlay,close,isClosed,setCanClose}=overlayShell();
  setCanClose(()=>!active);
  const preview=async()=>{
@@ -133,7 +140,7 @@ export async function openBlackLibriBeforePayment({
   try{
    const result=await api(endpoint+'/preview',{method:'POST',body:JSON.stringify(v3Cart?{...payload,blackLibriClaimId:claim.id}:payload)});
    quote=result.quote||null;
-  }catch(error){quote=null;showToast(error.message||'Não foi possível conferir o valor do presente.');}
+  }catch(error){quote=null;blackError=error.message||'Não foi possível conferir o valor do presente.';}
  };
  const paint=()=>{
   if(isClosed())return;
@@ -172,7 +179,7 @@ export async function openBlackLibriBeforePayment({
   });
   overlay.querySelectorAll('[data-black-slot]').forEach(button=>button.addEventListener('click',async()=>{
    if(active||claim)return;
-   active=true;chosen=Number(button.dataset.blackSlot);
+   blackError='';active=true;chosen=Number(button.dataset.blackSlot);
    button.classList.add('chosen');
    overlay.querySelectorAll('[data-black-slot]').forEach(b=>b.disabled=true);
    playBalloonPop(soundOn);
@@ -184,8 +191,8 @@ export async function openBlackLibriBeforePayment({
     claim=reveal.claim;
     await preview();
    }catch(error){
-    chosen=-1;showToast(error.message||'Não conseguimos revelar seu presente.');
-   }finally{active=false;paint();(overlay.querySelector('[data-black-continue]')||overlay.querySelector('.black-libri-close'))?.focus();}
+    chosen=-1;blackError=error.message||'Não conseguimos revelar seu presente.';
+   }finally{active=false;paint();if(blackError)showToast(blackError);(overlay.querySelector('[data-black-continue]')||overlay.querySelector('.black-libri-close'))?.focus();}
   }));
   overlay.querySelector('[data-black-continue]')?.addEventListener('click',()=>{
    if(active||(claim?.status==='reserved'&&!quote))return;
@@ -193,5 +200,5 @@ export async function openBlackLibriBeforePayment({
   });
  };
  if(claim)await preview();
- paint();overlay.querySelector('.black-libri-close')?.focus();
+ paint();if(blackError)showToast(blackError);overlay.querySelector('.black-libri-close')?.focus();
 }

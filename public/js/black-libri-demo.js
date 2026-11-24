@@ -9,14 +9,14 @@ async function ensureStyle() {
   const link=document.createElement('link');
   link.id='blackLibriClientStyles';
   link.rel='stylesheet';
-  link.href='/css/client-v2-black-libri.css?v=93-studio';
+  link.href='/css/client-v2-black-libri.css?v=95-studio';
   await new Promise(resolve=>{
     link.onload=resolve;link.onerror=resolve;
     document.head.appendChild(link);
   });
 }
 
-export async function openBlackLibriDemo({onContinue=null}={}) {
+export async function openBlackLibriDemo({onContinue=null,continueLabel='Continuar teste do briefing'}={}) {
   await ensureStyle();
   const overlay=document.createElement('div');
   overlay.className='black-libri-overlay';
@@ -65,7 +65,7 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
             <p>Prêmio ilustrativo. Nesta demonstração, nada é reservado, cobrado ou salvo.</p>
           </div>
           <button type="button" class="black-libri-button" data-demo-continue>
-            ${onContinue?'Continuar teste do briefing':'Fechar prévia'}
+            ${onContinue?continueLabel==='Concluir simulação'?'Concluir simulação':'Continuar teste do briefing':'Fechar prévia'}
           </button>
         `}
         <p class="black-libri-foot">MODO DE TESTE • Sem participação real • Sem pagamento</p>

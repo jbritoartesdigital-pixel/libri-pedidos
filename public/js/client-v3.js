@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=93';
+import { mountV3Checkout } from './client-v3-checkout.js?v=96';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -9,13 +9,15 @@ const basket=document.getElementById('v3-live-basket');
 const basketBody=document.getElementById('v3-basket-body');
 const basketTotal=document.getElementById('v3-basket-total');
 if(basket)basket.open=false;
+const simulationMode=new URLSearchParams(location.search).get('simular')==='1';
 const STORE_KEY = 'libriV3Draft';
+if(simulationMode){document.body.dataset.simulation='true';document.querySelector('.v3-header-shell')?.insertAdjacentHTML('afterend','<aside class="v3-simulation-banner" role="status"><strong>MODO DE TESTE</strong> · Nenhum pedido, prêmio ou pagamento real. <a href="/loja">Sair do teste</a></aside>');}
 // Personalização de conversa apenas em memória. Nunca incluir nome no rascunho,
 // nos eventos de análise ou nas solicitações de catálogo/agenda.
 let conversationName='',welcomeAnswered=false;
-try{welcomeAnswered=sessionStorage.getItem('libriV3WelcomeSeen')==='1';}catch{}
+try{welcomeAnswered=!simulationMode&&sessionStorage.getItem('libriV3WelcomeSeen')==='1';}catch{}
 function personalTitle(text){return conversationName?clean(conversationName)+', '+text:text.charAt(0).toUpperCase()+text.slice(1);}
-function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;setJourneyName(conversationName);try{sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
+function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;if(!simulationMode)setJourneyName(conversationName);try{if(!simulationMode)sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
 function shouldAskName(){return !welcomeAnswered&&state.step==='event'&&!state.eventType&&!state.cartItems.length;}
 const EVENTS = [
  ['birthday','Aniversário','Infantil ou adulto'],['15_years','15 anos','Uma celebração especial'],['wedding','Casamento','A história do casal'],['celebration','Chá ou celebração','Bebê, revelação, chá de panela e outros'],['other','Outra celebração','Formatura, bodas e mais']
@@ -71,7 +73,7 @@ let catalog = null, quote = null, offer = null, cartQuote = null, cartError = ''
 let cartEventDate='',cartRevision=0,cartOpenDetails=new Set(),checkoutContactDraft={};
 let state;
 try {
-  state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+  state = simulationMode?null:JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
 } catch {
   state = null;
 }
@@ -105,6 +107,7 @@ const hasGroup = group => state.addonCodes.some(code => groupCode(code) === grou
 const labelForEvent = () => state.eventSubtype || EVENTS.find(x => x[0] === state.eventType)?.[1] || 'Seu evento';
 const selectedAddons = () => state.addonCodes.map(getAddon).filter(Boolean);
 function save() {
+  if(simulationMode)return;
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
@@ -117,6 +120,7 @@ function message(text) {
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {
+  if(simulationMode){const endpoint=new URL(path,location.origin).pathname;const allowed=body?['/api/v2/quote','/api/v3/cart/quote','/api/v3/cart/terms','/api/v3/cart/delivery-options']:['/api/v2/catalog','/api/v2/atelie/catalog','/api/v3/retrospectivas/catalog','/api/v3/extras/catalog','/api/v2/gallery'];if(!allowed.includes(endpoint))throw Error('Operação real bloqueada no modo de teste.');}
   const response = await fetch(path, body ? {
     method: 'POST', credentials: 'same-origin',
     headers: {'content-type':'application/json'}, body: JSON.stringify(body)
@@ -497,6 +501,9 @@ function renderCart() {
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
+function showCartAdded(){
+ modalClose();modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho!</h2><p>Você pode contratar mais um serviço ou conferir o pedido.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Continuar escolhendo</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+}
 async function openCart(){
   const revision=cartRevision+1;
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
@@ -505,8 +512,7 @@ async function openCart(){
   root.innerHTML='<section class="v3-panel v3-panel--status v3-cart-transition" role="status"><div class="v3-cart-transition-copy"><span class="v3-cart-transition-line" aria-hidden="true"></span><h1>Preparando seu pedido</h1><p>Conferindo suas escolhas e o valor final.</p></div></section>';
   if(state.cartItems.length){
     try {
-      await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));
-      const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems});
+      const [data]=await Promise.all([request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems}),...state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const response=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=response.extras||[];}})]);
       if(revision!==cartRevision||state.step!=='cart')return;
       cartQuote=data.quote;
     } catch(e){if(revision!==cartRevision||state.step!=='cart')return;cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
@@ -685,12 +691,12 @@ async function handleStoreClick(event) {
     if(action==='retro-buy'){
       const item=retrosPackages.find(p=>p.code===value);
       if(!item?.previewAvailable)return message('Pacote indisponível.');
-      if(putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
+      if(putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]}))showCartAdded();return;
     }
     if(action==='atelie-buy'){
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
       if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
-      if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
+      if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}))showCartAdded();return;
     }
     if(action==='intent'){if(!['story','simple'].includes(value))return;if(state.intent!==value){if(state.addonCodes.length&&!confirm('Mudar o estilo? Os adicionais desta seleção serão revistos. O carrinho permanece salvo.'))return;state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';}await go('format');return;}
     if(action==='product'){
@@ -742,9 +748,9 @@ async function handleStoreClick(event) {
     }
     if(action==='add-invitation'){
       if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
-      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))await openCart();return;
+      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))showCartAdded();return;
     }
-    if(action==='open-cart'){await openCart();return;}
+    if(action==='added-more'){modalClose();await go('creation');return;} if(action==='added-view'){modalClose();await openCart();return;} if(action==='open-cart'){await openCart();return;}
     if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}
     if(action==='cart-edit'){
       const item=state.cartItems[Number(value)];if(!item)return;
@@ -792,7 +798,7 @@ async function handleStoreClick(event) {
       if(!cartQuote||cartError||!state.cartItems.length)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
-      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,contactDraft:checkoutContactDraft,request,onBack:draft=>{checkoutContactDraft=draft||{};if(draft?.eventDate)cartEventDate=draft.eventDate;return openCart();}});
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,contactDraft:checkoutContactDraft,simulationMode,request,onBack:draft=>{checkoutContactDraft=draft||{};if(draft?.eventDate)cartEventDate=draft.eventDate;return openCart();}});
       return;
     }
     if(action==='back'){
@@ -827,7 +833,7 @@ document.addEventListener('keydown', event => {
   if(event.key==='Escape'&&!modalRoot.hidden)modalClose();
 });
 async function init({skipRecovery=false}={}) {
-  if(!skipRecovery&&pendingV3CheckoutKey()){
+  if(!simulationMode&&!skipRecovery&&pendingV3CheckoutKey()){
     const handled=await mountV3PaymentRecovery(root,{request,onMissing:()=>init({skipRecovery:true})});
     if(handled||pendingV3CheckoutKey())return;
   }
@@ -855,7 +861,7 @@ async function init({skipRecovery=false}={}) {
   if(state.step==='extras'||state.step==='review'){await go(state.step);return;}
   if(state.productCode&&state.variantCode&&['format','scenes'].includes(state.step))await refreshQuote();
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(!sessionStorage.getItem('libriV3IntroSeen')&&state.step==='event'&&!reduced){
+  if(!simulationMode&&!sessionStorage.getItem('libriV3IntroSeen')&&state.step==='event'&&!reduced){
     intro();
     window.setTimeout(()=>{
       if(!sessionStorage.getItem('libriV3IntroSeen')){
@@ -865,8 +871,8 @@ async function init({skipRecovery=false}={}) {
     },2300);
   }else render();
 }
-mountStorePrivacy();
+if(!simulationMode)mountStorePrivacy();
 // V3 keeps the privacy controls accessible inside its single viewport.
 const site=document.querySelector('.v3-site'),privacy=document.getElementById('libri-privacy');
-if(site&&privacy)site.append(privacy);
+if(site&&privacy){site.append(privacy);const banner=document.querySelector('.libri-privacy-banner');if(banner)site.querySelector('.v3-header-shell')?.after(banner);}
 init().catch(err=>message(err.message));

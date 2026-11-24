@@ -71,6 +71,8 @@ export async function renderBlackLibri(panel=viewRoot) {
   const locked=camp.adminEnabled===true;
   const status=data.active?'EM VEICULAÇÃO':locked?'PROGRAMADA / FORA DO PERÍODO':'PAUSADA';
   const items=data.prizes||[];
+  const readiness=data.v3Readiness;
+  const reasons={checkout_disabled:'Checkout V3 desabilitado.',flag_disabled:'Integração da Black com o checkout V3 desabilitada.',campaign_inactive:'Campanha pausada, fora da vigência ou autorização ainda não confirmada.',missing_gift_workload:'Há presentes habilitados sem capacidade de produção configurada.'};
   panel.innerHTML=`
     <section class="settings-card black-admin">
       <div class="black-admin-top">
@@ -89,6 +91,7 @@ export async function renderBlackLibri(panel=viewRoot) {
       </div>
       <p class="muted">Escolha as datas como nos cupons. A campanha começa e termina automaticamente no período escolhido, sem configurar Cloudflare.</p>
       ${locked&&!data.active?'<p class="notice info"><strong>Campanha habilitada, mas fora do período.</strong> Os balões só aparecem em pedidos reais quando a data atual está dentro do intervalo. Use a prévia para testar a qualquer momento.</p>':''}
+      ${readiness?`<p class="notice ${readiness.ready?'info':'danger'}"><strong>Black na loja V3: ${readiness.ready?'pronta para convites elegíveis':'bloqueada'}</strong> ${esc(reasons[readiness.reason]||'')}${readiness.missing?.length?' Códigos: '+esc(readiness.missing.join(', ')):''}. Participações anteriores podem impedir novo sorteio.</p>`:''}
       <div class="black-admin-actions">
         <button class="btn btn-ghost" id="blackDemo" type="button">🎈 Testar balões sem gastar prêmio</button>
       </div>

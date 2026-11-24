@@ -21,6 +21,11 @@ const SEARCH_MODEL_TYPES = [
   ['atelie_essencia', 'Identidade Visual · Essência'],
   ['atelie_encanto', 'Identidade Visual · Encanto'],
   ['atelie_universo', 'Identidade Visual · Universo'],
+  ['retrospectiva_070','Retrospectiva · Memórias'],
+  ['retrospectiva_100','Retrospectiva · Recordações'],
+  ['retrospectiva_150','Retrospectiva · Nossa História'],
+  ['retrospectiva_200','Retrospectiva · Momentos Eternos'],
+  ['retrospectiva_250','Retrospectiva · Uma Vida em Memórias'],
 ];
 const SEARCH_MODEL_LABELS = Object.fromEntries(SEARCH_MODEL_TYPES);
 
@@ -176,6 +181,9 @@ export async function renderCentral(openOrder) {
         <strong>Identidades Visuais</strong>
         <small>Pedidos e etapas do Ateliê</small>
       </a>
+      <a class="admin-v3-shortcut" href="/admin-v2?view=production&service=retrospectivas">
+        <strong>Retrospectivas</strong><small>Pedidos, produção e aprovação</small>
+      </a>
       <a class="admin-v3-shortcut" href="/admin-v2?view=store&storeTab=atelie">
         <strong>Pacotes do Ateliê</strong>
         <small>Entregáveis, valores e disponibilidade</small>
@@ -208,9 +216,12 @@ export async function renderCentral(openOrder) {
             ['waiting_customer','Aguardando cliente'],['adjustments','Ajustes'],
             ['approved','Aprovado'],['balance_pending','Saldo pendente'],
             ['ready_for_delivery','Pronto para entrega'],['finalized','Finalizado'],
-            ['cancelled','Cancelado']].map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
+            ['capacity_review','Agenda em revisão'],['cancellation_review','Cancelamento em revisão'],['cancelled','Cancelado']].map(([v,label]) => `<option value="${v}">${label}</option>`).join('')}
           </select></div>
-        <div class="field"><label for="advOrderProduct">Formato do convite</label><select class="select" id="advOrderProduct">
+        <div class="field"><label for="advOrderFamily">Serviço</label><select class="select" id="advOrderFamily">
+          <option value="">Todos os serviços</option><option value="convite">Convites digitais</option><option value="identidade_visual">Libri Ateliê</option><option value="retrospectiva">Retrospectivas</option>
+          </select></div>
+        <div class="field"><label for="advOrderProduct">Modelo ou pacote</label><select class="select" id="advOrderProduct">
           <option value="">Todos os formatos</option>
           ${SEARCH_MODEL_TYPES.map(([v,label]) =>
             `<option value="${v}">${label}</option>`).join('')}
@@ -467,7 +478,7 @@ export async function renderCentral(openOrder) {
   let searchDebounce;
   let searchRevision = 0;
   const filterIds = [
-    'advOrderStatus', 'advOrderProduct', 'advOrderScenes',
+    'advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderDate', 'advOrderFrom', 'advOrderTo',
   ];
   const isFilterActive = () => filterIds.some(id =>
@@ -493,7 +504,7 @@ export async function renderCentral(openOrder) {
       return;
     }
     const values = [
-      ['q','advOrderQuery'], ['status','advOrderStatus'], ['product','advOrderProduct'],
+      ['q','advOrderQuery'], ['status','advOrderStatus'], ['family','advOrderFamily'], ['product','advOrderProduct'],
       ['scenes','advOrderScenes'], ['eventDate','advOrderDate'],
       ['archived','advOrderArchived'], ['from','advOrderFrom'], ['to','advOrderTo'],
     ];
@@ -510,10 +521,11 @@ export async function renderCentral(openOrder) {
           style="text-align:left;cursor:pointer">
           <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
           <small>${esc(item.customerName)} • Festa: ${dateBr(item.eventDate)}
-            • ${esc(SEARCH_MODEL_LABELS[item.productCode] || item.productCode || 'Modelo não informado')}
+            • ${item.modular?'Pedido integrado':esc(SEARCH_MODEL_LABELS[item.productCode] || item.productCode || 'Modelo não informado')}
             ${Number(item.sceneCount) > 0
               ? `• ${Number(item.sceneCount)} ${Number(item.sceneCount) === 1 ? 'cena' : 'cenas'}` : ''}
             • ${esc(item.status)} ${item.archived ? '• Arquivado' : ''}</small>
+          ${item.modular?(item.services||[]).map(s=>`<small><strong>${esc(s.productName||SEARCH_MODEL_LABELS[s.productCode]||s.productCode)}</strong> · ${esc(s.statusLabel||'Aguardando')} ${s.sceneCount>0?'· '+Number(s.sceneCount)+' cenas':''}</small>`).join(''):''}
         </button>`).join('') || empty('Nenhum pedido encontrado.');
       results.querySelectorAll('[data-searched-order]').forEach(button =>
         button.addEventListener('click', () => openOrder(button.dataset.searchedOrder)));
@@ -560,7 +572,7 @@ export async function renderCentral(openOrder) {
     document.getElementById(id)?.addEventListener('change', event => {
       if (event.target.value) document.getElementById('advOrderDate').value = '';
     }));
-  ['advOrderStatus', 'advOrderProduct', 'advOrderScenes',
+  ['advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderArchived', 'advOrderDate', 'advOrderFrom', 'advOrderTo']
     .forEach(id => document.getElementById(id)
       ?.addEventListener('change', refreshFilterIndicator));

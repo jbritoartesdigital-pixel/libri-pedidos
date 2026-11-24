@@ -76,12 +76,29 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       (s.productionStatus==='adjustments'?'<p>Solicitação registrada. A Libri irá conferir os ajustes e informar se estão dentro do escopo contratado.</p>':'')+
       (s.productionStatus==='approved'?'<p>Prévia aprovada. Aguardando os arquivos finais.</p>':'')+'</div>';
   }
+  function supplementHtml(s){
+    const offers=(area.supplements||[]).filter(x=>x.family===s.family);
+    const statuses={offered:'Aguardando sua decisão',accepted:'Aceite registrado · aguardando liberação do pagamento',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em conferência'};
+    return offers.map(x=>'<section class="card"><h4>Proposta complementar</h4><p>'+esc(statuses[x.status]||'Em acompanhamento')+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+' · '+money(i.totalCents)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.cardFeeCents?'<p>Taxa de cartão: '+money(x.cardFeeCents)+'</p>':'')+'<p><strong>Total adicional: '+money(x.totalCents)+'</strong> · '+(x.paymentMethod==='pix'?'Pix integral':'Cartão integral')+'</p><p>O pedido original permanece inalterado até pagamento confirmado e conferência da agenda.</p>'+
+      (x.status==='offered'?'<div class="grid two"><button type="button" class="btn primary" data-v3-supplement="accept" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Aceitar proposta</button><button type="button" class="btn secondary" data-v3-supplement="decline" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Recusar</button></div>':'')+'</section>').join('');
+  }
+  async function decideSupplement(id,action){
+    if(busy)return;
+    const x=(area.supplements||[]).find(y=>y.id===Number(id));
+    if(!x||x.status!=='offered')return;
+    if(!window.confirm(action==='accept'?'Aceitar a proposta de '+money(x.totalCents)+'? Nenhum pagamento será iniciado agora.':'Recusar esta proposta complementar?'))return;
+    busy=true;error='';notice='';render();
+    try{
+      const r=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/supplements/'+x.family+'/'+x.id+'/decision',{method:'POST',body:JSON.stringify({action,confirmed:true,expectedTotalCents:x.totalCents})});
+      area=r.briefing;notice=action==='accept'?'Aceite registrado. Aguarde a liberação da cobrança.':'Proposta recusada.';
+    }catch(e){error=e.message;}finally{busy=false;render();}
+  }
   function summary(){
     return '<section class="card"><h2>Seu pedido</h2><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p><p><strong>Total contratado:</strong> '+money(area.payment.totalCents)+'</p>'+
       '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></section>'+
       area.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><p>'+esc(briefingLabels[s.briefingStatus]||'Em acompanhamento')+' · '+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
         (s.deliveryWindow?'<p><strong>Entrega prevista:</strong> '+day(s.deliveryWindow.start)+' a '+day(s.deliveryWindow.end)+'</p>':'<p>Prazo individual aguardando conferência.</p>')+(s.complementNote?'<p><strong>Complemento solicitado:</strong> '+esc(s.complementNote)+'</p>':'')+'<p>'+money(s.totalCents)+'</p>'+(s.blackLibri?'<p><strong>Black Libri:</strong> '+esc(s.blackLibri.label)+(s.blackLibri.gift?' · Brinde incluído':s.blackLibri.applied?' · Desconto aplicado':' · Melhor condição mantida')+'</p>':'')+s.extras.map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+
-        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+deliveryHtml(s)+'</section>').join('');
+        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('');
   }
   function paymentHtml(){
     if(!area.locked)return '';
@@ -179,6 +196,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
     if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
+    const supplement=e.target.closest('[data-v3-supplement]');if(supplement&&!busy){await decideSupplement(supplement.dataset.id,supplement.dataset.v3Supplement);return;}
     const prod=e.target.closest('[data-v3-production]');if(prod&&!busy){await productionAction(prod.dataset.family,prod.dataset.v3Production);return;}
     const action=e.target.closest('[data-v3-action]')?.dataset.v3Action;
     if(action==='submit')submit();

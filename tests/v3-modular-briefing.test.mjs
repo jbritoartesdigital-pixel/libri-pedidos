@@ -153,3 +153,38 @@ test('service submission validates required fields and locks shared responses wi
  await assert.rejects(saveV3ModuleDraft(db,order.publicToken,'shared',{revision:1,data:{theme_or_style:'Outro'}}),/compartilhados/);
  assert.equal((await submit('identidade_visual',1,1)).status,200);
 });
+
+import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../src/lib/v3-admin-briefing.js';
+import {submitV3ServiceBriefing} from '../src/lib/v3-modular-briefing.js';
+test('Admin reviews or reopens one submitted service without releasing production',async t=>{
+ const {db,order}=await paid(t);
+ await saveV3ModuleDraft(db,order.publicToken,'shared',{revision:0,data:{theme_or_style:'Jardim',joint_celebration:'no',age:3,event_time:'14:00',venue_name:'Salão',venue_address:'Rua 1'}});
+ await saveV3ModuleDraft(db,order.publicToken,'identidade_visual',{revision:0,data:{mascotMode:'ilustração temática',additionalSubjects:'não',styleFreedom:'a Libri pode decidir',exactTexts:'Ana 3 anos'}});
+ await submitV3ServiceBriefing(db,order.publicToken,'identidade_visual',{revision:1,sharedRevision:1});
+ await assert.rejects(reviewV3ServiceBriefing(db,order.publicToken,'identidade_visual',{action:'confirm',revision:0,sharedRevision:1}),/mudou/);
+ const reviewed=await reviewV3ServiceBriefing(db,order.publicToken,'identidade_visual',{action:'confirm',revision:1,sharedRevision:1});
+ assert.ok(reviewed.services.find(s=>s.family==='identidade_visual').reviewedAt);
+ assert.equal(reviewed.services.find(s=>s.family==='identidade_visual').productionStatus,'pending');
+ const reopened=await reviewV3ServiceBriefing(db,order.publicToken,'identidade_visual',{action:'reopen',revision:1,sharedRevision:1,note:'Informe as cores das artes.'});
+ assert.equal(reopened.services.find(s=>s.family==='identidade_visual').briefingStatus,'in_progress');
+ assert.equal(reopened.services.find(s=>s.family==='identidade_visual').reviewedAt,null);
+ assert.equal(reopened.services.find(s=>s.family==='convite').briefingStatus,'available');
+ assert.equal(reopened.modules.find(m=>m.module==='identidade_visual').revision,2);
+ assert.equal((await getV3ModularBriefing(db,order.publicToken)).services.find(s=>s.family==='identidade_visual').complementNote,'Informe as cores das artes.');
+ assert.ok(!JSON.stringify(await getV3AdminBriefing(db,order.publicToken)).includes(order.publicToken));
+ const resp=await worker.fetch(new Request('https://test/api/admin/v2/orders/'+order.orderCode+'/v3/briefing/identidade_visual/review',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}),{DB:db},{waitUntil(){}});
+ assert.equal(resp.status,401);
+});
+test('Retro receipt completion is explicit, not implied by counts, and review requires it',async t=>{
+ const {db,order}=await paid(t);
+ const snap={product:{name:'Retrospectiva teste'},variant:{config:{retrospective:{maxPhotos:70,maxVideos:3,captionsIncluded:false}}}};
+ db.sqlite.prepare(`INSERT INTO v3_order_services(order_id,family,product_code,variant_code,gross_cents,discount_cents,total_cents,points_units,production_days,commercial_snapshot_json,briefing_status)
+ VALUES(?,'retrospectiva','retrospectiva_070','retrospectiva_070_default',10000,0,10000,100,15,?,'completed')`).run(order.orderId,JSON.stringify(snap));
+ await recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:60,videoCount:2});
+ await assert.rejects(reviewV3ServiceBriefing(db,order.publicToken,'retrospectiva',{action:'confirm',revision:0,sharedRevision:0}),/recebimento completo/);
+ await recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:60,videoCount:2,complete:true});
+ const reviewed=await reviewV3ServiceBriefing(db,order.publicToken,'retrospectiva',{action:'confirm',revision:0,sharedRevision:0});
+ assert.ok(reviewed.services.find(s=>s.family==='retrospectiva').reviewedAt);
+ assert.ok(reviewed.modules.find(m=>m.module==='retrospectiva').receipt.completeAt);
+ assert.equal(reviewed.services.find(s=>s.family==='retrospectiva').productionStatus,'pending');
+});

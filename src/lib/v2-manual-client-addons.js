@@ -351,3 +351,35 @@ export async function applyManualClientAddons(
   }
   return quote;
 }
+
+
+// Uma única oferta comercial, cotada no servidor. Nunca reserva ou altera o pedido.
+export async function getManualClientUpsell(db,manual,offer){
+  if(!offer?.editable || !await editable(db,manual))return null;
+  const snap=manual.pricing.snapshot||{};
+  const original=offer.products.find(p=>p.code===offer.currentProductCode);
+  const current=original?.variants.find(v=>v.code===offer.currentVariantCode);
+  if(!current)return null;
+  const candidates=[];
+  const upgradeCode={cinematic_video:'cinematic_interactive',interactive_essential:'interactive_animated'}[original.code];
+  const upgrade=offer.products.find(p=>p.code===upgradeCode);
+  const variant=upgrade?.variants.find(v=>original.pricingMode==='scene_count'?Number(v.sceneCount)===Number(current.sceneCount):true);
+  if(variant&&!snap.combo?.code&&!snap.coupon?.code){
+    candidates.push({title:upgradeCode==='cinematic_interactive'?'Que tal deixar seu vídeo interativo?':'Que tal uma abertura animada?',description:upgradeCode==='cinematic_interactive'?'A mesma história e quantidade de cenas, com acesso às informações da festa pelo convite.':'Uma animação especial revela o convite antes dos convidados acessarem os detalhes.',addonCodes:[],productCode:upgrade.code,variantCode:variant.code});
+  }
+  const ownedGroups=new Set((snap.addons||[]).map(a=>a.group).filter(Boolean));
+  const ownedCodes=new Set(currentAddonCodes(manual));
+  const descriptions={confirmation:'Acompanhe as respostas dos convidados em um painel personalizado, sem precisar organizar tudo pelo WhatsApp.',save_the_date:'Avise seus convidados da data com antecedência.',reminder:'Relembre a data da festa perto da comemoração.',moments:'Reúna os registros dos convidados em um álbum digital da festa.',filter:'Ofereça um filtro de fotos personalizado para a comemoração.'};
+  for(const group of ['confirmation','save_the_date','reminder','moments','filter']){
+    if(ownedGroups.has(group)||group==='filter'&&([...ownedCodes].some(c=>/^moments_/.test(c))||ownedGroups.has('moments'))||group==='moments'&&(ownedCodes.has('custom_filter')||ownedGroups.has('filter')))continue;
+    const addon=offer.available.filter(a=>a.group===group&&!ownedCodes.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
+    if(addon)candidates.push({title:'Gostaria de adicionar '+addon.name+'?',description:descriptions[group],addonCodes:[addon.code],productCode:original.code,variantCode:current.code});
+  }
+  for(const candidate of candidates.slice(0,4)){
+    try{
+      const q=await quoteManualClientAddons(db,manual,candidate.addonCodes,candidate);
+      if(q.increaseCents>0){const {_additions,...quote}=q;return {...candidate,quote};}
+    }catch{/* Uma oferta incompatível ou sem capacidade não deve impedir a compra. */}
+  }
+  return null;
+}

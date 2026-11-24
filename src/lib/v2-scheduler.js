@@ -1,3 +1,4 @@
+import {runV3DeliveryRetention} from './v3-delivery-retention.js';
 import { nowIso } from './http.js';
 import { expireBlackLibriClaims } from './v2-black-libri.js';
 import { syncMercadoPagoOrder } from './v2-mercadopago.js';
@@ -70,6 +71,9 @@ export async function runV2Scheduler(env) {
       pushEligible: true, dedupeKey: `urgency-requested:${order.id}` });
   }
   result.abandonedOrders = await cleanupAbandonedUnpaidV2Orders(env);
+  if(env.LIBRI_V3_CHECKOUT_ENABLED==='true'){
+    try{result.v3Retention=await runV3DeliveryRetention(env);}catch(error){console.error('V3 retention failed',error.message);result.v3Retention={failed:true};}
+  }
   result.notifications = await runV2NotificationScheduler(env);
   return result;
 }

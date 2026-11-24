@@ -13,7 +13,7 @@ const {chromium}=await import(pathToFileURL(process.env.LIBRI_PLAYWRIGHT_MODULE)
 const db=database();await setAtelieSaleStatus(db,'essencia',true);
 db.sqlite.exec("UPDATE v3_retrospective_packages SET sale_enabled=1 WHERE code='RETRO_070'");
 const env={DB:db,LIBRI_V3_CHECKOUT_ENABLED:'false'};
-const allowed=new Set(['/api/v2/catalog','/api/v2/atelie/catalog','/api/v2/quote','/api/v3/retrospectivas/catalog','/api/v3/extras/catalog','/api/v3/cart/quote','/api/v3/cart/terms','/api/v3/cart/delivery-options','/api/v3/store/stage']);
+const allowed=new Set(['/api/v2/catalog','/api/v2/gallery','/api/v2/atelie/catalog','/api/v2/quote','/api/v3/retrospectivas/catalog','/api/v3/extras/catalog','/api/v3/cart/quote','/api/v3/cart/terms','/api/v3/cart/delivery-options','/api/v3/store/stage']);
 let blocked=0;
 const server=createServer(async(req,res)=>{
  try{
@@ -41,6 +41,8 @@ async function pageFor(width,height){
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/loja');await page.locator('[data-action="event"]').first().waitFor();
+ await page.locator('.libri-privacy-banner [data-privacy="deny"]').click();
+ assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),'deny');
  return {context,page};
 }
 const click=(p,a,v)=>p.locator('[data-action="'+a+'"]'+(v?'[data-value="'+v+'"]':'')).first().click();

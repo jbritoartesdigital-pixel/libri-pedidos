@@ -13,6 +13,7 @@ import {
   startCustomerArea,
 } from './client-v2-area.js?v=20261124-atelier-gift-v3';
 
+import {mountStorePrivacy} from './store-privacy.js';
 async function bootstrap() {
   const route =
     pathInfo();
@@ -39,6 +40,7 @@ async function bootstrap() {
     return;
   }
 
+  mountStorePrivacy();
   await startStore(
     route.productSlug,
   );

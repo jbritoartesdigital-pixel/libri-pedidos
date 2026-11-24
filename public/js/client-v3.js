@@ -1,4 +1,5 @@
 import {trackStoreStage} from './store-funnel.js';
+import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 import { mountV3Checkout } from './client-v3-checkout.js';
 // Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
@@ -318,7 +319,7 @@ function renderFormats() {
     '<div class="v3-choices-stack">' + codes.map(code => {
       const product = getProduct(code), detail = PRODUCTS[code];
       return choice(code,detail?.title || product.name,detail?.description || product.shortDescription,
-        state.productCode,'product',product.variants[0]?.priceCents);
+        state.productCode,'product',product.variants[0]?.priceCents)+'<button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplos deste formato</button>';
     }).join('') + '</div>',
     actions(true,SCENE_PRODUCTS.has(state.productCode) ? 'Escolher cenas' : 'Continuar'),2);
 }
@@ -546,6 +547,25 @@ function modalClose() {
   modalRoot.hidden = true;
   modalRoot.innerHTML = '';
 }
+async function showExamples(code){
+ if(!getProduct(code)||!formatCodes().includes(code))return;
+ modalRoot.hidden=false;modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1"><h2>Exemplos deste formato</h2><p>Carregando exemplos da galeria…</p><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar</button></div>';
+ try{
+  const response=await request('/api/v2/gallery?productCode='+encodeURIComponent(code)+'&eventType='+encodeURIComponent(state.eventType));
+  const cards=(response.items||[]).filter(x=>x.productCode===code).slice(0,8).map(x=>{
+    const media=/^\/api\/v2\/gallery\/\d+\/media$/.test(x.mediaPath||'')?x.mediaPath:'';
+    const preview=/^\/api\/v2\/gallery\/\d+\/preview$/.test(x.previewPath||'')?x.previewPath:'';
+    const url=/^https:\/\//i.test(x.externalUrl||'')?x.externalUrl:'';
+    return '<article class="v3-gallery-example">'+(preview?'<img src="'+clean(preview)+'" loading="lazy" alt="Exemplo da Libri">':media&&x.mediaType==='image'?'<img src="'+clean(media)+'" loading="lazy" alt="Exemplo da Libri">':'')+
+      (media&&x.mediaType==='video'?'<video controls playsinline preload="none" '+(preview?'poster="'+clean(preview)+'" ':'')+'src="'+clean(media)+'"></video>':'')+
+      (url?'<a href="'+clean(url)+'" target="_blank" rel="noopener noreferrer">Abrir exemplo</a>':'')+
+      (x.themeLabel?'<strong>'+clean(x.themeLabel)+'</strong>':'')+(x.caption?'<p>'+clean(x.caption)+'</p>':'')+'</article>';
+  }).join('');
+  if(modalRoot.hidden)return;
+  modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" aria-labelledby="v3-example-title" tabindex="-1"><h2 id="v3-example-title">'+clean(PRODUCTS[code]?.title||'Exemplos')+'</h2><p>Veja exemplos reais disponíveis deste formato. A arte do seu pedido será personalizada.</p><div class="v3-gallery-grid">'+(cards||'<p>Ainda não há exemplos publicados desse formato para esta celebração. Você pode falar com a Libri para saber mais.</p>')+'</div><button type="button" class="v3-btn v3-btn-secondary" data-action="close-modal">Voltar às opções</button></div>';
+ }catch(e){if(!modalRoot.hidden)modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true"><p>Não foi possível carregar a galeria agora. Sua escolha foi mantida.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="close-modal">Voltar</button></div>';}
+ modalRoot.querySelector('[role="dialog"]')?.focus();
+}
 function openAddonGroup(group,guided=false) {
   const variants = (catalog?.addons || []).filter(a => a.group === group);
   if (!variants.length) return;
@@ -686,6 +706,7 @@ async function handleStoreClick(event) {
       quote=null;liveQuoteKey='';if(state.variantCode)await refreshQuote();render();return;
     }
     if(action==='variant'){state.variantCode=value;state.offerFinished=false;state.addonQuestion=0;await refreshQuote();render();return;}
+    if(action==='show-examples'){await showExamples(value);return;}
     if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
@@ -851,4 +872,5 @@ async function init({skipRecovery=false}={}) {
     },2300);
   }else render();
 }
+mountStorePrivacy();
 init().catch(err=>message(err.message));

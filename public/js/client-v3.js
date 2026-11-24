@@ -378,10 +378,12 @@ function renderCart() {
     const priced=cartQuote?.items?.find(x=>x.productCode===item.productCode&&x.variantCode===item.variantCode);
     const product=getProduct(item.productCode);
     const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
+    const upgrade=priced?.upgradeSuggestion;
+    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade" data-value="'+i+'">Trocar pacote</button></div>':'';
     return '<div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
       (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
       (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
-      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i);
+      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i)+suggestion;
   }).join('');
   const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
@@ -641,6 +643,13 @@ root.addEventListener('click', async event => {
     if(action==='remove-cart'){
       const i=Number(value);
       if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
+      await openCart();return;
+    }
+    if(action==='cart-upgrade'){
+      const i=Number(value),item=state.cartItems[i];
+      const suggestion=cartQuote?.items?.find(x=>x.productCode===item?.productCode&&x.variantCode===item?.variantCode)?.upgradeSuggestion;
+      if(!item||!suggestion||cartError)return;
+      state.cartItems[i]={productCode:suggestion.productCode,variantCode:suggestion.variantCode,addonCodes:[],extras:suggestion.extras};
       await openCart();return;
     }
     if(action==='cart-extra-plus'||action==='cart-extra-minus'){

@@ -92,16 +92,32 @@
 
 .black-libri-error{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(92%,460px);padding:12px 16px;border:1px solid #e3b99488;background:#4e3035;color:#fff4e8;border-radius:12px;text-align:center;z-index:2;box-shadow:0 6px 20px #130d1166}
 
-/* V97 — immersive Black stage, premium champagne contrast, no commercial changes. */
-.black-libri-overlay{background:radial-gradient(ellipse at 50% 0,#62434f99,transparent 65%),#140d13ed}
-.black-libri-panel{max-width:590px;background:radial-gradient(ellipse at 50% -5%,#97676b7d,transparent 55%),radial-gradient(ellipse at 100% 95%,#b7806945,transparent 52%),linear-gradient(155deg,#20151d,#38232e 62%,#513337);border-radius:28px;border-color:#d0a68b80;box-shadow:0 28px 100px #0e080dbe,inset 0 1px #ecd0b96b}
-.black-libri-campaign{font-size:clamp(48px,12vw,78px);letter-spacing:-.055em;color:#fff2e7;text-shadow:0 0 30px #d6a57e45}
-.black-libri-campaign em{color:#e8be9a}
-.black-libri-heading{font-size:clamp(24px,5.4vw,34px)}
-.black-libri-grid{max-width:100%;background:radial-gradient(ellipse at 50% 0,#be8e7c33,transparent 66%),#150b152c;border:1px solid #d4a88935;gap:4px 6px;padding:12px 6px 7px;margin:11px auto 7px}
-.black-libri-balloon{min-height:108px}
-.black-libri-balloon .bulb{width:min(94%,92px);box-shadow:inset 3px 4px 8px #fff8,inset -6px -11px 14px #31111d6b,0 8px 18px #10090c80}
-.black-libri-result{padding:26px 16px;background:radial-gradient(ellipse at 50% 0,#b98b6b5c,transparent 70%),linear-gradient(145deg,#65444a,#302029);border-color:#e4bc8c}
-.black-libri-result strong{font-size:clamp(30px,7vw,42px);color:#fff4e6}
-.black-libri-button{min-height:54px;background:linear-gradient(115deg,#f7dfc2,#d8b38e);font-size:15px}
-@media(max-height:660px){.black-libri-panel{padding:12px 14px}.black-libri-campaign{font-size:43px;margin:4px 0 7px}.black-libri-heading{font-size:23px}.black-libri-grid{padding:4px;gap:1px 4px;margin:6px 0}.black-libri-balloon{min-height:82px}.black-libri-balloon .bulb{width:min(88%,65px)}.black-libri-result{padding:15px 12px}}
+
+/* V102 — Black Rose Studio: preserve the game, use the storefront's real palette. */
+.black-libri-overlay{background:#3b2529a6;backdrop-filter:blur(12px)}
+.black-libri-panel{--ink:#37282b;--muted:#77656a;--accent:#754942;--gold:#905d56;max-width:510px;border:1px solid #e5d6ce;border-radius:24px;background:linear-gradient(150deg,#fffdfa,#f1dfd8);box-shadow:0 18px 55px #3b25294d;padding:18px 18px 15px}
+.black-libri-panel::before{display:none}
+.black-libri-panel :is(button,a):focus-visible{outline-color:#754942}
+.black-libri-close{background:#fffdfa;border-color:#e5d6ce;color:#37282b}
+.black-libri-brand-slot .black-libri-brand{filter:none;opacity:1}
+.black-libri-kicker,.black-libri-campaign em{color:#754942}
+.black-libri-kicker::before,.black-libri-kicker::after{background:#ad7d6c}
+.black-libri-campaign{font-size:clamp(38px,10vw,56px);color:#37282b;text-shadow:none;margin:6px 0 9px}
+.black-libri-heading{font-size:clamp(23px,5.6vw,31px);color:#37282b}
+.black-libri-subtitle,.black-libri-foot{color:#77656a}
+.black-libri-grid{background:linear-gradient(135deg,#fffdfaab,#f1dfd870);border:1px solid #e5d6ce;border-radius:18px;box-shadow:none;gap:3px 5px;padding:8px 6px 5px;margin:9px auto 5px}
+.black-libri-grid::before,.black-libri-grid::after{color:#905d56}
+.black-libri-balloon{min-height:91px}
+.black-libri-balloon .bulb{width:min(90%,76px)}
+.black-libri-balloon .black-libri-number{color:#754942}
+.black-libri-balloon .string{border-color:#905d56}
+.black-libri-sound,.black-libri-secondary{background:#fffdfa;border-color:#e5d6ce;color:#754942}
+.black-libri-result{border-color:#e5d6ce;background:linear-gradient(145deg,#fffdfa,#f1dfd8);box-shadow:none;padding:19px 13px}
+.black-libri-result>span{background:#f1dfd8;color:#754942;border-color:#e5d6ce}
+.black-libri-result small,.black-libri-result .black-libri-saved{color:#754942}
+.black-libri-result strong{color:#37282b}
+.black-libri-result p{color:#77656a}
+.black-libri-result::before,.black-libri-result::after{color:#905d56}
+.black-libri-button{background:#3b2529;color:#fff7ee;border-color:#3b2529;box-shadow:none;border-radius:12px;min-height:46px}
+.black-libri-error{background:#fffdfa;color:#754942;border-color:#ad7d6c}
+@media(max-height:660px){.black-libri-panel{padding:11px 13px}.black-libri-campaign{font-size:35px;margin:4px 0}.black-libri-heading{font-size:23px}.black-libri-grid{padding:4px;gap:2px;margin:6px 0}.black-libri-balloon{min-height:74px}.black-libri-balloon .bulb{width:min(82%,54px)}.black-libri-result{padding:13px 12px}}

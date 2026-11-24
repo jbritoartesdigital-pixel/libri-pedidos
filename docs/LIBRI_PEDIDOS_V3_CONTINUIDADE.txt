@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 14 | 23/11/2026 (Brasil)
+Versão 15 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -133,5 +133,11 @@ RETOMADA V14 — ORQUESTRADOR DO CHECKOUT V3
 - 7642160/2ca7e5f: reutiliza sequência atômica LIBRI e cria orquestrador startV3Checkout: valida contato, chave privada aleatória de 36 hex, cotação real, termos, pedido e hold, pagamento Mercado Pago integral. Recupera a tentativa pelo hash sem duplicar pedido ou cobrança; não atualiza contato legado só por informar WhatsApp.
 - e22813a/8b436a0: snapshot privado do contato vinculado ao hash; e-mail de pagamento vem dos dados confirmados nesta contratação, sem sobrescrever cadastro histórico.
 - fbc02a4: POST /api/v3/cart/terms consulta termos gerais e específicos por serviço; POST /api/v3/cart/checkout orquestra pagamento SOMENTE com LIBRI_V3_CHECKOUT_ENABLED='true' e pacote liberado. Flag não configurada na produção; manter bloqueada até conclusão integral, inclusive promoções/Black, UI, segurança e Admin. Nenhuma cobrança real.
-- 70e222f: testes de API, padrão bloqueado, termos, alteração de preço/contato, idempotência e cobrança mock. CI a confirmar.
+- 70e222f: testes de API, padrão bloqueado, termos, alteração de preço/contato, idempotência e cobrança mock. CI 45319547478 concluído com sucesso.
 - Próximo passo: validar CI, integrar formulário de checkout (cliente, evento, agenda, seleção Pix/cartão e termos), incluir Ateliê avulso com extras no V3, tratar recuperação/expiração e falha de pagamento com segurança; integrar área cliente e Admin, promoções/Black, cupom e campanha, agenda por serviço, submissão e uploads, cobranças complementares, entregas. Não ativar vendas nem publicar parcialmente. PR #143 draft.
+
+RETOMADA V15 — INTERFACE CHECKOUT UNIFICADO
+- 5d5bbb2/e8f00b0: Ateliê avulso com novos extras aceita registro V3; termos públicos informam se a flag de checkout está ativa, padrão continua desativado.
+- 6e393e2/970afbb: tela modular de contratação com identificação, nome do evento, data, consulta/seleção de janela, Pix/cartão integral, cotação e termos reais por serviço; carrinho combinado, retro avulsa e Ateliê com extras seguem ao formulário V3. Convites e Ateliê avulsos sem extras mantêm fluxo V2 até revisão de promoções. Interface bloqueia pagamento quando flag desativada. Dados pessoais ficam em memória, não localStorage; chave privada de tentativa na sessionStorage, payload idêntico em retry na mesma tela. Não permite reenvio com mudanças após tentativa incerta. URL de pagamento validada. Recuperação após reload/expiração e limpeza segura da chave ainda pendentes; não habilitar antes disso.
+- 7332d91/48e1f00: teste de Ateliê avulso com extras preservando valores e pontos unitários; teste de renderização do checkout, termos escapados, valor e bloqueio de pagamento. CI a confirmar; teste visual real de navegador ainda pendente.
+- Próximo: recuperação de checkout por chave privada, reconciliação de tentativas expiradas e pagamento já confirmado; telas reais de briefing cliente/Admin, submissão e arquivos privados, agenda por serviço, promoções/Black, complementos e entrega. Não publicar parcial, não ativar flag ou catálogo manualmente. PR #143 draft.

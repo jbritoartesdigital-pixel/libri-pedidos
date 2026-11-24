@@ -18,7 +18,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
   '<p>'+ (r.completeAt?'Recebimento completo confirmado.':'Recebimento ainda não confirmado como completo.')+'</p><button class="btn btn-secondary" data-v3-admin="receipt">Registrar recebimento</button></section>';
  }
  function agendaHtml(s){
- if(s.deliveryWindow)return '<p>Entrega confirmada: '+esc(s.deliveryWindow.start)+' a '+esc(s.deliveryWindow.end)+'</p><p>Serviço programado para produção.</p>';
+ if(s.deliveryWindow&&s.productionStatus!=='pending')return '<p>Entrega confirmada: '+esc(s.deliveryWindow.start)+' a '+esc(s.deliveryWindow.end)+'</p><p>Serviço programado para produção.</p>';
  if(!s.reviewedAt||s.productionStatus!=='pending')return '';
  const a=agenda[s.family],dependent=s.family==='convite'&&brief.services.some(x=>x.family==='identidade_visual');
  return '<div class="notice"><h4>Programar produção</h4>'+

@@ -109,7 +109,7 @@ async function checkout(p){
 }
 try{
  const durations=await pageFor(390,844);const dp=durations.page;
- await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await click(dp,'product','cinematic_video');
+ await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('.v3-demo-cinematic_video').waitFor();await dp.locator('.v3-demo-cinematic_interactive').waitFor();await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});
  const short=await dp.locator('[data-scenes="3"]').getAttribute('data-value');await dp.locator('[data-scenes="3"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),short);
  await click(dp,'guided-back');const long=await dp.locator('[data-scenes="6"]').getAttribute('data-value');await dp.locator('[data-scenes="6"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),long);
@@ -165,7 +165,7 @@ try{
  await adminContext.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
  const admin=await adminContext.newPage();admin.on('pageerror',e=>errors.push(e.message));
  await admin.goto(origin+'/admin-v2?order='+paidFixture.orderCode);
- await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
+ await admin.locator('#v3AdminOrder .v3-admin-mini-service').first().waitFor();assert.equal(await admin.locator('#v3AdminOrder .v3-admin-mini-service').count(),3);assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await adminContext.close();

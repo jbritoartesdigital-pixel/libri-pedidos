@@ -693,3 +693,18 @@ html[data-v3-theme=dark] .v3-panel--guided .v3-action-row{background:#392b2c;bor
 .v97-checkout-header{text-align:left}.v97-checkout-header .v3-title,.v97-checkout-header .v97-stage-label{text-align:left}
 @media(min-width:780px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{padding:20px 26px 12px}}
 @media(max-height:660px){.v3-header-shell{margin-top:4px}.v3-header-shell .v3-topbar{min-height:43px;padding:4px 8px}.v98-brand-mark{width:29px;height:29px}.v3-panel--guided .v3-stage-heading{padding-bottom:5px}.v3-panel--guided .v3-action-row{padding:4px}}
+
+/* V99: leitura imediata dos nomes e movimento leve, sem animação em loop. */
+.v3-panel--guided.v3-stage-scenes .v3-duration-card{min-height:106px;padding:13px 12px}
+.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy{gap:4px}
+.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{font:400 clamp(25px,6.7vw,36px)/1.05 Georgia,serif!important;letter-spacing:.015em!important;text-transform:uppercase}
+.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy small{font-size:13px;line-height:1.35}
+.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-price{font-size:17px}
+.v3-panel--guided.v3-stage-creation .v3-choice-copy strong{font-size:clamp(23px,6vw,32px)!important}
+.v3-panel--guided.v3-stage-intent .v3-choice-copy strong,.v3-panel--guided.v3-stage-format .v3-choice-copy strong{font-size:clamp(19px,5vw,26px)!important}
+.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) :is(.v3-choice,.v3-format-card){animation:v99-card-in .27s ease-out both}
+.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) :is(.v3-choice,.v3-format-card):nth-child(2){animation-delay:.045s}
+.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) :is(.v3-choice,.v3-format-card):nth-child(3){animation-delay:.09s}
+@keyframes v99-card-in{from{opacity:.65;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(max-height:660px){.v3-panel--guided.v3-stage-scenes .v3-duration-card{min-height:88px;padding:8px 10px}.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{font-size:25px!important}.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy small{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) :is(.v3-choice,.v3-format-card){animation:none}}

@@ -113,7 +113,7 @@ export async function getV3ModularBriefing(db,token){
   const {order,services,locked,drafts,revisions}=ctx;
   const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
     variantName:s.snapshot.variant?.label||'',submittedAt:s.briefing_submitted_at,complementNote:s.complement_note,reviewedAt:s.reviewed_at,deliveryWindow:s.delivery_start?{start:s.delivery_start,end:s.delivery_end}:null,scheduledAt:s.scheduled_at,dependsOnIdentity:s.depends_on_identity===null?null:Boolean(s.depends_on_identity),totalCents:s.total_cents,productionDays:s.production_days,
-    extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
+    blackLibri:s.snapshot.blackLibri||null,extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
   const base={orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[]};

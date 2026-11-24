@@ -359,6 +359,19 @@ function cartDeliveryHtml(){
       (options.length?options.map(o=>'<p>'+clean(formatDate(o.start))+' a '+clean(formatDate(o.end))+(o.recommended?' · sugerida':'')+'</p>').join(''):'<p>Sem janela automática para esta data. Será necessário avaliar a disponibilidade antes de pagar.</p>')+
       '<p class="v3-mini">'+(cartDelivery.provisionalUntilBriefing?'Mínimo de 15 dias corridos após pagamento e briefing completos. ':'')+'Consulta sem reserva de vaga. A data ainda deverá ser confirmada na contratação.</p></div>':'')+'</div>';
 }
+let cartExtrasCatalog=Object.create(null);
+function cartExtrasHtml(item,i){
+  const extras=cartExtrasCatalog[item.productCode]||[];
+  if(!extras.length)return '';
+  const selected=new Map((item.extras||[]).map(x=>[x.code,x.quantity]));
+  const groups=[...new Set(extras.map(x=>x.category))];
+  return '<div class="v3-notice"><strong>Personalize seu pacote</strong><p class="v3-mini">Selecione somente o que precisar além dos itens inclusos.</p>'+
+    groups.map(group=>'<details '+(extras.some(x=>x.category===group&&selected.has(x.code))?'open':'')+'><summary>'+clean(group)+'</summary>'+extras.filter(x=>x.category===group).map(x=>{
+      const n=selected.get(x.code)||0;
+      return '<div class="v3-line"><div><strong>'+clean(x.name)+'</strong><p class="v3-mini">'+money(x.priceCents)+' por unidade</p></div>'+
+        '<div><button type="button" aria-label="Diminuir '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-minus" data-value="'+i+':'+clean(x.code)+'" '+(!n?'disabled':'')+'>−</button> <strong>'+n+'</strong> <button type="button" aria-label="Aumentar '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-plus" data-value="'+i+':'+clean(x.code)+'" '+(n>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
+    }).join('')+'</details>').join('')+'</div>';
+}
 function renderCart() {
   const items=state.cartItems;
   const lines=items.map((item,i)=>{
@@ -368,18 +381,18 @@ function renderCart() {
     return '<div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
       (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
       (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
-      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>';
+      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i);
   }).join('');
   const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
     (cartQuote.discountCents?'<div class="v3-line"><span>Desconto do convite</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
     items.length>1?'<div class="v3-notice">A contratação conjunta está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
-    items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
+    items.some(x=>(x.extras||[]).length)?'<div class="v3-notice">O pagamento com os novos adicionais está em preparação. Nenhuma cobrança foi criada.</div>':items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
     '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length===1&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
+    (items.length===1&&cartQuote&&!cartError&&!(items[0].extras||[]).length?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
 }
 async function openCart(){
   state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
@@ -387,6 +400,7 @@ async function openCart(){
   root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
   if(state.cartItems.length){
     try {
+      await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));
       const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems});
       cartQuote=data.quote;
     } catch(e){cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
@@ -629,9 +643,18 @@ root.addEventListener('click', async event => {
       if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
       await openCart();return;
     }
+    if(action==='cart-extra-plus'||action==='cart-extra-minus'){
+      const [idx,code]=String(value).split(':');const item=state.cartItems[Number(idx)];
+      const extra=(cartExtrasCatalog[item?.productCode]||[]).find(x=>x.code===code);if(!item||!extra)return;
+      const selected=new Map((item.extras||[]).map(x=>[x.code,x.quantity]));
+      const quantity=Math.max(0,Math.min(extra.maxQuantity,(selected.get(code)||0)+(action==='cart-extra-plus'?1:-1)));
+      if(quantity)selected.set(code,quantity);else selected.delete(code);
+      item.extras=Array.from(selected,([code,quantity])=>({code,quantity}));await openCart();return;
+    }
     if(action==='cart-single-checkout'){
       if(state.cartItems.length!==1||!cartQuote||cartError)return;
       const item=state.cartItems[0];
+      if((item.extras||[]).length)return message('A contratação desses adicionais ainda está em preparação.');
       if(cartFamily(item.productCode)==='identity'){
         const pkg=ateliePackages.find(p=>'atelie_'+p.code===item.productCode&&p.purchaseAvailable&&p.variantCode===item.variantCode);
         if(!pkg)return message('Pacote indisponível para compra.');

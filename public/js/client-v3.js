@@ -1,7 +1,7 @@
 import {trackStoreStage} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
-import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
-import { mountV3Checkout } from './client-v3-checkout.js?v=74';
+import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
+import { mountV3Checkout } from './client-v3-checkout.js?v=79';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -101,8 +101,12 @@ function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
+function loading(title,detail='Só um instante, por favor.'){
+  root.setAttribute('aria-busy','true');
+  root.innerHTML='<section class="v3-panel v3-panel--status" role="status"><div class="v3-status-content"><img class="v3-status-emblem" src="/images/libri-emblem.png" alt="" width="56" height="56"><span class="v3-status-brand">LIBRI CONVITES</span><h1 class="v3-status-title">'+clean(title)+'</h1><div class="v3-status-line" aria-hidden="true"></div><p class="v3-status-note">'+clean(detail)+'</p></div></section>';
+}
 function message(text) {
-  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
+  hideBasket();root.innerHTML = '<section class="v3-panel v3-panel--status v3-panel--error" role="alert"><div class="v3-status-content"><img class="v3-status-emblem" src="/images/libri-emblem.png" alt="" width="56" height="56"><span class="v3-status-brand">LIBRI CONVITES</span><h1 class="v3-status-title">Não conseguimos continuar</h1><p class="v3-status-note">' + clean(text) + '</p><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {
@@ -484,7 +488,7 @@ async function openCart(){
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
   hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartRevision++;
   root.setAttribute('aria-busy','true');
-  root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
+  loading('Organizando seu pedido','Estamos conferindo os valores das suas escolhas.');
   if(state.cartItems.length){
     try {
       await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));
@@ -526,7 +530,7 @@ function modalClose() {
 }
 async function showExamples(code){
  if(!getProduct(code)||!formatCodes().includes(code))return;
- modalRoot.hidden=false;modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1"><h2>Exemplos deste formato</h2><p>Carregando exemplos da galeria…</p><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar</button></div>';
+ modalRoot.hidden=false;modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1"><h2>Exemplos deste formato</h2><p class="v3-inline-loading" role="status"><span class="v3-inline-line" aria-hidden="true"></span>Preparando os exemplos…</p><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar</button></div>';
  try{
   const response=await request('/api/v2/gallery?productCode='+encodeURIComponent(code)+'&eventType='+encodeURIComponent(state.eventType));
   const cards=(response.items||[]).filter(x=>x.productCode===code).slice(0,8).map(x=>{
@@ -641,7 +645,7 @@ async function go(target) {
   state.step=target;
   root.setAttribute('aria-busy','true');
   if (target==='extras'||target==='review') {
-    root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
+    loading('Preparando os detalhes','Estamos conferindo os valores do seu convite.');
     try {await refreshQuote(); offer=target==='review'?await determineOffer():null;}
     catch(e) {message(e.message);return;}
   }
@@ -846,4 +850,7 @@ async function init({skipRecovery=false}={}) {
   }else render();
 }
 mountStorePrivacy();
+// V3 keeps the privacy controls accessible inside its single viewport.
+const site=document.querySelector('.v3-site'),privacy=document.getElementById('libri-privacy');
+if(site&&privacy)site.append(privacy);
 init().catch(err=>message(err.message));

@@ -98,7 +98,7 @@ async function checkout(p){
  assert.equal(await p.locator('[data-action="cart-delivery"]').count(),0);
  await p.locator('#v3CartEventDate').fill(day(65));
  await click(p,'cart-unified-checkout');
- await p.locator('#v3-unified-checkout').waitFor();
+ await p.locator('#v3-unified-checkout').waitFor();assert.match(await p.locator('.v3-checkout-block h2').first().evaluate(el=>getComputedStyle(el).fontFamily),/Manrope/);
  assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));
  await p.locator('#v3-app[aria-busy="false"]').waitFor();
  await p.screenshot({path:'artifacts/v3-browser/checkout-before-agenda-'+p.viewportSize().width+'.png',fullPage:true});
@@ -109,6 +109,18 @@ async function checkout(p){
  assert.match(p.url(),/\/loja$/);
 }
 try{
+ const loadContext=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
+ await loadContext.addInitScript(()=>localStorage.setItem('libriPrivacyV1','deny'));
+ const loadPage=await loadContext.newPage();
+ let releaseCatalog;const catalogGate=new Promise(resolve=>{releaseCatalog=resolve;});
+ await loadContext.route('**/*',async route=>{if(!route.request().url().startsWith(origin+'/'))return route.abort();if(new URL(route.request().url()).pathname==='/api/v2/catalog')await catalogGate;return route.continue();});
+ await loadPage.goto(origin+'/loja');
+ await loadPage.locator('.v3-status-title').waitFor();await loadPage.evaluate(()=>document.fonts.ready);
+ assert.match(await loadPage.locator('.v3-status-title').evaluate(el=>getComputedStyle(el).fontFamily),/Manrope/);
+ assert.equal(await loadPage.locator('.v3-status-line').count(),1);
+ assert.equal(await loadPage.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);
+ await loadPage.screenshot({path:'artifacts/v3-browser/loading-mobile.png',fullPage:true});
+ releaseCatalog();await loadPage.locator('[data-action="event"]').first().waitFor();await loadContext.close();
  const durations=await pageFor(390,844);const dp=durations.page;
  await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon,.v3-arrow').count(),0);assert.equal(await dp.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);await dp.evaluate(()=>document.fonts.ready);assert.equal(await dp.evaluate(()=>[...document.fonts].some(f=>f.family==='Manrope'&&f.status==='loaded')),true,'Manrope precisa carregar o arquivo local');const glass=await dp.evaluate(()=>{const panel=getComputedStyle(document.querySelector('.v3-panel--guided'));const card=getComputedStyle(document.querySelector('.v3-format-card'));return {panelImage:panel.backgroundImage,cardImage:card.backgroundImage,cardBlur:card.backdropFilter}});assert.equal(glass.panelImage,'none','O contêiner deve manter o fundo claro original');assert.match(glass.cardImage,/linear-gradient/);assert.match(glass.cardBlur,/blur\(22px\)/);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});assert.equal(await dp.evaluate(()=>{const m=document.querySelector('.v3-main'),p=document.querySelector('.v3-panel--guided'),b=document.querySelector('#v3-live-basket');const a=m.getBoundingClientRect(),q=b.getBoundingClientRect();return getComputedStyle(m).flexDirection==='column'&&getComputedStyle(p).backgroundImage==='none'&&Math.abs(a.x-q.x)<=2&&Math.abs(a.width-q.width)<=2&&document.scrollingElement.scrollHeight<=innerHeight+1}),true,'Uma única coluna com resumo integrado e viewport travado');

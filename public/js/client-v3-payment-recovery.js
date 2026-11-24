@@ -42,7 +42,7 @@ export async function mountV3PaymentRecovery(root,{request,onMissing,credential}
     const validPath=validCustomerPath(state?.customerAreaPath);
     const provider=state?.state==='pending'?providerLink(state.checkoutUrl):null;
     root.innerHTML='<section class="v3-panel"><span class="v3-eyebrow">Libri · pagamento</span><h1 class="v3-title">Retomar contratação</h1>'+
-      (state?.found?'<p><strong>'+esc(state.orderCode)+'</strong> · '+money(state.totalCents)+'</p>'+(state.depositPercent===50?'<p>Entrada autorizada: '+money(state.amountDueNowCents)+' · Saldo posterior: '+money(state.balanceCents)+'</p>':'')+'<p>'+esc(descriptions[state.state]||'Confira a situação do pedido.')+'</p>':'<p>Consultando sua tentativa privada de pagamento.</p>')+
+      (state?.found?'<p><strong>'+esc(state.orderCode)+'</strong> · '+money(state.totalCents)+'</p>'+(state.depositPercent===50?'<p>Entrada autorizada: '+money(state.amountDueNowCents)+' · Saldo posterior: '+money(state.balanceCents)+'</p>':'')+'<p>'+esc(descriptions[state.state]||'Confira a situação do pedido.')+'</p>':'<p class="v3-inline-loading" role="status">'+(busy?'<span class="v3-inline-line" aria-hidden="true"></span>Consultando sua tentativa de pagamento…':'Confira novamente a situação do pagamento.')+'</p>')+
       (state?.capacityReview?'<div class="v3-notice">Pagamento confirmado. A Libri precisa revisar a capacidade da agenda.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       '<div class="v3-action-row">'+

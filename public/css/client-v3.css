@@ -3,7 +3,7 @@
   --cream:#fcf6f2;--ivory:#fffdfb;--ink:#492c32;--wine:#753d4b;
   --rose:#b96d79;--blush:#f4e4e2;--champagne:#eed9c4;--muted:#806a6e;
   --outline:#eadbd5;--shadow:0 21px 65px rgba(97,56,60,.095);
-  font-family:"Trebuchet MS",Arial,sans-serif;font-synthesis:none
+  font-family:Manrope,sans-serif;font-synthesis:none
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -16,20 +16,20 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .v3-topbar,.v3-footer{width:min(1040px,calc(100% - 36px));margin:auto;display:flex;justify-content:space-between;align-items:center;gap:14px}
 .v3-topbar{min-height:86px}
 .v3-brand{display:flex;gap:10px;align-items:center;text-decoration:none;color:var(--wine)}
-.v3-mark{display:grid;place-items:center;width:45px;height:45px;border:1px solid var(--rose);border-radius:50%;font:bold 29px Georgia,serif;box-shadow:inset 0 0 0 4px #fff5f0}
-.v3-brand-name{font:bold 25px Georgia,serif;letter-spacing:.012em}
+.v3-mark{display:grid;place-items:center;width:45px;height:45px;border:1px solid var(--rose);border-radius:50%;font:bold 29px Manrope,sans-serif;box-shadow:inset 0 0 0 4px #fff5f0}
+.v3-brand-name{font:bold 25px Manrope,sans-serif;letter-spacing:.012em}
 .v3-brand-name em{font-weight:normal;font-style:italic}
 .v3-preview-label{font-size:11px;color:var(--muted);text-align:right}
 .v3-main{width:min(760px,calc(100% - 28px));margin:30px auto 44px;flex:1}
 .v3-panel{border:1px solid var(--outline);border-radius:26px;background:rgba(255,253,251,.96);box-shadow:var(--shadow);padding:clamp(23px,4.5vw,43px);min-height:380px}
 .v3-panel--entrance{text-align:center;display:grid;place-content:center;min-height:500px;position:relative;overflow:hidden}
-.v3-panel--entrance:before,.v3-panel--entrance:after{content:"✧";position:absolute;color:var(--rose);font:42px Georgia,serif;opacity:.5;animation:v3spark 2.3s ease-in-out infinite alternate}
+.v3-panel--entrance:before,.v3-panel--entrance:after{content:"✧";position:absolute;color:var(--rose);font:42px Manrope,sans-serif;opacity:.5;animation:v3spark 2.3s ease-in-out infinite alternate}
 .v3-panel--entrance:before{top:16%;left:22%}.v3-panel--entrance:after{right:19%;bottom:21%;animation-delay:.35s}
 .v3-entrance-emblem{width:112px;height:112px;border:1px solid #c38a90;border-radius:50%;display:grid;place-items:center;margin:0 auto 20px;background:linear-gradient(135deg,#fff9f7,#f2dcda);box-shadow:0 0 0 9px #fff6f3,0 12px 30px #e9ced0;animation:v3appear 1.3s both}
-.v3-entrance-emblem span{font:italic 70px Georgia,serif;color:var(--wine)}
+.v3-entrance-emblem span{font:italic 70px Manrope,sans-serif;color:var(--wine)}
 .v3-eyebrow{display:block;text-transform:uppercase;letter-spacing:.16em;font-size:10px;font-weight:bold;color:var(--rose);margin:0 0 15px}
-.v3-title{font:normal clamp(31px,5vw,43px)/1.13 Georgia,"Times New Roman",serif;letter-spacing:-.025em;margin:0 0 15px}
-.v3-text{font:15px/1.62 Arial,sans-serif;color:var(--muted);margin:0 0 25px}
+.v3-title{font:normal clamp(31px,5vw,43px)/1.13 Manrope,sans-serif;letter-spacing:-.025em;margin:0 0 15px}
+.v3-text{font:15px/1.62 Manrope,sans-serif;color:var(--muted);margin:0 0 25px}
 .v3-steps{display:flex;gap:5px;margin-bottom:28px}
 .v3-steps span{height:4px;flex:1;background:#f0e9e5;border-radius:9px}
 .v3-steps span.is-active{background:var(--rose)}
@@ -53,7 +53,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .v3-notice{border:1px solid var(--outline);border-radius:15px;background:#fcf2ed;padding:15px 17px;line-height:1.6;font-size:13px;margin:18px 0}
 .v3-notice strong{color:var(--wine)}
 .v3-total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:17px 0;border-top:1px solid var(--outline);margin-top:24px}
-.v3-total b{font:normal 30px Georgia,serif;color:var(--wine)}
+.v3-total b{font:normal 30px Manrope,sans-serif;color:var(--wine)}
 .v3-total small{font-size:11px;color:var(--muted)}
 .v3-lines{margin:20px 0 0;display:grid;gap:10px}
 .v3-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:13px}
@@ -65,7 +65,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .v3-muted{color:var(--muted)}
 .v3-modal-root:not([hidden]){position:fixed;inset:0;display:grid;place-items:center;z-index:50;padding:20px;background:rgba(40,24,28,.52)}
 .v3-modal-card{width:min(460px,100%);background:var(--ivory);border:1px solid var(--champagne);padding:27px;border-radius:24px;box-shadow:0 30px 75px #27141b50}
-.v3-modal-card h2{font:normal 26px Georgia,serif;margin:0 0 9px;color:var(--wine)}
+.v3-modal-card h2{font:normal 26px Manrope,sans-serif;margin:0 0 9px;color:var(--wine)}
 .v3-modal-card p{font-size:14px;line-height:1.6;color:var(--muted)}
 .v3-modal-actions{display:grid;gap:8px;margin-top:20px}
 .v3-footer{padding:24px 0 38px;font-size:11px;color:var(--muted)}
@@ -103,7 +103,7 @@ body{background:radial-gradient(ellipse at top left,#f5e4e5 0,transparent 35%),v
 .v3-panel--entrance{min-height:440px}
 .v3-eyebrow{color:var(--wine);letter-spacing:.14em;margin-bottom:9px}
 .v3-title{font-size:clamp(30px,5vw,42px);margin-bottom:10px}
-.v3-text{font:15px/1.6 Arial,sans-serif;margin-bottom:24px;max-width:65ch}
+.v3-text{font:15px/1.6 Manrope,sans-serif;margin-bottom:24px;max-width:65ch}
 .v3-progress{margin-bottom:26px}
 .v3-progress-label{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px}
 .v3-steps{margin:0;gap:4px}
@@ -137,7 +137,7 @@ body{background:radial-gradient(ellipse at top left,#f5e4e5 0,transparent 35%),v
 .v3-package-card p,.v3-package-card ul{margin:0}
 .v3-package-card .v3-btn{margin-top:auto;align-self:stretch}
 .v3-package-heading{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
-.v3-package-heading strong{font:normal 21px Georgia,serif}
+.v3-package-heading strong{font:normal 21px Manrope,sans-serif}
 .v3-package-heading b{font-size:18px;color:var(--wine)}
 .v3-package-facts{display:flex;gap:8px;flex-wrap:wrap}
 .v3-package-facts span{flex:1;padding:9px 11px;border-radius:10px;background:#f8f2f2;font-size:13px;color:var(--muted)}
@@ -159,12 +159,12 @@ details summary{cursor:pointer;font-weight:600;color:var(--wine);padding:6px 0}
 .v3-cart-item details .v3-line>div:last-child{display:flex;align-items:center;gap:4px;white-space:nowrap}
 .v3-cart-item [data-action^="cart-extra-"]{background:white;border-color:var(--outline);min-height:44px;min-width:44px;padding:6px}
 .v3-total{border:1px solid #d6bec7;background:#f8eef1;border-radius:14px;padding:16px;margin:18px 0}
-.v3-total b{font:700 clamp(23px,4vw,30px)/1.2 Arial,sans-serif;white-space:nowrap}
+.v3-total b{font:700 clamp(23px,4vw,30px)/1.2 Manrope,sans-serif;white-space:nowrap}
 .v3-modal-card{max-height:calc(100dvh - 40px);overflow:auto;overscroll-behavior:contain}
 .v3-modal-card .v3-choice{min-height:66px}
 .v3-at-input{font-size:16px;min-height:48px}
 .v3-checkout-block{display:grid;gap:10px;padding:18px;border:1px solid var(--outline);border-radius:15px;margin-bottom:14px;background:white}
-.v3-checkout-block h2{font:normal 23px Georgia,serif;margin:0 0 5px}
+.v3-checkout-block h2{font:normal 23px Manrope,sans-serif;margin:0 0 5px}
 .v3-checkout-block label{font-size:14px;font-weight:600}
 .v3-checkout-block label:has(input[type="checkbox"]),.v3-checkout-block label:has(input[type="radio"]){display:flex!important;gap:9px;align-items:flex-start}
 .v3-checkout-block input[type=checkbox],.v3-checkout-block input[type=radio]{width:19px;height:19px;flex:0 0 19px;accent-color:var(--wine)}
@@ -231,7 +231,7 @@ body{background:radial-gradient(circle at 12% 8%,rgba(244,210,218,.45),transpare
 
 /* Referência posterior recuperada: Libri_V3_Compra_Guiada_Sem_Briefing, 23/11 20:40.
    Reutiliza as marcas originais; não importa catálogo ou preços do protótipo. */
-:root{--cream:#fcf8f4;--ivory:#fffdfa;--ink:#332323;--wine:#905d56;--rose:#c88e82;--blush:#f6e8e1;--champagne:#c6a185;--muted:#77666c;--outline:#e7dcd4;--shadow:0 20px 75px #6d4d5115,0 2px 8px #6d4d5108;font-family:Arial,sans-serif}
+:root{--cream:#fcf8f4;--ivory:#fffdfa;--ink:#332323;--wine:#905d56;--rose:#c88e82;--blush:#f6e8e1;--champagne:#c6a185;--muted:#77666c;--outline:#e7dcd4;--shadow:0 20px 75px #6d4d5115,0 2px 8px #6d4d5108;font-family:Manrope,sans-serif}
 body{background:radial-gradient(circle at 3% 58%,#f7e8e5 0,transparent 36%),radial-gradient(circle at 98% 16%,#f6e8dc 0,transparent 38%),var(--cream)}
 .v3-header-shell{background:#362625;border-bottom:1px solid #ebc7b838}
 .v3-topbar{min-height:74px;border:0;max-width:1240px;margin:0 auto}
@@ -239,7 +239,7 @@ body{background:radial-gradient(circle at 3% 58%,#f7e8e5 0,transparent 36%),radi
 .v3-preview-label{color:#ead6d0;font-size:10px;letter-spacing:.13em}
 .v3-landing{width:min(1190px,calc(100% - 36px));margin:26px auto 0;display:flex;justify-content:space-between;align-items:center;gap:20px}
 .v3-landing[hidden]{display:none}
-.v3-landing h1{font:400 clamp(30px,4vw,48px)/1.1 Georgia,serif;letter-spacing:-.04em;margin:9px 0;color:var(--ink)}
+.v3-landing h1{font:400 clamp(30px,4vw,48px)/1.1 Manrope,sans-serif;letter-spacing:-.04em;margin:9px 0;color:var(--ink)}
 .v3-landing h1 em{color:#b07a70;font-weight:400}
 .v3-landing p{font-size:13px;color:var(--muted);line-height:1.6;margin:0}
 .v3-landing>img{width:112px;height:112px;border:1px solid #dcc9bc;border-radius:50%;box-shadow:0 12px 35px #70545e13;object-fit:cover}
@@ -265,7 +265,7 @@ body{background:radial-gradient(circle at 3% 58%,#f7e8e5 0,transparent 36%),radi
 .v3-intro-inner{z-index:1;display:grid;justify-items:center;gap:24px;text-align:center;padding:24px;max-width:700px}
 .v3-intro-inner img{width:min(440px,78vw);height:auto;animation:v3intro 1s .2s both}
 .v3-intro-inner span{font-size:10px;letter-spacing:.24em;color:#d7b6a9}
-.v3-intro-inner h1{font:italic 26px/1.4 Georgia,serif;font-weight:400;margin:0;color:#f3e0db}
+.v3-intro-inner h1{font:italic 26px/1.4 Manrope,sans-serif;font-weight:400;margin:0;color:#f3e0db}
 .v3-intro-inner i{width:175px;height:1px;background:linear-gradient(90deg,transparent,#cfa99a,transparent)}
 .v3-intro-screen [data-action=skip-intro]{position:absolute;right:24px;bottom:30px;border:1px solid #f3ddce60;border-radius:99px;color:#f5e8de;background:none;z-index:2}
 @keyframes v3rings{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
@@ -294,7 +294,7 @@ body{background:radial-gradient(circle at 3% 58%,#f7e8e5 0,transparent 36%),radi
 .v3-stage-creation .v3-choice,.v3-stage-intent .v3-choice{position:relative;min-height:132px;padding:22px 24px;display:flex;flex-direction:column;justify-content:center;text-align:center;align-items:center;gap:8px;background:#f5e3de;border:1px solid #ddbeb6;border-radius:19px;color:#432d31}.v3-stage-creation .v3-choice:nth-child(2),.v3-stage-intent .v3-choice:nth-child(2){background:#eee2d3;border-color:#d7c2a7}.v3-stage-creation .v3-choice:nth-child(3){background:#e3e9de;border-color:#c2cfbd}.v3-stage-creation .v3-choice-copy,.v3-stage-intent .v3-choice-copy{display:grid;gap:8px;text-align:center}.v3-stage-creation .v3-choice-copy strong,.v3-stage-intent .v3-choice-copy strong,.v3-format-select .v3-choice-copy strong{font-size:clamp(19px,4.8vw,25px);font-weight:800;letter-spacing:.035em;text-transform:uppercase;line-height:1.15;color:#432d31}.v3-stage-creation .v3-choice-copy small,.v3-stage-intent .v3-choice-copy small,.v3-format-select .v3-choice-copy small{font-size:14px;line-height:1.45;color:#59434a}.v3-stage-creation .v3-choice-icon,.v3-stage-intent .v3-choice-icon{display:none}.v3-stage-creation .v3-choice-check,.v3-stage-intent .v3-choice-check{position:absolute;right:12px;top:12px}.v3-format-card{background:#f5e3de;border-color:#ddbeb6}.v3-format-card:nth-child(even){background:#eee2d3;border-color:#d7c2a7}.v3-format-select{display:grid;grid-template-columns:1fr;justify-items:center;text-align:center;gap:12px;padding:18px}.v3-format-select .v3-choice-copy{text-align:center;max-width:38rem;display:grid;gap:7px}.v3-format-select .v3-arrow{display:none}.v3-format-card .v3-example-link{margin:0 auto 10px}.v3-format-demo{width:104px;height:110px;flex-basis:auto}.v3-optional-action{max-width:125px;text-align:right;white-space:normal}.v3-stage-creation .v3-choice,.v3-stage-intent .v3-choice,.v3-format-card{animation:libri-card-in .38s cubic-bezier(.2,.75,.3,1) both}.v3-stage-creation .v3-choice:nth-child(2),.v3-stage-intent .v3-choice:nth-child(2),.v3-format-card:nth-child(2){animation-delay:.06s}.v3-stage-creation .v3-choice:nth-child(3),.v3-format-card:nth-child(3){animation-delay:.12s}@keyframes libri-card-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}@media(prefers-reduced-motion:reduce){.v3-stage-creation .v3-choice,.v3-stage-intent .v3-choice,.v3-format-card{animation:none!important}}.v3-agenda-loading{padding:12px 0;color:#59434a}.v3-agenda-option{display:block;padding:9px 0}.v3-black-recovery{border:1px solid #d7b9a9;padding:12px;border-radius:12px;margin:8px 0}.v3-black-recovery button{margin-top:8px}
 
 /* V74 — dark glass selection cards, consistent typography, fixed guided canvas. */
-:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-synthesis:none}
+:root{font-family:Manrope,sans-serif;font-synthesis:none}
 .v3-title,.v3-modal-card h2,.v3-total b,.v3-intro-inner h1,.v3-landing h1{font-family:inherit;font-weight:600;letter-spacing:-.035em}
 .v3-title{font-size:clamp(24px,4.1vw,35px);line-height:1.16}
 .v3-text{font-family:inherit}
@@ -408,3 +408,40 @@ body:has(.v3-panel--guided) .v3-stage-body{flex:1 1 0;min-height:0;overflow-y:au
 .v3-panel--guided .v3-total b{font-size:22px}
 @media(max-width:560px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{padding:14px 12px 10px;gap:9px}.v3-main .v3-panel{padding:18px 14px}.v3-main .v3-live-basket{padding:7px 14px}.v3-panel--guided .v3-title{font-size:22px}.v3-panel--guided .v3-stage-body{padding:2px 2px 8px}.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie,.v3-stage-extras) .v3-choice{padding:10px 9px}}
 @media(max-height:660px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{padding-top:10px;gap:6px}.v3-header-shell .v3-topbar{min-height:52px}.v3-header-shell .v3-brand-official{max-height:42px}.v3-stage-heading .v3-text{margin-top:4px}.v3-panel--guided .v3-action-row .v3-btn{min-height:40px}}
+
+/* V79 — same brand and typographic system for every state of the public V3 store. */
+:root{--v3-font:Manrope,sans-serif;font-family:var(--v3-font)}
+.v3-site,.v3-modal-root,.libri-privacy-dialog{font-family:var(--v3-font)}
+.v3-site :is(h1,h2,h3,p,small,summary,label,button,input,select,textarea),.v3-modal-root :is(h1,h2,h3,p,small,summary,label,button,input,select,textarea){font-family:inherit}
+.v3-package-heading strong,.v3-checkout-block h2{font-family:inherit;font-weight:650;letter-spacing:-.025em}
+.v3-checkout-block h2{font-size:17px;line-height:1.4}
+.v3-main .v3-panel:not(.v3-panel--guided)>.v3-title{margin:0 0 14px}
+html:has(.v3-panel--status),body:has(.v3-panel--status){height:100%;overflow:hidden;overscroll-behavior:none}
+body:has(.v3-panel--status) .v3-site{height:100dvh;min-height:0;overflow:hidden}
+body:has(.v3-panel--status) .v3-header-shell{flex:0 0 auto}
+body:has(.v3-panel--status) .v3-main{flex:1 1 0;min-height:0;margin:10px auto;overflow:hidden}
+body:has(.v3-panel--status) #v3-app{flex:1 1 0;min-height:0;overflow:hidden}
+body:has(.v3-panel--status) .v3-footer{display:none}
+body:has(.v3-panel--status) .v3-live-basket{flex:0 0 auto;max-height:29dvh;overflow:auto}
+.v3-main .v3-panel--status{height:100%;min-height:0;display:grid;place-items:center;overflow:auto;padding:24px 18px;background:#fffdfa;text-align:center}
+.v3-status-content{width:min(100%,320px);display:flex;flex-direction:column;align-items:center;gap:12px;margin:auto;color:var(--ink)}
+.v3-status-emblem{width:56px;height:56px;object-fit:contain;display:block}
+.v3-status-brand{font-size:10px;line-height:1.4;font-weight:600;letter-spacing:.2em;color:var(--wine)}
+.v3-status-title{font:600 clamp(19px,4.2vw,25px)/1.3 Manrope,sans-serif;letter-spacing:-.035em;margin:0;color:var(--ink)}
+.v3-status-note{font:400 13px/1.55 Manrope,sans-serif;color:var(--muted);margin:0;max-width:34ch;overflow-wrap:anywhere}
+.v3-status-line,.v3-inline-line{position:relative;display:block;overflow:hidden;isolation:isolate;height:2px;width:100px;background:#ebddd5;border-radius:3px;flex:none}
+.v3-status-line::after,.v3-inline-line::after{content:"";position:absolute;inset:0;width:45%;background:linear-gradient(90deg,transparent,#b48079,#cda487,transparent);animation:libri-status-sweep 1.35s ease-in-out infinite}
+@keyframes libri-status-sweep{from{transform:translateX(-105%)}to{transform:translateX(225%)}}
+.v3-inline-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;color:var(--muted);font:500 12px/1.5 Manrope,sans-serif;padding:8px 0;margin:4px 0}
+.v3-inline-line{width:64px}
+.v3-panel--error .v3-status-content{gap:14px}
+.v3-panel--error .v3-btn{margin-top:3px}
+body:has(.v3-site) :is(.libri-privacy,.libri-privacy-banner,.libri-privacy-dialog,.libri-privacy-head h2){font-family:Manrope,sans-serif}
+body:has(.v3-site) .libri-privacy-head h2{font-size:21px;font-weight:650}
+.v3-site #libri-privacy{width:min(680px,calc(100% - 24px));margin:0 auto 8px;padding:0;flex:0 0 auto}
+.v3-site .libri-privacy-links{justify-content:center;gap:3px 14px}
+.v3-site .libri-privacy-links button{font-size:10px;min-height:28px;padding:4px 0}
+body:has(.v3-site) .libri-privacy-banner:not([hidden]){position:fixed;z-index:80;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(420px,calc(100% - 24px));margin:0;padding:14px;background:#fffdfa;border:1px solid #d9c3b7;box-shadow:0 12px 45px #432a3033;border-radius:15px}
+body:has(.v3-site) .libri-privacy-actions button{font-family:inherit}
+@media(prefers-reduced-motion:reduce){.v3-status-line::after,.v3-inline-line::after{animation:none;transform:translateX(62%)}}
+@media(max-width:560px){.v3-status-content{gap:10px}.v3-site #libri-privacy{margin-bottom:max(3px,env(safe-area-inset-bottom))}.v3-site .libri-privacy-links{gap:2px 9px}.v3-site .libri-privacy-links button{font-size:9px;min-height:24px}}

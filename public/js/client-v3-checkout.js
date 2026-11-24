@@ -4,7 +4,6 @@ const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
 const day=v=>String(v).split('-').reverse().join('/');
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
-import {openBlackLibriBeforePayment} from './client-v2-black-libri.js?v=20261124-atelier-gift-v3';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBack}){
@@ -83,6 +82,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
         checkingBlack=true;
         let immediate=false,opening=true;
         try{
+          const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=20261124-atelier-gift-v3');
           await openBlackLibriBeforePayment({customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},clientRequestId:attemptKey,v3Cart:{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode},onContinue:claim=>{
             blackChecked=true;
             if(claim?.status==='reserved')blackClaim=claim;

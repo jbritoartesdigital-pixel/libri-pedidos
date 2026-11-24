@@ -1,3 +1,4 @@
+import {canonicalChange,changeKind,quoteV3Change} from './v3-supplement-changes.js';
 import {contextV3Briefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {listV3Extras,quoteV3Extras,normalizeV3ExtraSelection} from './v3-extras-catalog.js';
@@ -32,6 +33,7 @@ export async function supplementCatalog(db,s){
  return listV3Extras(s.family,s.product_code).filter(x=>['pending','ready'].includes(s.production_status)||x.code.endsWith('_revision')&&s.production_status==='adjustments').map(x=>({...x,maxQuantity:x.maxQuantity-(bought.get(x.code)||0)})).filter(x=>x.maxQuantity>0);
 }
 async function quote(db,ctx,s,input){
+ if(changeKind(input)!=='extras')return quoteV3Change(db,ctx,s,input);
  const selection=normalizeV3ExtraSelection(input.items);
  if(!selection.length)fail('Selecione ao menos um adicional.',422);
  if(!['pix','card'].includes(input.paymentMethod))fail('Escolha Pix ou cartão.',422);
@@ -57,12 +59,13 @@ async function quote(db,ctx,s,input){
  const pricing=priceWithCardProcessingFee(subtotalCents,input.paymentMethod);
  return {items,selection,subtotalCents,pointsUnits,paymentMethod:input.paymentMethod,totalCents:pricing.totalCents,cardFeeCents:pricing.cardFeeCents};
 }
-const view=r=>({id:r.id,family:r.family,status:r.status,items:parse(r.offer_json).items,subtotalCents:r.subtotal_cents,cardFeeCents:r.card_fee_cents,totalCents:r.total_cents,pointsUnits:r.points_units,paymentMethod:r.payment_method,note:r.note,createdAt:r.created_at,decidedAt:r.decided_at,paymentAvailable:false});
+const view=r=>({id:r.id,family:r.family,status:r.status,kind:parse(r.offer_json).kind||'extras',targetFamily:parse(r.offer_json).targetFamily||r.family,terms:parse(r.offer_json).terms||null,deliveryWindow:parse(r.offer_json).deliveryWindow||null,absorbed:parse(r.offer_json).absorbed||[],items:parse(r.offer_json).items,subtotalCents:r.subtotal_cents,cardFeeCents:r.card_fee_cents,totalCents:r.total_cents,pointsUnits:r.points_units,paymentMethod:r.payment_method,note:r.note,createdAt:r.created_at,decidedAt:r.decided_at,paymentAvailable:false});
 export async function listV3Supplements(db,orderId){
  const rows=(await db.prepare('SELECT a.*,s.family,s.production_status,s.production_version,s.scheduled_at,s.delivery_end,COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json) AS current_snapshot,p.status AS attempt_status,p.checkout_url,p.expires_at,p.paid_at FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id LEFT JOIN v3_supplement_payments p ON p.id=(SELECT MAX(id) FROM v3_supplement_payments WHERE supplement_id=a.id) WHERE s.order_id=? ORDER BY a.id DESC').bind(orderId).all()).results||[];
  return rows.map(r=>{
   const fresh=r.production_version===r.base_production_version&&r.current_snapshot===r.base_snapshot_json;
-  const eligible=fresh&&!!r.scheduled_at&&!!r.delivery_end&&(r.production_status==='ready'||r.production_status==='adjustments'&&parse(r.offer_json).items.every(x=>x.code.endsWith('_revision')));
+  const q=parse(r.offer_json);
+  const eligible=q.kind==='new_service'?true:fresh&&!!r.scheduled_at&&!!r.delivery_end&&(r.production_status==='ready'||r.production_status==='adjustments'&&parse(r.offer_json).items.every(x=>x.code.endsWith('_revision')));
   const live=r.attempt_status==='pending'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
   const retry=r.attempt_status==='creating'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
   const renew=['expired','cancelled','rejected'].includes(r.attempt_status)&&r.status==='accepted';
@@ -79,14 +82,17 @@ export async function createV3Supplement(db,token,family,input={}){
  const a=await access(db,token,family);if(!a)return null;
  if(!/^[a-f0-9]{36}$/.test(input.requestKey||''))fail('Identificador da proposta inválido.',422);
  if(typeof input.note!=='string'||input.note.trim().length>500)fail('Observação inválida.',422);
+ const change=canonicalChange(input);
  const selection=normalizeV3ExtraSelection(input.items);
- const canonical=JSON.stringify({selection,paymentMethod:input.paymentMethod,note:input.note.trim()});
+ const canonical=JSON.stringify({selection,paymentMethod:input.paymentMethod,note:input.note.trim(),...(change?{change}:{})});
  return withV2PaymentLock(db,a.ctx.order.id,async()=>{
  const {ctx,s}=await access(db,token,family);
  const prior=await db.prepare('SELECT a.*,s.family FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE request_key=?').bind(input.requestKey).first();
  if(prior){if(prior.service_id!==s.id||prior.selection_json!==canonical)fail('Identificador já utilizado em outra proposta.');return view(prior);}
- if(!eligible(s))fail('Este serviço não está disponível para complementos.');
+ if(!eligible(s)&&change?.kind!=='new_service')fail('Este serviço não está disponível para complementos.');
  const q=await quote(db,ctx,s,input);
+ if(q.requiresWindow)fail('Escolha uma previsão de entrega para o novo serviço.',422);
+ if(q.kind==='new_service'&&await db.prepare("SELECT 1 FROM v3_service_supplements a JOIN v3_order_services z ON z.id=a.service_id WHERE z.order_id=? AND a.status IN ('offered','accepted','payment_pending','review') AND json_extract(a.offer_json,'$.kind')='new_service' AND json_extract(a.offer_json,'$.targetFamily')=?").bind(ctx.order.id,q.targetFamily).first())fail('Já existe uma proposta para esta linha de serviço.');
  if(input.expectedTotalCents!==q.totalCents)fail('O valor mudou. Confira a proposta novamente.');
  if(await db.prepare("SELECT 1 FROM v3_service_supplements WHERE service_id=? AND status IN ('offered','accepted','payment_pending','review')").bind(s.id).first())fail('Já existe uma proposta complementar aberta neste serviço.');
  const stamp=new Date().toISOString();
@@ -109,7 +115,10 @@ export async function decideV3Supplement(db,token,family,id,input={},actor='cust
  if(!(r.status==='offered'||actor==='admin'&&r.status==='accepted'))fail('A proposta já foi decidida.');
  if(next==='accepted'){
    if(input.confirmed!==true||input.expectedTotalCents!==r.total_cents)fail('Confirme o valor e o escopo da proposta.',422);
-   if(!eligible(s)||s.production_version!==r.base_production_version||(s.effective_snapshot_json||s.commercial_snapshot_json)!==r.base_snapshot_json)fail('A produção mudou. Solicite uma nova proposta.');
+   const q=parse(r.offer_json);
+   if(q.terms&&input.termsAccepted!==true)fail('Aceite as condições específicas da proposta.',422);
+   if(q.kind==='new_service'){if(ctx.services.some(x=>x.family===q.targetFamily))fail('Esta linha já foi contratada.');}
+   else if(!eligible(s)||s.production_version!==r.base_production_version||(s.effective_snapshot_json||s.commercial_snapshot_json)!==r.base_snapshot_json)fail('A produção mudou. Solicite uma nova proposta.');
  }
  const stamp=new Date().toISOString();
  await db.batch([

@@ -871,10 +871,8 @@ export async function renderAgenda(
       </div>
     </section>
 
-    <section class="card" style="margin-top:14px">
-      <div class="section-title">
-        <h2>Antecipação em cascata</h2>
-      </div>
+    <details class="card agenda-advanced" style="margin-top:14px" ${suggestions.length||releaseable.length?'open':''}>
+      <summary>Antecipações e liberação de capacidade (${suggestions.length+releaseable.length})</summary>
 
       ${
         suggestions.length
@@ -972,7 +970,7 @@ export async function renderAgenda(
           `
           : ''
       }
-    </section>
+    </details>
   `;
 
   document

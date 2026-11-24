@@ -53,7 +53,7 @@ function productCard(
         </button>
       ` : ''}
 
-      <div class="list" style="margin-top:9px">
+      <details class="catalog-variants"><summary>Ver preços e opções (${(product.variants||[]).length})</summary><div class="list" style="margin-top:9px">
         ${(product.variants || []).map(
           (variant) => `
             <div class="row-card">
@@ -88,7 +88,7 @@ function productCard(
             </div>
           `,
         ).join('')}
-      </div>
+      </div></details>
     </div>
   `;
 }

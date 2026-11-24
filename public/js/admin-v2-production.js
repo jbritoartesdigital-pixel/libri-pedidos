@@ -39,8 +39,9 @@ export async function renderProduction(openOrder) {
   );
 
   viewRoot.innerHTML = `
+    <nav class="admin-segmented production-service-tabs" aria-label="Área de produção">${[['','Todos'],['convites','Convites'],['atelie','Ateliê'],['retrospectivas','Retrospectivas']].map(([v,label])=>`<button type="button" data-production-service="${v}" aria-pressed="false">${label}</button>`).join('')}</nav>
     <div class="toolbar admin-v3-production-filters">
-      <label class="admin-v3-filter">
+      <label class="admin-v3-filter hidden">
         <span>Serviço</span>
         <select id="productionService" class="select" aria-label="Filtrar serviço">
           <option value="">Todos os serviços</option>
@@ -112,6 +113,7 @@ export async function renderProduction(openOrder) {
 
   function syncService() {
     const art = serviceControl.value==='atelie';
+    viewRoot.querySelectorAll('[data-production-service]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.productionService===serviceControl.value)));
     document.getElementById('productionArtFilter')?.classList.toggle('hidden',!art);
     if(!art)stageControl.value='';
     const url = new URL(window.location.href);
@@ -124,6 +126,7 @@ export async function renderProduction(openOrder) {
   syncService();
 
   const load = async () => {
+    if(!list.isConnected)return;
     const currentRequest = ++requestSequence;
     const q =
       document
@@ -165,7 +168,7 @@ export async function renderProduction(openOrder) {
       if(currentRequest===requestSequence)list.innerHTML=empty('Não foi possível consultar a fila. '+e.message);
       return;
     }
-    if(currentRequest!==requestSequence)return;
+    if(currentRequest!==requestSequence||!list.isConnected)return;
     const orders=data.orders||[],v3Orders=data.v3Orders||[];
     const modular=v3Orders.map(order=>`<article class="order-card"><div><span class="status ${statusClass(order.aggregate.status)}">${esc(order.aggregate.label)}</span><h3>${esc(order.code)} • ${esc(order.honoreeName)}</h3><div class="order-meta"><strong>${esc(order.customerName)}</strong> • festa ${dateBr(order.eventDate)}<br>${order.aggregate.deliveredServices} de ${order.aggregate.totalServices} serviços entregues</div>${order.services.map(s=>`<div class="production-service-line"><strong>${esc(s.productName)}</strong><span>${esc(s.statusLabel)}</span>${s.deliveryWindow?`<small>${dateBr(s.deliveryWindow.start)} a ${dateBr(s.deliveryWindow.end)}</small>`:''}</div>`).join('')}</div><button class="btn btn-primary" type="button" data-open-order="${esc(order.code)}">Abrir pedido</button></article>`).join('');
 
@@ -242,6 +245,7 @@ export async function renderProduction(openOrder) {
           : 'Nenhum pedido nessa fila.');
   };
 
+  viewRoot.querySelectorAll('[data-production-service]').forEach(b=>b.addEventListener('click',()=>{serviceControl.value=b.dataset.productionService;serviceControl.dispatchEvent(new Event('change'));}));
   serviceControl.addEventListener('change',()=>{
     stageControl.value='';
     const statusControl=document.getElementById('productionStatus');

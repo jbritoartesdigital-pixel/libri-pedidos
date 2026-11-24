@@ -204,7 +204,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
       </div>
     </section>
 
-    <section class="card" id="advancedOrderSearch">
+    <section class="card admin-order-search" id="advancedOrderSearch">
       <div class="section-title"><h2>Encontrar um pedido</h2></div>
       <div class="field">
         <label for="advOrderQuery">Nome, WhatsApp ou código</label>
@@ -348,7 +348,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
     <section class="card" id="central-ongoing">
       <div class="section-title"><div><span class="eyebrow">Operação integrada</span><h2>Pedidos em andamento</h2></div><span class="status">${modular.length} pedidos</span></div>
       <div class="kpi-grid central-service-counts">${Object.entries(serviceNames).map(([family,label])=>`<article class="kpi"><span>${label}</span><strong>${active.filter(s=>s.family===family).length}</strong><small>Serviços em andamento</small></article>`).join('')}</div>
-      <details class="order-optional"><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido em andamento.')}</div>
+      <details class="order-optional" ${ordersOnly?'open':''}><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido em andamento.')}</div>
       ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}</details>
       ${soon.length?`<details class="order-optional" id="central-deadlines" style="margin-top:12px" open><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:'<div id="central-deadlines" class="muted">Nenhum prazo nos próximos 7 dias.</div>'}
     </section>
@@ -510,6 +510,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});
   if(ordersOnly){
     viewRoot.querySelector('.central-quick-summary')?.remove();
+    panels.orders.classList.add('admin-orders-page');
     for(const id of ['today','agenda','numbers'])panels[id].remove();
     nav.remove();
     const exception=viewRoot.querySelector(':scope > .card:not(#advancedOrderSearch)');

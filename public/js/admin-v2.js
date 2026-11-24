@@ -8,7 +8,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-81';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-82';
 
 import {
   ensureAuth,
@@ -17,11 +17,11 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-81';
+} from './admin-v2-central.js?v=20261124-admin-v3-82';
 
 import {
   renderProduction,
-} from './admin-v2-production.js?v=20261124-admin-v3-46';
+} from './admin-v2-production.js?v=20261124-admin-v3-82';
 
 import {
   renderManualOrder,
@@ -33,11 +33,11 @@ import {
 
 import {
   renderAgenda,
-} from './admin-v2-agenda.js?v=20261015-weekday-period-1';
+} from './admin-v2-agenda.js?v=20261124-admin-v3-82';
 
 import {
   renderFinance,
-} from './admin-v2-finance.js?v=20261010-void-closed-1';
+} from './admin-v2-finance.js?v=20261124-admin-v3-82';
 
 import {
   renderArchived,
@@ -45,7 +45,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261124-recovery-73';
+} from './admin-v2-config.js?v=20261124-admin-v3-82';
 
 import {
   refreshBell,
@@ -136,6 +136,7 @@ function syncViewQuery() {
   }
 
   if (state.view !== 'store') url.searchParams.delete('storeTab');
+  if (state.view !== 'finance') url.searchParams.delete('financeTab');
   if (state.view !== 'production') {
     url.searchParams.delete('service');
     url.searchParams.delete('artStage');
@@ -223,6 +224,7 @@ async function navigateTo(view, storeTab, service) {
     url.searchParams.set('service',service);
     url.searchParams.delete('artStage');
   }
+  if (view === 'finance' && storeTab) url.searchParams.set('financeTab',storeTab);
   if (view === 'store' && storeTab) url.searchParams.set('storeTab', storeTab);
   else if (view !== 'store') url.searchParams.delete('storeTab');
   history.replaceState({}, '', url.pathname + url.search + url.hash);

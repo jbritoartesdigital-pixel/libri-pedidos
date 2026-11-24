@@ -163,6 +163,7 @@ export async function renderFinance(openOrderDetail = null) {
       </button>
     </div>
 
+    <nav class="admin-segmented finance-tabs" aria-label="Seções financeiras">${[['summary','Resumo'],['movements','Movimentações'],['receivables','A receber'],['supplements','Complementos'],['refunds','Devoluções'],['performance','Desempenho']].map(([id,label])=>`<button type="button" data-finance-tab="${id}" aria-pressed="false">${label}</button>`).join('')}</nav>
     <div id="financeContent"></div>
   `;
 
@@ -172,6 +173,12 @@ export async function renderFinance(openOrderDetail = null) {
         'financeContent',
       );
 
+  const financeTabs=[...viewRoot.querySelectorAll('[data-finance-tab]')];
+  let activeFinanceTab=new URLSearchParams(location.search).get('financeTab')||'summary';
+  if(!financeTabs.some(b=>b.dataset.financeTab===activeFinanceTab))activeFinanceTab='summary';
+  function showFinanceTab(tab){activeFinanceTab=tab;financeTabs.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.financeTab===tab)));content.querySelectorAll('[data-finance-page]').forEach(el=>el.hidden=el.dataset.financePage!==tab);}
+  financeTabs.forEach(b=>b.addEventListener('click',()=>{showFinanceTab(b.dataset.financeTab);const url=new URL(location.href);url.searchParams.set('financeTab',activeFinanceTab);history.replaceState({},'',url.pathname+url.search+url.hash);}));
+  showFinanceTab(activeFinanceTab);
   const preset =
     document
       .getElementById(
@@ -285,7 +292,7 @@ export async function renderFinance(openOrderDetail = null) {
         || [];
 
       content.innerHTML = `
-        <div class="kpi-grid">
+        <div data-finance-page="summary" class="finance-page"><div class="kpi-grid">
           <article class="kpi">
             <span>Vendas realizadas</span>
             <strong>
@@ -353,7 +360,7 @@ export async function renderFinance(openOrderDetail = null) {
           </article>
         </div>
 
-        <section class="card" style="margin:14px 0">
+        </div><section class="card" data-finance-page="performance">
           <div class="section-title">
             <div><h2>Produtos mais vendidos e margem estimada</h2>
               <small>Contratações originais iniciadas no período. Valores do pedido e recebimentos rateados por produto, com centavos preservados. Complementos separados. O líquido considera recebimentos e devoluções conhecidos até hoje, não apenas no mês selecionado.</small>
@@ -380,19 +387,19 @@ export async function renderFinance(openOrderDetail = null) {
           </div>
         </section>
 
-        <section class="card" style="margin:14px 0">
-          <div class="section-title"><div><h2>Complementos V3</h2><small>Adicionais, upgrades e novos serviços no mesmo pedido. Taxas e valores líquidos ainda sujeitos à conciliação.</small></div></div>
+        <section class="card" data-finance-page="supplements">
+          <div class="section-title"><div><h2>Complementos</h2><small>Adicionais, upgrades e novos serviços no mesmo pedido. Taxas e valores líquidos ainda sujeitos à conciliação.</small></div></div>
           <div class="kpi-grid"><article class="kpi"><span>Contratações aplicadas no período</span><strong>${money(finance.supplemental?.paidCents||0)}</strong></article><article class="kpi"><span>Recebimentos brutos</span><strong>${money(finance.supplemental?.cashCents||0)}</strong></article><article class="kpi"><span>A receber</span><strong>${money(finance.supplemental?.pendingCents||0)}</strong></article><article class="kpi"><span>Em revisão</span><strong>${money(finance.supplemental?.reviewCents||0)}</strong></article></div>
           <div class="list">${['movements','receivables','review'].flatMap(group=>(finance.supplemental?.[group]||[]).map(x=>`<div class="row-card"><strong>${esc(x.orderCode)} · ${esc(x.customerName)}</strong><small>${esc(x.kind==='upgrade'?'Upgrade':x.kind==='new_service'?'Novo serviço':'Adicionais')} · ${esc(x.status==='refunded'?'Recebido e devolvido':x.status==='paid'?'Confirmado':x.status==='review'?'Revisar':'A receber')} · ${money(x.amountCents)}${x.chargeId?(x.feeKnown?' · Taxa '+money(x.feeCents)+' · Líquido '+money(x.netCents):' · Taxa a conciliar'):''}</small><button class="btn btn-secondary btn-small" data-finance-open-order="${esc(x.orderCode)}">Abrir pedido</button></div>`)).join('')||empty('Nenhum complemento neste período ou em aberto.')}</div>
         </section>
-        <section class="card" style="margin:14px 0">
+        <section class="card" data-finance-page="refunds">
           <div class="section-title"><div><h2>Devoluções e conciliação</h2><small>Entradas históricas preservadas. Devoluções V3 pelo dia da confirmação, sem duplicar lançamentos.</small></div></div>
           <div class="kpi-grid"><article class="kpi"><span>Devoluções totais no período</span><strong>${money(summary.refundsCents||0)}</strong></article><article class="kpi"><span>Devoluções V3 confirmadas</span><strong>${money(finance.refunds?.refundCents||0)}</strong></article><article class="kpi"><span>Cobranças V3 em conferência</span><strong>${money(finance.refunds?.reviewCents||0)}</strong></article></div>
           ${finance.refunds?.unknownDateCount?'<small>Existem devoluções com data de entrada ou confirmação ainda não conciliada.</small>':''}
           <div class="list">${(finance.refunds?.movements||[]).map(x=>`<div class="row-card"><strong>${esc(x.orderCode)} · ${esc(x.customerName)}</strong><small>${x.kind==='supplement'?'Complemento':'Contratação original'} · ${x.provider==='direct_pix'?'Pix direto':'Mercado Pago'} · −${money(x.amountCents)} · ${esc(x.confirmedAt)}</small><button class="btn btn-secondary btn-small" data-finance-open-order="${esc(x.orderCode)}">Abrir pedido</button></div>`).join('')||empty('Nenhuma devolução V3 confirmada no período.')}</div>
         </section>
-        <div class="section-grid">
-          <section class="card">
+        <div class="finance-page">
+          <section class="card" data-finance-page="movements">
             <div class="section-title">
               <h2>Movimentações</h2>
             </div>
@@ -465,7 +472,7 @@ export async function renderFinance(openOrderDetail = null) {
             }
           </section>
 
-          <section class="card">
+          <section class="card" data-finance-page="receivables">
             <div class="section-title">
               <h2>Saldos Pix em aberto</h2>
             </div>
@@ -509,10 +516,11 @@ export async function renderFinance(openOrderDetail = null) {
         </div>
       `;
 
+      showFinanceTab(activeFinanceTab);
       content.querySelectorAll('[data-finance-open-order]').forEach(button => {
         button.addEventListener('click', async () => {
           const orderCode = button.dataset.financeOpenOrder;
-          if (!/^LIBRI-\\d+$/.test(orderCode || '') || !openOrderDetail) return;
+          if (!/^LIBRI-\d+$/.test(orderCode || '') || !openOrderDetail) return;
           button.disabled = true;
           try {
             await openOrderDetail(orderCode);

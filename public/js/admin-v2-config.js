@@ -8,7 +8,7 @@ import {
 import {
   renderStoreProducts,
   renderStoreAddons,
-} from './admin-v2-store-products.js?v=20261026-scene-links-1';
+} from './admin-v2-store-products.js?v=20261124-admin-v3-82';
 
 import {
   renderStoreSettings,
@@ -39,11 +39,11 @@ export async function renderStore() {
     data.config;
 
   viewRoot.innerHTML = `
-    <div class="store-navigation" aria-label="Organização da loja">
+    <div class="store-navigation admin-store-navigation" aria-label="Organização da loja">
       <div class="store-navigation-group">
         <span class="store-navigation-label">Catálogo</span>
         <div class="store-navigation-buttons">
-          <button type="button" class="settings-tab active" data-store-tab="products">Produtos</button>
+          <button type="button" class="settings-tab active" data-store-tab="products">Convites e preços</button>
           <button type="button" class="settings-tab" data-store-tab="atelie">Libri Ateliê</button>
           <button type="button" class="settings-tab" data-store-tab="addons">Adicionais</button>
           <button type="button" class="settings-tab" data-store-tab="combos">Combos</button>
@@ -55,7 +55,7 @@ export async function renderStore() {
         <div class="store-navigation-buttons">
           <button type="button" class="settings-tab" data-store-tab="coupons">Cupons</button>
           <button type="button" class="settings-tab" data-store-tab="campaigns">Campanhas combinadas</button>
-          <button type="button" class="settings-tab" data-store-tab="black-libri">🎈 Black Libri</button>
+          <button type="button" class="settings-tab" data-store-tab="black-libri">Black Libri</button>
         </div>
       </div>
       <div class="store-navigation-group">

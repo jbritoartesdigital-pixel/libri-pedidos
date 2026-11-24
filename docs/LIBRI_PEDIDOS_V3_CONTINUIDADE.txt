@@ -1,6 +1,6 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 81 | 24/11/2026 (Brasil)
-ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V81 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
+Versão 82 | 24/11/2026 (Brasil)
+ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V82 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -480,3 +480,6 @@ CHECKPOINT 24/11/2026 | V80 | PR #150 ampliado. V79 CI 45470230461 aprovado. Usu
 
 CHECKPOINT V81 — ADMIN INTEGRADO
 Decisão recuperada de 23/11: seis áreas Central, Pedidos, Produção, Agenda, Financeiro, Loja; Ateliê dentro de Loja/pedidos; +Novo pedido como ação separada. V80 produção confirmada. Auditoria de código: Pedidos estava apenas em aba da Central, Novo pedido abria formulário clássico, tema Admin ausente, tipografia Georgia/Inter, carregamento texto solto, localizador não incluía produção de Retro, busca exibindo alguns status internos. Corrigidos nesta branch: Pedidos como destino próprio com busca e filas existentes sem duplicação de dados, novo pedido integrado por padrão com clássico explícito, reset de handlers delegados, retro no localizador, status traduzidos, Manrope/identidade e tema noturno persistente, carregamento, contraste e espaçamento. Sem alterações de API, catálogo, banco, agenda ou pagamentos. Testes Chromium de navegação, persistência de tema e mobile; CI pendente. Ainda auditar visualmente e funcionalmente produção, agenda, financeiro, loja, ficha V2/V3 e formulário manual completo, comparar fontes originais e testar ações seguras. Não declarar redesign integral concluído. Próximo: verificar PR/CI e capturas, resolver falhas e completar auditoria de funcionalidades pendentes antes de publicação.
+
+
+CHECKPOINT V82 — organização das telas operacionais. CI V81 45472634262 falhou em teste de cache da entrada manual; ajustada asserção para a nova versão, sem retirar testes. Financeiro em seis áreas (resumo, movimentações, a receber, complementos, devoluções, desempenho), links de complementos corrigidos (regex de código), localizador com acessos de trabalho e financeiro; produção com seleção direta de serviço, proteção de consulta após sair da tela; agenda mantém calendário e recolhe antecipação sem itens; catálogo recolhe variantes por formato; ficha separa Alterações do Financeiro e oferece próximo passo por serviço. Sem mudança de regras, cálculos ou endpoints. CI pendente. Próximo: verificar testes, corrigir regressões, revisar capturas e cobertura das rotas e catálogo de retrospectivas. Não tratar como conclusão integral enquanto faltarem verificações.

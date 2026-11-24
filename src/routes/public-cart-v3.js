@@ -30,7 +30,7 @@ export async function handlePublicCartV3Api(request,env,url) {
     if(raw.length>12000)return fail('Carrinho muito grande.',413);
     let body;
     try{body=JSON.parse(raw);}catch{return fail('Dados do carrinho inválidos.',422);}
-    if(termsRoute)return json({ok:true,terms:await getV3CheckoutTerms(env.DB,body)});
+    if(termsRoute)return json({ok:true,terms:await getV3CheckoutTerms(env.DB,body),checkoutEnabled:v3CheckoutEnabled(env)});
     if(checkoutRoute)return json({ok:true,...await startV3Checkout(request,env,body)});
     if(deliveryRoute)return json({ok:true,...await previewV3CartDelivery(env.DB,body)});
     const quote=await quoteV3Cart(env.DB,body);

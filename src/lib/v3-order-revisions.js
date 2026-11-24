@@ -1,3 +1,4 @@
+import {listV3Extras} from './v3-extras-catalog.js';
 import {quoteV3Cart} from './v3-cart-quote.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow,findV2DeliveryOptions} from './v2-agenda.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
@@ -96,5 +97,27 @@ export async function acceptV3Revision(db,token,input={}){
    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_revision_accepted','Cliente aceitou a alteração antes de pagar.',?,?)").bind(row.id,JSON.stringify({revisionId:r.id,totalCents:q.totalCents}),at)
   ]);
   return {accepted:true};
+ });
+}
+
+export async function getV3RevisionEditor(db,code){
+ const row=await load(db,code);await eligible(db,row);
+ const q=JSON.parse(row.quote_json);
+ const variants=(await db.prepare("SELECT p.code AS productCode,p.name,v.code AS variantCode,v.label AS variantName,v.price_cents AS priceCents FROM v2_products p JOIN v2_product_variants v ON v.product_id=p.id WHERE p.active=1 AND v.active=1 ORDER BY p.sort_order,v.sort_order,p.code,v.code").all()).results||[];
+ const retros=(await db.prepare("SELECT code,name,price_cents FROM v3_retrospective_packages WHERE scope_approved=1 AND sale_enabled=1 AND revision_limit IS NOT NULL AND specific_terms!='' ORDER BY max_photos").all()).results||[];
+ for(const r of retros){const productCode='retrospectiva_'+r.code.slice(6);variants.push({productCode,variantCode:productCode+'_default',name:r.name,variantName:r.name,priceCents:r.price_cents});}
+ for(const v of variants){v.family=v.productCode.startsWith('atelie_')?'identidade_visual':v.productCode.startsWith('retrospectiva_')?'retrospectiva':'convite';v.extras=listV3Extras(v.family,v.productCode);}
+ const addons=(await db.prepare("SELECT code,name,price_cents AS priceCents FROM v2_addons WHERE active=1 ORDER BY sort_order,code").all()).results||[];
+ const items=q.items.map(l=>({family:l.family,productCode:l.productCode,variantCode:l.variantCode,addonCodes:l.commercialSnapshot.addons.filter(a=>!a.config?.blackLibriGift).map(a=>a.code),extras:(l.extras||[]).map(x=>({code:x.code,quantity:x.quantity})),comboCode:l.comboCode||l.availableComboCode||''}));
+ return {items,variants,addons,couponCode:q.couponComparison?.code||q.coupon?.code||'',paymentMethod:row.payment_method,blackLibri:q.blackLibri};
+}
+export async function withdrawV3Revision(db,code,input){
+ const row=await load(db,code);
+ if(input.confirmed!==true)fail('Confirme a retirada.',422);
+ return withV2PaymentLock(db,row.id,async()=>{
+  const fresh=await load(db,code);await eligible(db,fresh);
+  const r=await db.prepare("SELECT id FROM v3_order_revisions WHERE order_id=? AND status='offered' AND kind='edit'").bind(row.id).first();
+  if(!r)fail('Nenhuma revisão disponível.');
+  await db.batch([db.prepare("UPDATE v3_order_revisions SET status='cancelled' WHERE id=?").bind(r.id),db.prepare("UPDATE v2_orders SET next_action='Aguardando pagamento',updated_at=? WHERE id=?").bind(nowIso(),row.id),db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,created_at) VALUES(?,'v3_revision_withdrawn','Revisão retirada; condições originais preservadas.',?)").bind(row.id,nowIso())]);return {withdrawn:true};
  });
 }

@@ -1,3 +1,4 @@
+import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/v3-service-supplements.js';
@@ -18,6 +19,11 @@ async function boundedJson(request){
   return body;
 }
 export async function handleCustomerBriefingV3Api(request,env,url){
+ const revision=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/revision\/accept$/);
+ if(revision){
+  if(request.method!=='POST')return fail('Método não permitido.',405);
+  try{const result=await acceptV3Revision(env.DB,revision[1],await boundedJson(request));return result?json({ok:true,result,briefing:await customerBrief(env,revision[1])}):fail('Pedido não encontrado.',404);}catch(e){return errorResponse(e);}
+ }
   const supplementalPayment=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/supplements\/(convite|identidade_visual|retrospectiva)\/(\d+)\/(pay|verify|renew)$/);
   if(supplementalPayment){
     if(request.method!=='POST')return fail('Método não permitido.',405);
@@ -80,6 +86,19 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+ const revision=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/revision\/(editor|preview|create|withdraw)$/);
+ if(revision){
+  if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Editor V3 ainda indisponível.',503);
+  try{
+   const [,code,action]=revision;
+   if(action==='editor'&&request.method==='GET')return json({ok:true,result:await getV3RevisionEditor(env.DB,code)});
+   if(request.method!=='POST')return fail('Método não permitido.',405);
+   const body=await boundedJson(request);
+   const result=action==='preview'?await previewV3Revision(env.DB,code,body):action==='create'?await createV3Revision(env,code,body):await withdrawV3Revision(env.DB,code,body);
+   const row=await env.DB.prepare('SELECT public_token FROM v2_orders WHERE order_code=?').bind(code).first();
+   return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+  }catch(e){return errorResponse(e);}
+ }
   const finance=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/finance\/(deposit|balance|cancel-unpaid)$/);
   if(finance){
     if(request.method!=='POST')return fail('Método não permitido.',405);

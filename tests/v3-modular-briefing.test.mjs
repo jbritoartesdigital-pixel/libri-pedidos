@@ -622,3 +622,24 @@ test('central financial dashboard counts the paid supplement separately and only
  assert.equal(after.summary.cashInCents,before.summary.cashInCents+4000);
  assert.equal(after.summary.netCashMovementComplete,false);
 });
+
+import {previewV3Revision,createV3Revision,acceptV3Revision} from '../src/lib/v3-order-revisions.js';
+test('unpaid revision closes the previous charge, blocks renewal until customer acceptance and keeps order identity',async t=>{
+ const {db,input}=await setup(),mp=providerMock(t),order=await createV3OrderRecords(db,input);
+ const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'},request=new Request('https://test/internal-v3');
+ const first=await prepareV3Payment(request,env,order.orderId);
+ const items=input.body.items.map(x=>x.productCode==='atelie_essencia'?{...x,extras:[{code:'atelie_pose',quantity:2}]}:x);
+ const quote=await previewV3Revision(db,order.orderCode,{items});
+ assert.equal(quote.totalCents,first.totalCents+4000);
+ const r=await createV3Revision(env,order.orderCode,{items,deliveryWindow:quote.options[0],expectedTotalCents:quote.totalCents,requestKey:'f'.repeat(36),confirmed:true,reason:'Duas poses extras'});
+ assert.equal(db.sqlite.prepare('SELECT total_cents FROM v2_order_pricing WHERE order_id=?').get(order.orderId).total_cents,first.totalCents);
+ await assert.rejects(prepareV3Payment(request,env,order.orderId,{renew:true}),/Aceite/);
+ assert.equal((await reconcileV3Payment(env,order.orderId)).revisionRequired,true);
+ await assert.rejects(acceptV3Revision(db,order.publicToken,{id:r.id,confirmed:true,expectedTotalCents:quote.totalCents}),/aceite/);
+ await acceptV3Revision(db,order.publicToken,{id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:quote.totalCents});
+ const next=await prepareV3Payment(request,env,order.orderId,{renew:true});
+ assert.equal(next.totalCents,quote.totalCents);assert.equal(mp.posts,2);assert.equal(next.orderCode,order.orderCode);
+ mp.approve(next.providerOrderId);await syncMercadoPagoOrder(env,next.providerOrderId);
+ assert.equal((await getV3ModularBriefing(db,order.publicToken)).locked,false);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
+});

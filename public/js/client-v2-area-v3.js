@@ -130,6 +130,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function paymentHtml(){
     if(!area.locked)return '';
+    if(area.revision){
+      const r=area.revision;
+      return '<section class="card"><h3>Confira a proposta revisada</h3><p>'+esc(r.reason)+'</p>'+r.items.map(i=>'<p><strong>'+esc(i.productName+' · '+i.variantName)+'</strong> · '+money(i.totalCents)+'<br>'+i.addons.map(esc).join(', ')+' '+i.extras.map(x=>esc(x.quantity+' × '+x.name)).join(', ')+'</p>').join('')+'<p>Nova previsão: '+day(r.deliveryWindow.start)+' a '+day(r.deliveryWindow.end)+'</p><p><strong>Total: '+money(r.totalCents)+'</strong> · Entrada: '+money(r.depositCents)+'</p>'+(r.blackLibri?'<p>Surpresa preservada: '+esc(r.blackLibri.label)+'</p>':'')+'<details><summary>Condições da contratação</summary><p style="white-space:pre-wrap">'+esc(r.terms.general.body)+'</p>'+r.terms.services.map(t=>'<p style="white-space:pre-wrap">'+esc(t.body)+'</p>').join('')+'</details><label><input type="checkbox" data-revision-terms> Li e aceito as condições e o novo valor.</label><button class="btn primary" data-v3-action="accept-revision">Aceitar proposta</button></section>';
+    }
     const url=payment?.state==='pending'?safePayment(payment.checkoutUrl):null;
     return '<section class="card"><h3>Pagamento</h3><p>'+esc(payment?.state==='paid'?'Pagamento confirmado. Atualize o pedido para conferir a liberação.':payment?.state==='expired'?'Cobrança anterior encerrada.':payment?.state==='review'?'Entre em contato com a Libri para revisar a cobrança.':'Confira a situação do pagamento para liberar os dados contratados.')+'</p>'+
       (url?'<a href="'+esc(url)+'" class="btn primary">Continuar pagamento</a>':'')+
@@ -227,6 +231,12 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const supplement=e.target.closest('[data-v3-supplement]');if(supplement&&!busy){const a=supplement.dataset.v3Supplement;await (['pay','renew','verify'].includes(a)?supplementPaymentAction(supplement.dataset.id,a):decideSupplement(supplement.dataset.id,a));return;}
     const prod=e.target.closest('[data-v3-production]');if(prod&&!busy){await productionAction(prod.dataset.family,prod.dataset.v3Production);return;}
     const action=e.target.closest('[data-v3-action]')?.dataset.v3Action;
+    if(action==='accept-revision'&&!busy&&area.revision){
+      if(!root.querySelector('[data-revision-terms]')?.checked){error='Leia e aceite as condições da proposta.';render();return;}
+      const r=area.revision;busy=true;error='';render();
+      try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:r.totalCents})});area=res.briefing;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
+      if(!area.revision)await verify();return;
+    }
     if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);

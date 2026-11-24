@@ -4,7 +4,7 @@ const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof 
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
  const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
- const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={},supplementCapacity={};
+ const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={},supplementCapacity={},revisionEditor=null,revisionPreview=null;
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;
   if(!s)return '';
@@ -65,6 +65,24 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<button class="btn btn-secondary" data-v3-admin="supplement-preview" data-family="'+family+'">Calcular proposta</button>'+
  (draft&&!draft.quote.requiresWindow?'<p>Total complementar: <strong>'+money(draft.quote.totalCents)+'</strong> · '+(draft.quote.pointsUnits/100)+' pontos adicionais</p>'+(draft.quote.absorbed?.length?'<p>Já contratado e incorporado ao novo pacote: '+draft.quote.absorbed.map(i=>esc(i.quantity+' × '+i.name)).join(', ')+'</p>':'')+'<button class="btn btn-primary" data-v3-admin="supplement-create" data-family="'+family+'">Enviar proposta para aceite</button>':''):'')+'</details>';
  }
+ function revisionHtml(){
+  if(brief.revision)return '<section class="card"><h3>Alteração aguardando aceite</h3><p>Novo total: '+money(brief.revision.totalCents)+'</p><p>'+esc(brief.revision.reason)+'</p><button class="btn btn-secondary" data-v3-admin="revision-withdraw">Retirar proposta</button></section>';
+  if(!brief.adminPayment?.canCancelUnpaid)return '';
+  if(!revisionEditor)return '<button class="btn btn-secondary" data-v3-admin="revision-editor">Editar contratação antes do pagamento</button>';
+  return '<section class="card"><h3>Editar contratação</h3><p>Confira serviços, cenas e adicionais. O valor será recalculado antes de enviar a proposta.</p>'+['convite','identidade_visual','retrospectiva'].map(f=>{
+   const current=revisionEditor.items.find(i=>i.family===f),variants=revisionEditor.variants.filter(v=>v.family===f),chosen=variants.find(v=>v.variantCode===current?.variantCode);
+   return '<details open><summary>'+esc(names[f])+'</summary><label>Pacote <select data-revision-family="'+f+'"><option value="">Não contratar</option>'+variants.map(v=>'<option value="'+esc(v.variantCode)+'" '+(v.variantCode===current?.variantCode?'selected':'')+'>'+esc(v.name+' · '+v.variantName)+' · '+money(v.priceCents)+'</option>').join('')+'</select></label>'+
+    (f==='convite'?'<details><summary>Adicionais do convite</summary>'+revisionEditor.addons.map(a=>'<label><input type="checkbox" data-revision-addon="'+esc(a.code)+'" '+(current?.addonCodes.includes(a.code)?'checked':'')+'>'+esc(a.name)+' · '+money(a.priceCents)+'</label>').join('')+'</details>':(chosen?.extras||[]).map(a=>'<label>'+esc(a.name)+' · '+money(a.priceCents)+'<input type="number" min="0" max="'+a.maxQuantity+'" data-revision-extra="'+esc(a.code)+'" data-extra-family="'+f+'" value="'+(current?.extras.find(x=>x.code===a.code)?.quantity||0)+'"></label>').join(''))+'</details>';
+  }).join('')+'<label>Cupom <input data-revision-coupon value="'+esc(revisionEditor.couponCode)+'"></label><label>Motivo <input data-revision-reason maxlength="500" value="'+esc(revisionPreview?.input.reason||'')+'"></label><button class="btn btn-secondary" data-v3-admin="revision-preview">Recalcular proposta</button>'+(revisionPreview?'<p><strong>'+money(revisionPreview.result.totalCents)+'</strong> · '+(revisionPreview.result.pointsUnits/100)+' pontos</p><label>Nova janela <select data-revision-window><option value="">Selecione</option>'+revisionPreview.result.options.map((w,i)=>'<option value="'+i+'">'+esc(w.start+' a '+w.end)+'</option>').join('')+'</select></label><button class="btn btn-primary" data-v3-admin="revision-create">Enviar para aceite</button>':'')+'</section>';
+ }
+ function readRevision(){
+  const items=Array.from(host.querySelectorAll('[data-revision-family]')).flatMap(el=>{
+   const v=revisionEditor.variants.find(x=>x.variantCode===el.value&&x.family===el.dataset.revisionFamily);if(!v)return [];
+   const old=revisionEditor.items.find(x=>x.family===v.family);
+   return [{family:v.family,productCode:v.productCode,variantCode:v.variantCode,addonCodes:v.family==='convite'?Array.from(host.querySelectorAll('[data-revision-addon]:checked')).map(x=>x.dataset.revisionAddon):[],extras:Array.from(host.querySelectorAll('[data-extra-family="'+v.family+'"]')).map(x=>({code:x.dataset.revisionExtra,quantity:Number(x.value)})).filter(x=>x.quantity>0),comboCode:old?.variantCode===v.variantCode?old.comboCode||'':''}];
+  });
+  return {items,couponCode:host.querySelector('[data-revision-coupon]').value,reason:host.querySelector('[data-revision-reason]').value.trim()};
+ }
  function financeActions(){
   const p=brief.payment,a=brief.adminPayment||{};
   return '<section class="card"><h3>Pagamento do pedido original</h3><p>Entrada: '+p.depositPercent+'% · '+money(p.depositCents)+'</p><p>Recebido: '+money(p.receivedCents)+'</p><p>Saldo: <strong>'+money(p.remainingCents)+'</strong></p>'+
@@ -75,7 +93,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  function render(){
  if(!host.isConnected)return;
  host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Contratação original: '+money(brief.payment.totalCents)+'</p>'+(brief.financial?'<p>Adicionais confirmados: '+money(brief.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(brief.financial.confirmedTotalCents)+'</strong></p><p>Adicionais a receber: '+money(brief.financial.pendingSupplementCents)+'</p>'+(brief.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(brief.financial.reviewSupplementCents)+'</p>':''):'')+'<p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
- financeActions()+ (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
+ financeActions()+revisionHtml()+ (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
@@ -86,11 +104,26 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<p class="muted">Conferir não libera a produção automaticamente. A agenda será validada por serviço.</p>';
  host.querySelectorAll('button').forEach(b=>b.disabled=busy);
  }
+ host.addEventListener('change',e=>{if(!e.target.matches('[data-revision-family]')||!revisionEditor)return;const draft=readRevision();revisionEditor.items=draft.items;revisionEditor.couponCode=draft.couponCode;revisionPreview=null;render();});
  host.addEventListener('click',async e=>{
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null,method='POST';
- if(action.startsWith('finance-')){
+ if(action.startsWith('revision-')){
+   const mode=action.slice(9);path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/revision/'+mode;
+   if(mode==='editor'){method='GET';}
+   else if(mode==='withdraw'){if(!confirm('Retirar a proposta e manter as condições anteriores?'))return;payload={confirmed:true};}
+   else{
+    const input=readRevision();
+    if(mode==='preview'){payload=input;}
+    else{
+      const index=host.querySelector('[data-revision-window]').value,w=index===''?null:revisionPreview?.result.options[Number(index)];
+      if(!w||JSON.stringify(input)!==JSON.stringify(revisionPreview?.input)||input.reason.length<5){showToast('Confira o motivo, recalcule e escolha a previsão.');return;}
+      if(!confirm('Encerrar cobrança anterior e enviar proposta de '+money(revisionPreview.result.totalCents)+' para aceite?'))return;
+      payload={...input,deliveryWindow:w,expectedTotalCents:revisionPreview.result.totalCents,confirmed:true,requestKey:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};
+    }
+   }
+ }else if(action.startsWith('finance-')){
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/finance/'+action.slice(8);
    if(action==='finance-deposit'){
      const depositPercent=Number(host.querySelector('[data-admin-deposit]').value),reason=host.querySelector('[data-finance-reason]').value.trim();
@@ -182,7 +215,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,giftMediaConfirmed:!!host.querySelector('[data-gift-media="'+family+'"]')?.checked,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='supplement-capacity'){supplementCapacity[b.dataset.supplementId]=res.result;}else if(action==='supplement-preview'){supplementDrafts[family]={input:payload,quote:res.result,key:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};}else if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};supplementDrafts={};supplementCapacity={};showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});if(res.briefing)brief=res.briefing;if(action==='revision-editor'){revisionEditor=res.result;revisionPreview=null;}else if(action==='revision-preview'){revisionEditor.items=payload.items;revisionEditor.couponCode=payload.couponCode;revisionPreview={input:payload,result:res.result};}else if(action==='revision-create'||action==='revision-withdraw'){revisionEditor=null;revisionPreview=null;if(onChanged)await onChanged();}else if(action==='supplement-capacity'){supplementCapacity[b.dataset.supplementId]=res.result;}else if(action==='supplement-preview'){supplementDrafts[family]={input:payload,quote:res.result,key:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};}else if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};supplementDrafts={};supplementCapacity={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

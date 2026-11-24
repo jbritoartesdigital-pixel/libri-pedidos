@@ -12,7 +12,7 @@ Commits desta retomada:
 4330b695bcec1d27cf468466cea20b983c603bbe: cotação com combo explícito na linha convite e acréscimo de cartão calculado sobre o conjunto.
 852dd3e74e6b86923af7fbff147babe621c30a1d: carrinho persistente na interface, adicionar/substituir/retirar serviços, cotação no servidor, checkout individual preservado.
 b32b78d593708bd57362766a2ac29a26cd9b95cf: testes dos combos, taxa agregada e descontos rejeitados.
-CI desse commit: execução 45312771660, em andamento na última consulta.
+CI do commit b32b78d: execução 45312771660 concluída com SUCCESS. A documentação foi criada no commit 133b981; a execução do commit de documentação ainda estava em andamento na última consulta.
 https://github.com/jbritoartesdigital-pixel/libri-pedidos/actions/runs/45312771660
 Não afirmar sucesso de testes sem verificar a conclusão e o SHA efetivamente testado.
 
@@ -35,7 +35,7 @@ IMPLEMENTADO NO PR #143
 - Não houve alteração na main nem no banco de produção nesta retomada.
 
 PRÓXIMO PASSO EXATO
-1. Verificar conclusão CI do último SHA e corrigir falhas; testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
+1. CI do código concluído com sucesso; verificar o CI do último SHA e testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
 2. Implementar modelo persistente V3 de pedido-pai e itens principais, snapshot de cotação/termos e chave de idempotência. Reutilizar serviço Mercado Pago existente com um único total, confirmação de webhook e reserva de agenda atômica; não criar pedidos filhos cobrados separadamente. Inspecionar migrations, checkout V2, pagamentos, reservas e reconciliação antes de codificar.
 3. Completar Retrospectivas como linha real (catálogo aprovado, limites, direitos, briefing e uploads privados), integrar preço, pontos, prazo e carrinho.
 4. Briefing modular único pós-pagamento, status por serviço e replanejamento a partir de briefing completo, inclusive múltiplas crianças/personagens.

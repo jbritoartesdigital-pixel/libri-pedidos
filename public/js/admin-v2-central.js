@@ -260,7 +260,7 @@ export async function renderCentral(openOrder) {
       <div id="advancedOrderResults" class="list" style="margin-top:12px" aria-live="polite"></div>
     </section>
 
-    <div class="section-grid">
+    <div class="section-grid" id="central-schedule-grid">
       <section class="card">
         <div class="section-title">
           <h2>Festas de hoje</h2>
@@ -352,7 +352,7 @@ export async function renderCentral(openOrder) {
       ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}</details>
       ${soon.length?`<details class="order-optional" id="central-deadlines" style="margin-top:12px" open><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:'<div id="central-deadlines" class="muted">Nenhum prazo V3 nos próximos 7 dias.</div>'}
     </section>
-    <section class="card" style="margin-top:14px">
+    <section class="card" id="central-workload" style="margin-top:14px">
       <div class="section-title">
         <h2>Entregas e produção • próximos 7 dias</h2>
         <span class="status">${Number(c.workload?.count || 0)} pedidos</span>
@@ -401,7 +401,7 @@ export async function renderCentral(openOrder) {
         Base: recebimentos confirmados no mês, descontando estornos. Não inclui pedidos ainda não pagos.</small>
     </section>
 
-    <div class="kpi-grid" style="margin-top:14px">
+    <div class="kpi-grid" id="central-finance-kpis" style="margin-top:14px">
       <article class="kpi">
         <span>Vendas do mês</span>
         <strong>${money(c.finance.salesCents)}</strong>
@@ -455,7 +455,7 @@ export async function renderCentral(openOrder) {
     </div>
 
 </details>
-    <details class="card order-optional" style="margin-top:14px">
+    <details class="card order-optional" id="central-capacity" style="margin-top:14px">
       <summary>Ver capacidade diária dos próximos 14 dias</summary>
       <p class="muted" style="font-size:12px;margin:0 0 12px">
         ${(used / 100).toFixed(1)} pts ocupados no período.
@@ -497,6 +497,23 @@ export async function renderCentral(openOrder) {
       </div>
     </details>
   `;
+
+  // Keep search and critical exceptions visible. Other existing sections remain accessible in tabs.
+  const sections=[['today','Hoje'],['orders','Pedidos'],['agenda','Agenda'],['numbers','Indicadores']];
+  const nav=document.createElement('nav');nav.className='central-section-tabs';nav.setAttribute('aria-label','Seções da Central');
+  nav.innerHTML=sections.map(([id,label])=>'<button type="button" data-central-section="'+id+'" aria-pressed="false">'+label+'</button>').join('');
+  viewRoot.querySelector('#advancedOrderSearch')?.after(nav);
+  const panels={};
+  for(const [id,label] of sections){const el=document.createElement('section');el.className='central-section-page';el.dataset.centralPage=id;el.setAttribute('aria-label',label);viewRoot.append(el);panels[id]=el;}
+  const move=(selector,id)=>{const el=viewRoot.querySelector(selector);if(el)panels[id].append(el);};
+  move('#central-new','orders');move('#central-payments','orders');move('#central-ongoing','orders');
+  move('#central-schedule-grid','agenda');move('#central-workload','agenda');move('#central-capacity','agenda');
+  move('.monthly-goal-card','numbers');move('#central-finance-kpis','numbers');move('.central-analytics','numbers');move('.central-shortcut-fold','numbers');
+  move('.attention-center','today');
+  function showSection(id){if(!panels[id])return;for(const [k,el] of Object.entries(panels))el.hidden=k!==id;for(const b of nav.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.centralSection===id));}
+  nav.addEventListener('click',e=>{const b=e.target.closest('[data-central-section]');if(b)showSection(b.dataset.centralSection);});
+  for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});
+  showSection('today');
 
   const searchButton = document.getElementById('runAdvancedOrderSearch');
   const quickSearch = document.getElementById('advOrderQuery');

@@ -260,7 +260,7 @@ function renderUnready() {
     (item.previewAvailable?'<button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'<p class="v3-mini">Pacote indisponível.</p>')+'</article>'
   ).join('');
   panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
-    '<div class="v3-notice">Envie os materiais organizados pelo WhatsApp após a contratação. Prazo mínimo de 15 dias corridos após pagamento, briefing completo e recebimento dos materiais.</div>'+
+    '<p class="v3-mini">Materiais pelo WhatsApp após contratar. Mínimo de 15 dias após pagamento, briefing e materiais completos.</p>'+
     '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+cartButton(),
     '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
@@ -272,12 +272,10 @@ function renderAtelie() {
       '<span class="v3-price">'+(item.purchaseAvailable?money(item.priceCents):'Consultar detalhes')+'</span></span><span class="v3-choice-check" aria-hidden="true"></span></button>'
   ).join('');
   panel('Sua festa, com tudo combinando',
-    'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
-    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação da identidade visual em PDF. Não inclui projeto ou simulação de decoração.</div>'+
-      '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
-      '<p class="v3-mini" style="margin-top:16px">Não inclui impressão ou fabricação, montagem da festa nem convite em vídeo ou interativo. Peças especiais, personagens elaborados a partir de fotos e alterações grandes precisam de orçamento individual.</p>',
-    '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>'+
-      '<button class="v3-btn v3-btn-primary" type="button" data-action="atelie-detail" '+(!state.ateliePackage?'disabled':'')+'>Conhecer pacote</button></div>',2);
+    'Artes digitais personalizadas para todos os detalhes da festa.',
+    '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
+      '<p class="v3-mini">Artes digitais, sem impressão, montagem ou convite. Prazo mínimo de 15 dias após pagamento e briefing completo.</p>',
+    actions(true,'',null),2);
 }
 function renderAtelieDetail() {
   const item = ateliePackages.find(p=>p.code===state.ateliePackage);
@@ -288,10 +286,9 @@ function renderAtelieDetail() {
   const exclusions=[...(item.excludedCommon||[]),...(item.excludedItems||[])];
   const excluded='<ul class="v3-mini">'+exclusions.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>';
   panel('Pacote '+clean(item.name),clean(item.shortDescription),
-    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual em PDF.</p></div>'+
-    '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
+    '<h2 class="v3-title" style="font-size:20px">O que você recebe</h2>'+includes+
     '<details class="v3-terms-disclosure"><summary>O que não está incluído</summary>'+excluded+'</details>'+
-    '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
+    '<div class="v3-total">'+(item.purchaseAvailable?'<strong>Valor do pacote</strong><b>'+money(item.priceCents)+'</b>':'<strong>Compra ainda não liberada.</strong>')+'</div>'+ 
     '',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
     '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
@@ -498,7 +495,7 @@ function renderCart() {
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':items.length?'<p class="v3-mini">Confira os dados, os prazos e as condições na contratação. Nenhuma cobrança foi criada.</p>':'';
-  panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
+  panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
     '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
@@ -681,7 +678,7 @@ async function handleStoreClick(event) {
     if(action==='event'){if(!EVENTS.some(x=>x[0]===value))return;if(state.eventType===value){await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.eventSubtype='';state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}
     if(action==='event-subtype'){if(!(EVENT_SUBTYPES[state.eventType]||[]).some(x=>x[0]===value))return;state.eventSubtype=value;await go('creation');return;}
     if(action==='creation'){if(!['invitation','identity','retrospective'].includes(value))return;if(state.creation!==value)state.ateliePackage='';state.creation=value;await go(value==='invitation'?'intent':value==='identity'?'atelie':'unready');return;}
-    if(action==='atelie-package'){state.ateliePackage=value;render();return;}
+    if(action==='atelie-package'){if(!ateliePackages.some(p=>p.code===value))return;state.ateliePackage=value;await go('atelie-detail');return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='retro-buy'){
       const item=retrosPackages.find(p=>p.code===value);

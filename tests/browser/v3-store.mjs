@@ -124,7 +124,7 @@ try{
  await context.close();
  const desktop=await pageFor(1280,900);const p=desktop.page;
  await click(p,'event','birthday');await click(p,'creation','identity');
- await click(p,'atelie-package','essencia');await click(p,'atelie-detail');await click(p,'atelie-buy');
+ await click(p,'atelie-package','essencia');await click(p,'atelie-buy');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
  await click(p,'cart-extra-start');await p.locator('#v3-modal [data-action="guided-cart-expand"]').waitFor();await click(p,'guided-cart-expand');await click(p,'guided-cart-plus','atelie_pose');await click(p,'guided-cart-next');
  await click(p,'guided-cart-skip');await click(p,'guided-cart-skip');p.once('dialog',d=>d.accept());await click(p,'guided-cart-skip');await p.locator('[data-action="cart-unified-checkout"]').waitFor();await p.getByText('1 × Pose extra',{exact:true}).waitFor();

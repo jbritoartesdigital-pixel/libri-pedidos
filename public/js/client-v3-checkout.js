@@ -12,10 +12,11 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
   let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
-  let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false;
+  let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false;
   const hasInvite=cart.items.some(i=>! /^(atelie_|retrospectiva)/.test(i.productCode));
   const blackSelection=()=>blackClaim?{blackLibriClaimId:blackClaim.id,clientRequestId:attemptKey,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email}}:{};
   function readForm(){
+    const couponDetails=root.querySelector('#v3-coupon-details');if(couponDetails)couponOpen=couponDetails.open;
     for(const k of ['name','whatsapp','email','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
@@ -40,17 +41,17 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   function render(){
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
     root.ownerDocument?.getElementById('v3-landing')?.setAttribute('hidden','');
-    root.innerHTML='<section class="v3-panel"><span class="v3-eyebrow">Libri · contratação</span><h1 class="v3-title">Finalizar seu pedido</h1><p class="v3-text">Um pagamento, acompanhamento individual dos serviços.</p>'+
+    root.innerHTML='<section class="v3-panel"><h1 class="v3-title">Finalizar seu pedido</h1>'+
       (!enabled?'<div class="v3-notice">Prévia do novo checkout. O pagamento ainda não está liberado.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<section class="v3-checkout-block"><h2>1. Seus dados</h2>'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+
+      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+'</div>'+
       '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
       '<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="agenda">Consultar agenda</button>'+
       (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label style="display:block;padding:8px 0"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · sugerida':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
       (urgentQuote?'<div class="v3-notice" data-v3-delivery-options><strong>Precisa de um encaixe?</strong><p>Não há janela normal para esta data. A Libri pode avaliar um encaixe com adicional de '+urgentQuote.urgencyPercent+'% ('+money(urgentQuote.urgencyAmountCents)+'). Nenhuma cobrança ou reserva será criada antes da aprovação.</p><label><input type="checkbox" name="urgencyAccepted" '+(urgentAccepted?'checked':'')+'> Solicitar análise pelo total de '+money(urgentQuote.totalCents)+'</label></div>':'')+
-      '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+field('couponCode','Cupom (opcional)','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Conferir cupom</button>'+summary()+
-      '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-notice"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
+      '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
+      '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
       '</section></fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
       '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length&&!(urgentQuote&&urgentAccepted))?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':urgentQuote&&urgentAccepted?'Solicitar encaixe, sem pagar agora':'Confirmar e pagar')+'</button></div></form></section>';
     root.setAttribute('aria-busy',String(busy));

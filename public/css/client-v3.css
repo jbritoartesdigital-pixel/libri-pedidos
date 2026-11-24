@@ -445,3 +445,51 @@ body:has(.v3-site) .libri-privacy-banner:not([hidden]){position:fixed;z-index:80
 body:has(.v3-site) .libri-privacy-actions button{font-family:inherit}
 @media(prefers-reduced-motion:reduce){.v3-status-line::after,.v3-inline-line::after{animation:none;transform:translateX(62%)}}
 @media(max-width:560px){.v3-status-content{gap:10px}.v3-site #libri-privacy{margin-bottom:max(3px,env(safe-area-inset-bottom))}.v3-site .libri-privacy-links{gap:2px 9px}.v3-site .libri-privacy-links button{font-size:9px;min-height:24px}}
+
+/* V80 — original dark opening remains unchanged. Dark branded loading, optional night mode. */
+.v3-header-shell .v3-topbar{position:relative;display:grid;grid-template-columns:minmax(42px,1fr) auto minmax(42px,1fr);gap:8px}
+.v3-header-shell .v3-brand{grid-column:2;justify-content:center}
+.v3-theme-toggle{grid-column:3;justify-self:end;width:44px;height:44px;display:grid;place-items:center;border:1px solid #e1c0ac66;border-radius:50%;background:#ffffff08;color:#f2dbca;padding:0}
+.v3-theme-toggle[hidden]{display:none}
+.v3-theme-toggle:hover,.v3-theme-toggle[aria-pressed=true]{background:#e1c0ac26}
+.v3-theme-toggle:focus-visible{outline:2px solid #f0d4bb;outline-offset:2px}
+/* Loading only, not the purchase canvas or the existing animated opening. */
+.v3-main .v3-panel--status:not(.v3-panel--error){background:radial-gradient(ellipse at 50% 44%,#745049 0%,#3d2929 47%,#24191a 100%)}
+.v3-panel--status:not(.v3-panel--error) .v3-status-title{color:#f7e8df}
+.v3-panel--status:not(.v3-panel--error) .v3-status-brand,.v3-panel--status:not(.v3-panel--error) .v3-status-note{color:#e7cfc4}
+.v3-panel--status:not(.v3-panel--error) .v3-status-line{background:#e6c6b438}
+.v3-panel--status:not(.v3-panel--error) .v3-status-line::after{background:linear-gradient(90deg,transparent,#e4bda3,#f5ddcc,transparent)}
+.v3-site .libri-privacy-links button{font-size:11px;min-height:32px}
+.v3-site .libri-privacy-links{gap:2px 12px}
+.v3-panel--guided .v3-choice-copy small{font-size:13px}
+.v3-panel--guided .v3-optional-card .v3-optional-action{font-size:13px}
+.v3-main .v3-btn:focus-visible,.v3-main .v3-choice:focus-visible{outline:2px solid #b9897d;outline-offset:2px}
+/* The night palette is scoped to an explicit preference, never the default. */
+html[data-v3-theme=dark]{color-scheme:dark;--cream:#21181b;--ivory:#302427;--ink:#f6e9e2;--wine:#e4b6a5;--rose:#d4a094;--blush:#3f2e32;--champagne:#d4ad92;--muted:#d2bcb5;--outline:#694c50;--shadow:0 10px 38px #120c0f55;--v3-night-panel:#302427;--v3-night-raised:#3b2c30;--v3-night-input:#241b1e;--v3-night-accent:#e4b6a5}
+html[data-v3-theme=dark] body{background:radial-gradient(ellipse at 50% 0%,#493033 0%,transparent 65%),#21181b;color:var(--ink)}
+html[data-v3-theme=dark] .v3-header-shell{background:#2d2023;border-color:var(--outline)}
+html[data-v3-theme=dark] .v3-main,html[data-v3-theme=dark] .v3-main:has(.v3-live-basket[hidden]){background:var(--v3-night-panel);border-color:var(--outline);box-shadow:var(--shadow)}
+html[data-v3-theme=dark] .v3-main .v3-panel:not(.v3-panel--status),html[data-v3-theme=dark] body:has(.v3-panel--guided) .v3-main .v3-panel--guided,html[data-v3-theme=dark] .v3-main .v3-panel--error{background:var(--v3-night-panel);color:var(--ink)}
+html[data-v3-theme=dark] .v3-main .v3-live-basket{background:#38282c;border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] .v3-main :is(.v3-basket-list li,.v3-basket-draft,.v3-package-card,.v3-cart-item,.v3-custom-scenes,.v3-free-confirmation,.v3-at-summary,.v3-at-terms,.v3-notice,.v3-total,.v3-gallery-example,.v3-package-facts span,.v3-black-recovery){background:var(--v3-night-raised);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] .v3-main .v3-notice[role=alert]{background:#4c2e32;border-color:#a46f69;color:#ffd8cc}
+html[data-v3-theme=dark] .v3-main .v3-agenda-option{background:var(--v3-night-input);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] .v3-main .v3-agenda-option:has(input:checked){background:#4b3437;border-color:var(--wine)}
+html[data-v3-theme=dark] :is(.v3-at-input,.v3-field input){background:var(--v3-night-input);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] :is(.v3-btn-primary,.libri-privacy-actions button[data-privacy=allow]){background:#d4a094;color:#302023;border-color:#d4a094}
+html[data-v3-theme=dark] :is(.v3-btn-secondary,.v3-cart-item [data-action^="cart-extra-"],.libri-privacy-actions button,.libri-privacy-dialog>button){background:#443137;border-color:var(--outline);color:var(--wine)}
+html[data-v3-theme=dark] .v3-main .v3-live-basket .v3-btn-secondary{background:#443137;color:var(--wine);border:1px solid var(--outline)}
+html[data-v3-theme=dark] .v3-main .v3-stage-heading .v3-text,html[data-v3-theme=dark] .v3-main .v3-mini,html[data-v3-theme=dark] .v3-main .v3-basket-verified{color:var(--muted)}
+html[data-v3-theme=dark] .v3-main .v3-steps span{background:#674d50}
+html[data-v3-theme=dark] .v3-main .v3-steps span.is-active{background:#d4a094}
+html[data-v3-theme=dark] .v3-main .v3-checkout-block{border-color:var(--outline)!important}
+html[data-v3-theme=dark] .v3-modal-root:not([hidden]){background:#130d11b8}
+html[data-v3-theme=dark] .v3-modal-card,html[data-v3-theme=dark] .v3-offer-card{background:var(--v3-night-panel);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] .v3-modal-card :is(.v3-choice,.v3-gallery-example){background:var(--v3-night-raised);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] .v3-modal-card .v3-choice.is-selected{background:#50383d;border-color:var(--wine)}
+html[data-v3-theme=dark] .v3-modal-card :is(h2,.v3-offer-price,.v3-eyebrow){color:var(--wine)}
+html[data-v3-theme=dark] .v3-modal-card p{color:var(--muted)}
+html[data-v3-theme=dark] body:has(.v3-site) :is(.libri-privacy-banner,.libri-privacy-dialog){background:var(--v3-night-panel);border-color:var(--outline);color:var(--ink)}
+html[data-v3-theme=dark] :is(.libri-privacy-links button,.libri-privacy-dialog a,.libri-privacy-head button){color:var(--wine)}
+html[data-v3-theme=dark] .v3-status-line,html[data-v3-theme=dark] .v3-inline-line{background:#694b4f}
+@media(max-width:380px){.v3-header-shell .v3-brand-official{max-width:48vw}.v3-site .libri-privacy-links{gap:2px 8px}.v3-site .libri-privacy-links button{font-size:10px}}

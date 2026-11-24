@@ -115,6 +115,7 @@ export async function quoteV3Cart(db, cart={}) {
     totalCents:pricing.totalCents,
     cardFeeCents:pricing.cardFeeCents,
     pointsUnits:sum('pointsUnits'),
+    productionDays:Math.max(...quotes.map(x=>x.productionDays)),
     discountCents:sum('discountCents'),
     pricedOnServer:true
   };

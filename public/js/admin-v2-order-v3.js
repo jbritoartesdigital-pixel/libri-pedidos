@@ -4,7 +4,7 @@ const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof 
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
  const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
- const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={};
+ const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={};
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;
   if(!s)return '';
@@ -51,12 +51,22 @@ export async function openV3AdminOrder(code,initial,onChanged){
  (p.revisionsIncluded!==null&&p.revisionsUsed<p.revisionsIncluded?button('included_revision','Usar rodada incluída'):'')+button('libri_correction','Corrigir erro da Libri sem consumir rodada')+button('extra_quote','Registrar necessidade de orçamento')+button('return_preview','Retornar para aprovação'):'')+
  '<details><summary>Histórico de produção</summary>'+p.events.map(e=>'<p>'+esc(e.created_at)+' · '+esc(({started:'Produção iniciada',preview_published:'Prévia publicada',approved:'Aprovada pela cliente',adjustments_requested:'Ajustes solicitados',included_revision:'Rodada utilizada',libri_correction:'Correção da Libri',extra_quote:'Orçamento necessário',return_preview:'Retorno à aprovação'})[e.action]||e.action)+(e.note?' · '+esc(e.note):'')+'</p>').join('')+'</details></div>';
  }
+ function supplementHtml(s){
+ const family=esc(s.family),offers=(brief.supplements||[]).filter(x=>x.family===s.family),draft=supplementDrafts[s.family];
+ const status={offered:'Aguardando cliente',accepted:'Aceita · cobrança ainda indisponível',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em revisão'};
+ const open=offers.some(x=>['offered','accepted','payment_pending','review'].includes(x.status));
+ return '<details class="notice"><summary>Adicionais após contratação</summary>'+offers.map(x=>'<p><strong>'+money(x.totalCents)+'</strong> · '+esc(status[x.status])+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(['offered','accepted'].includes(x.status)?'<button class="btn btn-secondary" data-v3-admin="supplement-cancel" data-family="'+family+'" data-supplement-id="'+x.id+'">Cancelar proposta</button>':'')).join('')+
+ (!open&&s.supplementCatalog?.length?'<p>Selecione os adicionais. A proposta não modifica o pedido original.</p>'+s.supplementCatalog.map(x=>'<label class="field">'+esc(x.name)+' · '+money(x.priceCents)+'<input type="number" min="0" max="'+esc(x.maxQuantity)+'" value="'+esc(draft?.input.items.find(i=>i.code===x.code)?.quantity||0)+'" data-supplement-family="'+family+'" data-extra-code="'+esc(x.code)+'"></label>').join('')+
+ '<label>Pagamento <select data-supplement-method="'+family+'"><option value="pix">Pix integral</option><option value="card" '+(draft?.input.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select></label><label>Observação para cliente <textarea maxlength="500" data-supplement-note="'+family+'">'+esc(draft?.input.note||'')+'</textarea></label>'+
+ '<button class="btn btn-secondary" data-v3-admin="supplement-preview" data-family="'+family+'">Calcular proposta</button>'+
+ (draft?'<p>Total complementar: <strong>'+money(draft.quote.totalCents)+'</strong> · '+(draft.quote.pointsUnits/100)+' pontos adicionais</p><button class="btn btn-primary" data-v3-admin="supplement-create" data-family="'+family+'">Enviar proposta para aceite</button>':''):'')+'</details>';
+ }
  function render(){
  if(!host.isConnected)return;
  host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Total: '+money(brief.payment.totalCents)+'</p><p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
  (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
- (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+'</section>').join('')+
+ (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
  (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a></p>').join('')+
@@ -69,7 +79,24 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null,method='POST';
- if(['stage-final','remove-final','deliver'].includes(action)){
+ if(action.startsWith('supplement-')){
+   path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/supplements/'+family;
+   if(action==='supplement-cancel'){
+     if(!confirm('Cancelar esta proposta complementar?'))return;
+     path+='/'+encodeURIComponent(b.dataset.supplementId)+'/cancel';payload={};
+   }else{
+     const items=Array.from(host.querySelectorAll('[data-supplement-family="'+family+'"]')).map(el=>({code:el.dataset.extraCode,quantity:Number(el.value)})).filter(i=>i.quantity>0);
+     const input={items,paymentMethod:host.querySelector('[data-supplement-method="'+family+'"]').value,note:host.querySelector('[data-supplement-note="'+family+'"]').value};
+     if(!items.length){showToast('Selecione pelo menos um adicional.');return;}
+     if(action==='supplement-preview'){path+='/preview';payload=input;}
+     else{
+       const draft=supplementDrafts[family];
+       if(!draft||JSON.stringify(draft.input)!==JSON.stringify(input)){showToast('Calcule novamente após alterar os itens.');return;}
+       if(!confirm('Enviar proposta de '+money(draft.quote.totalCents)+' para aceite da cliente?'))return;
+       path+='/create';payload={...input,expectedTotalCents:draft.quote.totalCents,requestKey:draft.key};
+     }
+   }
+ }else if(['stage-final','remove-final','deliver'].includes(action)){
    const s=brief.services.find(x=>x.family===family);if(!s?.progress)return;
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/delivery/'+family;
    payload={version:s.progress.version};
@@ -113,7 +140,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,giftMediaConfirmed:!!host.querySelector('[data-gift-media="'+family+'"]')?.checked,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='supplement-preview'){supplementDrafts[family]={input:payload,quote:res.result,key:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};}else if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};supplementDrafts={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

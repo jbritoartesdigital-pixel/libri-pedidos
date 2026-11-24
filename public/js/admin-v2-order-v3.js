@@ -4,7 +4,7 @@ const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof 
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
  const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
- const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={};
+ const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={},supplementCapacity={};
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;
   if(!s)return '';
@@ -53,9 +53,13 @@ export async function openV3AdminOrder(code,initial,onChanged){
  }
  function supplementHtml(s){
  const family=esc(s.family),offers=(brief.supplements||[]).filter(x=>x.family===s.family),draft=supplementDrafts[s.family];
- const status={offered:'Aguardando cliente',accepted:'Aceita · cobrança ainda indisponível',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em revisão'};
+ const status={offered:'Aguardando cliente',accepted:'Aceita · aguardando pagamento',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em revisão'};
  const open=offers.some(x=>['offered','accepted','payment_pending','review'].includes(x.status));
- return '<details class="notice"><summary>Adicionais após contratação</summary>'+offers.map(x=>'<p><strong>'+money(x.totalCents)+'</strong> · '+esc(status[x.status])+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(['offered','accepted'].includes(x.status)?'<button class="btn btn-secondary" data-v3-admin="supplement-cancel" data-family="'+family+'" data-supplement-id="'+x.id+'">Cancelar proposta</button>':'')).join('')+
+ return '<details class="notice"><summary>Adicionais após contratação</summary>'+offers.map(x=>'<p><strong>'+money(x.totalCents)+'</strong> · '+esc(status[x.status])+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.payment?.paidAt?'<p>Confirmação registrada: '+esc(x.payment.paidAt.slice(0,10))+'</p>':'')+
+ (x.status==='accepted'?'<button class="btn btn-secondary" data-v3-admin="supplement-capacity" data-family="'+family+'" data-supplement-id="'+x.id+'">Conferir capacidade</button>':'')+
+ (x.canVerify?'<button class="btn btn-secondary" data-v3-admin="supplement-verify" data-family="'+family+'" data-supplement-id="'+x.id+'">Verificar cobrança</button>':'')+
+ (supplementCapacity[x.id]?'<p>Capacidade disponível até '+esc(supplementCapacity[x.id].deliveryEnd)+' · '+esc(supplementCapacity[x.id].pointsUnits/100)+' pontos (consulta sem reserva).</p>':'')+
+ (x.status==='review'?'<p>Conciliação necessária. Não cobrar novamente.</p>':'')+(['offered','accepted'].includes(x.status)?'<button class="btn btn-secondary" data-v3-admin="supplement-cancel" data-family="'+family+'" data-supplement-id="'+x.id+'">Cancelar proposta</button>':'')).join('')+
  (!open&&s.supplementCatalog?.length?'<p>Selecione os adicionais. A proposta não modifica o pedido original.</p>'+s.supplementCatalog.map(x=>'<label class="field">'+esc(x.name)+' · '+money(x.priceCents)+'<input type="number" min="0" max="'+esc(x.maxQuantity)+'" value="'+esc(draft?.input.items.find(i=>i.code===x.code)?.quantity||0)+'" data-supplement-family="'+family+'" data-extra-code="'+esc(x.code)+'"></label>').join('')+
  '<label>Pagamento <select data-supplement-method="'+family+'"><option value="pix">Pix integral</option><option value="card" '+(draft?.input.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select></label><label>Observação para cliente <textarea maxlength="500" data-supplement-note="'+family+'">'+esc(draft?.input.note||'')+'</textarea></label>'+
  '<button class="btn btn-secondary" data-v3-admin="supplement-preview" data-family="'+family+'">Calcular proposta</button>'+
@@ -63,7 +67,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  }
  function render(){
  if(!host.isConnected)return;
- host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Total: '+money(brief.payment.totalCents)+'</p><p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
+ host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Contratação original: '+money(brief.payment.totalCents)+'</p>'+(brief.financial?'<p>Adicionais confirmados: '+money(brief.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(brief.financial.confirmedTotalCents)+'</strong></p><p>Adicionais a receber: '+money(brief.financial.pendingSupplementCents)+'</p>'+(brief.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(brief.financial.reviewSupplementCents)+'</p>':''):'')+'<p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
  (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
@@ -81,7 +85,9 @@ export async function openV3AdminOrder(code,initial,onChanged){
  let path=base,payload=null,method='POST';
  if(action.startsWith('supplement-')){
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/supplements/'+family;
-   if(action==='supplement-cancel'){
+   if(['supplement-capacity','supplement-verify'].includes(action)){
+     path+='/'+encodeURIComponent(b.dataset.supplementId)+'/'+(action==='supplement-capacity'?'capacity':'verify');payload={};
+   }else if(action==='supplement-cancel'){
      if(!confirm('Cancelar esta proposta complementar?'))return;
      path+='/'+encodeURIComponent(b.dataset.supplementId)+'/cancel';payload={};
    }else{
@@ -140,7 +146,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,giftMediaConfirmed:!!host.querySelector('[data-gift-media="'+family+'"]')?.checked,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='supplement-preview'){supplementDrafts[family]={input:payload,quote:res.result,key:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};}else if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};supplementDrafts={};showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method,body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='supplement-capacity'){supplementCapacity[b.dataset.supplementId]=res.result;}else if(action==='supplement-preview'){supplementDrafts[family]={input:payload,quote:res.result,key:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};}else if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};supplementDrafts={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

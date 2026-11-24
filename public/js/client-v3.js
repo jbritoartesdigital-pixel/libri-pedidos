@@ -173,8 +173,6 @@ async function refreshQuote() {
 
 }
 const stepNames=['Evento','Serviço','Escolhas','Personalização','Carrinho'];
-const symbols={invitation:'mail',identity:'palette',retrospective:'film',birthday:'cake','15_years':'sparkles',wedding:'heart',celebration:'gift',other:'star',story:'film',simple:'mail'};
-function choiceIcon(kind){const icons={mail:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/>',palette:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2A4 4 0 0 0 21 10c0-4-4-7-9-7Z"/><path d="M7 11h.01M10 7h.01M15 7h.01" stroke-width="3"/>',film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 12h4m10 0h4m-11-3 4 3-4 3Z"/>',cake:'<path d="M4 13h16v7H4zM2 20h20M4 13l4 3 4-3 4 3 4-3M8 9V6m4 3V5m4 4V6"/>',heart:'<path d="M12 21 4 13C-2 6 7 1 12 8c5-7 14-2 8 5Z"/>',gift:'<rect x="4" y="10" width="16" height="11" rx="1"/><path d="M3 6h18v4H3zM12 6v15M12 6C3-1 4 7 12 6c9-7 8 1 0 0Z"/>',star:'<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',sparkles:'<path d="m12 2 2 7 7 3-7 3-2 7-2-7-7-3 7-3Z"/>'};return icons[kind]?'<span class="v3-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">'+icons[kind]+'</svg></span>':'';}
 function stepBar(index) {
   return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
 }
@@ -207,7 +205,7 @@ function renderBasket(){
  basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
 function panel(title, subtitle, content, buttons, index=0) {
-  const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready'].includes(state.step);
+  const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
     (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
     (fixed?'<div class="v3-stage-body">':'')+
@@ -224,7 +222,7 @@ function actions(back, nextText, nextAction = 'next') {
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
+    '<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
 }
 function intro() {
   hideBasket();root.innerHTML = '<section class="v3-intro-screen">' +
@@ -269,7 +267,7 @@ function renderAtelie() {
     '<button type="button" class="v3-choice '+(item.code===state.ateliePackage?'is-selected':'')+
       '" data-action="atelie-package" data-value="'+clean(item.code)+'" aria-pressed="'+(item.code===state.ateliePackage)+'">'+
       '<span class="v3-choice-copy"><strong>'+clean(item.name)+'</strong><small>'+clean(item.shortDescription)+'</small>'+
-      '<span class="v3-price">'+(item.purchaseAvailable?money(item.priceCents):'Consultar detalhes')+'</span></span><span class="v3-choice-check" aria-hidden="true"></span></button>'
+      '<span class="v3-price">'+(item.purchaseAvailable?money(item.priceCents):'Consultar detalhes')+'</span></span></button>'
   ).join('');
   panel('Sua festa, com tudo combinando',
     'Artes digitais personalizadas para todos os detalhes da festa.',
@@ -318,7 +316,7 @@ function renderFormats(){
  const codes=formatCodes().filter(code=>getProduct(code));
  const cards=codes.map(code=>{
   const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
-  return '<article class="v3-format-card"><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'">'+formatVisual(code)+'<span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span><span class="v3-arrow" aria-hidden="true">›</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+  return '<article class="v3-format-card"><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
  }).join('');
  panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
 }
@@ -328,10 +326,10 @@ function renderScenes() {
  const product=currentProduct();
  if(!product||product.pricingMode!=='scene_count'){state.step='extras';render();return;}
  const options=product.variants.filter(v=>Number.isInteger(Number(v.sceneCount))&&Number(v.sceneCount)>0).sort((a,b)=>a.sceneCount-b.sceneCount);
- const preset=(n,title,description)=>{const v=options.find(x=>Number(x.sceneCount)===n);return v?'<button type="button" class="v3-choice v3-duration-card" data-action="variant" data-value="'+clean(v.code)+'" data-scenes="'+n+'">'+durationVisual(n)+'<span class="v3-choice-copy"><strong>'+title+'</strong><small>'+n+' cenas · '+description+'</small><span class="v3-price">Total '+money(v.priceCents)+'</span></span><span aria-hidden="true" class="v3-arrow">›</span></button>':'';};
+ const preset=(n,title,description)=>{const v=options.find(x=>Number(x.sceneCount)===n);return v?'<button type="button" class="v3-choice v3-duration-card" data-action="variant" data-value="'+clean(v.code)+'" data-scenes="'+n+'"><span class="v3-choice-copy"><strong>'+title+'</strong><small>'+n+' cenas · '+description+'</small><span class="v3-price">Total '+money(v.priceCents)+'</span></span></button>':'';};
  const extra=customScenes?'<div class="v3-custom-scenes"><label for="v3-scene-select">Quantidade de cenas</label><select class="v3-at-input" id="v3-scene-select"><option value="">Escolha a quantidade</option>'+options.map(v=>'<option value="'+clean(v.code)+'" '+(state.variantCode===v.code?'selected':'')+'>'+Number(v.sceneCount)+(Number(v.sceneCount)===1?' cena':' cenas')+' · Total '+money(v.priceCents)+'</option>').join('')+'</select><button type="button" class="v3-btn v3-btn-primary" data-action="custom-scenes-confirm">Escolher esta duração</button></div>':'';
  panel('Qual tamanho de história você quer?','A abertura já está incluída. Os valores são do convite completo.',
- '<div class="v3-choices-stack">'+preset(3,'Curtinho e encantador','Mais direto')+preset(6,'Uma história completa','Mais momentos e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-duration-visual v3-custom-visual" aria-hidden="true">✦</span><span class="v3-choice-copy"><strong>Quero escolher</strong><small>Defina a quantidade de cenas.</small></span><span class="v3-arrow" aria-hidden="true">'+(customScenes?'−':'+')+'</span></button>'+extra+'</div>',actions(true,'',null),3);
+ '<div class="v3-choices-stack">'+preset(3,'Curtinho e encantador','Mais direto')+preset(6,'Uma história completa','Mais momentos e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-choice-copy"><strong>Quero escolher</strong><small>Defina a quantidade de cenas.</small></span></button>'+extra+'</div>',actions(true,'',null),3);
 }
 function availableGroups() {
   return ADDON_GROUPS.filter(item => {
@@ -351,7 +349,7 @@ function renderExtras(){
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
   const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents)+(selected.length?' · Retirar':' · Adicionar'):selected.length?'+ '+money(price)+' · Alterar':'Ver opções';
-  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action">'+text+(direct?'':' ›')+'</span></button>';
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action">'+text+'</span></button>';
  }).join('');
  const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
  panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
@@ -386,17 +384,22 @@ function linesHtml() {
 }
 function offerHtml() {
   if (!offer || state.offerFinished) return '';
-  return '<div class="v3-notice"><span class="v3-eyebrow">Uma sugestão que combina com seu pedido</span>' +
-    '<strong>' + clean(offer.title) + '</strong><p>' + clean(offer.description) + '</p>' +
-    '<p><b>' + (offer.delta >= 0 ? 'Por mais ' + money(offer.delta) : 'Economize ' + money(-offer.delta)) + '</b> no total do pedido.</p>' +
+  return '<div class="v3-modal-card v3-offer-card" role="dialog" aria-modal="true" aria-labelledby="v3-offer-title" tabindex="-1"><span class="v3-eyebrow">Uma sugestão para o seu convite</span>' +
+    '<h2 id="v3-offer-title">' + clean(offer.title) + '</h2><p>' + clean(offer.description) + '</p>' +
+    '<div class="v3-offer-price">' + (offer.delta === 0 ? 'Sem acréscimo' : offer.delta > 0 ? 'Por mais ' + money(offer.delta) : 'Economize ' + money(-offer.delta)) + '</div><p class="v3-mini">No total do pedido. A escolha é opcional.</p>' +
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="dismiss-offer">Agora não</button>' +
     '<button class="v3-btn v3-btn-primary" type="button" data-action="accept-offer">Quero adicionar</button></div></div>';
 }
 function renderReview() {
   panel('Seu convite', 'Confira antes de adicionar ao carrinho.',
-    linesHtml() + priceBar() + offerHtml(),
+    linesHtml() + priceBar(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
+}
+function openOfferModal(){
+  const html=offerHtml();if(!html||!modalRoot.hidden)return;
+  modalRoot.innerHTML=html;modalRoot.hidden=false;
+  modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 function cartDateHtml(){
   if(!cartQuote||cartError||!state.cartItems.length)return '';
@@ -460,7 +463,7 @@ function renderCart() {
     const product=getProduct(item.productCode);
     const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
     const upgrade=priced?.upgradeSuggestion;
-    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade" data-value="'+i+'">Trocar pacote</button></div>':'';
+    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade-preview" data-value="'+i+'">Ver sugestão</button></div>':'';
     return '<article class="v3-cart-item"><div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
       (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
       (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
@@ -507,12 +510,15 @@ function render() {
     case 'format': renderFormats(); break;
     case 'scenes': renderScenes(); break;
     case 'extras': renderExtras(); break;
-    case 'review': renderReview(); break;
+    case 'review': renderReview();openOfferModal(); break;
     case 'cart': renderCart(); break;
     default: state.step='event';renderEvent();
   }
 }
 function modalClose() {
+  if(modalRoot.querySelector('.v3-offer-card')&&offer&&!state.offerFinished){
+    state.dismissed.push(offer.id);state.offerFinished=true;offer=null;save();
+  }
   extraFlow=null;
   modalRoot.hidden = true;
   modalRoot.innerHTML = '';
@@ -699,7 +705,7 @@ async function handleStoreClick(event) {
       modalClose();await go('extras');return;
     }
     if(action==='dismiss-offer'){
-      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;render();return;
+      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;modalClose();render();return;
     }
     if(action==='accept-offer'){
       if(!offer)return;
@@ -711,7 +717,7 @@ async function handleStoreClick(event) {
         if(item.group==='moments')state.addonCodes=state.addonCodes.filter(code=>code!=='custom_filter');
         state.addonCodes.push(item.code);
       }
-      state.offerFinished=true;offer=null;await go('review');return;
+      state.offerFinished=true;offer=null;modalClose();await go('review');return;
     }
     if(action==='add-invitation'){
       if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
@@ -733,12 +739,18 @@ async function handleStoreClick(event) {
       if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
       await openCart();return;
     }
+    if(action==='cart-upgrade-preview'){
+      const i=Number(value),item=state.cartItems[i];
+      const s=cartQuote?.items?.find(x=>x.productCode===item?.productCode&&x.variantCode===item?.variantCode)?.upgradeSuggestion;
+      if(!s||cartError)return;
+      modalRoot.innerHTML='<div class="v3-modal-card v3-offer-card" role="dialog" aria-modal="true" aria-labelledby="v3-package-offer" tabindex="-1"><span class="v3-eyebrow">Uma sugestão para seu pedido</span><h2 id="v3-package-offer">Conheça o pacote '+clean(s.name)+'</h2><p>Os extras não contemplados serão mantidos.</p><div class="v3-offer-price">'+(s.savingsCents?'Economize '+money(s.savingsCents)+' antes dos descontos':'Pelo mesmo valor')+'</div><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Agora não</button><button type="button" class="v3-btn v3-btn-primary" data-action="cart-upgrade" data-value="'+i+'">Trocar pacote</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});return;
+    }
     if(action==='cart-upgrade'){
       const i=Number(value),item=state.cartItems[i];
       const suggestion=cartQuote?.items?.find(x=>x.productCode===item?.productCode&&x.variantCode===item?.variantCode)?.upgradeSuggestion;
       if(!item||!suggestion||cartError)return;
       state.cartItems[i]={productCode:suggestion.productCode,variantCode:suggestion.variantCode,addonCodes:[],extras:suggestion.extras};
-      await openCart();return;
+      modalClose();await openCart();return;
     }
     if(action==='cart-extra-start'){
       const i=Number(value),item=state.cartItems[i],extras=cartExtrasCatalog[item?.productCode]||[];if(!extras.length)return;

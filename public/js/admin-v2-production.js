@@ -21,7 +21,7 @@ const ART_STAGE_LABELS = Object.fromEntries(ATELIE_STAGES);
 
 const STATUS_OPTIONS = [
   ['', 'Todos'],
-  ['briefing_pending', 'Briefing · Ateliê'],
+  ['briefing_pending', 'Aguardando briefing'],
   ['ready_for_production', 'Prontos'],
   ['in_production', 'Em produção'],
   ['waiting_customer', 'Aguardando cliente'],
@@ -35,7 +35,7 @@ const STATUS_OPTIONS = [
 export async function renderProduction(openOrder) {
   setViewMeta(
     'Produção',
-    'Convites e identidades visuais',
+    'Convites, identidades visuais e retrospectivas',
   );
 
   viewRoot.innerHTML = `
@@ -46,6 +46,7 @@ export async function renderProduction(openOrder) {
           <option value="">Todos os serviços</option>
           <option value="convites">Convites Digitais</option>
           <option value="atelie">Identidade Visual · Ateliê</option>
+          <option value="retrospectivas">Retrospectivas</option>
         </select>
       </label>
       <label class="admin-v3-filter admin-v3-art-filter hidden" id="productionArtFilter">
@@ -105,7 +106,7 @@ export async function renderProduction(openOrder) {
   const serviceControl = document.getElementById('productionService');
   const stageControl = document.getElementById('productionArtStage');
   const initialService = new URLSearchParams(window.location.search).get('service');
-  if(['atelie','convites'].includes(initialService)) serviceControl.value=initialService;
+  if(['atelie','convites','retrospectivas'].includes(initialService)) serviceControl.value=initialService;
   const initialStage = new URLSearchParams(window.location.search).get('artStage');
   if(ATELIE_STAGES.some(([code])=>code===initialStage)) stageControl.value=initialStage;
 
@@ -165,11 +166,12 @@ export async function renderProduction(openOrder) {
       return;
     }
     if(currentRequest!==requestSequence)return;
-    const orders=data.orders||[];
+    const orders=data.orders||[],v3Orders=data.v3Orders||[];
+    const modular=v3Orders.map(order=>`<article class="order-card"><div><span class="status ${statusClass(order.aggregate.status)}">${esc(order.aggregate.label)}</span><h3>${esc(order.code)} • ${esc(order.honoreeName)}</h3><div class="order-meta"><strong>${esc(order.customerName)}</strong> • festa ${dateBr(order.eventDate)}<br>${order.aggregate.deliveredServices} de ${order.aggregate.totalServices} serviços entregues</div>${order.services.map(s=>`<p><strong>${esc(s.productName)}</strong> · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.start)+' a '+dateBr(s.deliveryWindow.end):''}</p>`).join('')}</div><button class="btn btn-primary" type="button" data-open-order="${esc(order.code)}">Abrir pedido</button></article>`).join('');
 
     list.innerHTML =
-      orders.length
-        ? orders.map(
+      orders.length||v3Orders.length
+        ? modular+orders.map(
           (order) => `
             <article class="order-card">
               <div>
@@ -243,8 +245,7 @@ export async function renderProduction(openOrder) {
   serviceControl.addEventListener('change',()=>{
     stageControl.value='';
     const statusControl=document.getElementById('productionStatus');
-    if(serviceControl.value==='convites'&&statusControl.value==='briefing_pending')
-      statusControl.value='';
+
     syncService();
     load();
   });

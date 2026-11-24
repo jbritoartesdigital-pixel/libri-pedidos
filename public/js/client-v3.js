@@ -314,13 +314,39 @@ function addonCard(group) {
 function priceBar() {
   return quote ? '<div class="v3-total"><div><strong>Total até agora</strong><div><small>Calculado pelo catálogo oficial · Pix</small></div></div><b>' + money(quote.totalCents) + '</b></div>' : '';
 }
-function renderExtras() {
-  const free = INTERACTIVE.has(state.productCode)
-    ? '<div class="v3-notice"><strong>Já incluído: confirmação simples pelo WhatsApp · R$ 0,00.</strong> O convidado toca na opção, o WhatsApp abre com uma mensagem pronta, e ele só precisa tocar em Enviar. Não tem painel de convidados.</div>' : '';
-  panel('Gostaria de completar seu pedido?',
-    'Aqui você pode acrescentar artes e serviços. Tudo é opcional, e o preço aparece antes de adicionar.',
-    free + '<div class="v3-choices-stack">' + availableGroups().map(addonCard).join('') + '</div>' + priceBar(),
-    actions(true,'Conferir meu pedido'),4);
+const ADDON_QUESTIONS={
+ save_the_date:'Quer avisar a data antes de enviar o convite?',
+ reminder:'Quer lembrar seus convidados quando a festa estiver chegando?',
+ confirmation:'Como gostaria de acompanhar as confirmações?',
+ moments:'Quer guardar as fotos que seus convidados tirarem na festa?',
+ filter:'Quer um filtro de fotos personalizado com o tema da festa?'
+};
+function renderExtras(){
+ const groups=availableGroups();
+ if(!groups.length){panel('Seu convite está pronto para conferir','Nenhum adicional disponível para este formato.',priceBar(),actions(true,'Conferir meu pedido'),3);return;}
+ const i=Math.max(0,Math.min(groups.length-1,Number(state.addonQuestion)||0));
+ state.addonQuestion=i;
+ const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
+ const variants=(catalog.addons||[]).filter(a=>a.group===group);
+ const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · sem custo</strong><p>O convidado abre uma mensagem pronta e envia pelo WhatsApp. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
+ const choiceList=variants.map(a=>choice(a.code,a.name,group==='confirmation'?'Confirmação pelo próprio convite, com painel de respostas.':a.config?.photoLimit?'Até '+a.config.photoLimit+' fotos':a.code.endsWith('_animated')?'Com movimento':a.code.endsWith('_static')?'Sem movimento':'',selected?.code,'guided-addon',a.priceCents)).join('');
+ panel(ADDON_QUESTIONS[group]||g[1],g[2],
+  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">'+choiceList+choice(group,group==='confirmation'?'Continuar com WhatsApp':'Agora não','Sem adicionar custo',selected?null:group,'guided-skip')+'</div></div>'+priceBar(),
+  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+}
+async function advanceGuided(group,code){
+ const groups=availableGroups(),index=groups.findIndex(g=>g[0]===group);
+ if(index<0)return;
+ if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
+ const before=[...state.addonCodes],dismissed=[...state.dismissed];
+ state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
+ if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);}
+ else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
+ try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
+ state.offerFinished=false;
+ const next=availableGroups().findIndex(g=>groups.slice(index+1).some(old=>old[0]===g[0]));
+ if(next<0){state.addonQuestion=0;await go('review');}
+ else{state.addonQuestion=next;render();window.scrollTo({top:0,behavior:'auto'});}
 }
 function linesHtml() {
   let all = [
@@ -598,11 +624,14 @@ root.addEventListener('click', async event => {
       const product=getProduct(value);if(!product)return;
       state.productCode=value;
       state.variantCode=product.pricingMode==='scene_count'?'':product.variants[0]?.code||'';
-      state.addonCodes=[];
+      state.addonCodes=[];state.addonQuestion=0;
       state.offerFinished=false;state.dismissed=[];
       quote=null;render();return;
     }
     if(action==='variant'){state.variantCode=value;state.offerFinished=false;render();return;}
+    if(action==='guided-addon'||action==='guided-skip'){button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
+    if(action==='guided-back'){if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
+    if(action==='guided-finish'){state.addonQuestion=0;await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

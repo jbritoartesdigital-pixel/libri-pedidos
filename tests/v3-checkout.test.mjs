@@ -4,6 +4,7 @@ import {database,day,providerMock} from './helpers.mjs';
 import worker from '../src/index.js';
 import {previewV3CartDelivery} from '../src/lib/v3-cart-delivery.js';
 import {getV3CheckoutTerms} from '../src/lib/v3-checkout.js';
+import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
 import {randomToken} from '../src/lib/http.js';
 const items=[{productCode:'retrospectiva_070',variantCode:'retrospectiva_070_default',addonCodes:[]}];
 const base={items,eventType:'birthday',paymentMethod:'pix'};
@@ -51,4 +52,24 @@ test('checkout creates one order and one provider charge and refuses changed ret
   const wrongOwner=await call({...body,customer:{...body.customer,whatsapp:'5561888888888'}});
   assert.equal(wrongOwner.status,409);
   assert.equal(mp.posts,1);
+});
+
+test('unified checkout accepts standalone Atelie with extras, preserving unit quantities',async t=>{
+  const {DB,body,env,call}=await setup();
+  await setAtelieSaleStatus(DB,'essencia',true);
+  const mp=providerMock(t);
+  const items=[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[],extras:[{code:'atelie_pose',quantity:3}]}];
+  const preview=await previewV3CartDelivery(DB,{...body,items});
+  const terms=await getV3CheckoutTerms(DB,{...body,items});
+  const payload={...body,items,expectedTotalCents:preview.quote.totalCents,deliveryWindow:preview.delivery.options[0],atelieTermsAccepted:true,atelieTermsVersion:terms.services[0].version};
+  const response=await call(payload);
+  assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.totalCents,21900);
+  assert.equal(mp.posts,1);
+  const extra=DB.sqlite.prepare("SELECT quantity,unit_price_cents,points_units FROM v2_order_items WHERE item_code='atelie_pose'").get();
+  assert.equal(extra.quantity,3);
+  assert.equal(extra.unit_price_cents,2000);
+  assert.equal(extra.points_units,50);
+  assert.equal(DB.sqlite.prepare('SELECT points_units FROM v3_order_services').get().points_units,450);
 });

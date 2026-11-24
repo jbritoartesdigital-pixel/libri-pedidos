@@ -463,3 +463,6 @@ Refinamento pós-merge: cards de vidro escuro, tipografia system-ui, sem ícones
 
 CHECKPOINT 24/11/2026 | V76 loja | correção visual pós-deploy
 PR #148 publicado no run 45466620377, mas interface recusada pela usuária: tipografia, cores fora da paleta, falta de translucidez, ícones e rolagem do contêiner. Novo ajuste: Manrope variável local (OFL), vidro rosé fumê com transparência real e fundo vinho/champagne, remoção dos ícones e das ilustrações decorativas, viewport travado nas etapas guiadas e scroll interno, sugestão de aumento de ticket em modal animado opcional com delta de preço real. Revisar CI e publicação; nenhuma mudança de regras comerciais ou agenda.
+
+CHECKPOINT 24/11/2026 | V77 CSS da loja | fix/v3-glass-apenas-cards-20261124
+Usuária esclareceu que vidro escuro e cor devem ficar apenas nos pequenos cards de escolha com texto; fundo e painel principal devem conservar a aparência clara original. Removidos fundo escuro do painel e overrides de cores do título, navegação e progresso. Reequilibrado vidro fumê nos cards para contraste com fundo claro. Preservados Manrope, viewport fixo, progresso inferior, ícones removidos, modal animado e consulta de data. CSS cache v77, JS inalterado. Teste de navegador verifica separação painel/card. CI e conferência visual pendentes; não publicado.

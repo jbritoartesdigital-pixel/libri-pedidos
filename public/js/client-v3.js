@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=96';
+import { mountV3Checkout } from './client-v3-checkout.js?v=97';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -221,10 +221,11 @@ function renderBasket(){
 }
 function panel(title, subtitle, content, buttons, index=0) {
   const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
+  const stageLabel={event:'Sua celebração','event-subtype':'Sua celebração',creation:'Escolha seu serviço',intent:'Seu convite',format:'Formato do convite',scenes:'Duração da história',atelie:'Libri Ateliê','atelie-detail':'Detalhes do pacote',unready:'Retrospectivas',extras:'Personalize seu pedido',review:'Confira suas escolhas',cart:'Sua sacola'}[state.step]||'';
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
     (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
     (fixed?'<div class="v3-stage-heading">':'')+
-    '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
+    (stageLabel?'<span class="v97-stage-label">'+clean(stageLabel)+'</span>':'')+'<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
     (fixed?'</div><div class="v3-stage-body">':'')+
     content + (fixed?'</div>':'') + (buttons || '') +
     (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
@@ -238,7 +239,7 @@ function actions(back, nextText, nextAction = 'next') {
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    '<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
+    (action==='creation'?'<span class="v97-card-overline">'+({invitation:'PARA CONVIDAR',identity:'PARA PERSONALIZAR',retrospective:'PARA EMOCIONAR'}[value]||'')+'</span>':'')+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
 }
 function intro() {
   hideBasket();root.innerHTML = '<section class="v3-intro-screen">' +
@@ -262,13 +263,13 @@ function renderEventSubtype(){
 }
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Você pode contratar mais de um serviço.',
+    'Escolha por onde começar. Você pode combinar serviços no mesmo pedido.',
     '<div class="v3-choices-stack">' +
-    choice('invitation','Convite digital','Um convite personalizado para enviar aos convidados pelo celular.',state.creation,'creation') +
+    choice('invitation','Convite digital','Convites em vídeo ou interativos, feitos no tema da sua festa.',state.creation,'creation') +
     choice('identity','Identidade visual',
-      'Artes da festa com o nome, as cores e o tema combinando em cada detalhe.',state.creation,'creation') +
+      'Nome, cores e artes personalizadas para deixar tudo combinando.',state.creation,'creation') +
     choice('retrospective','Retrospectiva',
-      'Transforme fotos e vídeos especiais em uma homenagem para exibir na festa.',state.creation,'creation') +
+      'Um vídeo com suas fotos e lembranças, para emocionar na festa.',state.creation,'creation') +
     '</div>',
     actions(true,'',null),1);
 }
@@ -329,7 +330,7 @@ function formatCodes() {
   return codes;
 }
 // Illustrative demonstrations of how each format behaves, not portfolio artwork.
-const formatShort={cinematic_video:'Uma história animada personalizada. Envie o vídeo pronto pelo WhatsApp.',cinematic_interactive:'A mesma história animada, em um convite que o convidado abre pelo celular. No final, ele pode acessar a localização, confirmar presença e consultar presentes, sem procurar informações nas mensagens.',interactive_essential:'Uma arte personalizada com os dados da festa. O convidado abre pelo celular e pode acessar localização, confirmação de presença e presentes.',interactive_gif:'A arte do convite ganha movimento em pequenos detalhes. Os convidados acessam as informações da festa pelo próprio convite.',interactive_animated:'Uma abertura animada revela a arte personalizada da festa. Depois, o convidado acessa as informações e os atalhos do convite.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
+const formatShort={cinematic_video:'Uma história animada personalizada. Você envia o vídeo pronto pelo WhatsApp.',cinematic_interactive:'História animada + convite para acessar localização, confirmar presença e consultar presentes.',interactive_essential:'Arte da festa com acesso à localização, confirmação de presença e presentes.',interactive_gif:'Arte com detalhes em movimento e atalhos para as informações da festa.',interactive_animated:'Uma abertura animada revela o convite com os atalhos da festa.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
 function formatVisual(code){
  const isFilm=SCENE_PRODUCTS.has(code),interactive=code!=='cinematic_video';
  return '<span aria-hidden="true" class="v3-format-demo v3-demo-'+clean(code)+'"><span class="v3-demo-phone"><span class="v3-demo-screen">'+(code==='book'?'<i class="v3-demo-page"></i>':isFilm?'<i class="v3-demo-film"></i><i class="v3-demo-play"></i><i class="v3-demo-progress"></i>':'<i class="v3-demo-art"></i><i class="v3-demo-title"></i><i class="v3-demo-lines"></i>')+(interactive?'<span class="v3-demo-buttons"><i></i><i></i><i></i></span>':'')+(code==='interactive_animated'?'<i class="v3-demo-cover"></i>':'')+'</span></span></span>';
@@ -338,7 +339,8 @@ function renderFormats(){
  const codes=formatCodes().filter(code=>getProduct(code));
  const cards=codes.map(code=>{
   const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
-  return '<article class="v3-format-card"><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+  const label=code==='cinematic_video'?'VÍDEO PARA ENVIAR':code==='cinematic_interactive'?'EXPERIÊNCIA INTERATIVA':code==='interactive_essential'?'ARTE PERSONALIZADA':code==='interactive_gif'?'ARTE EM MOVIMENTO':code==='interactive_animated'?'ABERTURA ANIMADA':'CONVITE INTERATIVO';
+  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
  }).join('');
  panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
 }
@@ -370,11 +372,11 @@ function renderExtras(){
  const cards=groups.map(g=>{
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
-  const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents)+(selected.length?' · Retirar':' · Adicionar'):selected.length?'+ '+money(price)+' · Alterar':'Ver opções';
-  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action">'+text+'</span></button>';
+  const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents):selected.length?'+ '+money(price):'A partir de '+money(Math.min(...variants.map(a=>Number(a.priceCents))));const actionText=selected.length?(direct?'Retirar':'Alterar'):direct?'Adicionar':'Ver opções';
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
  }).join('');
  const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
- panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
+ panel('Quer acrescentar algo ao seu convite?','Escolha apenas o que faz sentido para sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
 let guidedBusy=false;
@@ -497,7 +499,7 @@ function renderCart() {
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDateHtml(),
+    '<div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }

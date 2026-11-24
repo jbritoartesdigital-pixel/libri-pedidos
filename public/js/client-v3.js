@@ -59,7 +59,7 @@ const money = cents => new Intl.NumberFormat('pt-BR', {style:'currency',currency
 const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-let catalog = null, quote = null, offer = null, ateliePackages = [];
+let catalog = null, quote = null, offer = null, ateliePackages = [], retrosPackages = [];
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -190,18 +190,28 @@ function renderEvent() {
 }
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Escolha uma das duas linhas da Libri. As duas fazem parte do mesmo aplicativo.',
+    'Escolha o que você quer criar. Os serviços pertencem ao mesmo aplicativo.',
     '<div class="v3-choices-stack">' +
     choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
     choice('identity','Identidade Visual para Festas | Libri Ateliê',
       'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
-    '</div><p class="v3-mini" style="margin-top:18px"><button type="button" class="v3-btn v3-btn-text" data-action="retrospective-info">Conhecer retrospectivas (em preparação)</button></p>',
+    choice('retrospective','Retrospectiva de Fotos e Vídeos',
+      'Uma homenagem em vídeo com suas lembranças, músicas e dedicatória. Você escolhe conforme a quantidade de fotos e vídeos.',state.creation,'creation') +
+    '</div>',
     actions(true,'Continuar'),1);
 }
 function renderUnready() {
-  panel('Retrospectiva','O serviço de retrospectivas continua planejado, mas seus pacotes ainda não foram integrados ao novo catálogo.',
-    '<div class="v3-notice">Enquanto isso, os convites disponíveis continuam na loja atual, sem alterações.</div>',
-    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button><a href="/pedido" class="v3-btn v3-btn-secondary">Loja atual</a></div>',1);
+  const cards=retrosPackages.map(item=>
+    '<div class="v3-line"><strong>'+clean(item.name)+'</strong>'+
+    '<p>Até '+Number(item.maxPhotos)+' fotos e '+Number(item.maxVideos)+' vídeos'+
+    (item.captionsIncluded?', com legendas':'')+'.</p>'+
+    '<p class="v3-mini">Prazo mínimo: '+Number(item.minimumProductionDays)+' dias corridos após briefing completo.</p></div>'
+  ).join('');
+  panel('Retrospectivas','Transformamos fotos, vídeos, músicas e lembranças em uma homenagem audiovisual personalizada.',
+    '<div class="v3-notice"><strong>Pacotes identificados no catálogo:</strong> ainda sem contratação direta. Não há cobrança automática.</div>'+
+    '<div class="v3-lines">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+
+    '<p class="v3-mini">Os valores e limites definitivos serão confirmados no fechamento comercial, antes da ativação do checkout e do envio de materiais.</p>',
+    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
 function renderAtelie() {
   const cards = ateliePackages.map(item =>
@@ -490,7 +500,6 @@ root.addEventListener('click', async event => {
     if(action==='retry'){await init();return;}
     if(action==='event'){state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
-    if(action==='retrospective-info'){state.creation='retrospective';await go('unready');return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='atelie-buy'){
@@ -570,12 +579,14 @@ document.addEventListener('keydown', event => {
 });
 async function init() {
   root.setAttribute('aria-busy','true');
-  const [result, atelie] = await Promise.all([
+  const [result, atelie, retrospective] = await Promise.all([
     request('/api/v2/catalog'),
-    request('/api/v2/atelie/catalog').catch(()=>({packages:[]}))
+    request('/api/v2/atelie/catalog').catch(()=>({packages:[]})),
+    request('/api/v3/retrospectivas/catalog').catch(()=>({packages:[]}))
   ]);
   catalog=result.catalog;
   ateliePackages=atelie.packages || [];
+  retrosPackages=retrospective.packages || [];
   if(state.ateliePackage && !ateliePackages.some(p=>p.code===state.ateliePackage)) state.ateliePackage='';
   if(!catalog?.products?.length)throw new Error('O catálogo está indisponível. Confira a loja atual.');
   // Um código de produto desativado nunca deve ficar selecionado em rascunhos antigos.

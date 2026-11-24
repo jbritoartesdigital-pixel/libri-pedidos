@@ -214,3 +214,96 @@ html body .v3-panel--guided .v3-choice .v3-price,html body .v3-panel--guided .v3
  html body .v3-panel--guided.v3-stage-creation .v3-choices-stack{min-height:100%;grid-template-rows:minmax(150px,1.15fr) minmax(135px,1fr);grid-auto-rows:auto}
  html body .v3-panel--guided.v3-stage-creation .v3-choice:first-child{min-height:150px}
 }
+
+
+/* V105 — one editorial hierarchy, based on the approved Curtinho cards.
+   Large choices use Georgia; functional lists, copy, money and controls use Manrope. */
+html body .v3-main :is(.v3-panel--guided,.v3-stage-cart,.v97-checkout) .v3-title{
+ font-weight:700!important;letter-spacing:-.035em;line-height:1.12;text-wrap:balance;overflow-wrap:normal;word-break:normal
+}
+html body .v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-choice-copy strong{
+ font:700 clamp(21px,5.3vw,29px)/1.12 var(--store-serif)!important;
+ letter-spacing:-.018em!important;text-transform:uppercase;text-wrap:balance;word-break:normal;overflow-wrap:normal;
+ max-width:100%;color:var(--store-ink)
+}
+html body .v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype) .v3-choice-copy strong{
+ font-size:clamp(17px,4.5vw,24px)!important
+}
+html body .v3-panel--guided .v3-choice-copy small{
+ font:400 13px/1.45 var(--store-sans);text-wrap:pretty;max-width:42ch;overflow-wrap:break-word
+}
+html body .v3-panel--guided .v3-choice-copy{min-width:0;max-width:100%;gap:6px}
+html body .v3-panel--guided .v97-card-overline{font-size:10px;letter-spacing:.12em}
+html body .v3-panel--guided :is(.v3-grid,.v3-choices-stack,.v3-format-list,.v3-optional-list){gap:9px}
+html body .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choice{
+ min-height:104px;height:auto;padding:15px 14px;gap:6px
+}
+html body .v3-panel--guided.v3-stage-format .v3-format-card{padding:14px 12px 12px;height:auto}
+html body .v3-panel--guided.v3-stage-format .v3-format-select{padding:3px 0;min-height:0}
+html body .v3-panel--guided.v3-stage-format .v3-format-card .v3-example-link{margin-top:7px}
+html body .v3-panel--guided.v3-stage-extras .v3-optional-card{grid-template-columns:minmax(0,1fr) minmax(100px,auto);gap:9px;padding:11px 12px;min-height:70px}
+html body .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{font:750 14px/1.25 var(--store-sans)!important;letter-spacing:0;overflow-wrap:break-word;text-wrap:pretty}
+html body .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy small{font:400 12px/1.4 var(--store-sans)}
+html body .v3-panel--guided .v3-optional-action{min-width:0;white-space:normal;text-align:right}
+html body .v3-panel--guided .v3-optional-action b{font:750 12px/1.25 var(--store-sans)}
+html body .v3-panel--guided .v97-extra-cta{white-space:normal;text-align:center}
+html body .v3-modal-root .v3-modal-card h2{font-weight:700;text-wrap:balance}
+html body .v3-main .v97-checkout .v3-checkout-block h2{font-weight:700}
+/* Keep the approved roomy three-card proportion, without a large empty gap on short lists. */
+@media(max-width:959px) and (min-height:700px){
+ html body:has(.v3-panel--guided) .v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-stage-body{justify-content:safe center;padding-top:10px}
+ html body .v3-panel--guided:is(.v3-stage-creation,.v3-stage-scenes,.v3-stage-atelie) .v3-choice{min-height:108px;padding:15px 14px}
+ html body .v3-panel--guided.v3-stage-intent .v3-choice{min-height:120px}
+ html body .v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype) .v3-choice{min-height:92px;padding:12px 8px}
+}
+@media(max-height:699px){
+ html body .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choice{min-height:84px;padding:10px}
+ html body .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-choice-copy strong{font-size:21px!important}
+ html body .v3-panel--guided .v3-choice-copy small{font-size:12px}
+}
+@media(min-width:960px) and (min-height:690px){
+ html body .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choice{min-height:124px;padding:20px}
+ html body .v3-panel--guided.v3-stage-creation .v3-choice:first-child{min-height:150px}
+ html body .v3-panel--guided .v3-choice-copy small{font-size:14px}
+ html body .v3-panel--guided.v3-stage-format .v3-format-card{padding:18px;min-height:190px}
+ html body .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{font-size:16px!important}
+}
+@media(max-width:350px){
+ html body .v3-panel--guided.v3-stage-extras .v3-optional-card{grid-template-columns:minmax(0,1fr);gap:6px}
+ html body .v3-panel--guided .v3-optional-action{display:flex;align-items:center;justify-content:space-between}
+}
+/* V105 cart: simple list, secondary details on demand, persistent final total. */
+html body .v3-main .v3-stage-cart{max-width:840px;margin-inline:auto;width:100%}
+html body .v3-main .v3-stage-cart>.v97-stage-label{margin:0}
+html body .v3-main .v3-stage-cart>.v3-text{font:400 13px/1.45 var(--store-sans);color:var(--store-muted);margin:0 0 6px}
+html body .v3-main .v3-stage-cart>.v3-stage-progress{order:5;flex:none;margin:0;padding-top:4px}
+html body .v3-stage-cart .v3-cart-scroll{padding:3px 0 8px}
+html body .v3-stage-cart .v97-cart-layout{display:block}
+html body .v3-stage-cart .v3-cart-list{gap:9px}
+html body .v3-stage-cart .v3-cart-item{display:grid;gap:6px;padding:14px;border:1px solid var(--store-line);border-radius:16px;background:var(--store-glass);box-shadow:var(--store-shadow)}
+.v105-cart-item-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start}
+.v105-cart-item-copy{display:grid;gap:4px;min-width:0}
+.v105-cart-family{font:700 10px/1.25 var(--store-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--store-rose)}
+.v105-cart-item-copy>strong{font:700 19px/1.22 var(--store-serif);color:var(--store-ink);overflow-wrap:break-word}
+.v105-cart-item-copy .v3-mini{font:400 12px/1.35 var(--store-sans);color:var(--store-muted);margin:0}
+.v105-cart-price{font:750 17px/1.3 var(--store-sans);white-space:nowrap;color:var(--store-rose)}
+.v105-cart-details{color:var(--store-muted);font:500 12px/1.45 var(--store-sans)}
+.v105-cart-details summary{cursor:pointer;padding:8px 0;color:var(--store-rose);font-weight:700}
+.v105-cart-details ul,.v105-cart-extras ul{margin:0 0 4px;padding-left:18px;font-size:12px;color:var(--store-muted)}
+html body .v3-stage-cart .v3-cart-edit-actions{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:16px;border-top:1px solid var(--store-line);padding-top:3px}
+html body .v3-stage-cart :is(.v3-cart-edit-actions,.v105-cart-extras,.v105-cart-upgrade) .v3-btn{border:0;background:none;color:var(--store-rose);padding:7px 0;min-height:36px;font:700 12px/1.3 var(--store-sans);box-shadow:none}
+.v105-cart-upgrade{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:5px 0;font:500 12px/1.4 var(--store-sans);color:var(--store-muted)}
+html body .v3-stage-cart .v105-cart-more{justify-self:start;border:0;background:none;color:var(--store-rose);padding:8px 0;min-height:44px;font:700 13px/1.4 var(--store-sans);box-shadow:none}
+html body .v3-stage-cart>.v97-cart-summary{flex:none;padding:12px 14px;border:1px solid var(--store-line);border-radius:16px;background:var(--store-blush);box-shadow:none;display:grid;gap:5px}
+.v105-cart-total{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.v105-cart-total strong{display:block;font:750 14px/1.2 var(--store-sans);color:var(--store-ink)}
+.v105-cart-total small{display:block;font:400 11px/1.35 var(--store-sans);color:var(--store-muted);margin-top:3px}
+.v105-cart-total b{font:800 26px/1.15 var(--store-sans);letter-spacing:-.035em;color:var(--store-ink);white-space:nowrap}
+.v105-cart-saving{display:flex;justify-content:space-between;gap:6px;font:650 12px/1.4 var(--store-sans);color:var(--store-rose)}
+html body .v3-stage-cart>.v3-action-row .v3-btn-primary{width:100%;min-height:48px;font-size:14px}
+@media(min-width:960px){
+ html body .v3-main .v3-stage-cart{padding-inline:32px}
+ html body .v3-stage-cart .v3-cart-item{padding:17px 20px}
+ .v105-cart-item-copy>strong{font-size:23px}
+ .v105-cart-price{font-size:20px}
+}

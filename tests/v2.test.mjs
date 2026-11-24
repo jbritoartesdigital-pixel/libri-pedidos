@@ -504,9 +504,9 @@ test('customer simulation continues to briefing with direct interactive upgrade 
   assert.match(storefront, /um único link/);
   assert.match(storefront, /A confirmação avançada com lista de convidados é um adicional separado/);
   assert.match(area, /export function inputHtml/);
-  assert.ok(appShell.includes('/js/client-v2.js?v=20261124-v99'));
+  assert.ok(appShell.includes('/js/client-v2.js?v=20261124-v109'));
   assert.ok(entry.includes('./client-v2-store.js?v=20261124-v99'));
-  assert.ok(entry.includes('./client-v2-area.js?v=20261124-v99'));
+  assert.ok(entry.includes('./client-v2-area.js?v=20261124-v109'));
 });
 
 test("briefing reference photos appear in both real and simulated children\u0027s style choices", () => {
@@ -701,7 +701,7 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1, V2 and disabled V3 staging intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 65);
+  const DB = database(); assert.equal(DB.migrationCount, 66);
   assert.ok(DB.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v3_store_journey_names'").get());
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',

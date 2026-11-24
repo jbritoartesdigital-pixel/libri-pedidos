@@ -34,13 +34,15 @@ test('V3 stores one parent with individual snapshots and a single full-payment t
   assert.equal(count('v2_order_terms_acceptances'),1);
   assert.equal(count('v2_briefings'),1);
   const price=db.sqlite.prepare('SELECT * FROM v2_order_pricing').get();
-  assert.equal(price.total_cents,19400);
+  assert.equal(price.total_cents,18430);
+  assert.equal(price.combo_discount_cents,970);
   assert.equal(price.deposit_percent,100);
   assert.equal(price.deposit_cents,price.total_cents);
   assert.equal(price.balance_cents,0);
   const lines=db.sqlite.prepare('SELECT * FROM v3_order_services ORDER BY family').all();
   assert.deepEqual(lines.map(x=>x.family),['convite','identidade_visual']);
   assert.deepEqual(lines.map(x=>x.points_units),[100,300]);
+  assert.deepEqual(lines.map(x=>x.discount_cents),[175,795]);
   assert.equal(JSON.parse(lines[1].commercial_snapshot_json).variant.config.atelie.includedMascotPoses,3);
   assert.ok(lines.every(x=>x.briefing_status==='locked'));
   assert.equal(count('v2_payments'),0);

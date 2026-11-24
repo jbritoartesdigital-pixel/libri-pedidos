@@ -14,6 +14,7 @@ import { planV2AllocationForWindow } from './v2-agenda.js';
 import { createV2AdminNotification } from './v2-notifications.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
 import { openPaidCapacityReview } from './v2-capacity-review.js';
+import {isV3PaymentSnapshot,assertV3ConfirmedPayment,v3PaidServiceUnlockStatement} from './v3-paid-services.js';
 
 const MP_API_BASE =
   'https://api.mercadopago.com';
@@ -1917,6 +1918,8 @@ async function syncMercadoPagoOrderUnlocked(
     paymentStatus
     === 'approved'
   ) {
+    const combinedV3=isV3PaymentSnapshot(localPayment.pricing_snapshot_json);
+    if(combinedV3)await assertV3ConfirmedPayment(env.DB,localPayment);
     let financeReconciliation = {
       reconciled:
         false,
@@ -1973,6 +1976,7 @@ async function syncMercadoPagoOrderUnlocked(
       if (localPayment.briefing_status === 'locked') {
         await openPaidCapacityReview(env.DB, localPayment.order_id, 'mercado_pago');
       }
+      if(combinedV3)await v3PaidServiceUnlockStatement(env.DB,localPayment.order_id,nowIso()).run();
       await createV2AdminNotification(env, {
         eventCode: 'PAYMENT_CONFIRMED', orderId: localPayment.order_id,
         title: 'Pagamento recebido; dados liberados, revisar capacidade',
@@ -2097,6 +2101,7 @@ async function syncMercadoPagoOrderUnlocked(
           localPayment
             .order_id,
         ),
+      ...(combinedV3?[v3PaidServiceUnlockStatement(env.DB,localPayment.order_id,nowIso())]:[]),
     ]);
 
     return {

@@ -1,7 +1,7 @@
 import {trackStoreStage} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
-import { mountV3Checkout } from './client-v3-checkout.js';
+import { mountV3Checkout } from './client-v3-checkout.js?v=74';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -207,10 +207,13 @@ function renderBasket(){
  basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
 function panel(title, subtitle, content, buttons, index=0) {
-  root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
-    '' +
+  const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready'].includes(state.step);
+  root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
+    (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
+    (fixed?'<div class="v3-stage-body">':'')+
     '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
-    content + (buttons || '') + '</section>';
+    content + (fixed?'</div>':'') + (buttons || '') +
+    (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
   root.setAttribute('aria-busy','false');renderBasket();
 }
 function actions(back, nextText, nextAction = 'next') {

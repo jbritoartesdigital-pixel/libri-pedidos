@@ -1,7 +1,7 @@
 // INTERNAL ONLY: no HTTP entry point until modular briefing, admin and
 // promotions are compatible. Reuses V2 capacity and provider idempotency.
 import {createCapacityHold,V2CheckoutError} from './v2-checkout.js';
-import {createMercadoPagoCheckout} from './v2-mercadopago.js';
+import {createMercadoPagoCheckout,syncMercadoPagoOrder,cancelMercadoPagoOrder} from './v2-mercadopago.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
@@ -66,5 +66,36 @@ export async function prepareV3Payment(request,env,orderId){
       paymentMethod:row.payment_method,amountDueNowCents:row.total_cents,customerEmail:row.email});
     return {ok:true,recovered:!!liveHold,orderCode:row.order_code,providerOrderId:checkout.providerOrderId,
       checkoutUrl:checkout.checkoutUrl,totalCents:row.total_cents};
+  });
+}
+
+// Internal reconciliation only: a replacement charge is NOT issued here.
+// Unknown provider responses and orphaned holds stay blocked for manual review.
+export async function reconcileV3Payment(env,orderId){
+  if(!Number.isSafeInteger(orderId)||orderId<=0)fail('Pedido inválido.','v3_order_invalid');
+  const db=env.DB;
+  return withV2PaymentLock(db,orderId,async()=>{
+    const order=await db.prepare(`SELECT o.status FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
+      WHERE o.id=?`).bind(orderId).first();
+    if(!order)fail('Pedido combinado não encontrado.','v3_order_missing');
+    const rows=(await db.prepare(`SELECT provider_order_id,status FROM v2_payments
+      WHERE order_id=? AND provider='mercado_pago' ORDER BY id DESC`).bind(orderId).all()).results||[];
+    const hold=await db.prepare('SELECT status,expires_at FROM v2_checkout_holds WHERE order_id=? ORDER BY id DESC LIMIT 1').bind(orderId).first();
+    if(rows.length!==1||!rows[0].provider_order_id)
+      return {ok:false,needsReview:true,reason:rows.length?'ambiguous_payment':'provider_payment_unknown',canRetry:false};
+    const providerId=rows[0].provider_order_id;
+    let remote=await syncMercadoPagoOrder(env,providerId,{lock:false});
+    if(remote.approved)return {ok:true,alreadyPaid:true,capacityReview:!!remote.capacityReview,canRetry:false};
+    if(remote.paymentStatus==='pending'){
+      if(hold?.status==='active'&&hold.expires_at>nowIso()&&order.status!=='cancelled')
+        return {ok:true,pending:true,canRetry:false};
+      // A cancellation can race a payment approval. Always query the provider
+      // again, including when the cancel request itself fails.
+      try{await cancelMercadoPagoOrder(env,providerId);}catch{}
+      remote=await syncMercadoPagoOrder(env,providerId,{lock:false});
+      if(remote.approved)return {ok:true,alreadyPaid:true,capacityReview:!!remote.capacityReview,canRetry:false};
+    }
+    const terminal=['expired','cancelled','rejected'].includes(remote.paymentStatus);
+    return {ok:terminal,needsReview:!terminal,terminal,paymentStatus:remote.paymentStatus,canRetry:false};
   });
 }

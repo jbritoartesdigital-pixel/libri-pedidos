@@ -19,6 +19,7 @@ async function access(db,token,family,write=false){
  const service=ctx.services.find(s=>s.family===family);
  if(!service)error('Serviço não contratado.',404);
  if(ctx.locked)error('Arquivos disponíveis após confirmação do pagamento.',403);
+ if(service.originals_until&&Date.now()>=Date.parse(service.originals_until))error('Prazo de armazenamento encerrado.',410);
  if(write&&(!['available','in_progress'].includes(service.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status)))error('Este briefing não permite alterar arquivos.',409);
  return ctx;
 }

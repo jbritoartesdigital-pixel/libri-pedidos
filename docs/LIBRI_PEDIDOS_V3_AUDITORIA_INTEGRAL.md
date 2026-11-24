@@ -48,3 +48,6 @@ Reconstrução V3 usa prazo de produção original e valida janela, em vez de ca
 
 ## V60 — financeiro
 Complementos conciliados exclusivamente por referência única, valor e detalhe confirmado do provedor; valores desconhecidos continuam a conciliar. Líquido e taxa efetiva (bruto menos líquido), data de aprovação verificada e rotina limitada de recuperação. Estornos ainda requerem evidência; nenhum acesso financeiro real. V59 passou Chromium ampliado. CI V60 pendente.
+
+## V61 — Estado confirmado
+V60 HEAD 99401f9c363d0c08503bceb02ef2457119ddea12, CI 45441144468 SUCCESS, inclusive Chromium e migrations. Não houve acesso a cobranças reais. PR ainda draft. Próxima prioridade: gate de publicação V3 para SHA efetivo, configuração Cloudflare/backup e ativação segura do catálogo, revisar pendências comerciais e operacionais e evidências visuais. Não publicar parcialmente.

@@ -50,16 +50,10 @@ export async function suggestV3Upgrade(db,{family,productCode,variantCode,quote,
 }
 
 async function suggestRetroUpgrade(db,{family,productCode,variantCode,quote,extras}){
-  const rows=(await db.prepare(`SELECT r.*,p.code AS product_code,v.code AS variant_code,v.price_cents AS variant_price,v.config_json
-    FROM v3_retrospective_packages r JOIN v2_products p ON p.code='retrospectiva_'||substr(r.code,7)
-    JOIN v2_product_variants v ON v.product_id=p.id AND v.code=p.code||'_default'
-    WHERE r.sale_enabled=1 AND r.scope_approved=1 AND p.active=1 AND v.active=1`).all()).results||[];
-  const packages=rows.filter(r=>{
-    if(r.variant_price!==r.price_cents)return false;
-    try{const s=JSON.parse(r.config_json).retrospective;return s.maxPhotos===r.max_photos&&s.maxVideos===r.max_videos&&s.maxTotalVideoSeconds===r.max_total_video_seconds&&s.revisionLimit===r.revision_limit&&s.captionsIncluded===Boolean(r.captions_included);}catch{return false;}
-  }).map(r=>{
+  const rows=(await db.prepare("SELECT * FROM v3_retrospective_packages WHERE scope_approved=1 AND revision_limit IS NOT NULL AND specific_terms!=''").all()).results||[];
+  const packages=rows.filter(r=>/^RETRO_(070|100|150|200|250)$/.test(r.code)).map(r=>{
     const rank=['RETRO_070','RETRO_100','RETRO_150','RETRO_200','RETRO_250'].indexOf(r.code);
-    return {productCode:r.product_code,variantCode:r.variant_code,name:r.name,priceCents:r.price_cents,
+    return {productCode:'retrospectiva_'+r.code.slice(6),variantCode:'retrospectiva_'+r.code.slice(6)+'_default',name:r.name,priceCents:r.price_cents,
       maxPhotos:r.max_photos,maxVideos:r.max_videos,maxTotalVideoSeconds:r.max_total_video_seconds,
       counts:{retro_animation:Math.max(0,rank-1),retro_narration:rank>=3?1:0,retro_trailer:rank>=4?1:0,
         retro_captions:Number(r.captions_included),retro_revision:r.revision_limit}};

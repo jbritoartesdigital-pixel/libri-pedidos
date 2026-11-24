@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 04 | 23/11/2026 (Brasil)
+Versão 05 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -64,5 +64,12 @@ RETOMADA V04 — REGISTRO TRANSACIONAL DO PEDIDO MULTIPRODUTO
 - c8ef57b: cotação interna pode carregar snapshot comercial integral por serviço; resposta pública continua sem essa propriedade.
 - 4be4e32: migration 0041 cria v3_order_services e v3_order_checkout_snapshots vinculadas a v2_orders, sem backfill e sem alterar pedidos legados.
 - 7dbb0ba: createV3OrderRecords é helper INTERNO, sem rota HTTP e sem chamada ao Mercado Pago. Valida valor recalculado, termos gerais/específicos vigentes, data e capacidade; grava em batch D1 um pedido configuring, itens, pricing integral 100%, termos, briefing bloqueado, histórico e serviços individuais. Chave de tentativa + hash do payload canônico permite recuperar repetição idêntica e rejeita mudança de escolhas. Não cria reserva nem pagamento. Não está autorizado chamá-lo por rota pública até integração completa.
-- bde8952/a3bc185: testes de migration, pedido pai único, snapshots, repetição, termos, preços adulterados, duplicidade, rollback por falha de escrita e privacidade do preview. CI da etapa ainda a confirmar.
+- bde8952/a3bc185: testes de migration, pedido pai único, snapshots, repetição, termos, preços adulterados, duplicidade, rollback por falha de escrita e privacidade do preview. CI 45314360979 concluído com sucesso.
 - Próximo passo exato: integrar helper a orquestrador comum com geração de código/cliente, reserva de agenda real e bloqueio de pagamento; usar createMercadoPagoCheckout com único total e recuperação da mesma tentativa, sem cair em checkout V2 individual. Antes de habilitar rota, revisar resumeV2Payment, webhook, scheduler e Admin/briefing que assumem um produto; impedir cobrança de pedidos configuring e reprecificação/edição V2 destrutiva. Retrospectivas ainda precisam de catálogo contratável, termos, uploads e briefing. Não declarar checkout concluído nem publicar agora.
+
+RETOMADA V05 — RESERVA E PAGAMENTO INTERNO MULTIPRODUTO
+- 51794fd: exporta o motor V2 de reserva de capacidade para reaproveitamento na V3.
+- aeb82e3: prepareV3Payment, helper INTERNO sem rota pública, valida integridade da cotação e pricing, usa lock por pedido, reserva soma dos pontos e chama Mercado Pago uma única vez pelo total integral. Recupera checkout pendente com reserva válida; bloqueia substituição de tentativa expirada até conciliação. Reutiliza idempotência do provedor; ainda precisa de tratamento completo de falhas incertas, expiração e recuperação, webhook/briefing modular, promoções Black Libri e guardas Admin antes da exposição pública.
+- 883e896: bloqueia resumeV2Payment para snapshots V3, impedindo reprecificação pelo fluxo legado.
+- d33c8aa: testes com provedor simulado de reserva real, cobrança integral única, repetição, integridade e expiração. CI da rodada a confirmar. Nenhuma cobrança real, deploy ou mudança no banco de produção.
+- Próximo passo: integrar confirmação de pagamento e liberação dos serviços/briefings, conciliar expiração e recuperação segura, construir fluxo público completo e proteger Admin/edição. Retrospectivas, replanejamento pós-briefing, visual e desempenho seguem pendentes.

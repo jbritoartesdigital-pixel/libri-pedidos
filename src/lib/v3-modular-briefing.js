@@ -3,6 +3,7 @@
 // Retrospectiva never creates R2 objects; only receipt metadata is persisted.
 import {buildV2BriefingSimulationSchema} from './v2-customer-area.js';
 import {buildAtelieBriefingBlueprint} from './v3-atelie-briefing.js';
+import {summarizeV3Order} from './v3-order-overview.js';
 import {getV3Delivery} from './v3-service-delivery.js';
 import {getV3ServiceProgress} from './v3-service-production.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
@@ -103,7 +104,7 @@ export async function getV3ModularBriefing(db,token){
   const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
     variantName:s.snapshot.variant?.label||'',submittedAt:s.briefing_submitted_at,complementNote:s.complement_note,reviewedAt:s.reviewed_at,deliveryWindow:s.delivery_start?{start:s.delivery_start,end:s.delivery_end}:null,scheduledAt:s.scheduled_at,dependsOnIdentity:s.depends_on_identity===null?null:Boolean(s.depends_on_identity),totalCents:s.total_cents,productionDays:s.production_days,
     extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
-  const base={orderCode:order.order_code,locked,orderStatus:order.status,payment:{totalCents:order.total_cents,method:order.payment_method},
+  const base={orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[]};
   for(let i=0;i<services.length;i++){purchased[i].progress=await getV3ServiceProgress(db,services[i]);purchased[i].delivery=await getV3Delivery(db,services[i]);}

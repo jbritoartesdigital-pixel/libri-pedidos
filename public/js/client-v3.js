@@ -623,6 +623,7 @@ async function determineOffer() {
   // show the actual benefit first. Never promise a discount from the catalogue alone.
   const ownedGroups=new Set(selectedAddons().map(a=>a.group));
   const eligibleGroups=new Set(available.map(g=>g[0]));
+  const preferredGroup=INTERACTIVE.has(current)?['confirmation','filter','moments'].find(g=>eligibleGroups.has(g)):null;
   const comboCandidates=new Map();
   for(const combo of catalog?.combos||[]){
     if(!ownedGroups.size||Number(combo.discountValue||0)<=0)continue;
@@ -633,7 +634,7 @@ async function determineOffer() {
     if(missing.length!==1)continue;
     const m=missing[0];
     if(!['addon','addon_group'].includes(m.itemType))continue;
-    const options=catalog.addons.filter(a=>eligibleGroups.has(a.group)&&
+    const options=catalog.addons.filter(a=>eligibleGroups.has(a.group)&&(!preferredGroup||a.group===preferredGroup)&&
       (m.itemType==='addon'?a.code===m.itemCode:a.group===m.itemCode))
       .filter(a=>a.group!=='moments'||!ownedGroups.has('filter'))
       .sort((a,b)=>a.priceCents-b.priceCents);
@@ -693,8 +694,8 @@ async function determineOffer() {
   }).filter(x=>x.missing.length===1);
   const ranked = available.sort((a,b)=>{
     const preference = {confirmation:5,filter:4,moments:3,save_the_date:2,reminder:1};
-    const nearA=nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
-    const nearB=nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
+    const nearA=!preferredGroup&&nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
+    const nearB=!preferredGroup&&nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
     return (nearB+(preference[b[0]]||0))-(nearA+(preference[a[0]]||0));
   });
   for (const group of ranked) {

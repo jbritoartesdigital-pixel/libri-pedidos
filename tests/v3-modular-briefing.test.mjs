@@ -664,3 +664,41 @@ test('manual V3 prepares a private order with optional authorized Pix deposit, n
  assert.equal(payment.amountDueNowCents,7950);mp.approve(payment.providerOrderId);await syncMercadoPagoOrder(env,payment.providerOrderId);
  assert.equal((await getV3ModularBriefing(db,token)).locked,false);
 });
+
+import {openV3PaidCancellation,refreshV3Cancellation,refundV3CancellationCharge,finalizeV3PaidCancellation} from '../src/lib/v3-paid-cancellation.js';
+test('paid cancellation suspends access, reconciles original and supplementary refunds once and releases only future capacity',async t=>{
+ const {db,order,env,request,token,family,offer,mp}=await preparedSupplement(t);
+ await startV3SupplementPayment(request,env,token,family,offer.id);
+ const charge=db.sqlite.prepare('SELECT provider_order_id FROM v3_supplement_payments WHERE supplement_id=?').get(offer.id);
+ mp.approve(charge.provider_order_id);await syncV3SupplementPayment(env,charge.provider_order_id);
+ const allocations=()=>db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n;
+ const before=allocations();
+ await openV3PaidCancellation(env,order.orderCode,{confirmed:true,reason:'Cancelamento solicitado pela cliente'});
+ assert.equal((await getV3ModularBriefing(db,token)).locked,true);
+ assert.equal(allocations(),before);
+ await assert.rejects(finalizeV3PaidCancellation(env,order.orderCode,{confirmed:true}),/sem devolução/);
+ let state=await refreshV3Cancellation(env,order.orderCode);assert.equal(state.charges.length,2);assert.ok(state.charges.every(x=>x.status==='paid'));
+ for(const x of state.charges){
+  await assert.rejects(refundV3CancellationCharge(env,order.orderCode,{confirmed:true,chargeKey:x.key,amountCents:1}),/valor integral/);
+  const payload={confirmed:true,chargeKey:x.key,amountCents:x.amountCents};
+  await refundV3CancellationCharge(env,order.orderCode,payload);
+  await refundV3CancellationCharge(env,order.orderCode,payload);
+ }
+ assert.equal(mp.refundKeys.size,2);
+ state=await finalizeV3PaidCancellation(env,order.orderCode,{confirmed:true});
+ assert.equal(state.status,'completed');assert.equal(state.refundCents,state.charges.reduce((n,x)=>n+x.amountCents,0));
+ assert.equal(db.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.orderId).status,'cancelled');
+ assert.equal(allocations(),0);
+ assert.equal((await finalizeV3PaidCancellation(env,order.orderCode,{confirmed:true})).status,'completed');
+ assert.equal((await getV3ModularBriefing(db,token)).cancellation.status,'completed');
+});
+test('partial refund or chargeback remains in review and prevents release',async t=>{
+ const {db,order,env,mp}=await preparedSupplement(t);
+ await openV3PaidCancellation(env,order.orderCode,{confirmed:true,reason:'Conferência de devolução'});
+ Object.assign(mp.orders.get('ORD1'),{status:'processed',status_detail:'partially_refunded'});
+ const s=await refreshV3Cancellation(env,order.orderCode);
+ assert.equal(s.charges[0].status,'review');
+ await assert.rejects(refundV3CancellationCharge(env,order.orderCode,{confirmed:true,chargeKey:s.charges[0].key,amountCents:s.charges[0].amountCents}),/não está elegível/);
+ await assert.rejects(finalizeV3PaidCancellation(env,order.orderCode,{confirmed:true}),/sem devolução/);
+ assert.equal(mp.refundKeys.size,0);
+});

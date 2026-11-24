@@ -1,3 +1,4 @@
+import {openV3PaidCancellation,refreshV3Cancellation,refundV3CancellationCharge,finalizeV3PaidCancellation} from '../lib/v3-paid-cancellation.js';
 import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
@@ -109,6 +110,17 @@ export async function handleAdminBriefingV3Api(request,env,url){
    return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
   }catch(e){return errorResponse(e);}
  }
+  const cancellation=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/cancellation\/(open|refresh|refund|finalize)$/);
+  if(cancellation){
+    if(request.method!=='POST')return fail('Método não permitido.',405);
+    if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Operação administrativa V3 ainda indisponível.',503);
+    try{
+      const [,code,action]=cancellation,body=await boundedJson(request);
+      const result=await ({open:openV3PaidCancellation,refresh:refreshV3Cancellation,refund:refundV3CancellationCharge,finalize:finalizeV3PaidCancellation}[action])(env,code,body);
+      const row=await env.DB.prepare('SELECT public_token FROM v2_orders WHERE order_code=?').bind(code).first();
+      return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+    }catch(e){return errorResponse(e);}
+  }
   const finance=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/finance\/(deposit|balance|cancel-unpaid)$/);
   if(finance){
     if(request.method!=='POST')return fail('Método não permitido.',405);

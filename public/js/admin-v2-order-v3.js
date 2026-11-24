@@ -83,6 +83,15 @@ export async function openV3AdminOrder(code,initial,onChanged){
   });
   return {items,couponCode:host.querySelector('[data-revision-coupon]').value,reason:host.querySelector('[data-revision-reason]').value.trim()};
  }
+ function cancellationHtml(){
+  const c=brief.cancellation;
+  if(!c)return brief.adminPayment?.canCancelPaid?'<section class="card"><h3>Cancelar pedido pago</h3><p>Suspende a produção e novas cobranças, preservando o histórico.</p><label>Motivo <input data-paid-cancel-reason maxlength="500"></label><button class="btn btn-secondary" data-v3-admin="cancellation-open">Iniciar conferência de cancelamento</button></section>':'';
+  const status={review:'Em conferência',paid:'Pago · devolução disponível',pending:'Pendente',terminal:'Encerrado sem pagamento',refund_requested:'Devolução solicitada · confirmar',refunded:'Devolução confirmada'};
+  return '<section class="card"><h3>'+ (c.status==='completed'?'Cancelamento concluído':'Cancelamento em conferência')+'</h3><p>'+esc(c.reason)+'</p><p><strong>Devoluções confirmadas: '+money(c.refundCents)+'</strong></p>'+
+   (c.charges||[]).map(x=>'<div class="row-card"><strong>'+money(x.amountCents)+' · '+esc(x.provider==='direct_pix'?'Pix direto':'Mercado Pago')+'</strong><p>'+esc(status[x.status]||x.status)+'</p>'+
+    (c.status==='review'&&['paid','refund_requested'].includes(x.status)?(x.provider==='direct_pix'?'<label>Referência do Pix já devolvido <input data-refund-proof="'+esc(x.key)+'" maxlength="500"></label>':'')+'<button class="btn btn-secondary" data-v3-admin="cancellation-refund" data-charge="'+esc(x.key)+'">'+(x.provider==='direct_pix'?'Registrar devolução Pix':'Solicitar devolução integral')+'</button>':'')+'</div>').join('')+
+   (c.status==='review'?'<p>Reembolsos parciais, contestações e tentativas desconhecidas exigem conferência. A agenda futura permanece reservada até a conclusão.</p><button class="btn btn-secondary" data-v3-admin="cancellation-refresh">Conferir cobranças no provedor</button><button class="btn btn-primary" data-v3-admin="cancellation-finalize">Concluir cancelamento</button>':'')+'</section>';
+ }
  function financeActions(){
   const p=brief.payment,a=brief.adminPayment||{};
   return '<section class="card"><h3>Pagamento do pedido original</h3><p>Entrada: '+p.depositPercent+'% · '+money(p.depositCents)+'</p><p>Recebido: '+money(p.receivedCents)+'</p><p>Saldo: <strong>'+money(p.remainingCents)+'</strong></p>'+
@@ -92,8 +101,8 @@ export async function openV3AdminOrder(code,initial,onChanged){
  }
  function render(){
  if(!host.isConnected)return;
- host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Contratação original: '+money(brief.payment.totalCents)+'</p>'+(brief.financial?'<p>Adicionais confirmados: '+money(brief.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(brief.financial.confirmedTotalCents)+'</strong></p><p>Adicionais a receber: '+money(brief.financial.pendingSupplementCents)+'</p>'+(brief.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(brief.financial.reviewSupplementCents)+'</p>':''):'')+'<p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
- financeActions()+revisionHtml()+ (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
+ host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Contratação original: '+money(brief.payment.totalCents)+'</p>'+(brief.financial?'<p>Adicionais confirmados: '+money(brief.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(brief.financial.confirmedTotalCents)+'</strong></p><p>Adicionais a receber: '+money(brief.financial.pendingSupplementCents)+'</p>'+(brief.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(brief.financial.reviewSupplementCents)+'</p>':''):'')+'<p>'+ (brief.cancellation?(brief.cancellation.status==='completed'?'Pedido cancelado':'Cancelamento em conferência'):brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
+ financeActions()+cancellationHtml()+revisionHtml()+ (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
@@ -123,6 +132,12 @@ export async function openV3AdminOrder(code,initial,onChanged){
       payload={...input,deliveryWindow:w,expectedTotalCents:revisionPreview.result.totalCents,confirmed:true,requestKey:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};
     }
    }
+ }else if(action.startsWith('cancellation-')){
+   const mode=action.slice(13);path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/cancellation/'+mode;
+   if(mode==='open'){const reason=host.querySelector('[data-paid-cancel-reason]').value.trim();if(reason.length<5){showToast('Informe o motivo.');return;}if(!confirm('Suspender este pedido para conferir o cancelamento?'))return;payload={reason,confirmed:true};}
+   else if(mode==='refund'){const charge=brief.cancellation.charges.find(x=>x.key===b.dataset.charge);if(!charge)return;const proof=host.querySelector('[data-refund-proof="'+charge.key+'"]')?.value.trim();if(!confirm((charge.provider==='direct_pix'?'Confirma que já devolveu ':'Confirma solicitar a devolução integral de ')+money(charge.amountCents)+'?'))return;payload={chargeKey:charge.key,amountCents:charge.amountCents,proof,confirmed:true};}
+   else if(mode==='finalize'){if(!confirm('Encerrar definitivamente após verificar todas as cobranças?'))return;payload={confirmed:true};}
+   else payload={};
  }else if(action.startsWith('finance-')){
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/finance/'+action.slice(8);
    if(action==='finance-deposit'){

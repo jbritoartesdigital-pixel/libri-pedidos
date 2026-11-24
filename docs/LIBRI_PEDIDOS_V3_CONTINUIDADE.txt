@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 34 | 23/11/2026 (Brasil)
+Versão 35 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -265,3 +265,7 @@ RETOMADA V34 — EDIÇÃO DE PEDIDOS NÃO PAGOS, MESMO LINK
 
 V34 CONTINUAÇÃO — PEDIDO MANUAL V3
 - 0052935 e commit subsequente: criação manual por Admin com seleção de até três famílias, variantes/cenas, adicionais, cupom, consulta de prazo, pagamento integral por padrão e 50% Pix exclusivamente autorizado, proposta e link privados. Termos não são registrados como aceitos até confirmação explícita da cliente; nenhuma cobrança é gerada pela administradora. Pedido preserva identidade, fonte manual_whatsapp e política de entrada; reutiliza aceite da revisão, idempotência e motor financeiro V3. Interface acessível pelo novo botão na tela de pedidos manuais; fluxo clássico V2 preservado. Teste de aceite real, idempotência, pagamento autorizado. CI final V34 a confirmar. Substitui a pendência 'criação manual V3 ainda não implementada' do parágrafo anterior. Ainda faltam validar browser, desconto manual negociado, cancelamento/reembolso pago, taxas, entrega/avisos e Admin/indicadores. Nenhuma flag ativada, nenhum deploy.
+
+RETOMADA V35 — CANCELAMENTO DE PEDIDOS PAGOS E ESTORNOS INTEGRAIS
+- CI V34 45408775817 aprovado. 1fdae37: migration 0058 (59 migrações), suspensão operacional com registro próprio e inventário de cobranças originais e complementares; bloqueio de briefing, produção, entrega e cobranças durante conferência, reserva da agenda mantida. Conferência remota de referência/valor/status, fechamento de pendências, devolução integral Mercado Pago somente por autorização explícita por cobrança e chave de idempotência persistida, confirmação GET; registro de Pix direto já devolvido com comprovante. API oficial https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-pro/refund-order/post; reembolso integral body vazio, parcial/contestação permanecem em revisão. Encerramento apenas após todas as cobranças comprovadamente devolvidas/terminais, capacidade futura liberada, histórico e arquivos preservados, cupom/brinde já utilizados não voltam automaticamente. Rotas Admin e interface cliente/Admin, testes simulados de estorno integral e bloqueio de parcial. CI a confirmar. Não realizou estorno real, flag desativada, PR #143 draft.
+- Pendências: relatório financeiro de devoluções deve conservar entradas históricas e separar devolução confirmada sem dupla contagem; política e fluxo parcial/contestação, reabertura de revisão sem devolução, tentativa remota desconhecida, prova Pix e acesso Admin aos arquivos após suspensão, auditoria dos webhooks e prazos/estoque. Próximo: concluir conciliação financeira e avançar entrega, avisos, Admin e indicadores. Sem publicação parcial.

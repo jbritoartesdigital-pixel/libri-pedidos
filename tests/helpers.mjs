@@ -36,6 +36,7 @@ export function day(offset) {
 export function providerMock(t) {
   const orders = new Map(); const keys = new Map(); const bodies = [];
   const financeDetails = new Map();
+  const refundKeys=new Set();
   const rejectedKeys = new Set(); const keysUsed = []; let posts = 0; let rejectNextPost = false;
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     const href = String(url);
@@ -93,6 +94,10 @@ export function providerMock(t) {
     }
 
     if (!href.startsWith('https://api.mercadopago.com/v1/orders')) throw new Error(`Unexpected network call ${url}`);
+    if(options.method==='POST'&&String(url).endsWith('/refund')){
+      const id=String(url).split('/').at(-2),o=orders.get(id);if(!o)return Response.json({}, {status:404});
+      refundKeys.add(options.headers['x-idempotency-key']);Object.assign(o,{status:'refunded',status_detail:'refunded'});return Response.json(o,{status:201});
+    }
     if (options.method === 'POST' && String(url).endsWith('/cancel')) {
       const id = String(url).split('/').at(-2); orders.get(id).status = 'cancelled'; orders.get(id).status_detail = 'cancelled';
       return Response.json(orders.get(id));
@@ -120,7 +125,7 @@ export function providerMock(t) {
     const id = String(url).split('/').at(-1);
     return orders.has(id) ? Response.json(orders.get(id)) : Response.json({}, { status: 404 });
   });
-  return { orders, keys, bodies, keysUsed, get posts() { return posts; },
+  return { orders, keys, bodies, keysUsed, refundKeys, get posts() { return posts; },
     rejectNext() { rejectNextPost = true; },
     setFinanceDetails(id, { feeCents = 0, netCents }) {
       const order = orders.get(id);

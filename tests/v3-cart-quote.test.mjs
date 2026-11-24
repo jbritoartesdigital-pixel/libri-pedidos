@@ -40,7 +40,9 @@ test('V3 combina convite com Ateliê ativado SEM duplicar produto, pagamento ou 
     {productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}
   ]});
   assert.deepEqual(cart.items.map(x=>x.family),['convite','identidade_visual']);
-  assert.equal(cart.totalCents,3500+15900);
+  assert.equal(cart.totalCents,18430);
+  assert.equal(cart.combinedDiscountCents,970);
+  assert.deepEqual(cart.items.map(x=>x.discountCents),[175,795]);
   assert.equal(cart.pointsUnits,100+300);
   assert.equal(cart.items[1].productName,'Identidade Visual | Essência');
   assert.equal(cart.canCheckout,false);
@@ -75,17 +77,18 @@ test('API V3 é pública somente para cotação e não afeta rotas V2',async()=>
 test('V3 applies explicit eligible invite combo once and calculates card fee on aggregate',async()=>{
   const db=database({beforeApprovedAtelie:true});
   await enableAtelie(db);
-  db.sqlite.exec("INSERT INTO v2_combos(code,name,discount_type,discount_value,active) VALUES ('cart_test','Combo teste','fixed',100,1)");
+  db.sqlite.exec("INSERT INTO v2_combos(code,name,discount_type,discount_value,active) VALUES ('cart_test','Combo teste','fixed',1200,1)");
   const items=[{...invitation,comboCode:'cart_test'},
     {productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}];
   const cart=await quoteV3Cart(db,{...base,items,paymentMethod:'card'});
   assert.equal(cart.grossCents,19400);
-  assert.equal(cart.discountCents,100);
+  assert.equal(cart.discountCents,1200);
+  assert.equal(cart.combinedDiscountCents,0);
   assert.equal(cart.items[0].comboCode,'cart_test');
   assert.equal(cart.items[1].discountCents,0);
-  assert.equal(cart.baseTotalCents,19300);
-  assert.equal(cart.totalCents,priceWithCardProcessingFee(19300,'card').totalCents);
-  assert.equal(cart.cardFeeCents,cart.totalCents-19300);
+  assert.equal(cart.baseTotalCents,18200);
+  assert.equal(cart.totalCents,priceWithCardProcessingFee(18200,'card').totalCents);
+  assert.equal(cart.cardFeeCents,cart.totalCents-18200);
   assert.equal(cart.canCheckout,false);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
 });

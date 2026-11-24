@@ -1,3 +1,4 @@
+import {trackStoreStage,storeJourneyId,finishStoreJourney} from './store-funnel.js';
 // Unified V3 checkout. Draft customer data stays in memory, not localStorage.
 // Once a payment attempt is sent, only the exact same payload may be retried.
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -7,6 +8,7 @@ import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3Payment
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBack}){
+  trackStoreStage('dados');
   const cart={items:JSON.parse(JSON.stringify(items)),eventType};
   let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
@@ -59,6 +61,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       if(JSON.stringify(next)!==JSON.stringify(terms))accepted.clear();
       terms=next;enabled=t.checkoutEnabled===true;
       if(agenda){
+        trackStoreStage('agenda');
         options=[];form.deliveryWindow=null;
         if(!form.eventDate)throw Error('Informe a data do evento.');
         const result=await request('/api/v3/cart/delivery-options',{...selection,eventDate:form.eventDate});
@@ -94,7 +97,8 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
         finally{opening=false;checkingBlack=false;}
         if(!immediate)return;
       }
-      attempt={...cart,...blackSelection(),customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},honoreeName:form.honoreeName,eventDate:form.eventDate,
+      trackStoreStage('tentativa');
+      attempt={...cart,...blackSelection(),storeJourneyId:storeJourneyId(),customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},honoreeName:form.honoreeName,eventDate:form.eventDate,
         paymentMethod:form.paymentMethod,couponCode:form.couponCode,deliveryWindow:{start:form.deliveryWindow.start,end:form.deliveryWindow.end},expectedTotalCents:quote.totalCents,
         clientRequestId:attemptKey,termsAccepted:true,termsVersion:terms.general.version};
       for(const t of terms.services){
@@ -112,7 +116,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       // Retain the retry key until confirmed payment; do not create a new
       // attempt merely because the browser returns from the payment provider.
       if(result.alreadyPaid)clearV3CheckoutKey(attemptKey);
-      location.assign(url.href);
+      finishStoreJourney();location.assign(url.href);
     }catch(e){error=e.message+' Retome a mesma tentativa para evitar duplicidade.';busy=false;render();}
   }
   root.addEventListener('click',handleClick);
@@ -130,7 +134,9 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
     if(busy||attempt)return;
     if(e.target.name==='whatsapp'&&!blackClaim)blackChecked=false;
     if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;render();}
-    if(e.target.name==='paymentMethod'||e.target.name==='couponCode')refresh();
+    if(e.target.name==='deliveryWindow')trackStoreStage('pagamento');
+    if(e.target.hasAttribute('data-v3-term'))trackStoreStage('revisao');
+    if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh();}
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}
   render();refresh();

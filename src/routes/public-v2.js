@@ -1,3 +1,4 @@
+import {safeLinkStoreOrder} from '../lib/v3-store-funnel.js';
 import {syncV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {
   fail,
@@ -782,6 +783,7 @@ export async function handlePublicV2Api(
           body,
         );
 
+      if(body.storeJourneyId&&result.order?.publicToken){try{const row=await env.DB.prepare('SELECT id FROM v2_orders WHERE public_token=?').bind(result.order.publicToken).first();if(row)await safeLinkStoreOrder(env.DB,body.storeJourneyId,row.id);}catch{}}
       return json(
         result,
         201,

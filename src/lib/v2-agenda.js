@@ -269,7 +269,7 @@ async function loadCapacityMap(
               AND a.day <= ?
               AND h.status = 'active'
               AND h.expires_at > ?
-              AND (? IS NULL OR h.order_id != ?)
+              AND (? IS NULL OR h.order_id IS NULL OR h.order_id != ?)
             GROUP BY a.day
           `,
         )

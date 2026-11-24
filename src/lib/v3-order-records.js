@@ -125,7 +125,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     const serviceTerms=quote.items.flatMap(l=>{const t=l.commercialSnapshot.variant.config?.atelie||l.commercialSnapshot.variant.config?.retrospective;return t?[{family:l.family,version:t.termsVersion,body:t.specificTerms}]:[];});
     statements.push(db.prepare(`INSERT INTO v3_order_revisions(order_id,request_key,kind,input_json,quote_json,terms_json,reason,created_at) VALUES(${idSql},?,'manual',?,?,?,?,?)`).bind(orderCode,requestKey,JSON.stringify({items,deliveryWindow:delivery,depositPercent:percent,manualFingerprint:manualDraft.fingerprint,...(manualDraft.flexibleDelivery===true?{flexibleDelivery:true}:{})}),JSON.stringify(pricing),JSON.stringify({general:terms,services:serviceTerms}),manualDraft.reason,stamp));
     if(percent===50)statements.push(db.prepare(`INSERT INTO v3_admin_payment_policies(order_id,deposit_percent,reason,updated_at) VALUES(${idSql},50,?,?)`).bind(orderCode,manualDraft.reason,stamp));
-    statements.push(db.prepare(`UPDATE v2_orders SET next_action='Aguardando aceite da contratação' WHERE id=${idSql}`).bind(orderCode));
+    statements.push(db.prepare(`UPDATE v2_orders SET next_action='Aguardando pagamento' WHERE id=${idSql}`).bind(orderCode));
   }
   statements.push(...v3LineStatements(db,quote,idSql,orderCode,stamp));
   try{

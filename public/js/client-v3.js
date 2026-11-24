@@ -59,7 +59,7 @@ const money = cents => new Intl.NumberFormat('pt-BR', {style:'currency',currency
 const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-let catalog = null, quote = null, offer = null, ateliePackages = [], retrosPackages = [];
+let catalog = null, quote = null, offer = null, cartQuote = null, cartError = '', ateliePackages = [], retrosPackages = [];
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -69,11 +69,19 @@ try {
 if (!state || typeof state !== 'object') state = {};
 state = {
   eventType: '', creation: '', intent: '', productCode: '', variantCode: '',
-  addonCodes: [], ateliePackage: '', step: 'event', offerFinished: false, dismissed: [],
+  addonCodes: [], ateliePackage: '', step: 'event', offerFinished: false, dismissed: [], cartItems: [],
   ...state
 };
 if (!Array.isArray(state.addonCodes)) state.addonCodes = [];
 if (!Array.isArray(state.dismissed)) state.dismissed = [];
+// Store selection identifiers only: no personal data, prices or payment authority.
+state.cartItems = Array.isArray(state.cartItems) ? state.cartItems.filter(x=>x&&typeof x.productCode==='string'&&typeof x.variantCode==='string'&&Array.isArray(x.addonCodes)).slice(0,3) : [];
+const cartFamily = code => code.startsWith('atelie_')?'identity':/^retrospectiva(?:_|$)/.test(code)?'retrospective':'invitation';
+function putCart(item) {
+  state.cartItems = state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(item.productCode)).concat(item);
+  save();
+}
+function cartButton(){return state.cartItems.length?'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="open-cart">Ver meu carrinho ('+state.cartItems.length+')</button></div>':'';}
 const getProduct = code => (catalog?.products || []).find(item => item.code === code);
 const getAddon = code => (catalog?.addons || []).find(item => item.code === code);
 const currentProduct = () => getProduct(state.productCode);
@@ -197,7 +205,7 @@ function renderCreation() {
       'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
     choice('retrospective','Retrospectiva de Fotos e Vídeos',
       'Uma homenagem em vídeo com suas lembranças, músicas e dedicatória. Você escolhe conforme a quantidade de fotos e vídeos.',state.creation,'creation') +
-    '</div>',
+    '</div>'+cartButton(),
     actions(true,'Continuar'),1);
 }
 function renderUnready() {
@@ -243,7 +251,7 @@ function renderAtelieDetail() {
     '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
     '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso e identificação de simulações conceituais.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
-    '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Contratar este pacote':'Contratação em preparação')+'</button></div>',3);
+    '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
 }
 function renderIntent() {
   panel('Como imagina seu convite?',
@@ -333,9 +341,43 @@ function renderReview() {
   panel('Seu pedido está tomando forma!', 'Confira suas escolhas. O próximo passo conclui o pedido com segurança no checkout Libri.',
     '<div class="v3-notice"><b>' + clean(labelForEvent()) + '</b> · ' + clean(PRODUCTS[state.productCode]?.title || '') +
     '</div>' + linesHtml() + priceBar() + offerHtml() +
-    '<p class="v3-mini">Você informará a data da festa, escolherá a entrega e concluirá o pedido com o checkout seguro Libri.</p>',
+    '<p class="v3-mini">Você pode guardar este convite no carrinho e escolher outro serviço para o mesmo evento.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
-    '<button class="v3-btn v3-btn-primary" type="button" data-action="handoff">Continuar para o pagamento</button></div>',4);
+    '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
+}
+function renderCart() {
+  const items=state.cartItems;
+  const lines=items.map((item,i)=>{
+    const priced=cartQuote?.items?.find(x=>x.productCode===item.productCode&&x.variantCode===item.variantCode);
+    const product=getProduct(item.productCode);
+    const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
+    return '<div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
+      (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
+      (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
+      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>';
+  }).join('');
+  const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
+    (cartQuote.discountCents?'<div class="v3-line"><span>Desconto do convite</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
+    '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
+  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
+    items.length>1?'<div class="v3-notice">A contratação conjunta está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
+    items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
+  panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
+    '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice,
+    '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
+    (items.length===1&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
+}
+async function openCart(){
+  state.step='cart';save();cartQuote=null;cartError='';
+  root.setAttribute('aria-busy','true');
+  root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
+  if(state.cartItems.length){
+    try {
+      const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems});
+      cartQuote=data.quote;
+    } catch(e){cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
+  }
+  renderCart();window.scrollTo({top:0,behavior:'auto'});
 }
 function render() {
   save();
@@ -355,6 +397,7 @@ function render() {
     case 'scenes': renderScenes(); break;
     case 'extras': renderExtras(); break;
     case 'review': renderReview(); break;
+    case 'cart': renderCart(); break;
     default: state.step='event';renderEvent();
   }
 }
@@ -498,14 +541,15 @@ root.addEventListener('click', async event => {
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='event'){if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='atelie-buy'){
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
-      if(!item?.purchaseAvailable)return message('Pacote indisponível para compra.');
-      await go('atelie-checkout');return;
+      if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
+      putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]});
+      await openCart();return;
     }
     if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
     if(action==='product'){
@@ -547,7 +591,33 @@ root.addEventListener('click', async event => {
       }
       state.offerFinished=true;offer=null;await go('review');return;
     }
-    if(action==='handoff'){handoff();return;}
+    if(action==='add-invitation'){
+      if(!currentVariant()||!quote)return message('Confira a configuração do convite.');
+      putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''});
+      await openCart();return;
+    }
+    if(action==='open-cart'){await openCart();return;}
+    if(action==='cart-more'){await go('creation');return;}
+    if(action==='remove-cart'){
+      const i=Number(value);
+      if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
+      await openCart();return;
+    }
+    if(action==='cart-single-checkout'){
+      if(state.cartItems.length!==1||!cartQuote||cartError)return;
+      const item=state.cartItems[0];
+      if(cartFamily(item.productCode)==='identity'){
+        const pkg=ateliePackages.find(p=>'atelie_'+p.code===item.productCode&&p.purchaseAvailable&&p.variantCode===item.variantCode);
+        if(!pkg)return message('Pacote indisponível para compra.');
+        state.ateliePackage=pkg.code;await go('atelie-checkout');return;
+      }
+      if(cartFamily(item.productCode)!=='invitation')return;
+      Object.assign(state,{productCode:item.productCode,variantCode:item.variantCode,addonCodes:[...item.addonCodes]});
+      // Retain the explicit combo accepted on the cart; the V2 checkout still revalidates.
+      const result=await request('/api/v2/quote',{eventType:state.eventType,selection:{...item,couponCode:'',paymentMethod:'pix'}});
+      quote=result.quote;
+      handoff();return;
+    }
     if(action==='back'){
       const previous={
         creation:'event',unready:'creation',atelie:'creation','atelie-detail':'atelie',intent:'creation',
@@ -598,6 +668,7 @@ async function init() {
     state.step=SCENE_PRODUCTS.has(state.productCode)?'scenes':'format';
   }
   if(!state.eventType)state.step='event';
+  if(state.step==='cart'){await openCart();return;}
   if(state.step==='extras'||state.step==='review'){await go(state.step);return;}
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(!sessionStorage.getItem('libriV3IntroSeen')&&state.step==='event'&&!reduced){

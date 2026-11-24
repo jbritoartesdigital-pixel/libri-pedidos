@@ -415,3 +415,67 @@ test('supplement quotes reject invalid quantity, stage and duplicate scope',asyn
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
  await assert.rejects(q('identidade_visual',[{code:'atelie_pose',quantity:1}]),/indisponível/);
 });
+
+import {previewV3SupplementCapacity,startV3SupplementPayment,syncV3SupplementPayment} from '../src/lib/v3-supplement-payment.js';
+async function preparedSupplement(t){
+ const {db,input}=await setup(),mp=providerMock(t);
+ const order=await createV3OrderRecords(db,input),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token',LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED:'true'};
+ const request=new Request('https://test/internal-v3');
+ const payment=await prepareV3Payment(request,env,order.orderId);mp.approve(payment.providerOrderId);await syncMercadoPagoOrder(env,payment.providerOrderId);
+ const token=order.publicToken,family='identidade_visual';
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed',reviewed_at=datetime('now') WHERE order_id=? AND family=?").run(order.orderId,family);
+ const options=await previewV3ServiceAgenda(db,token,family,{});
+ await scheduleV3Service(db,token,family,{...options.options[0],confirmed:true});
+ const offer=await createV3Supplement(db,token,family,{items:[{code:'atelie_pose',quantity:2}],paymentMethod:'pix',note:'Duas poses',requestKey:'a'.repeat(36),expectedTotalCents:4000});
+ await decideV3Supplement(db,token,family,offer.id,{action:'accept',confirmed:true,expectedTotalCents:4000});
+ return {db,order,env,request,token,family,offer,mp};
+}
+test('independent supplement charge reserves shared capacity and applies paid scope only once',async t=>{
+ const {db,order,env,request,token,family,offer,mp}=await preparedSupplement(t);
+ const original=db.sqlite.prepare('SELECT * FROM v2_order_pricing WHERE order_id=?').get(order.orderId);
+ const service=()=>db.sqlite.prepare("SELECT * FROM v3_order_services WHERE order_id=? AND family=?").get(order.orderId,family);
+ const before=service(),points=before.points_units;
+ const capacity=await previewV3SupplementCapacity(db,token,family,offer.id);
+ assert.equal(capacity.pointsUnits,100);assert.equal(capacity.allocation.reduce((n,x)=>n+x.units,0),100);
+ await assert.rejects(startV3SupplementPayment(request,{...env,LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED:'false'},token,family,offer.id),/indisponível/);
+ const pay=await startV3SupplementPayment(request,env,token,family,offer.id);
+ assert.equal(pay.status,'pending');assert.equal(mp.posts,2);
+ assert.equal((await startV3SupplementPayment(request,env,token,family,offer.id)).checkoutUrl,pay.checkoutUrl);
+ assert.equal(mp.posts,2);
+ const attempt=db.sqlite.prepare('SELECT * FROM v3_supplement_payments').get();
+ assert.match(attempt.external_reference,/^SUP-/);
+ const hold=db.sqlite.prepare('SELECT * FROM v2_checkout_holds WHERE id=?').get(attempt.hold_id);
+ assert.equal(hold.order_id,null);assert.equal(hold.status,'active');
+ assert.equal(service().points_units,points);
+ await syncMercadoPagoOrder(env,'ORD1');
+ assert.equal(db.sqlite.prepare('SELECT status FROM v2_checkout_holds WHERE id=?').get(hold.id).status,'active');
+ mp.approve(attempt.provider_order_id);
+ assert.equal((await syncV3SupplementPayment(env,attempt.provider_order_id)).applied,true);
+ assert.equal((await syncV3SupplementPayment(env,attempt.provider_order_id)).alreadyApplied,true);
+ assert.equal(service().points_units,points+100);
+ assert.equal(service().commercial_snapshot_json,before.commercial_snapshot_json);
+ assert.equal(service().production_status,'pending');
+ assert.equal(service().briefing_status,'in_progress');
+ assert.equal(service().reviewed_at,null);
+ assert.equal(service().delivery_end,before.delivery_end);
+ const scope=JSON.parse(service().effective_snapshot_json);
+ assert.equal(scope.v3Extras.find(x=>x.code==='atelie_pose').quantity,2);
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=? AND service_family=?').get(order.orderId,family).n,points+100);
+ assert.deepEqual(db.sqlite.prepare('SELECT * FROM v2_order_pricing WHERE order_id=?').get(order.orderId),original);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments WHERE order_id=?').get(order.orderId).n,1);
+ assert.equal((await getV3ModularBriefing(db,token)).supplements[0].status,'paid');
+});
+test('supplement expiry releases only verified terminal charge and supports explicit renewal',async t=>{
+ const {db,env,request,token,family,offer,mp}=await preparedSupplement(t);
+ await startV3SupplementPayment(request,env,token,family,offer.id);
+ const old=db.sqlite.prepare('SELECT * FROM v3_supplement_payments').get();
+ db.sqlite.prepare("UPDATE v3_supplement_payments SET expires_at='2000-01-01T00:00:00Z'").run();
+ assert.equal(db.sqlite.prepare('SELECT status FROM v2_checkout_holds WHERE id=?').get(old.hold_id).status,'active');
+ assert.equal((await syncV3SupplementPayment(env,old.provider_order_id)).status,'cancelled');
+ assert.equal(db.sqlite.prepare('SELECT status FROM v2_checkout_holds WHERE id=?').get(old.hold_id).status,'cancelled');
+ await assert.rejects(startV3SupplementPayment(request,env,token,family,offer.id),/renovação/);
+ assert.equal((await startV3SupplementPayment(request,env,token,family,offer.id,{renew:true})).status,'pending');
+ assert.equal(mp.posts,3);
+ await syncV3SupplementPayment(env,old.provider_order_id);
+ assert.equal(db.sqlite.prepare('SELECT status FROM v3_service_supplements WHERE id=?').get(offer.id).status,'payment_pending');
+});

@@ -54,7 +54,7 @@ function validateItems(items) {
   });
 }
 
-export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSale=false}={}) {
+export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSale=false,customerId=null}={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
@@ -115,7 +115,7 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
   }
   const campaign=await activeV3CombinedCampaign(db);
   const discount=calculateV3CombinedDiscount(quotes,campaign||undefined);
-  const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType);
+  const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType,new Date(),customerId);
   const bestExisting=discount.selectedDiscount==='combined'?discount.combinedDiscountCents:quotes.reduce((n,l)=>n+l.discountCents,0);
   const useCoupon=!!coupon&&coupon.discountCents>bestExisting;
   if(useCoupon){discount.selectedDiscount='coupon';discount.percent=0;discount.combinedDiscountCents=0;discount.allocations={};}

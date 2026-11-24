@@ -4,7 +4,7 @@ import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/v3-service-supplements.js';
 import {stageV3FinalFile,removeV3FinalFile,deliverV3Service,downloadV3FinalFile} from '../lib/v3-service-delivery.js';
-import {changeV3Production,publishV3ServicePreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
+import {changeV3Production,publishV3ServicePreview,publishV3ExternalPreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
 import {previewV3ServiceAgenda,scheduleV3Service} from '../lib/v3-service-agenda.js';
 import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
@@ -169,7 +169,7 @@ export async function handleAdminBriefingV3Api(request,env,url){
       if(!row)return fail('Pedido V3 não encontrado.',404);
       if(request.method==='GET'&&id)return await streamV3ServicePreview(env,row.public_token,family,Number(id),request);
       if(request.method==='POST'&&!id){
-        const result=url.pathname.endsWith('/preview')?await publishV3ServicePreview(request,env,row.public_token,family):await changeV3Production(env.DB,row.public_token,family,await boundedJson(request),'admin');
+        const result=url.pathname.endsWith('/preview')?(family==='retrospectiva'?await publishV3ExternalPreview(env,row.public_token,family,await boundedJson(request)):await publishV3ServicePreview(request,env,row.public_token,family)):await changeV3Production(env.DB,row.public_token,family,await boundedJson(request),'admin');
         return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
       }
       return fail('Método não permitido.',405);

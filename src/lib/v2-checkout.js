@@ -273,7 +273,7 @@ async function releaseCheckoutRequest(
     .run();
 }
 
-async function nextOrderCode(
+export async function nextOrderCode(
   db,
 ) {
   const row =

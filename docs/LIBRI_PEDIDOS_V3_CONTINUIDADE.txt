@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 11 | 23/11/2026 (Brasil)
+Versão 12 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -112,4 +112,11 @@ RETOMADA V11 — ADICIONAIS POR SERVIÇO E QUANTIDADE
 - 4a1373c: catálogo servidor de adicionais Ateliê e Retro com preços/pontos aprovados V09, categorias e limites defensivos de quantidade; Retro esconde narração, legendas e trailer já inclusos. Convites continuam no catálogo V2 existente.
 - 89dcdcf/1615aac/8066411: cotação soma extras e pontos, ignora preços enviados pelo cliente, snapshot e hash preservam quantidades; v2_order_items guarda preço e pontos UNITÁRIOS com quantity para não multiplicar duas vezes. Não habilita checkout.
 - 823c0f0/c813fd8: API GET /api/v3/extras/catalog?productCode=..., categorias expansíveis no carrinho e botões +/-; checkout individual legado bloqueado se novos extras presentes, evitando perda de itens/cobrança inferior. Retrospectiva ainda não ativada.
-- 8b87a70: testes de compatibilidade, limites, preços, pontos e API; CI a confirmar. Testar persistência e UI real na próxima rodada. Ainda faltam quantidades nos materiais Retro (limites por extra), upgrade sugerido, edição e cobrança complementar Admin, catálogo Retro contratável, desconto 5/10 não cumulativo, telas/checkout e demais etapas. Não publicar.
+- 8b87a70: testes de compatibilidade, limites, preços, pontos e API; CI 45317939246 concluído com sucesso. Testar persistência e UI real na próxima rodada. Ainda faltam quantidades nos materiais Retro (limites por extra), upgrade sugerido, edição e cobrança complementar Admin, catálogo Retro contratável, desconto 5/10 não cumulativo, telas/checkout e demais etapas. Não publicar.
+
+RETOMADA V12 — DESCONTO COMBINADO E SUGESTÃO DE UPGRADE
+- a6d660d/86568a3: desconto 5% duas famílias, 10% três; rateio determinístico em centavos pelo produto principal, sem desconto nos adicionais, sem reduzir pontos; compara combo explícito do convite e escolhe maior economia, sem somar. Snapshot por linha e total agregado, taxa cartão depois do desconto. Cupom monetário global e campanhas temporárias continuam pendentes, bloqueados até integração segura.
+- b43bf27/8683ea3/c1d1d84/9fb43ef: testes e UI atualizados para valor efetivamente descontado. Convite R$35 + Essência R$159 = R$194; desconto R$9,70; total Pix R$184,30. Com 3 poses extras R$60, total R$244,30; capacidade 550 unidades.
+- 0b6c09b/34f22c2/99dd25f/776f716: sugestões de upgrade com comparação do escopo, preço real e disponibilidade; extras cobertos são retirados somente mediante escolha explícita, extras não cobertos permanecem; recomenda mesmo valor ou economia, nunca pacote mais caro. Ateliê compara escopo oficial exato; Retro prepara comparação de blocos de fotos/vídeos e duração acumulada, mas venda ainda inativa. UI recota após clicar em Trocar pacote.
+- b68922b: testes de rateio para três famílias, não acumulação, extras integrais e upgrade; CI a confirmar.
+- Próximo passo: tornar Retrospectivas contratável com catálogo aprovado, verificar limites acrescidos pelos adicionais no recebimento, integrar desconto/cupom/campanha, Admin de extras/cobranças complementares, checkout e briefings/agenda por serviço. Não liberar venda parcial. Nenhum deploy.

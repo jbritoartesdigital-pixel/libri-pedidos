@@ -195,7 +195,7 @@ test('shared ledger atomically rejects concurrent checkout for a per-customer li
  assert.throws(()=>DB.sqlite.prepare('INSERT INTO v3_coupon_reservations(order_id,coupon_id,customer_id,hold_token) VALUES(?,?,?,?)').run(other,row.coupon_id,row.customer_id,'hold_direct'),/coupon_reservation_limit/);
 });
 
-import {saveBlackLibriCampaign} from '../src/lib/v2-black-libri-admin.js';
+import {saveBlackLibriCampaign,getBlackLibriAdmin} from '../src/lib/v2-black-libri-admin.js';
 import {findBlackLibriClaim,expireBlackLibriClaims,revealBlackLibri} from '../src/lib/v2-black-libri.js';
 test('Black V3 uses a private claim, adds gift capacity and preserves it through payment recovery',async t=>{
  const {DB,body,env,call}=await setup(),mp=providerMock(t);
@@ -204,6 +204,9 @@ test('Black V3 uses a private claim, adds gift capacity and preserves it through
  const cart={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},...body.items]};
  assert.equal((await (await call(cart,{...env,LIBRI_V3_BLACK_LIBRI_ENABLED:'false'},'black/status')).json()).enabled,false,'release flag blocks activation');
  assert.equal((await (await call(cart,env,'black/status')).json()).enabled,true,'all current gifts have workloads');
+ assert.deepEqual((await getBlackLibriAdmin(env)).v3Readiness,{ready:true,reason:'ready'});
+ assert.equal((await getBlackLibriAdmin({...env,LIBRI_V3_BLACK_LIBRI_ENABLED:'false'})).v3Readiness.reason,'flag_disabled');
+ assert.equal((await getBlackLibriAdmin({...env,LIBRI_V3_CHECKOUT_ENABLED:'false'})).v3Readiness.reason,'checkout_disabled');
  DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
  const plain=await previewV3CartDelivery(DB,cart);
  const status=await call(cart,env,'black/status');assert.equal(status.status,200);assert.equal((await status.json()).enabled,true);

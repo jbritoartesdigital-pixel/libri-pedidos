@@ -16,6 +16,7 @@ async function load(db,code){
  return row;
 }
 async function eligible(db,row){
+ if(await db.prepare('SELECT 1 FROM v2_urgency_requests WHERE order_id=?').bind(row.id).first())fail('Encaixe urgente precisa preservar a aprovação e o valor originais; não pode ser recotado pela revisão comum.');
  if(row.archived_at||row.briefing_status!=='locked'||!['configuring','awaiting_payment'].includes(row.status)||await db.prepare("SELECT 1 FROM v2_payments WHERE order_id=? AND status IN ('approved','refunded')").bind(row.id).first())fail('Pedido recebido ou em produção: utilize propostas complementares.');
 }
 export async function pendingV3Revision(db,orderId){

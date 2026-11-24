@@ -638,7 +638,7 @@ test('central financial dashboard counts the paid supplement separately and only
  const paidAt='2026-10-03T12:00:00.000Z',refundAt='2026-11-03T12:00:00.000Z';
  const payment=db.sqlite.prepare('SELECT id,external_reference FROM v3_supplement_payments WHERE supplement_id=?').get(offer.id);
  db.sqlite.prepare("UPDATE v3_supplement_payments SET paid_at=?,status='review' WHERE id=?").run(paidAt,payment.id);
- db.sqlite.prepare("UPDATE v3_service_supplements SET status='review' WHERE id=?").run(offer.id);
+ db.sqlite.prepare("UPDATE v3_service_supplements SET status='review',applied_at=? WHERE id=?").run('2026-11-01T12:00:00.000Z',offer.id);
  const {getV3SupplementFinance,getV3RefundFinance}=await import('../src/lib/v3-finance-report.js');
  const oct={start:'2026-10-01T00:00:00.000Z',endExclusive:'2026-11-01T00:00:00.000Z'},nov={start:oct.endExclusive,endExclusive:'2026-12-01T00:00:00.000Z'};
  assert.equal((await getV3SupplementFinance(db,oct)).cashCents,4000);
@@ -646,7 +646,8 @@ test('central financial dashboard counts the paid supplement separately and only
  db.sqlite.prepare("INSERT INTO v3_cancellation_charges(order_id,charge_key,provider,provider_order_id,reference,amount_cents,original_paid_at,status,refund_key,refund_confirmed_at,updated_at) VALUES(?,?,?,?,?,?,?,'refunded',?,?,?)").run(order.orderId,'supplement:'+payment.id,'mercado_pago',charge.provider_order_id,payment.external_reference,4000,paidAt,'supp-test-refund',refundAt,refundAt);
  db.sqlite.prepare("UPDATE v3_supplement_payments SET status='refunded' WHERE id=?").run(payment.id);
  assert.equal((await getV3SupplementFinance(db,oct)).cashCents,4000);
- assert.equal((await getV3SupplementFinance(db,oct)).paidCents,4000);
+ assert.equal((await getV3SupplementFinance(db,oct)).paidCents,0);
+ assert.equal((await getV3SupplementFinance(db,nov)).paidCents,4000);
  assert.equal((await getV3SupplementFinance(db,nov)).cashCents,0);
  assert.equal((await getV3RefundFinance(db,nov)).refundCents,4000);
 });

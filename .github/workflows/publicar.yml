@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release 24/11/2026: PR #148, vidro escuro e consulta de data alternativa; CI 45466359300 aprovado.
 # Release V75 (24/11/2026): refinamentos de compra, agenda automática e recuperação da surpresa; CI 45461720246 aprovado.
 # Release 23/11: catálogo Ateliê V4.1 R$159/299/549, paleta, tipografia, 3/4/5 poses; Admin seguro, sem migrations.
 # Release 23/11: figuras temáticas já previstas na composição não geram personagem extra; PR #140, sem migrations.

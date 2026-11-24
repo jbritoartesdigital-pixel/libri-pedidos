@@ -149,7 +149,7 @@ test('Ateliê is in the existing Admin and store categories; older routes retain
   assert.match(worker,/handleAdminAtelieV3Api/);
   assert.match(worker,/requireAdminPasskeyAuth/);
   assert.match(admin,/data-store-tab="atelie"/);
-  assert.match(store,/Convites Digitais/);
+  assert.match(store,/choice\('invitation','Convite digital'/);
   assert.match(store,/choice\('identity','Identidade visual'/);
   assert.match(publicRoutes,/\/api\/v2\/atelie\/catalog/);
   assert.match(worker,/isClientV2Page/);

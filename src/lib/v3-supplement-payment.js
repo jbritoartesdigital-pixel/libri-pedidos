@@ -65,6 +65,7 @@ export async function startV3SupplementPayment(request,env,token,family,id,{rene
  return withV2PaymentLock(db,x.ctx.order.id,async()=>{
   const {ctx,s,offer}=await access(db,token,family,id);
   let p=await loadAttempt(db,id);
+  if(offer.status==='review'||await db.prepare("SELECT 1 FROM v3_supplement_payments WHERE supplement_id=? AND status IN ('review','refunded')").bind(id).first())fail('A cobrança complementar precisa de revisão.');
   if(p&&p.status==='approved')return view(p);
   if(p&&p.status==='pending'&&Date.parse(p.expires_at)>Date.now())return view(p);
   if(p&&p.status!=='creating'&&active.includes(p.status))fail('A cobrança complementar anterior precisa ser conciliada.');

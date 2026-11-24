@@ -51,3 +51,6 @@ Complementos conciliados exclusivamente por referência única, valor e detalhe 
 
 ## V61 — Estado confirmado
 V60 HEAD 99401f9c363d0c08503bceb02ef2457119ddea12, CI 45441144468 SUCCESS, inclusive Chromium e migrations. Não houve acesso a cobranças reais. PR ainda draft. Próxima prioridade: gate de publicação V3 para SHA efetivo, configuração Cloudflare/backup e ativação segura do catálogo, revisar pendências comerciais e operacionais e evidências visuais. Não publicar parcialmente.
+
+## Gate de release
+V61 CI 45443115366 aprovado. V62 adiciona gate V3 no workflow de publicação, preflight manual somente leitura por padrão, restrição de publicação à main, bookmark antes de migrations e rotas V3 explicitadas no Worker. Nenhuma escrita de produção ou confirmação de configuração remota. As flags/catalogação e a Black Libri permanecem bloqueadas até as verificações comerciais e remotas. CI V62 a confirmar.

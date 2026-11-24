@@ -30,6 +30,10 @@
       "/api/*",
       "/pedido",
       "/pedido/*",
+      "/loja",
+      "/loja/",
+      "/pedido-v3",
+      "/pedido-v3/",
       "/meu-pedido/*",
       "/admin-v2",
       "/admin-v2/"

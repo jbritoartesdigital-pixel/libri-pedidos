@@ -40,7 +40,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   }
   function render(){
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
-    root.innerHTML='<section class="v3-panel v97-checkout"><header class="v97-checkout-header"><span class="v97-stage-label">Última etapa</span><h1 class="v3-title">Finalizar seu pedido</h1><p>Confirme os detalhes da sua comemoração e o valor da contratação.</p></header>'+
+    root.innerHTML='<section class="v3-panel v97-checkout"><header class="v97-checkout-header"><span class="v97-stage-label">Última etapa</span><h1 class="v3-title">Finalizar seu pedido</h1><p>Preencha os dados e escolha a entrega.</p></header>'+
       (!enabled&&!busy&&terms?'<div class="v3-notice">Pagamento indisponível no momento.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       (blackConflict?'<div class="v3-black-recovery"><strong>Você já tem uma surpresa registrada!</strong><p>Seu presente não será sorteado novamente. Se a Libri enviou um código de recuperação, informe abaixo.</p><label for="v3-black-code">Código de recuperação</label><input id="v3-black-code" class="v3-at-input" autocomplete="off"><button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="black-recover">Recuperar presente</button><p class="v3-mini">Se não tiver o código, fale com a Libri antes de pagar para preservar o benefício.</p></div>':'')+
@@ -85,8 +85,8 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       readForm();
       if(!quote||!terms||(!form.deliveryWindow&&!(urgentQuote&&urgentAccepted))||!accepted.has('general')||terms.services.some(x=>!accepted.has(x.family))){error='Confira a agenda e aceite todas as condições.';render();return;}
       if(simulationMode){
-        const complete=()=>{detach();root.innerHTML='<section class="v3-panel" role="status"><span class="v3-eyebrow">Modo de teste</span><h1 class="v3-title">Simulação concluída!</h1><p>Você conferiu a contratação sem criar pedido, cobrança ou reserva real.</p>'+summary()+'<div class="v3-action-row"><a class="v3-btn v3-btn-primary" href="/loja?simular=1">Simular novamente</a><a class="v3-btn v3-btn-secondary" href="/loja">Sair do teste</a></div></section>';root.setAttribute('aria-busy','false');};
-        if(hasInvite){checkingBlack=true;try{const {openBlackLibriDemo}=await import('./black-libri-demo.js?v=97');await openBlackLibriDemo({onContinue:complete,continueLabel:'Concluir simulação'});}catch(e){error=e.message;render();}finally{checkingBlack=false;}}else complete();
+        const complete=(gift='')=>{detach();root.innerHTML='<section class="v3-panel" role="status"><span class="v3-eyebrow">Modo de teste</span><h1 class="v3-title">Simulação concluída!</h1><p>Você conferiu a contratação sem criar pedido, cobrança ou reserva real.</p>'+(gift?'<p class="v3-notice"><strong>Presente simulado:</strong> '+esc(gift)+'</p>':'')+summary()+'<div class="v3-action-row"><a class="v3-btn v3-btn-primary" href="/loja?simular=1">Simular novamente</a><a class="v3-btn v3-btn-secondary" href="/loja">Sair do teste</a></div></section>';root.setAttribute('aria-busy','false');};
+        if(hasInvite){checkingBlack=true;try{const {openBlackLibriDemo}=await import('./black-libri-demo.js?v=98');await openBlackLibriDemo({onContinue:complete,continueLabel:'Concluir simulação',hasSaveDate:cart.items.some(i=>i.addonCodes?.some(c=>/^save_/.test(c)))});}catch(e){error=e.message;render();}finally{checkingBlack=false;}}else complete();
         return;
       }
       try{

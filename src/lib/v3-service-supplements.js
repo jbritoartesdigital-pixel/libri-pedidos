@@ -61,11 +61,12 @@ async function quote(db,ctx,s,input){
 }
 const view=r=>({id:r.id,family:r.family,status:r.status,kind:parse(r.offer_json).kind||'extras',targetFamily:parse(r.offer_json).targetFamily||r.family,terms:parse(r.offer_json).terms||null,deliveryWindow:parse(r.offer_json).deliveryWindow||null,absorbed:parse(r.offer_json).absorbed||[],items:parse(r.offer_json).items,subtotalCents:r.subtotal_cents,cardFeeCents:r.card_fee_cents,totalCents:r.total_cents,pointsUnits:r.points_units,paymentMethod:r.payment_method,note:r.note,createdAt:r.created_at,decidedAt:r.decided_at,paymentAvailable:false});
 export async function listV3Supplements(db,orderId){
+ const contracted=new Set(((await db.prepare('SELECT family FROM v3_order_services WHERE order_id=?').bind(orderId).all()).results||[]).map(x=>x.family));
  const rows=(await db.prepare('SELECT a.*,s.family,s.production_status,s.production_version,s.scheduled_at,s.delivery_end,COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json) AS current_snapshot,p.status AS attempt_status,p.checkout_url,p.expires_at,p.paid_at FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id LEFT JOIN v3_supplement_payments p ON p.id=(SELECT MAX(id) FROM v3_supplement_payments WHERE supplement_id=a.id) WHERE s.order_id=? ORDER BY a.id DESC').bind(orderId).all()).results||[];
  return rows.map(r=>{
   const fresh=r.production_version===r.base_production_version&&r.current_snapshot===r.base_snapshot_json;
   const q=parse(r.offer_json);
-  const eligible=q.kind==='new_service'?true:fresh&&!!r.scheduled_at&&!!r.delivery_end&&(r.production_status==='ready'||r.production_status==='adjustments'&&parse(r.offer_json).items.every(x=>x.code.endsWith('_revision')));
+  const eligible=q.kind==='new_service'?!!q.deliveryWindow&&!contracted.has(q.targetFamily):fresh&&!!r.scheduled_at&&!!r.delivery_end&&(r.production_status==='ready'||r.production_status==='adjustments'&&parse(r.offer_json).items.every(x=>x.code.endsWith('_revision')));
   const live=r.attempt_status==='pending'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
   const retry=r.attempt_status==='creating'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
   const renew=['expired','cancelled','rejected'].includes(r.attempt_status)&&r.status==='accepted';

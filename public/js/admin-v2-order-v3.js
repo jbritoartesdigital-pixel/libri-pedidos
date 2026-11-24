@@ -55,15 +55,15 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const family=esc(s.family),offers=(brief.supplements||[]).filter(x=>x.family===s.family),draft=supplementDrafts[s.family];
  const status={offered:'Aguardando cliente',accepted:'Aceita · aguardando pagamento',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em revisão'};
  const open=offers.some(x=>['offered','accepted','payment_pending','review'].includes(x.status));
- return '<details class="notice"><summary>Adicionais após contratação</summary>'+offers.map(x=>'<p><strong>'+money(x.totalCents)+'</strong> · '+esc(status[x.status])+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.payment?.paidAt?'<p>Confirmação registrada: '+esc(x.payment.paidAt.slice(0,10))+'</p>':'')+
+ return '<details class="notice"><summary>Adicionais, upgrades e novos serviços</summary>'+offers.map(x=>'<p><strong>'+money(x.totalCents)+'</strong> · '+esc(status[x.status])+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.payment?.paidAt?'<p>Confirmação registrada: '+esc(x.payment.paidAt.slice(0,10))+'</p>':'')+
  (x.status==='accepted'?'<button class="btn btn-secondary" data-v3-admin="supplement-capacity" data-family="'+family+'" data-supplement-id="'+x.id+'">Conferir capacidade</button>':'')+
  (x.canVerify?'<button class="btn btn-secondary" data-v3-admin="supplement-verify" data-family="'+family+'" data-supplement-id="'+x.id+'">Verificar cobrança</button>':'')+
  (supplementCapacity[x.id]?'<p>Capacidade disponível até '+esc(supplementCapacity[x.id].deliveryEnd)+' · '+esc(supplementCapacity[x.id].pointsUnits/100)+' pontos (consulta sem reserva).</p>':'')+
  (x.status==='review'?'<p>Conciliação necessária. Não cobrar novamente.</p>':'')+(['offered','accepted'].includes(x.status)?'<button class="btn btn-secondary" data-v3-admin="supplement-cancel" data-family="'+family+'" data-supplement-id="'+x.id+'">Cancelar proposta</button>':'')).join('')+
- (!open&&s.supplementCatalog?.length?'<p>Selecione os adicionais. A proposta não modifica o pedido original.</p>'+s.supplementCatalog.map(x=>'<label class="field">'+esc(x.name)+' · '+money(x.priceCents)+'<input type="number" min="0" max="'+esc(x.maxQuantity)+'" value="'+esc(draft?.input.items.find(i=>i.code===x.code)?.quantity||0)+'" data-supplement-family="'+family+'" data-extra-code="'+esc(x.code)+'"></label>').join('')+
+ (!open&&(s.supplementCatalog?.length||s.changeCatalog?.length)?'<p>Escolha adicionais, um pacote superior ou outra linha de serviço.</p><label>Tipo de complemento <select data-change-kind="'+family+'"><option value="">Adicionais</option>'+ (s.changeCatalog||[]).map((x,i)=>'<option value="'+i+'" '+(draft?.input.productCode===x.productCode&&draft?.input.variantCode===x.variantCode&&draft?.input.kind===x.kind?'selected':'')+'>'+esc((x.kind==='upgrade'?'Upgrade · ':'Novo serviço · ')+x.name+' · '+x.variantName)+'</option>').join('')+'</select></label>'+ (draft?.quote.requiresWindow?'<label>Previsão de entrega <select data-change-window="'+family+'"><option value="">Escolha uma janela</option>'+draft.quote.options.map((w,i)=>'<option value="'+i+'">'+esc(w.start+' a '+w.end)+'</option>').join('')+'</select></label>':'')+(draft?.input.deliveryWindow?'<p>Previsão: '+esc(draft.input.deliveryWindow.start+' a '+draft.input.deliveryWindow.end)+' (sujeita à confirmação após briefing)</p>':'')+(s.supplementCatalog||[]).map(x=>'<label class="field">'+esc(x.name)+' · '+money(x.priceCents)+'<input type="number" min="0" max="'+esc(x.maxQuantity)+'" value="'+esc(draft?.input.items?.find(i=>i.code===x.code)?.quantity||0)+'" data-supplement-family="'+family+'" data-extra-code="'+esc(x.code)+'"></label>').join('')+
  '<label>Pagamento <select data-supplement-method="'+family+'"><option value="pix">Pix integral</option><option value="card" '+(draft?.input.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select></label><label>Observação para cliente <textarea maxlength="500" data-supplement-note="'+family+'">'+esc(draft?.input.note||'')+'</textarea></label>'+
  '<button class="btn btn-secondary" data-v3-admin="supplement-preview" data-family="'+family+'">Calcular proposta</button>'+
- (draft?'<p>Total complementar: <strong>'+money(draft.quote.totalCents)+'</strong> · '+(draft.quote.pointsUnits/100)+' pontos adicionais</p><button class="btn btn-primary" data-v3-admin="supplement-create" data-family="'+family+'">Enviar proposta para aceite</button>':''):'')+'</details>';
+ (draft&&!draft.quote.requiresWindow?'<p>Total complementar: <strong>'+money(draft.quote.totalCents)+'</strong> · '+(draft.quote.pointsUnits/100)+' pontos adicionais</p>'+(draft.quote.absorbed?.length?'<p>Já contratado e incorporado ao novo pacote: '+draft.quote.absorbed.map(i=>esc(i.quantity+' × '+i.name)).join(', ')+'</p>':'')+'<button class="btn btn-primary" data-v3-admin="supplement-create" data-family="'+family+'">Enviar proposta para aceite</button>':''):'')+'</details>';
  }
  function render(){
  if(!host.isConnected)return;
@@ -93,7 +93,18 @@ export async function openV3AdminOrder(code,initial,onChanged){
    }else{
      const items=Array.from(host.querySelectorAll('[data-supplement-family="'+family+'"]')).map(el=>({code:el.dataset.extraCode,quantity:Number(el.value)})).filter(i=>i.quantity>0);
      const input={items,paymentMethod:host.querySelector('[data-supplement-method="'+family+'"]').value,note:host.querySelector('[data-supplement-note="'+family+'"]').value};
-     if(!items.length){showToast('Selecione pelo menos um adicional.');return;}
+     const selected=host.querySelector('[data-change-kind="'+family+'"]')?.value;
+     const option=selected!==''&&selected!=null?brief.services.find(s=>s.family===family)?.changeCatalog?.[Number(selected)]:null;
+     const prior=supplementDrafts[family];
+     if(option){
+       input.kind=option.kind;input.productCode=option.productCode;input.variantCode=option.variantCode;input.items=[];
+       if(option.kind==='new_service'){
+         const windowIndex=host.querySelector('[data-change-window="'+family+'"]')?.value;
+         const same=prior?.input.productCode===option.productCode&&prior?.input.variantCode===option.variantCode;
+         if(same&&windowIndex!=null&&windowIndex!=='')input.deliveryWindow=prior.quote.options[Number(windowIndex)];
+         else if(same&&prior.input.deliveryWindow)input.deliveryWindow=prior.input.deliveryWindow;
+       }
+     }else if(!items.length){showToast('Selecione pelo menos um adicional.');return;}
      if(action==='supplement-preview'){path+='/preview';payload=input;}
      else{
        const draft=supplementDrafts[family];

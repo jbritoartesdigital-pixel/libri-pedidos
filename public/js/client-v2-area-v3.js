@@ -90,7 +90,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   function supplementHtml(s){
     const offers=(area.supplements||[]).filter(x=>x.family===s.family);
     const statuses={offered:'Aguardando sua decisão',accepted:'Proposta aceita',declined:'Recusada',cancelled:'Cancelada',payment_pending:'Pagamento pendente',paid:'Pago',review:'Em conferência'};
-    return offers.map(x=>'<section class="card"><h4>Proposta complementar</h4><p>'+esc(statuses[x.status]||'Em acompanhamento')+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+' · '+money(i.totalCents)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.cardFeeCents?'<p>Taxa de cartão: '+money(x.cardFeeCents)+'</p>':'')+'<p><strong>Total adicional: '+money(x.totalCents)+'</strong> · '+(x.paymentMethod==='pix'?'Pix integral':'Cartão integral')+'</p><p>O pedido original permanece inalterado até pagamento confirmado e conferência da agenda.</p>'+
+    return offers.map(x=>'<section class="card"><h4>'+esc(x.kind==='upgrade'?'Upgrade de pacote':x.kind==='new_service'?'Novo serviço':'Proposta complementar')+'</h4><p>'+esc(statuses[x.status]||'Em acompanhamento')+'</p>'+x.items.map(i=>'<p>'+esc(i.quantity)+' × '+esc(i.name)+' · '+money(i.totalCents)+'</p>').join('')+(x.note?'<p>'+esc(x.note)+'</p>':'')+(x.cardFeeCents?'<p>Taxa de cartão: '+money(x.cardFeeCents)+'</p>':'')+'<p><strong>Total adicional: '+money(x.totalCents)+'</strong> · '+(x.paymentMethod==='pix'?'Pix integral':'Cartão integral')+'</p><p>O pedido original permanece inalterado até pagamento confirmado e conferência da agenda.</p>'+
+      (x.absorbed?.length?'<p>Extras já contratados incorporados ao pacote: '+x.absorbed.map(i=>esc(i.quantity+' × '+i.name)).join(', ')+'</p>':'')+
+      (x.deliveryWindow?'<p>Previsão do novo serviço: '+day(x.deliveryWindow.start)+' a '+day(x.deliveryWindow.end)+'. Prazo final confirmado após briefing e materiais completos.</p>':'')+
+      (x.terms?'<details><summary>Condições da nova contratação</summary><p style="white-space:pre-wrap">'+esc(x.terms.generalBody)+'</p>'+(x.terms.specificBody?'<p style="white-space:pre-wrap">'+esc(x.terms.specificBody)+'</p>':'')+'</details>'+(x.status==='offered'?'<label><input type="checkbox" data-change-terms="'+x.id+'"> Li e aceito as condições desta proposta.</label>':''):'')+
       (x.status==='offered'?'<div class="grid two"><button type="button" class="btn primary" data-v3-supplement="accept" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Aceitar proposta</button><button type="button" class="btn secondary" data-v3-supplement="decline" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Recusar</button></div>':'')+supplementPaymentHtml(x)+'</section>').join('');
   }
   async function supplementPaymentAction(id,action){
@@ -109,10 +112,12 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     if(busy)return;
     const x=(area.supplements||[]).find(y=>y.id===Number(id));
     if(!x||x.status!=='offered')return;
+    const termsAccepted=!!root.querySelector('[data-change-terms="'+x.id+'"]')?.checked;
+    if(action==='accept'&&x.terms&&!termsAccepted){error='Leia e aceite as condições desta proposta.';render();return;}
     if(!window.confirm(action==='accept'?'Aceitar a proposta de '+money(x.totalCents)+'? Nenhum pagamento será iniciado agora.':'Recusar esta proposta complementar?'))return;
     busy=true;error='';notice='';render();
     try{
-      const r=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/supplements/'+x.family+'/'+x.id+'/decision',{method:'POST',body:JSON.stringify({action,confirmed:true,expectedTotalCents:x.totalCents})});
+      const r=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/supplements/'+x.family+'/'+x.id+'/decision',{method:'POST',body:JSON.stringify({action,confirmed:true,expectedTotalCents:x.totalCents,termsAccepted})});
       area=r.briefing;notice=action==='accept'?'Aceite registrado. Confira as opções de pagamento.':'Proposta recusada.';
     }catch(e){error=e.message;}finally{busy=false;render();}
   }

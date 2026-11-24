@@ -384,7 +384,7 @@ function renderCart() {
       '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i);
   }).join('');
   const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
-    (cartQuote.discountCents?'<div class="v3-line"><span>Desconto do convite</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
+    (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
     items.length>1?'<div class="v3-notice">A contratação conjunta está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':

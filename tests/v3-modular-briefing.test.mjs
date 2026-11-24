@@ -188,3 +188,40 @@ test('Retro receipt completion is explicit, not implied by counts, and review re
  assert.ok(reviewed.modules.find(m=>m.module==='retrospectiva').receipt.completeAt);
  assert.equal(reviewed.services.find(s=>s.family==='retrospectiva').productionStatus,'pending');
 });
+
+import {partitionV3Allocations,previewV3ServiceAgenda,scheduleV3Service} from '../src/lib/v3-service-agenda.js';
+test('service agenda partitions original points and rejects inconsistent reservations',()=>{
+ const services=[{family:'convite',points_units:100},{family:'identidade_visual',points_units:300}];
+ const rows=[{id:1,day:'2027-01-05',points_units:250,allocation_type:'confirmed'},{id:2,day:'2027-01-06',points_units:150,allocation_type:'confirmed'}];
+ const p=partitionV3Allocations(services,rows);
+ assert.equal(p.reduce((n,x)=>n+x.points_units,0),400);
+ assert.equal(p.filter(x=>x.service_family==='identidade_visual').reduce((n,x)=>n+x.points_units,0),300);
+ assert.throws(()=>partitionV3Allocations(services,rows.slice(0,1)),/reserva original/);
+});
+test('service agenda requires reviewed briefing, keeps points once and enforces identity dependency',async t=>{
+ const {db,order}=await paid(t);
+ await assert.rejects(previewV3ServiceAgenda(db,order.publicToken,'identidade_visual',{}),/Confira o briefing/);
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed',reviewed_at=datetime('now') WHERE order_id=?").run(order.orderId);
+ const before=db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n;
+ assert.equal(before,400);
+ await assert.rejects(previewV3ServiceAgenda(db,order.publicToken,'convite',{}),/depende/);
+ await assert.rejects(previewV3ServiceAgenda(db,order.publicToken,'convite',{dependsOnIdentity:true}),/Aguarde a aprovação/);
+ const preview=await previewV3ServiceAgenda(db,order.publicToken,'identidade_visual',{});
+ assert.ok(preview.options.length);
+ assert.equal(preview.pointsUnits,300);
+ const window=preview.options[0];
+ assert.ok(window.allocation.every(r=>![0,6].includes(new Date(r.day+'T12:00:00Z').getUTCDay())));
+ assert.ok(window.start>=day(14));
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE service_family IS NOT NULL').get().n,0);
+ await assert.rejects(scheduleV3Service(db,order.publicToken,'identidade_visual',{...window,confirmed:false}),/Confirme/);
+ await scheduleV3Service(db,order.publicToken,'identidade_visual',{...window,confirmed:true});
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,before);
+ assert.equal(db.sqlite.prepare("SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=? AND service_family='identidade_visual'").get(order.orderId).n,300);
+ const next=await previewV3ServiceAgenda(db,order.publicToken,'convite',{dependsOnIdentity:false});
+ assert.ok(next.options.length);
+ await scheduleV3Service(db,order.publicToken,'convite',{...next.options[0],confirmed:true,dependsOnIdentity:false});
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,400);
+ const brief=await getV3ModularBriefing(db,order.publicToken);
+ assert.ok(brief.services.every(s=>s.deliveryWindow&&s.productionStatus==='ready'));
+ assert.equal(brief.services.find(s=>s.family==='convite').dependsOnIdentity,false);
+});

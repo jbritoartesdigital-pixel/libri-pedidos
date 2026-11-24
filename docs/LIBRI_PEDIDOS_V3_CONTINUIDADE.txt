@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 12 | 23/11/2026 (Brasil)
+Versão 13 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -118,5 +118,13 @@ RETOMADA V12 — DESCONTO COMBINADO E SUGESTÃO DE UPGRADE
 - a6d660d/86568a3: desconto 5% duas famílias, 10% três; rateio determinístico em centavos pelo produto principal, sem desconto nos adicionais, sem reduzir pontos; compara combo explícito do convite e escolhe maior economia, sem somar. Snapshot por linha e total agregado, taxa cartão depois do desconto. Cupom monetário global e campanhas temporárias continuam pendentes, bloqueados até integração segura.
 - b43bf27/8683ea3/c1d1d84/9fb43ef: testes e UI atualizados para valor efetivamente descontado. Convite R$35 + Essência R$159 = R$194; desconto R$9,70; total Pix R$184,30. Com 3 poses extras R$60, total R$244,30; capacidade 550 unidades.
 - 0b6c09b/34f22c2/99dd25f/776f716: sugestões de upgrade com comparação do escopo, preço real e disponibilidade; extras cobertos são retirados somente mediante escolha explícita, extras não cobertos permanecem; recomenda mesmo valor ou economia, nunca pacote mais caro. Ateliê compara escopo oficial exato; Retro prepara comparação de blocos de fotos/vídeos e duração acumulada, mas venda ainda inativa. UI recota após clicar em Trocar pacote.
-- b68922b: testes de rateio para três famílias, não acumulação, extras integrais e upgrade; CI a confirmar.
+- b68922b: testes de rateio para três famílias, não acumulação, extras integrais e upgrade; CI 45318260357 concluído com sucesso.
 - Próximo passo: tornar Retrospectivas contratável com catálogo aprovado, verificar limites acrescidos pelos adicionais no recebimento, integrar desconto/cupom/campanha, Admin de extras/cobranças complementares, checkout e briefings/agenda por serviço. Não liberar venda parcial. Nenhum deploy.
+
+RETOMADA V13 — RETROSPECTIVA INDEPENDENTE E LIMITES DE MATERIAIS
+- 8b195bf/ec7ab93: catálogo aprovado D1 gera cotação V3 diretamente por retrospectiva_070/100/150/200/250; não insere produto V2, nem altera preços dos adicionais históricos. API expõe preço de prévia e códigos selecionáveis; sale_enabled continua 0. Cotação aceita serviço avulso e combinado; bloqueia duplicidade de retro legado e principal.
+- c35a544/620d9e8/bffcf90: persistência e pagamento internos aceitam uma retrospectiva ou múltiplos serviços; compra real exige flag sale_enabled e termos específicos; quantidade de serviços deve corresponder ao snapshot. Ainda não existe endpoint público de cobrança V3. Não ativar flag manualmente em produção; ativação automática somente com integração final.
+- 026ec9a: upgrade Retro compara pacotes aprovados da própria tabela, sem depender de produto V2. 9f350d3: vitrine com preços, limites, entregáveis, seleção para carrinho, prévia da agenda também no serviço avulso, bloqueio de pagamento legado para Retro, retira textos antigos de mockup do Ateliê.
+- 1a1475c/e6c850c: migration 0044 e briefing/recebimento aplicam limites do snapshot com +25 fotos e +5 vídeos de até 60s/+300s de total por adicional; recorte bruto contratado +600s; legendas extras liberam campo no briefing. Admin registra contagem e duração individual/total, sem R2, mídia ou início automático de produção. Não substitui confirmação de materiais completos.
+- cae2328/1ab75af: teste de cotação avulsa, 3 famílias com 10%, gate de venda, pagamento mock integral, desbloqueio de briefing e limites; CI a confirmar. Exemplo Memórias R$149 + 25 fotos R$35 + 5 vídeos R$35 = R$219, 4 pontos; 95 fotos, 10 vídeos, 8 minutos acumulados, 60s por vídeo.
+- Próximos: validar CI, implementar orquestrador checkout V3 público seguro, cliente/termos/reserva/pagamento, recuperação de tentativas e bloqueios de rotas legadas; Admin e área cliente para briefings/materiais, submissão/agenda individual; promoções, cupons e cobrança complementar; ativar catálogo somente com testes integrais. PR #143 draft sem publicação.

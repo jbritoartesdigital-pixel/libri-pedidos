@@ -619,6 +619,39 @@ async function determineOffer() {
   const current = state.productCode;
   const available = availableGroups()
     .filter(g => !hasGroup(g[0]) && !state.dismissed.includes('addon:'+g[0]));
+  // When one compatible additional choice unlocks a better official combo,
+  // show the actual benefit first. Never promise a discount from the catalogue alone.
+  const ownedGroups=new Set(selectedAddons().map(a=>a.group));
+  const eligibleGroups=new Set(available.map(g=>g[0]));
+  const comboCandidates=new Map();
+  for(const combo of catalog?.combos||[]){
+    if(Number(combo.discountValue||0)<=0)continue;
+    const missing=(combo.items||[]).filter(item=>item.required!==false&&!(
+      item.itemType==='addon_group'&&ownedGroups.has(item.itemCode)||
+      item.itemType==='addon'&&state.addonCodes.includes(item.itemCode)||
+      item.itemType==='main_product'&&current===item.itemCode));
+    if(missing.length!==1)continue;
+    const m=missing[0];
+    if(!['addon','addon_group'].includes(m.itemType))continue;
+    const options=catalog.addons.filter(a=>eligibleGroups.has(a.group)&&
+      (m.itemType==='addon'?a.code===m.itemCode:a.group===m.itemCode))
+      .filter(a=>a.group!=='moments'||!ownedGroups.has('filter'))
+      .sort((a,b)=>a.priceCents-b.priceCents);
+    if(options[0])comboCandidates.set(options[0].code,options[0]);
+  }
+  const offers=[];
+  for(const addon of comboCandidates.values()){
+    try{
+      const alternative=await priceFor(current,state.variantCode,[...state.addonCodes,addon.code]);
+      const gain=Number(alternative.comboDiscountCents||0)-Number(quote.comboDiscountCents||0);
+      if(gain<=0||!alternative.combo?.name)continue;
+      offers.push({id:'addon:'+addon.group,kind:'addon',addonCode:addon.code,
+        delta:alternative.totalCents-quote.totalCents,gain,
+        title:'Complete o combo '+alternative.combo.name,
+        description:'Adicione '+addon.name+' e aproveite '+money(gain)+' a mais de desconto no convite. O valor abaixo já considera o desconto.'});
+    }catch{/* Invalid or unavailable combos never block checkout. */}
+  }
+  if(offers.length)return offers.sort((a,b)=>a.delta-b.delta||b.gain-a.gain)[0];
   // Interactive customers already have WhatsApp confirmation for free.
   // Recommend the optional managed form before any decorative upgrade.
   const confirmation=INTERACTIVE.has(current)&&available.find(g=>g[0]==='confirmation');
@@ -681,6 +714,7 @@ async function determineOffer() {
   });
   for (const group of ranked) {
     // A oferta sugere a opção mais acessível daquele grupo e calcula o total real.
+    if(group[0]==='moments'&&ownedGroups.has('filter'))continue; // no implicit removal of a purchased filter
     const choices = catalog.addons.filter(a=>a.group===group[0]).sort((a,b)=>a.priceCents-b.priceCents);
     const addon = choices[0];
     if (!addon) continue;
@@ -688,7 +722,7 @@ async function determineOffer() {
       .filter(c=>group[0]!=='moments'||c!=='custom_filter');
     try {
       const alternative = await priceFor(currentCode,state.variantCode,nextCodes);
-      const combo = alternative.combo?.name;
+      const combo = Number(alternative.comboDiscountCents||0)>Number(quote.comboDiscountCents||0)?alternative.combo?.name:null;
       return {
         id:'addon:'+group[0],kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
         title:combo ? 'Complete o pacote '+combo : 'Gostaria de acrescentar '+group[1]+'?',

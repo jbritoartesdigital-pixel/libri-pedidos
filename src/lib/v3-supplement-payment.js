@@ -131,6 +131,10 @@ export async function syncV3SupplementPayment(env,providerOrderId){
   }
   const at=stamp();
   if(offer.applied_at){
+   if(p.status!=='approved'&&p.status!=='refunded'&&status==='approved'){
+    await db.batch([db.prepare("UPDATE v3_supplement_payments SET status='review',paid_at=COALESCE(paid_at,?),updated_at=? WHERE id=?").bind(at,at,p.id),db.prepare("UPDATE v3_service_supplements SET status='review',updated_at=? WHERE id=?").bind(at,offer.id)]);
+    return {found:true,status:'review',needsReview:true};
+   }
    if(status==='refunded'){
     await db.batch([db.prepare("UPDATE v3_supplement_payments SET status='refunded',updated_at=? WHERE id=?").bind(at,p.id),db.prepare("UPDATE v3_service_supplements SET status='review',updated_at=? WHERE id=?").bind(at,offer.id)]);
     return {found:true,status:'refunded',needsReview:true};

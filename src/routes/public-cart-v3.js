@@ -1,3 +1,4 @@
+import {v3BlackStatus} from '../lib/v3-black-libri.js';
 import {fail,json} from '../lib/http.js';
 import {quoteV3Cart,V3CartValidationError} from '../lib/v3-cart-quote.js';
 import {previewV3CartDelivery} from '../lib/v3-cart-delivery.js';
@@ -17,12 +18,13 @@ export async function handlePublicCartV3Api(request,env,url) {
     const family=code.startsWith('atelie_')?'identidade_visual':code.startsWith('retrospectiva_')?'retrospectiva':'convite';
     return json({ok:true,extras:listV3Extras(family,code)});
   }
+  const blackRoute=url.pathname.match(/^\/api\/v3\/cart\/black\/(status|reveal|preview)$/);
   const deliveryRoute=url.pathname==='/api/v3/cart/delivery-options';
   const termsRoute=url.pathname==='/api/v3/cart/terms';
   const checkoutRoute=url.pathname==='/api/v3/cart/checkout';
   const recoveryRoute=url.pathname==='/api/v3/cart/recover';
   const renewRoute=url.pathname==='/api/v3/cart/renew';
-  if(!deliveryRoute&&!termsRoute&&!checkoutRoute&&!recoveryRoute&&!renewRoute&&url.pathname!=='/api/v3/cart/quote')return null;
+  if(!blackRoute&&!deliveryRoute&&!termsRoute&&!checkoutRoute&&!recoveryRoute&&!renewRoute&&url.pathname!=='/api/v3/cart/quote')return null;
   if(checkoutRoute&&!v3CheckoutEnabled(env))return fail('A contratação V3 ainda não está disponível.',503);
   if(request.method!=='POST')return fail('Método não permitido.',405);
   try {
@@ -32,6 +34,12 @@ export async function handlePublicCartV3Api(request,env,url) {
     if(raw.length>12000)return fail('Carrinho muito grande.',413);
     let body;
     try{body=JSON.parse(raw);}catch{return fail('Dados do carrinho inválidos.',422);}
+    if(blackRoute){
+      if(blackRoute[1]==='preview')return json({ok:true,quote:await quoteV3Cart(env.DB,body,{requireSale:true})});
+      // Validate the real cart before allocating promotional inventory.
+      await quoteV3Cart(env.DB,{...body,blackLibriClaimId:null},{requireSale:true});
+      return json({ok:true,...await v3BlackStatus(env,body,{reveal:blackRoute[1]==='reveal'})});
+    }
     if(recoveryRoute||renewRoute)return json({ok:true,...await recoverV3Checkout(request,env,body,{renew:renewRoute})});
     if(termsRoute)return json({ok:true,terms:await getV3CheckoutTerms(env.DB,body),checkoutEnabled:v3CheckoutEnabled(env)});
     if(checkoutRoute)return json({ok:true,...await startV3Checkout(request,env,body)});
@@ -40,7 +48,7 @@ export async function handlePublicCartV3Api(request,env,url) {
     return json({ok:true,quote});
   }catch(error){
     // Rejeição comercial esperada. Não inclui dados pessoais nem pagamento.
-    if(error instanceof V3CartValidationError||error?.code==='cart_promotion_invalid'||error?.code==='cart_extra_invalid'||error?.name==='V2CheckoutError'||error?.code==='order_busy')
+    if(error instanceof V3CartValidationError||String(error?.code||'').startsWith('black_libri_')||error?.code==='cart_promotion_invalid'||error?.code==='cart_extra_invalid'||error?.name==='V2CheckoutError'||error?.code==='order_busy')
       return json({ok:false,error:error.message,code:error.code},error.status);
     return fail('Não foi possível cotar esse conjunto de produtos. Atualize a seleção.',422);
   }

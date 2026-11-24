@@ -733,3 +733,15 @@ test('V3 approval reminders are per preview, deduplicated, stop after approval a
  assert.equal((await run('2026-10-09')).resolved,3);
  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE event_code='V3_APPROVAL_REMINDER' AND resolved_at IS NULL").get().n,0);
 });
+
+test('V3 individual delivery reminders use confirmed service date and resolve after delivery',async t=>{
+ const {db,order}=await paid(t);
+ const s=db.sqlite.prepare("SELECT id FROM v3_order_services WHERE order_id=? AND family='identidade_visual'").get(order.orderId);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='ready',scheduled_at=?,delivery_start=?,delivery_end=? WHERE id=?").run('2026-10-01T12:00:00.000Z','2026-10-07','2026-10-08',s.id);
+ const {runV3DeliveryDeadlineReminders}=await import('../src/lib/v3-service-reminders.js');
+ const run=()=>runV3DeliveryDeadlineReminders({DB:db},{now:new Date('2026-10-07T12:00:00.000Z')});
+ assert.equal((await run()).created,1);
+ assert.equal((await run()).created,0);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE id=?").run(s.id);
+ assert.equal((await run()).resolved,1);
+});

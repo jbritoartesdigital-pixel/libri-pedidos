@@ -1464,6 +1464,7 @@ export async function createUpcomingOperationalNotifications(
               ON c.id = o.customer_id
             WHERE
               o.delivery_end = ?
+              AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots v3 WHERE v3.order_id=o.id)
               AND o.status NOT IN (
                 'cancelled',
                 'finalized'

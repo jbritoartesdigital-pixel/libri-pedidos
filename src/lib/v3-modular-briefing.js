@@ -52,6 +52,16 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
     if(personal)sections.push(section('private_permission','Autorização de imagens',[
       field('private_photo_authorization','Você possui autorização da pessoa retratada ou de seu responsável legal para usar as fotos nesta criação?','choice',{required:true,options:['sim','não']})
     ]));
+    const gift=service.snapshot.blackLibri?.gift;
+    if(gift?.config?.giftOnly){
+      const prize=gift.config.blackLibriPrizeCode;
+      const fields=[field('black_gift_notes','Preferências para o presente '+gift.name,'textarea',{required:true,help:'Informe o texto, tema, cores, personagem ou mensagem desejada; se preferir, escreva que a Libri pode decidir.'})];
+      if(['mini_retrospective','child_birthday'].includes(prize)){
+        fields.push(field('black_gift_media_authorization','Possui autorização do responsável para utilizar as fotos neste presente?','choice',{required:true,options:['sim','não']}),
+          field('black_gift_media_sent','Envie as fotos pelo WhatsApp da Libri, como documentos, identificando seu pedido e o presente. Já enviou?', 'choice',{required:true,options:['sim','não']}));
+      }
+      sections.push(section('black_gift','Seu presente Black Libri',fields));
+    }
     return {...inviteSchema,sections,uploadRules:inviteSchema.uploadRules.map(r=>({...r,authorized:!['person_photos','outfit_photos'].includes(r.fieldKey)||data.private_photo_authorization==='sim'}))};
   }
   if(module==='identidade_visual'){
@@ -235,6 +245,11 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}){
       }
     }
     const data=ctx.drafts[family]||{};
+    const prize=service.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
+    if(['mini_retrospective','child_birthday'].includes(prize)){
+      if(data.black_gift_media_authorization!=='sim')missing.push('Autorização para as fotos do presente Black Libri.');
+      if(data.black_gift_media_sent!=='sim')missing.push('Envio das fotos do presente pelo WhatsApp.');
+    }
     if(family==='retrospectiva'&&data.media_authorization!=='sim')missing.push('Autorização para uso das fotos e vídeos.');
     if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))missing.push('Autorização do responsável para a ilustração da criança.');
     if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;throw e;}

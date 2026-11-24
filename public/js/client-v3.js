@@ -1,3 +1,4 @@
+import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 import { mountV3Checkout } from './client-v3-checkout.js';
 import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
 // Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
@@ -718,7 +719,11 @@ modalRoot.addEventListener('click', event => {
 document.addEventListener('keydown', event => {
   if(event.key==='Escape'&&!modalRoot.hidden)modalClose();
 });
-async function init() {
+async function init({skipRecovery=false}={}) {
+  if(!skipRecovery&&pendingV3CheckoutKey()){
+    const handled=await mountV3PaymentRecovery(root,{request,onMissing:()=>init({skipRecovery:true})});
+    if(handled||pendingV3CheckoutKey())return;
+  }
   root.setAttribute('aria-busy','true');
   const [result, atelie, retrospective] = await Promise.all([
     request('/api/v2/catalog'),

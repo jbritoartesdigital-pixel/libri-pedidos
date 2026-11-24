@@ -617,35 +617,53 @@ function variantFor(productCode, sceneCount) {
 async function determineOffer() {
   if (!quote || state.offerFinished) return null;
   const current = state.productCode;
+  const available = availableGroups()
+    .filter(g => !hasGroup(g[0]) && !state.dismissed.includes('addon:'+g[0]));
+  // Interactive customers already have WhatsApp confirmation for free.
+  // Recommend the optional managed form before any decorative upgrade.
+  const confirmation=INTERACTIVE.has(current)&&available.find(g=>g[0]==='confirmation');
+  if(confirmation){
+    const addon=catalog.addons.filter(a=>a.group==='confirmation').sort((a,b)=>a.priceCents-b.priceCents)[0];
+    if(addon){
+      try{
+        const alternative=await priceFor(current,state.variantCode,[...state.addonCodes,addon.code]);
+        return {id:'addon:confirmation',kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
+          title:'Quer acompanhar as confirmações em um painel?',
+          description:'A confirmação pelo WhatsApp continua grátis. Com o formulário personalizado, os convidados respondem pelo convite e você acompanha tudo em um painel.'};
+      }catch{/* An unavailable suggestion never blocks the original purchase. */}
+    }
+  }
   if (current === 'cinematic_video' && !state.dismissed.includes('upgrade:cinematic_interactive')) {
     const item = variantFor('cinematic_interactive',currentVariant()?.sceneCount);
     if (item) {
-      const alternative = await priceFor('cinematic_interactive',item.code,state.addonCodes);
-      return {
-        id:'upgrade:cinematic_interactive',kind:'upgrade',
-        title:'Que tal deixar seu vídeo interativo?',
-        description:'O mesmo vídeo e as mesmas cenas. No final, os convidados poderão tocar nos botões para acessar as informações da festa.',
-        productCode:'cinematic_interactive',variantCode:item.code,
-        delta:alternative.totalCents-quote.totalCents
-      };
+      try{
+        const alternative = await priceFor('cinematic_interactive',item.code,state.addonCodes);
+        return {
+          id:'upgrade:cinematic_interactive',kind:'upgrade',
+          title:'Que tal deixar seu vídeo interativo?',
+          description:'O mesmo vídeo e as mesmas cenas. No final, os convidados poderão tocar nos botões para acessar as informações da festa.',
+          productCode:'cinematic_interactive',variantCode:item.code,
+          delta:alternative.totalCents-quote.totalCents
+        };
+      }catch{/* Continue to eligible add-ons. */}
     }
   }
   if (current === 'interactive_essential' && !state.dismissed.includes('upgrade:interactive_animated')) {
     const product = getProduct('interactive_animated');
     const variant = product?.variants?.[0];
     if (variant) {
-      const alternative = await priceFor(product.code, variant.code, state.addonCodes);
-      return {
-        id:'upgrade:interactive_animated',kind:'upgrade',
-        title:'Quer uma abertura animada para seu convite?',
-        description:'Seu convite continua com os mesmos recursos. Só acrescentamos uma pequena animação especial antes de mostrar a arte principal.',
-        productCode:product.code,variantCode:variant.code,
-        delta:alternative.totalCents-quote.totalCents
-      };
+      try{
+        const alternative = await priceFor(product.code, variant.code, state.addonCodes);
+        return {
+          id:'upgrade:interactive_animated',kind:'upgrade',
+          title:'Quer uma abertura animada para seu convite?',
+          description:'Seu convite continua com os mesmos recursos. Só acrescentamos uma pequena animação especial antes de mostrar a arte principal.',
+          productCode:product.code,variantCode:variant.code,
+          delta:alternative.totalCents-quote.totalCents
+        };
+      }catch{/* Continue to eligible add-ons. */}
     }
   }
-  const available = availableGroups()
-    .filter(g => !hasGroup(g[0]) && !state.dismissed.includes('addon:'+g[0]));
   const groups = new Set(selectedAddons().map(a=>a.group));
   const currentCode = state.productCode;
   const nearCombo = (catalog?.combos || []).filter(c=>Number(c.discountValue||0)>0).map(c=>{
@@ -734,7 +752,7 @@ async function handleStoreClick(event) {
     if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
+    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

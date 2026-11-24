@@ -370,7 +370,7 @@ export async function getManualClientUpsell(db,manual,offer){
   const ownedGroups=new Set((snap.addons||[]).map(a=>a.group).filter(Boolean));
   const ownedCodes=new Set(currentAddonCodes(manual));
   const descriptions={confirmation:'Acompanhe as respostas dos convidados em um painel personalizado, sem precisar organizar tudo pelo WhatsApp.',save_the_date:'Avise seus convidados da data com antecedência.',reminder:'Relembre a data da festa perto da comemoração.',moments:'Reúna os registros dos convidados em um álbum digital da festa.',filter:'Ofereça um filtro de fotos personalizado para a comemoração.'};
-  for(const group of ['confirmation','save_the_date','reminder','moments','filter']){
+  for(const group of ['confirmation','filter','moments','save_the_date','reminder']){
     if(ownedGroups.has(group)||group==='filter'&&([...ownedCodes].some(c=>/^moments_/.test(c))||ownedGroups.has('moments'))||group==='moments'&&(ownedCodes.has('custom_filter')||ownedGroups.has('filter')))continue;
     const addon=offer.available.filter(a=>a.group===group&&!ownedCodes.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
     if(addon)candidates.push({title:'Gostaria de adicionar '+addon.name+'?',description:descriptions[group],addonCodes:[addon.code],productCode:original.code,variantCode:current.code});
@@ -379,6 +379,8 @@ export async function getManualClientUpsell(db,manual,offer){
   if(original.code!=='cinematic_video'){
     const confirmation=candidates.findIndex(c=>c.addonCodes.some(code=>offer.available.some(a=>a.code===code&&a.group==='confirmation')));
     if(confirmation>0)candidates.unshift(candidates.splice(confirmation,1)[0]);
+    const filter=candidates.findIndex(c=>c.addonCodes.some(code=>offer.available.some(a=>a.code===code&&a.group==='filter')));
+    if(confirmation<0&&filter>0)candidates.unshift(candidates.splice(filter,1)[0]);
   }
   for(const candidate of candidates.slice(0,4)){
     try{

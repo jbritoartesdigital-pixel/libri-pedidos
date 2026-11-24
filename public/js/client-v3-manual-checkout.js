@@ -42,24 +42,34 @@ export async function startV3ManualCheckout(root,{token,api}){
  catch(e){error=e.message||'Não foi possível conferir os adicionais.';chosen.clear();quantities.clear();quote=c.quote;}
  finally{busy=false;render();const el=root.querySelector('.manual-scroll');if(el)el.scrollTop=y;}
  }
- async function finish(){
- if(busy)return;
- if(!terms){error='Leia e aceite os termos da contratação para continuar.';render();return;}
+ async function payFinal(){
  busy=true;error='';render();
  try{
-  const hasInvite=quote.items.some(i=>i.family==='convite');
-  if(hasInvite&&!black){
-   let continued=false;
-   await openBlackLibriBeforePayment({manualV3Endpoint:endpoint,manualV3Selection:selection(),onContinue:claim=>{black=claim?.status==='reserved'?claim:{status:'unavailable'};continued=true;}}); 
-   if(!continued){busy=false;render();return;}
-  }
   const finalSelection={...selection(),...(black?.status==='reserved'?{blackLibriClaimId:black.id}:{})};
-  quote=(await request('quote',finalSelection)).quote;
-  render();
+  quote=(await request('quote',finalSelection)).quote;render();
   const result=await request('finish',{...finalSelection,id:c.revisionId,termsAccepted:true,confirmed:true,expectedTotalCents:quote.totalCents});
   const url=safePay(result.payment?.checkoutUrl);if(url){location.assign(url);return;}
   location.reload();
- }catch(e){error=e.message||'Não foi possível continuar. Reabra seu pedido para conferir o pagamento.';busy=false;render();}
+ }catch(e){
+  // A provider failure can happen after the terms were recorded. Reopen the same
+  // order rather than attempting another checkout or repeating its acceptance.
+  try{const area=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing');if(area.briefing&&!area.briefing.revision){location.reload();return;}}catch{}
+  error=e.message||'Não foi possível continuar. Reabra seu pedido para conferir o pagamento.';busy=false;render();
+ }
+ }
+ async function finish(){
+ if(busy)return;
+ if(!terms){error='Leia e aceite os termos da contratação para continuar.';render();return;}
+ if(!quote.items.some(i=>i.family==='convite')||black){await payFinal();return;}
+ busy=true;error='';render();
+ let continuation=null;
+ try{
+  await openBlackLibriBeforePayment({manualV3Endpoint:endpoint,manualV3Selection:selection(),onContinue:claim=>{black=claim?.status==='reserved'?claim:{status:'unavailable'};continuation=payFinal();}});
+  if(continuation){await continuation;return;}
+  // The overlay owns its own click handlers and calls onContinue after the
+  // balloon is selected. Closing it leaves the cart intact.
+  busy=false;render();
+ }catch(e){error=e.message;busy=false;render();}
  }
  root.addEventListener('change',e=>{
  if(e.target.matches('[data-manual-terms]')){terms=e.target.checked;return;}

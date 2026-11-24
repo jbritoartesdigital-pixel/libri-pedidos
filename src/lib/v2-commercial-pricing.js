@@ -56,7 +56,7 @@ function boundedDiscount(
   );
 }
 
-function discountValue(
+export function discountValue(
   baseCents,
   type,
   value,
@@ -386,7 +386,7 @@ function comboMatches(
     );
 }
 
-function couponRestrictionsMatch(
+export function couponRestrictionsMatch(
   restrictions,
   {
     quote,

@@ -242,3 +242,28 @@ test('Black monetary discount competes with combined discount and coupon, never 
  q=(await (await call({...selected,couponCode:'BETTER'},env,'black/preview')).json()).quote;
  assert.equal(q.selectedDiscount,'coupon');assert.equal(q.discountCents,2000);assert.equal(q.blackLibri.applied,false);
 });
+
+import {V3_BLACK_GIFT_WORKLOAD,v3BlackCandidate} from '../src/lib/v3-black-libri.js';
+import {buildV3ModuleSchema} from '../src/lib/v3-modular-briefing.js';
+import {quoteV3Cart} from '../src/lib/v3-cart-quote.js';
+test('all gift-only prizes carry positive workload, free delivery scope and creative briefing',async()=>{
+ const {DB,body}=await setup();
+ const cart={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},...body.items]};
+ const q=await quoteV3Cart(DB,cart,{includeSnapshots:true});
+ const invite=q.items.find(x=>x.family==='convite');
+ for(const [code,points] of Object.entries(V3_BLACK_GIFT_WORKLOAD)){
+  const prize=DB.sqlite.prepare('SELECT * FROM v2_black_libri_prizes WHERE code=?').get(code);
+  assert.ok(prize);
+  const claim={id:'test_'+code,prize_code:code,label:prize.label,kind:'gift',description:prize.description};
+  const benefit=await v3BlackCandidate(DB,claim,invite);
+  assert.equal(benefit.gift.pointsUnits,points);
+  assert.equal(benefit.gift.priceCents,0);
+  assert.equal(benefit.availableDiscountCents,0);
+  assert.equal(benefit.gift.config.giftOnly,true);
+  const snapshot={...invite.commercialSnapshot,addons:[...invite.commercialSnapshot.addons,benefit.gift],blackLibri:benefit};
+  const schema=buildV3ModuleSchema({event_type:'birthday'},[{family:'convite',snapshot}],'convite');
+  const fields=schema.sections.find(s=>s.id==='black_gift').fields;
+  assert.ok(fields.some(x=>x.key==='black_gift_notes'&&x.required));
+  assert.equal(fields.some(x=>x.key==='black_gift_media_sent'),['mini_retrospective','child_birthday'].includes(code));
+ }
+});

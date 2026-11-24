@@ -98,13 +98,14 @@ async function checkout(p){
  assert.equal(await p.locator('[data-action="cart-delivery"]').count(),0);
  await p.locator('#v3CartEventDate').fill(day(65));
  await click(p,'cart-unified-checkout');
- await p.locator('#v3-unified-checkout').waitFor();assert.match(await p.locator('.v3-checkout-block h2').first().evaluate(el=>getComputedStyle(el).fontFamily),/Manrope/);
+ await p.locator('#v3-unified-checkout').waitFor();
  assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));
  await p.locator('#v3-app[aria-busy="false"]').waitFor();
  await p.screenshot({path:'artifacts/v3-browser/checkout-before-agenda-'+p.viewportSize().width+'.png',fullPage:true});
  assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
  assert.equal(await p.locator('[name="email"]').count(),0);
  await p.locator('[name="deliveryWindow"]').first().waitFor();
+ await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.waitForFunction(()=>{const el=document.querySelector('.v3-checkout-block h2');return el&&getComputedStyle(el).fontFamily.includes('Manrope')});
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);await p.locator('#v3-theme-toggle').click();assert.equal(await p.locator('html').getAttribute('data-v3-theme'),'dark');assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));assert.equal(await p.locator('#v3c-eventDate').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(36, 27, 30)');await p.locator('#v3-theme-toggle').click();
  assert.match(p.url(),/\/loja$/);
 }

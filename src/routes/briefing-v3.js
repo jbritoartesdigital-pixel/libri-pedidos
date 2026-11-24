@@ -61,7 +61,7 @@ export async function handleCustomerBriefingV3Api(request,env,url){
   const submit=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/briefing\/(convite|identidade_visual|retrospectiva)\/submit$/);
   if(submit){
     if(request.method!=='POST')return fail('Método não permitido.',405);
-    try{const result=await submitV3ServiceBriefing(env.DB,submit[1],submit[2],await boundedJson(request));return result?json({ok:true,briefing:result}):fail('Pedido não encontrado.',404);}catch(e){return errorResponse(e);}
+    try{const result=await submitV3ServiceBriefing(env.DB,submit[1],submit[2],await boundedJson(request));return result?json({ok:true,briefing:{...result,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}}):fail('Pedido não encontrado.',404);}catch(e){return errorResponse(e);}
   }
   const match=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/briefing(?:\/(shared|convite|identidade_visual|retrospectiva))?$/);
   if(!match)return null;

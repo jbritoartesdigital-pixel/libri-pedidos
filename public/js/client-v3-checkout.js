@@ -39,6 +39,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     return '<label for="v3c-'+name+'">'+label+'</label><input class="v3-at-input" id="v3c-'+name+'" name="'+name+'" type="'+type+'" value="'+esc(form[name])+'" maxlength="'+max+'" '+(name==='whatsapp'?'autocomplete="tel" inputmode="tel" ':name==='email'?'autocomplete="email" ':name==='name'?'autocomplete="name" ':'')+(name==='whatsapp'&&blackClaim?'readonly ':'')+(required?'required':'')+'>';
   }
   function render(){
+    const priorScroll=root.querySelector('#v3-unified-checkout>fieldset')?.scrollTop||0;
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
     root.innerHTML='<section class="v3-panel v97-checkout"><header class="v97-checkout-header"><span class="v97-stage-label">Última etapa</span><h1 class="v3-title">Finalizar seu pedido</h1><p>Preencha os dados e escolha a entrega.</p></header>'+
       (!enabled&&!busy&&terms?'<div class="v3-notice">Pagamento indisponível no momento.</div>':'')+
@@ -54,6 +55,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       '</section><section class="v3-checkout-block" data-checkout-stage="revisao"><h2><span class="v97-step-no">04</span> Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
       '</section></fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
       '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length&&!(urgentQuote&&urgentAccepted))?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':urgentQuote&&urgentAccepted?'Solicitar encaixe, sem pagar agora':simulationMode?'Concluir simulação':'Confirmar e pagar')+'</button></div></form></section>';
+    const scroll=root.querySelector('#v3-unified-checkout>fieldset');if(scroll)scroll.scrollTop=priorScroll;
     root.setAttribute('aria-busy',String(busy));
   }
   async function refresh({agenda=false}={}){
@@ -86,7 +88,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       if(!quote||!terms||(!form.deliveryWindow&&!(urgentQuote&&urgentAccepted))||!accepted.has('general')||terms.services.some(x=>!accepted.has(x.family))){error='Confira a agenda e aceite todas as condições.';render();return;}
       if(simulationMode){
         const complete=(gift='')=>{detach();root.innerHTML='<section class="v3-panel" role="status"><span class="v3-eyebrow">Modo de teste</span><h1 class="v3-title">Simulação concluída!</h1><p>Você conferiu a contratação sem criar pedido, cobrança ou reserva real.</p>'+(gift?'<p class="v3-notice"><strong>Presente simulado:</strong> '+esc(gift)+'</p>':'')+summary()+'<div class="v3-action-row"><a class="v3-btn v3-btn-primary" href="/loja?simular=1">Simular novamente</a><a class="v3-btn v3-btn-secondary" href="/loja">Sair do teste</a></div></section>';root.setAttribute('aria-busy','false');};
-        if(hasInvite){checkingBlack=true;try{const {openBlackLibriDemo}=await import('./black-libri-demo.js?v=98');await openBlackLibriDemo({onContinue:complete,continueLabel:'Concluir simulação',hasSaveDate:cart.items.some(i=>i.addonCodes?.some(c=>/^save_/.test(c)))});}catch(e){error=e.message;render();}finally{checkingBlack=false;}}else complete();
+        if(hasInvite){checkingBlack=true;try{const {openBlackLibriDemo}=await import('./black-libri-demo.js?v=102');await openBlackLibriDemo({onContinue:complete,continueLabel:'Concluir simulação',hasSaveDate:cart.items.some(i=>i.addonCodes?.some(c=>/^save_/.test(c)))});}catch(e){error=e.message;render();}finally{checkingBlack=false;}}else complete();
         return;
       }
       try{
@@ -98,7 +100,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
         checkingBlack=true;
         let immediate=false,opening=true;
         try{
-          const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=97-studio');
+          const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=102-studio');
           let legacyRequestId='';try{legacyRequestId=JSON.parse(localStorage.getItem('libriV2StoreState')||'null')?.clientRequestId||'';}catch{}
           await openBlackLibriBeforePayment({legacyRequestId,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},clientRequestId:attemptKey,v3Cart:{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode},onContinue:claim=>{
             blackChecked=true;blackConflict=false;

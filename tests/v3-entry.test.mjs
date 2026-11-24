@@ -20,7 +20,8 @@ test('V3 preview is noindex and loads its own assets', () => {
   assert.match(html, /rel="canonical"/);
   assert.match(html, /client-v3\.css/);
   assert.match(html, /client-v3\.js/);
-  assert.match(html, /Loja atual/);
+  assert.doesNotMatch(html, /versao=2|versão anterior|Loja atual/i);
+  assert.doesNotMatch(source('public/js/client-v3.js'), /href="\/pedido\?versao=2"/);
 });
 
 test('V3 reads live catalogue and uses integrated checkout for single and combined carts', () => {

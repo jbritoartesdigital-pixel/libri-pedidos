@@ -2,9 +2,7 @@ import {trackStoreStage} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 import { mountV3Checkout } from './client-v3-checkout.js';
-// Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
-// O catálogo, os preços e o cálculo de descontos permanecem nas APIs V2.
-// A etapa de pagamento continua exclusivamente no fluxo V2 existente.
+// Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
 const basket=document.getElementById('v3-live-basket');
@@ -63,7 +61,7 @@ const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let catalog = null, quote = null, offer = null, cartQuote = null, cartError = '', ateliePackages = [], retrosPackages = [];
-let cartDelivery=null,cartDeliveryError='',cartEventDate='',cartDeliveryBusy=false,cartRevision=0,cartOpenDetails=new Set();
+let cartEventDate='',cartRevision=0,cartOpenDetails=new Set();
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -91,7 +89,6 @@ function putCart(item) {
   state.cartItems = state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(item.productCode)).concat(item);
   save();return true;
 }
-function cartButton(){return state.cartItems.length?'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="open-cart">Ver meu carrinho ('+state.cartItems.length+')</button></div>':'';}
 const getProduct = code => (catalog?.products || []).find(item => item.code === code);
 const getAddon = code => (catalog?.addons || []).find(item => item.code === code);
 const currentProduct = () => getProduct(state.productCode);
@@ -105,7 +102,7 @@ function save() {
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
 function message(text) {
-  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido?versao=2">Abrir a versão anterior</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
+  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {
@@ -179,25 +176,26 @@ const stepNames=['Evento','Serviço','Escolhas','Personalização','Carrinho'];
 const symbols={invitation:'mail',identity:'palette',retrospective:'film',birthday:'cake','15_years':'sparkles',wedding:'heart',celebration:'gift',other:'star',story:'film',simple:'mail'};
 function choiceIcon(kind){const icons={mail:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/>',palette:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2A4 4 0 0 0 21 10c0-4-4-7-9-7Z"/><path d="M7 11h.01M10 7h.01M15 7h.01" stroke-width="3"/>',film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 12h4m10 0h4m-11-3 4 3-4 3Z"/>',cake:'<path d="M4 13h16v7H4zM2 20h20M4 13l4 3 4-3 4 3 4-3M8 9V6m4 3V5m4 4V6"/>',heart:'<path d="M12 21 4 13C-2 6 7 1 12 8c5-7 14-2 8 5Z"/>',gift:'<rect x="4" y="10" width="16" height="11" rx="1"/><path d="M3 6h18v4H3zM12 6v15M12 6C3-1 4 7 12 6c9-7 8 1 0 0Z"/>',star:'<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',sparkles:'<path d="m12 2 2 7 7 3-7 3-2 7-2-7-7-3 7-3Z"/>'};return icons[kind]?'<span class="v3-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">'+icons[kind]+'</svg></span>':'';}
 function stepBar(index) {
-  return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span><span>'+(index+1)+' de 5</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
+  return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
 }
 let basketRequestKey='',basketRequestQuote=null,basketRequestSeq=0;
 function hideBasket(){if(basket)basket.hidden=true;basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
 function renderBasket(){
  if(!basket||!basketBody||!basketTotal)return;
  if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
- basket.hidden=false;
  const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
  const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
  const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
- const rows=state.cartItems.map(x=>'<li><span>'+clean(getProduct(x.productCode)?.name||ateliePackages.find(p=>'atelie_'+p.code===x.productCode)?.name||retrosPackages.find(p=>p.productCode===x.productCode)?.name||'Serviço selecionado')+'</span><small>Adicionado ao carrinho</small></li>').join('');
+ if(!state.cartItems.length&&!staged&&!item){hideBasket();return;}
+ basket.hidden=false;
+ const rows=state.cartItems.map(x=>'<li><span>'+clean(getProduct(x.productCode)?.name||ateliePackages.find(p=>'atelie_'+p.code===x.productCode)?.name||retrosPackages.find(p=>p.productCode===x.productCode)?.name||'Serviço selecionado')+'</span></li>').join('');
  basketBody.innerHTML='<p class="v3-basket-event">'+clean(labelForEvent())+'</p>'+
  (rows?'<ul class="v3-basket-list">'+rows+'</ul>':'')+
  (staged?'<div class="v3-basket-draft"><small>Convite em configuração</small><strong>'+clean(PRODUCTS[state.productCode]?.title||currentProduct()?.name||'Convite')+'</strong>'+(currentVariant()?.sceneCount?'<span>'+Number(currentVariant().sceneCount)+' cenas</span>':'')+selectedAddons().map(x=>'<span>'+clean(x.name)+'</span>').join('')+(live?'<b>'+money(live.totalCents)+'</b><small>Total do convite no Pix</small>':'<small>Escolha a configuração para consultar o total.</small>')+'</div>':'')+
  (item?'<div class="v3-basket-draft"><small>Pacote em seleção</small><strong>'+clean(item.name)+'</strong>'+(item.purchaseAvailable?'<b>'+money(item.priceCents)+'</b>':'')+'</div>':'')+
  (!rows&&!staged&&!item?'<p class="v3-mini">Suas escolhas aparecem aqui, conforme você monta a comemoração.</p>':'')+
- (rows?'<button type="button" class="v3-btn v3-btn-secondary" id="v3-basket-open">Ver carrinho ('+state.cartItems.length+')</button><p class="v3-mini">O valor conjunto e os descontos são confirmados no carrinho.</p>':'');
- basketTotal.textContent='Em construção';
+ (rows?'<button type="button" class="v3-btn v3-btn-secondary" id="v3-basket-open">Ver carrinho ('+state.cartItems.length+')</button>':'');
+ basketTotal.textContent='A escolher';
  const pending=live?{productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:live.combo?.code||''}:item?.purchaseAvailable?{productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}:null;
  const old=pending?state.cartItems.find(x=>cartFamily(x.productCode)===cartFamily(pending.productCode)):null;
  if(old&&old.productCode===pending.productCode&&old.variantCode===pending.variantCode&&old.extras?.length)pending.extras=old.extras;
@@ -209,7 +207,6 @@ function renderBasket(){
  basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
 function panel(title, subtitle, content, buttons, index=0) {
-  document.getElementById('v3-landing')?.toggleAttribute('hidden',state.step!=='event');
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
     '' +
     '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
@@ -227,7 +224,7 @@ function choice(value, title, subtitle, current, action, price) {
     choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
 }
 function intro() {
-  hideBasket();document.getElementById('v3-landing')?.setAttribute('hidden','');root.innerHTML = '<section class="v3-intro-screen">' +
+  hideBasket();root.innerHTML = '<section class="v3-intro-screen">' +
     '<div class="v3-intro-inner"><span>UM ATELIÊ DE CELEBRAÇÕES</span><img src="/images/libri-wordmark.png" alt="Libri Convites" width="440" height="128"><i aria-hidden="true"></i><h1>Cada celebração tem sua própria história.</h1><span>FEITO COM ENCANTO. FEITO PARA VOCÊ.</span></div>' +
     '<button class="v3-btn v3-btn-text" type="button" data-action="skip-intro">Pular abertura</button></section>';
 }
@@ -249,7 +246,7 @@ function renderCreation() {
       'Brasão, nome, cores e artes combinando.',state.creation,'creation') +
     choice('retrospective','Retrospectiva de fotos e vídeos',
       'Suas fotos e vídeos em uma homenagem.',state.creation,'creation') +
-    '</div>'+cartButton(),
+    '</div>',
     actions(true,'',null),1);
 }
 function renderUnready() {
@@ -261,7 +258,7 @@ function renderUnready() {
   ).join('');
   panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
     '<p class="v3-mini">Materiais pelo WhatsApp após contratar. Mínimo de 15 dias após pagamento, briefing e materiais completos.</p>'+
-    '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+cartButton(),
+    '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>',
     '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
 function renderAtelie() {
@@ -341,24 +338,9 @@ function availableGroups() {
     return catalog.addons.some(a => a.group === item[0]);
   });
 }
-function addonCard(group) {
-  const checked = selectedAddons().filter(a => a.group === group[0]);
-  const detail = checked.map(a=>a.name).join(', ');
-  return '<button class="v3-choice ' + (checked.length ? 'is-selected':'') + '" data-action="addon-group" data-value="' + clean(group[0]) + '">' +
-    '<strong>' + clean(group[1]) + '</strong><small>' + clean(detail || group[2]) + '</small>' +
-    (checked.length ? '<span class="v3-price">' + money(checked.reduce((sum,a)=>sum+Number(a.priceCents),0)) + ' · Alterar</span>' : '<span class="v3-mini">Ver opções e valores</span>') +
-    '</button>';
-}
 function priceBar() {
   return quote ? '<div class="v3-total"><div><strong>Total até agora</strong><div><small>Calculado pelo catálogo oficial · Pix</small></div></div><b>' + money(quote.totalCents) + '</b></div>' : '';
 }
-const ADDON_QUESTIONS={
- save_the_date:'Quer avisar a data antes de enviar o convite?',
- reminder:'Quer lembrar seus convidados quando a festa estiver chegando?',
- confirmation:'Como gostaria de acompanhar as confirmações?',
- moments:'Quer guardar as fotos que seus convidados tirarem na festa?',
- filter:'Quer um filtro de fotos personalizado com o tema da festa?'
-};
 function renderExtras(){
  const groups=availableGroups();
  const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Respostas no formulário e painel da Libri.',moments:'Álbum digital com fotos dos convidados e filtro incluso.',filter:'Um efeito de fotos com o tema da festa.'};
@@ -407,25 +389,14 @@ function offerHtml() {
     '<button class="v3-btn v3-btn-primary" type="button" data-action="accept-offer">Quero adicionar</button></div></div>';
 }
 function renderReview() {
-  panel('Seu pedido está tomando forma!', 'Confira suas escolhas. O próximo passo conclui o pedido com segurança no checkout Libri.',
-    '<div class="v3-notice"><b>' + clean(labelForEvent()) + '</b> · ' + clean(PRODUCTS[state.productCode]?.title || '') +
-    '</div>' + linesHtml() + priceBar() + offerHtml() +
-    '<p class="v3-mini">Você pode guardar este convite no carrinho e escolher outro serviço para o mesmo evento.</p>',
+  panel('Seu convite', 'Confira antes de adicionar ao carrinho.',
+    linesHtml() + priceBar() + offerHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
 }
-function cartDeliveryHtml(){
+function cartDateHtml(){
   if(!cartQuote||cartError||!state.cartItems.length)return '';
-  const formatDate=s=>s.split('-').reverse().join('/');
-  const options=cartDelivery?.options||[];
-  return '<div class="v3-notice"><strong>Quando é a festa?</strong><p>Consulte a agenda para todos os serviços juntos.</p>'+
-    '<label for="v3CartEventDate" class="v3-mini">Data do evento</label>'+
-    '<input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input">'+
-    '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-delivery" '+(cartDeliveryBusy?'disabled':'')+'>'+(cartDeliveryBusy?'Consultando…':'Consultar prazos')+'</button>'+
-    (cartDeliveryError?'<p role="alert">'+clean(cartDeliveryError)+'</p>':'')+
-    (cartDelivery?'<div role="status"><p><strong>Previsão de entrega conjunta</strong></p>'+
-      (options.length?options.map(o=>'<p>'+clean(formatDate(o.start))+' a '+clean(formatDate(o.end))+(o.recommended?' · sugerida':'')+'</p>').join(''):'<p>Sem janela automática para esta data. Será necessário avaliar a disponibilidade antes de pagar.</p>')+
-      '<p class="v3-mini">'+(cartDelivery.provisionalUntilBriefing?'Mínimo de 15 dias corridos após pagamento e briefing completos. ':'')+'Consulta sem reserva de vaga. A data ainda deverá ser confirmada na contratação.</p></div>':'')+'</div>';
+  return '<div class="v3-cart-date"><label for="v3CartEventDate">Data da festa</label><input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input"><small>Confira o prazo na próxima etapa.</small></div>';
 }
 let cartExtrasCatalog=Object.create(null);
 const EXTRA_INTENTS={
@@ -491,19 +462,19 @@ function renderCart() {
       (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
       '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
   }).join('');
-  const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
+  const totals=cartQuote?'<div class="v3-lines">'+(cartQuote.discountCents?'<div class="v3-line"><span>Subtotal</span><b>'+money(cartQuote.grossCents)+'</b></div>':'')+
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
-  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':items.length?'<p class="v3-mini">Confira os dados, os prazos e as condições na contratação. Nenhuma cobrança foi criada.</p>':'';
+  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
+    '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDateHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
 async function openCart(){
   const revision=cartRevision+1;
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
-  hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
+  hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartRevision++;
   root.setAttribute('aria-busy','true');
   root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
   if(state.cartItems.length){
@@ -743,18 +714,6 @@ async function handleStoreClick(event) {
       if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))await openCart();return;
     }
     if(action==='open-cart'){await openCart();return;}
-    if(action==='cart-delivery'){
-      if(cartDeliveryBusy||!cartQuote||!state.cartItems.length)return;
-      const revision=cartRevision;
-      cartEventDate=root.querySelector('#v3CartEventDate')?.value||'';
-      cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=true;renderCart();
-      try{
-        const result=await request('/api/v3/cart/delivery-options',{eventType:state.eventType,eventDate:cartEventDate,paymentMethod:'pix',items:state.cartItems});
-        if(revision===cartRevision&&state.step==='cart'){cartDelivery=result.delivery;cartQuote=result.quote;}
-      }catch(e){if(revision===cartRevision)cartDeliveryError=e.message||'Não foi possível consultar a agenda.';}
-      finally{if(revision===cartRevision){cartDeliveryBusy=false;if(state.step==='cart')renderCart();}}
-      return;
-    }
     if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}
     if(action==='cart-edit'){
       const item=state.cartItems[Number(value)];if(!item)return;
@@ -793,7 +752,7 @@ async function handleStoreClick(event) {
       renderExtraQuestion();return;
     }
     if(action==='cart-unified-checkout'||action==='cart-single-checkout'){
-      if(!cartQuote||cartError||!state.cartItems.length||cartDeliveryBusy)return;
+      if(!cartQuote||cartError||!state.cartItems.length)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
       hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,request,onBack:()=>openCart()});

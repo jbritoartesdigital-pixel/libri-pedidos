@@ -183,7 +183,7 @@ export async function renderCentral(openOrder) {
       <a href="#central-new" class="central-quick-item"><small>Novos pedidos</small><strong>${newOrders.length}</strong><span>Conferir e programar</span></a>
       <a href="#central-payments" class="central-quick-item"><small>Pagamentos pendentes</small><strong>${pendingPayments.length}</strong><span>Entradas e saldos</span></a>
       <a href="#central-ongoing" class="central-quick-item"><small>Em andamento</small><strong>${modular.length}</strong><span>Pedidos integrados</span></a>
-      <a href="#central-deadlines" class="central-quick-item"><small>Prazos próximos</small><strong>${soon.length}</strong><span>Serviços V3 até 7 dias</span></a>
+      <a href="#central-deadlines" class="central-quick-item"><small>Prazos próximos</small><strong>${soon.length}</strong><span>Até 7 dias</span></a>
     </div>
     ${exceptions.length?`<section class="card" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
     <section class="card attention-center">
@@ -348,9 +348,9 @@ export async function renderCentral(openOrder) {
     <section class="card" id="central-ongoing">
       <div class="section-title"><div><span class="eyebrow">Operação integrada</span><h2>Pedidos em andamento</h2></div><span class="status">${modular.length} pedidos</span></div>
       <div class="kpi-grid central-service-counts">${Object.entries(serviceNames).map(([family,label])=>`<article class="kpi"><span>${label}</span><strong>${active.filter(s=>s.family===family).length}</strong><small>Serviços em andamento</small></article>`).join('')}</div>
-      <details class="order-optional"><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido integrado em andamento.')}</div>
+      <details class="order-optional"><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido em andamento.')}</div>
       ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}</details>
-      ${soon.length?`<details class="order-optional" id="central-deadlines" style="margin-top:12px" open><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:'<div id="central-deadlines" class="muted">Nenhum prazo V3 nos próximos 7 dias.</div>'}
+      ${soon.length?`<details class="order-optional" id="central-deadlines" style="margin-top:12px" open><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:'<div id="central-deadlines" class="muted">Nenhum prazo nos próximos 7 dias.</div>'}
     </section>
     <section class="card" id="central-workload" style="margin-top:14px">
       <div class="section-title">
@@ -445,15 +445,10 @@ export async function renderCentral(openOrder) {
         <small>Entregáveis, valores e disponibilidade</small>
       </a>
       <a class="admin-v3-shortcut" href="/loja" target="_blank" rel="noopener noreferrer">
-        <strong>Loja V3</strong>
+        <strong>Loja de pedidos</strong>
         <small>Ver a experiência da cliente</small>
       </a>
     </nav>
-    <div class="toolbar" style="justify-content:flex-end;margin-bottom:14px">
-      <a class="btn btn-secondary" href="/pedido?simular=1" target="_blank"
-        rel="noopener noreferrer">Simular compra V2</a>
-    </div>
-
 </details>
     <details class="card order-optional" id="central-capacity" style="margin-top:14px">
       <summary>Ver capacidade diária dos próximos 14 dias</summary>

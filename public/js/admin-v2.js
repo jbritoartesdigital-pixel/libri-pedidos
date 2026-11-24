@@ -16,7 +16,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-68';
+} from './admin-v2-central.js?v=20261124-admin-v3-71';
 
 import {
   renderProduction,

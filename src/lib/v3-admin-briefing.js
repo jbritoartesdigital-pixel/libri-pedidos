@@ -14,6 +14,8 @@ export async function getV3AdminBriefing(db,token){
  for(const m of brief.modules){
    for(const u of m.uploads||[])u.contentPath=base+m.module+'/uploads/'+u.id+'/content';
  }
+ const financialCtx=await contextV3Briefing(db,token);
+ brief.adminPayment={canChangeDeposit:brief.locked&&brief.payment.method==='pix'&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canCancelUnpaid:brief.locked&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canRecordBalance:!brief.locked&&brief.payment.depositPercent===50&&brief.payment.remainingCents>0};
  if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.supplementCatalog=await supplementCatalog(db,s);line.changeCatalog=await changeCatalog(db,ctx,s);}}
  return brief;
 }

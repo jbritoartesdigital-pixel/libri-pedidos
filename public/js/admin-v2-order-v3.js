@@ -65,10 +65,17 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<button class="btn btn-secondary" data-v3-admin="supplement-preview" data-family="'+family+'">Calcular proposta</button>'+
  (draft&&!draft.quote.requiresWindow?'<p>Total complementar: <strong>'+money(draft.quote.totalCents)+'</strong> · '+(draft.quote.pointsUnits/100)+' pontos adicionais</p>'+(draft.quote.absorbed?.length?'<p>Já contratado e incorporado ao novo pacote: '+draft.quote.absorbed.map(i=>esc(i.quantity+' × '+i.name)).join(', ')+'</p>':'')+'<button class="btn btn-primary" data-v3-admin="supplement-create" data-family="'+family+'">Enviar proposta para aceite</button>':''):'')+'</details>';
  }
+ function financeActions(){
+  const p=brief.payment,a=brief.adminPayment||{};
+  return '<section class="card"><h3>Pagamento do pedido original</h3><p>Entrada: '+p.depositPercent+'% · '+money(p.depositCents)+'</p><p>Recebido: '+money(p.receivedCents)+'</p><p>Saldo: <strong>'+money(p.remainingCents)+'</strong></p>'+
+   (a.canChangeDeposit?'<label>Condição autorizada <select data-admin-deposit><option value="100" '+(p.depositPercent===100?'selected':'')+'>100% integral</option><option value="50" '+(p.depositPercent===50?'selected':'')+'>50% excepcional</option></select></label><label>Motivo <input data-finance-reason maxlength="500"></label><button class="btn btn-secondary" data-v3-admin="finance-deposit">Alterar entrada e encerrar cobrança anterior</button>':'')+
+   (a.canRecordBalance?'<label>Data do Pix recebido <input type="date" data-admin-paid-date></label><label>Referência do comprovante <input data-admin-paid-note maxlength="500"></label><button class="btn btn-primary" data-v3-admin="finance-balance">Registrar Pix recebido · '+money(p.remainingCents)+'</button>':'')+
+   (a.canCancelUnpaid?'<label>Motivo do cancelamento <input data-cancel-reason maxlength="500"></label><button class="btn btn-secondary" data-v3-admin="finance-cancel-unpaid">Cancelar pedido não pago</button>':'')+'</section>';
+ }
  function render(){
  if(!host.isConnected)return;
  host.innerHTML='<section class="card"><h3>Pedido V3</h3>'+(brief.aggregate?'<p><strong>'+esc(brief.aggregate.label)+'</strong> · '+esc(brief.aggregate.deliveredServices)+' de '+esc(brief.aggregate.totalServices)+' serviços entregues</p>':'')+'<p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Contratação original: '+money(brief.payment.totalCents)+'</p>'+(brief.financial?'<p>Adicionais confirmados: '+money(brief.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(brief.financial.confirmedTotalCents)+'</strong></p><p>Adicionais a receber: '+money(brief.financial.pendingSupplementCents)+'</p>'+(brief.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(brief.financial.reviewSupplementCents)+'</p>':''):'')+'<p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
- (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
+ financeActions()+ (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
@@ -83,7 +90,25 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null,method='POST';
- if(action.startsWith('supplement-')){
+ if(action.startsWith('finance-')){
+   path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/finance/'+action.slice(8);
+   if(action==='finance-deposit'){
+     const depositPercent=Number(host.querySelector('[data-admin-deposit]').value),reason=host.querySelector('[data-finance-reason]').value.trim();
+     if(reason.length<5){showToast('Informe o motivo.');return;}
+     if(!confirm('Encerrar a cobrança anterior após conciliação e autorizar '+depositPercent+'% neste mesmo pedido?'))return;
+     payload={depositPercent,reason,confirmed:true};
+   }else if(action==='finance-balance'){
+     const paidDate=host.querySelector('[data-admin-paid-date]').value,note=host.querySelector('[data-admin-paid-note]').value.trim();
+     if(!paidDate||note.length<5){showToast('Informe data e referência do Pix efetivamente recebido.');return;}
+     if(!confirm('Confirma que recebeu '+money(brief.payment.remainingCents)+' por Pix?'))return;
+     payload={paidDate,note,amountCents:brief.payment.remainingCents,confirmed:true,requestKey:Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('')};
+   }else{
+     const reason=host.querySelector('[data-cancel-reason]').value.trim();
+     if(reason.length<5){showToast('Informe o motivo.');return;}
+     if(!confirm('Cancelar definitivamente este pedido se nenhuma cobrança tiver sido paga?'))return;
+     payload={reason,confirmed:true};
+   }
+ }else if(action.startsWith('supplement-')){
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/supplements/'+family;
    if(['supplement-capacity','supplement-verify'].includes(action)){
      path+='/'+encodeURIComponent(b.dataset.supplementId)+'/'+(action==='supplement-capacity'?'capacity':'verify');payload={};

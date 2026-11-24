@@ -96,7 +96,13 @@ export async function reconcileV3Payment(env,orderId){
       WHERE o.id=?`).bind(orderId).first();
     if(!order)fail('Pedido combinado não encontrado.','v3_order_missing');
     const state=await originalV3FinancialState(db,orderId);
-    if(state?.valid)return {ok:true,alreadyPaid:true,canRetry:false,balanceCents:state.remainingCents};
+    if(state?.valid&&state.row.deposit_percent===50){
+      const initial=state.payments.find(p=>p.provider==='mercado_pago'&&p.status==='approved'&&p.amount_cents===state.row.deposit_cents);
+      const remote=await syncMercadoPagoOrder(env,initial.provider_order_id,{lock:false});
+      const verified=await originalV3FinancialState(db,orderId);
+      if(remote.approved&&verified?.valid)return {ok:true,alreadyPaid:true,canRetry:false,balanceCents:verified.remainingCents,capacityReview:!!remote.capacityReview};
+      return {ok:false,needsReview:true,canRetry:false};
+    }
     const rows=(await db.prepare(`SELECT provider_order_id,status,provider,checkout_url,amount_cents,method FROM v2_payments
       WHERE order_id=? ORDER BY id DESC`).bind(orderId).all()).results||[];
     const hold=await db.prepare('SELECT status,expires_at FROM v2_checkout_holds WHERE order_id=? ORDER BY id DESC LIMIT 1').bind(orderId).first();

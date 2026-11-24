@@ -19,7 +19,7 @@ export async function originalV3FinancialState(db,orderId){
  const initial=approved.filter(p=>p.provider==='mercado_pago'&&p.amount_cents===row.deposit_cents&&p.method===row.payment_method&&p.payment_type!=='balance');
  const remaining=approved.filter(p=>p.provider==='direct_pix'&&p.payment_type==='balance'&&p.method==='pix');
  const paidCents=approved.reduce((n,p)=>n+p.amount_cents,0)-refunds.reduce((n,p)=>n+p.amount_cents,0);
- const valid=validV3PaymentPlan(row)&&!refunds.length&&!payments.some(p=>p.status==='refunded')&&initial.length===1&&initial.length+remaining.length===approved.length&&paidCents<=row.total_cents&&(row.deposit_percent===50||!remaining.length);
+ const valid=validV3PaymentPlan(row)&&!refunds.length&&!payments.some(p=>['refunded','pending'].includes(p.status))&&initial.length===1&&initial.length+remaining.length===approved.length&&paidCents<=row.total_cents&&(row.deposit_percent===50||!remaining.length);
  return {row,payments,valid,depositConfirmed:valid,paidCents:Math.max(0,paidCents),remainingCents:Math.max(0,row.total_cents-paidCents),fullyPaid:valid&&paidCents===row.total_cents};
 }
 async function lookup(db,code){

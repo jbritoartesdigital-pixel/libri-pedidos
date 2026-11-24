@@ -75,6 +75,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import {handleCustomerBriefingV3Api,handleAdminBriefingV3Api} from './routes/briefing-v3.js';
 import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
 import { handlePublicCartV3Api } from './routes/public-cart-v3.js';
 
@@ -333,6 +334,7 @@ async function handleAdminV2Api(
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
+    handleAdminBriefingV3Api,
     handleAdminAtelieV3Api,
     handleAdminContractsV2Api,
     handleAdminBlackLibriV2Api,
@@ -372,6 +374,7 @@ async function handleCustomerV2Api(
    * para evitar que a área privada fique acoplada ao checkout.
    */
   const handlers = [
+    handleCustomerBriefingV3Api,
     handleCustomerAreaV2Api,
     handleCustomerPreviewV2Api,
     handleCustomerContractsV2Api,

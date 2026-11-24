@@ -167,7 +167,7 @@ async function renderCurrent() {
   if(rendering)return;rendering=true;
   const target=state.view;try{
   // Clear view-owned delegated handlers before mounting the next screen.
-  const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;
+  const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;root.oninput=null;
   loading();
 
   const open =

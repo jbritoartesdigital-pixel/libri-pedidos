@@ -11,11 +11,12 @@ test('unified checkout renders contact, date, payment choices, server totals and
     request:async(path,body)=>{
       calls.push({path,body});
       if(path.endsWith('/quote'))return {quote:{items:[{productName:'Memórias <teste>',grossCents:14900}],totalCents:14900,discountCents:0,cardFeeCents:0}};
+      if(path.endsWith('/delivery-options'))return {quote:{items:[{productName:'Memórias <teste>',grossCents:14900}],totalCents:14900,discountCents:0,cardFeeCents:0},delivery:{options:[{start:'2027-01-01',end:'2027-01-03',recommended:true}]}};
       if(path.endsWith('/terms'))return {checkoutEnabled:false,terms:{general:{version:'v1',body:'Condições <script>'},services:[{family:'retrospectiva',version:'v2',body:'Limites de materiais'}]}};
       throw Error('unexpected request');
     }});
   await new Promise(resolve=>setImmediate(resolve));
-  assert.match(root.innerHTML,/Seu nome/);
+  assert.match(root.innerHTML,/Seu nome/);assert.doesNotMatch(root.innerHTML,/name="email"|data-v3-checkout="agenda"/);assert.match(root.innerHTML,/Sugerida/);
   assert.match(root.innerHTML,/2027-02-01/);
   assert.match(root.innerHTML,/Pix integral/);
   assert.match(root.innerHTML,/Cartão integral/);
@@ -24,7 +25,7 @@ test('unified checkout renders contact, date, payment choices, server totals and
   assert.match(root.innerHTML,/Condições &lt;script&gt;/);
   assert.match(root.innerHTML,/Limites de materiais/);
   assert.match(root.innerHTML,/type="submit"[^>]*disabled[^>]*>Confirmar e pagar/);
-  assert.deepEqual(calls.map(x=>x.path),['/api/v3/cart/quote','/api/v3/cart/terms']);
+  assert.deepEqual(calls.map(x=>x.path),['/api/v3/cart/quote','/api/v3/cart/terms','/api/v3/cart/delivery-options']);
   listeners.get('click')({target:{closest:()=>({dataset:{v3Checkout:'back'}})}});
   assert.equal(backed,true);
   assert.equal(listeners.size,0);

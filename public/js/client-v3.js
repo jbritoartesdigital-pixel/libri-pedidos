@@ -47,8 +47,8 @@ const PRODUCTS = {
 const ADDON_GROUPS = [
   ['save_the_date', 'Save the Date', 'Uma arte extra para avisar a data da festa com antecedência.'],
   ['reminder', 'Lembrete da festa', 'Uma arte para enviar quando a comemoração estiver chegando.'],
-  ['confirmation', 'Confirmação Libri', 'Os convidados preenchem a confirmação no próprio convite. Você acompanha as respostas em um painel.'],
-  ['moments', 'Libri Moments', 'Um espaço digital para reunir as fotos da festa. O filtro da câmera Libri já vem incluído.'],
+  ['confirmation', 'Formulário de confirmação de presença personalizado', 'Os convidados respondem pelo convite e você acompanha tudo em um painel, sem lotar seu WhatsApp.'],
+  ['moments', 'Álbum de fotos', 'Seus convidados registram e compartilham os momentos da festa em um álbum digital. Inclui filtro personalizado.'],
   ['filter', 'Filtro de fotos personalizado', 'Um efeito com o tema da festa para tirar fotos na câmera Libri.']
 ];
 const INTERACTIVE = new Set([
@@ -241,11 +241,11 @@ function renderCreation() {
   panel('O que gostaria de criar?',
     'Você pode contratar mais de um serviço.',
     '<div class="v3-choices-stack">' +
-    choice('invitation','Convites Digitais','Convites em vídeo ou interativos.',state.creation,'creation') +
-    choice('identity','Libri Ateliê · Identidade visual',
-      'Brasão, nome, cores e artes combinando.',state.creation,'creation') +
-    choice('retrospective','Retrospectiva de fotos e vídeos',
-      'Suas fotos e vídeos em uma homenagem.',state.creation,'creation') +
+    choice('invitation','Convite digital','Um convite personalizado para enviar aos convidados pelo celular.',state.creation,'creation') +
+    choice('identity','Identidade visual',
+      'Artes da festa com o nome, as cores e o tema combinando em cada detalhe.',state.creation,'creation') +
+    choice('retrospective','Retrospectiva',
+      'Transforme fotos e vídeos especiais em uma homenagem para exibir na festa.',state.creation,'creation') +
     '</div>',
     actions(true,'',null),1);
 }
@@ -294,8 +294,8 @@ function renderIntent() {
   panel('Como imagina seu convite?',
     '',
     '<div class="v3-choices-stack">' +
-      choice('story','Uma história animada','Cenas, personagens e animações.',state.intent,'intent') +
-      choice('simple','Um convite mais simples','Uma arte com os detalhes da festa.',state.intent,'intent') +
+      choice('story','Convite cinematográfico','Uma história animada criada para sua festa, com personagens e cenários personalizados.',state.intent,'intent') +
+      choice('simple','Convite interativo simples','Uma arte personalizada com as informações da festa, que abre pelo celular. Sem uma história longa.',state.intent,'intent') +
     '</div>',actions(true,'',null),2);
 }
 function formatCodes() {
@@ -306,7 +306,7 @@ function formatCodes() {
   return codes;
 }
 // Illustrative demonstrations of how each format behaves, not portfolio artwork.
-const formatShort={cinematic_video:'Um vídeo personalizado para assistir e compartilhar.',cinematic_interactive:'O vídeo termina em uma tela com botões clicáveis.',interactive_essential:'Abre no celular com informações e até 3 botões.',interactive_gif:'Detalhes se movimentam continuamente, com até 3 botões.',interactive_animated:'Uma abertura animada revela a arte com até 3 botões.',book:'O convidado folheia as páginas do casamento.',infinite:'Os detalhes aparecem ao deslizar a tela.'};
+const formatShort={cinematic_video:'Uma história animada personalizada. Envie o vídeo pronto pelo WhatsApp.',cinematic_interactive:'A mesma história animada, em um convite que o convidado abre pelo celular. No final, ele pode acessar a localização, confirmar presença e consultar presentes, sem procurar informações nas mensagens.',interactive_essential:'Uma arte personalizada com os dados da festa. O convidado abre pelo celular e pode acessar localização, confirmação de presença e presentes.',interactive_gif:'A arte do convite ganha movimento em pequenos detalhes. Os convidados acessam as informações da festa pelo próprio convite.',interactive_animated:'Uma abertura animada revela a arte personalizada da festa. Depois, o convidado acessa as informações e os atalhos do convite.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
 function formatVisual(code){
  const isFilm=SCENE_PRODUCTS.has(code),interactive=code!=='cinematic_video';
  return '<span aria-hidden="true" class="v3-format-demo v3-demo-'+clean(code)+'"><span class="v3-demo-phone"><span class="v3-demo-screen">'+(code==='book'?'<i class="v3-demo-page"></i>':isFilm?'<i class="v3-demo-film"></i><i class="v3-demo-play"></i><i class="v3-demo-progress"></i>':'<i class="v3-demo-art"></i><i class="v3-demo-title"></i><i class="v3-demo-lines"></i>')+(interactive?'<span class="v3-demo-buttons"><i></i><i></i><i></i></span>':'')+(code==='interactive_animated'?'<i class="v3-demo-cover"></i>':'')+'</span></span></span>';
@@ -343,13 +343,14 @@ function priceBar() {
 }
 function renderExtras(){
  const groups=availableGroups();
- const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Respostas no formulário e painel da Libri.',moments:'Álbum digital com fotos dos convidados e filtro incluso.',filter:'Um efeito de fotos com o tema da festa.'};
+ const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Os convidados confirmam pelo formulário e você acompanha as respostas em um painel, sem lotar seu WhatsApp.',moments:'Reúna as fotos feitas pelos convidados durante a festa em um álbum digital. Inclui filtro personalizado.',filter:'Um efeito de fotos com o tema da festa.'};
  const cards=groups.map(g=>{
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
-  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(selected.length?selected.map(a=>a.name).join(', '):short[g[0]]||g[2])+'</small></span><span class="v3-optional-action">'+(selected.length?'+ '+money(price)+' · Alterar':'Ver opções')+' ›</span></button>';
+  const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents)+(selected.length?' · Retirar':' · Adicionar'):selected.length?'+ '+money(price)+' · Alterar':'Ver opções';
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action">'+text+(direct?'':' ›')+'</span></button>';
  }).join('');
- const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Se quiser acompanhar pelo painel Libri, escolha a opção abaixo.</p>':'';
+ const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
  panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
@@ -542,7 +543,7 @@ function openAddonGroup(group,guided=false) {
     reminder:'Escolha se prefere uma imagem sem movimento ou uma pequena animação.',
     moments:'Escolha um plano conforme a quantidade de fotos e o período em que o álbum ficará disponível.',
     confirmation:'O convidado responde no próprio convite, e você acompanha as confirmações em um painel.',
-    filter:'O filtro da câmera Libri já vem incluído quando você escolhe Libri Moments.'
+    filter:'O filtro personalizado já vem incluído no álbum de fotos.'
   };
   modalRoot.innerHTML = '<div class="v3-modal-card" role="dialog" aria-modal="true" aria-labelledby="v3-modal-title" tabindex="-1">' +
     '<h2 id="v3-modal-title">'+clean(groupItem?.[1]||'Adicional')+'</h2><p>'+clean(explanations[group]||groupItem?.[2]||'')+'</p>' +
@@ -675,7 +676,7 @@ async function handleStoreClick(event) {
     if(action==='custom-scenes'){customScenes=!customScenes;render();if(customScenes)root.querySelector('#v3-scene-select')?.focus();return;}
     if(action==='variant'||action==='custom-scenes-confirm'){const code=action==='variant'?value:root.querySelector('#v3-scene-select')?.value;if(state.step!=='scenes'||!currentProduct()?.variants.some(v=>v.code===code)){root.querySelector('#v3-scene-select')?.focus();return;}state.variantCode=code;state.offerFinished=false;state.addonQuestion=0;customScenes=false;await go('extras');return;}
     if(action==='show-examples'){await showExamples(value);return;}
-    if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
+    if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
     if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);await go('review');return;}

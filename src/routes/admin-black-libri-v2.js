@@ -1,4 +1,5 @@
 import { fail, json, readJson } from '../lib/http.js';
+import {recoverBlackReservationAdmin} from '../lib/v2-black-libri.js';
 import {
   getBlackLibriAdmin,
   saveBlackLibriCampaign,
@@ -21,6 +22,9 @@ export async function handleAdminBlackLibriV2Api(request,env,url) {
   if(method==='GET' && path==='/api/admin/v2/black-libri') {
     try { return json(await getBlackLibriAdmin(env)); }
     catch(error) { return adminError(error); }
+  }
+  if(method==='POST' && path==='/api/admin/v2/black-libri/recover') {
+    try{return json(await recoverBlackReservationAdmin(env,await readJson(request)));}catch(error){return adminError(error);}
   }
   if(method==='PATCH' && path==='/api/admin/v2/black-libri/campaign') {
     try { return json(await saveBlackLibriCampaign(env,await readJson(request))); }

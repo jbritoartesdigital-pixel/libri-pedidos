@@ -89,6 +89,7 @@ async function invite(p,fromCreation=false){
  await p.locator('#v3-modal').waitFor({state:'hidden'});
  await p.locator('.v3-optional-card.is-selected').waitFor();assert.equal(await p.locator('.v3-title').innerText(),question);
  // Optional additions stay on one screen; no sequential upsell.
+ const confirmation=p.locator('[data-action="guided-options"][data-value="confirmation"]');await confirmation.click();await confirmation.and(p.locator('[aria-pressed="true"]')).waitFor();assert.equal(await p.locator('#v3-modal').isVisible(),false);await confirmation.click();await confirmation.and(p.locator('[aria-pressed="false"]')).waitFor();
  await p.locator('[data-action="guided-back"]').waitFor();await click(p,'guided-finish');
  await p.locator('[data-action="add-invitation"]').waitFor();await click(p,'add-invitation');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
@@ -101,9 +102,8 @@ async function checkout(p){
  assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));
  await p.locator('#v3-app[aria-busy="false"]').waitFor();
  await p.screenshot({path:'artifacts/v3-browser/checkout-before-agenda-'+p.viewportSize().width+'.png',fullPage:true});
- // Exercise the real keyboard-accessible control; do not force a synthetic click.
- await p.locator('[data-v3-checkout="agenda"]').focus();
- await p.keyboard.press('Enter');
+ assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
+ assert.equal(await p.locator('[name="email"]').count(),0);
  await p.locator('[name="deliveryWindow"]').first().waitFor();
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);
  assert.match(p.url(),/\/loja$/);

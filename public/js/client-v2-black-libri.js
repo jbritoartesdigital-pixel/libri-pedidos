@@ -116,12 +116,12 @@ export async function openBlackLibriPrizeDetails(prize,{paid=false}={}){
 
 // Mantém o callback de pagamento e a seleção criptográfica no servidor.
 export async function openBlackLibriBeforePayment({
- customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null,v3Cart=null
+ customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null,v3Cart=null,legacyRequestId=''
 }){
  const endpoint=v3Cart?'/api/v3/cart/black':manualToken
   ?'/api/v2/manual-order/'+encodeURIComponent(manualToken)+'/black-libri'
   :'/api/v2/black-libri';
- const payload=v3Cart?{...v3Cart,customer,clientRequestId}:manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
+ const payload=v3Cart?{...v3Cart,customer,clientRequestId,...(legacyRequestId?{legacyRequestId}:{})}:manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
  let response=await api(endpoint+'/status',{method:'POST',body:JSON.stringify(payload)});
  if(!response.enabled){onContinue();return;}
  await ensureStyles();

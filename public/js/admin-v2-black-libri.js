@@ -24,6 +24,7 @@ function renderPrize(prize,locked) {
         <div><dt>Confirmados</dt><dd>${count(prize.redeemed)}</dd></div>
         <div><dt>Disponíveis</dt><dd>${effectiveStock(prize)}</dd></div>
       </dl>
+      <details class="card"><summary>Recuperar surpresa de uma cliente</summary><p>Confirme que está falando com a cliente pelo WhatsApp. O código privado recupera a mesma reserva válida, sem novo sorteio.</p><label>WhatsApp <input id="blackRecoveryPhone" type="tel" class="input"></label><label><input id="blackRecoveryVerified" type="checkbox"> Identidade da cliente confirmada</label><button id="blackRecoveryGenerate" type="button" class="btn btn-secondary">Gerar código de recuperação</button><div id="blackRecoveryResult" role="status"></div></details>
       <div class="black-admin-fields">
         <label>Peso <input class="input" type="number" data-black-weight
           min="1" max="2000" step="1" value="${prize.weight}" ${locked?'disabled':''}></label>
@@ -165,6 +166,7 @@ export async function renderBlackLibri(panel=viewRoot) {
       if(button)button.disabled=false;
     }
   }
+  panel.querySelector('#blackRecoveryGenerate')?.addEventListener('click',async e=>{const btn=e.currentTarget,out=panel.querySelector('#blackRecoveryResult');btn.disabled=true;out.textContent='';try{const result=await api('/api/admin/v2/black-libri/recover',{method:'POST',body:JSON.stringify({whatsapp:panel.querySelector('#blackRecoveryPhone').value,identityVerified:panel.querySelector('#blackRecoveryVerified').checked})});out.textContent='Presente: '+result.label+' | Código privado: '+result.recoveryCode+' | Envie somente à cliente verificada.';}catch(err){out.textContent=err.message;}finally{btn.disabled=false;}});
   panel.querySelector('#blackDemo')?.addEventListener('click',()=>{
     openBlackLibriDemo().catch(error=>showToast(error.message||'Não foi possível abrir a prévia.'));
   });

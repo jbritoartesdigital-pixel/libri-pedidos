@@ -1,5 +1,5 @@
 // Pseudonymous first-party analytics. No form contents or recovery credentials.
-export const FUNNEL_STAGES=Object.freeze(['evento','servico','modelo','configuracao','carrinho','dados','agenda','adicionais','revisao','pagamento','tentativa']);
+export const FUNNEL_STAGES=Object.freeze(['evento','servico','modelo','configuracao','carrinho','dados','agenda','adicionais','revisao','pagamento','tentativa','surpresa','redirecionamento']);
 const valid=id=>typeof id==='string'&&/^[a-f0-9]{32}$/.test(id);
 const DAY=86400000;
 export async function recordStoreStage(db,id,stage,now=new Date()){
@@ -7,7 +7,7 @@ export async function recordStoreStage(db,id,stage,now=new Date()){
  const stamp=now.toISOString();
  await db.prepare(`INSERT INTO v3_store_journeys(id,started_at,last_seen_at,stage,stage_mask) VALUES(?,?,?,?,?)
  ON CONFLICT(id) DO UPDATE SET last_seen_at=excluded.last_seen_at,stage=excluded.stage,stage_mask=v3_store_journeys.stage_mask|excluded.stage_mask
- WHERE v3_store_journeys.had_order=0 AND (v3_store_journeys.stage!=excluded.stage OR v3_store_journeys.last_seen_at<=?)`).bind(id,stamp,stamp,stage,1<<i,new Date(now.getTime()-60000).toISOString()).run();
+ WHERE (v3_store_journeys.had_order=0 OR (excluded.stage='redirecionamento' AND v3_store_journeys.order_id IS NOT NULL)) AND (v3_store_journeys.stage!=excluded.stage OR v3_store_journeys.last_seen_at<=?)`).bind(id,stamp,stamp,stage,1<<i,new Date(now.getTime()-60000).toISOString()).run();
  return true;
 }
 export async function linkStoreOrder(db,id,orderId){
@@ -44,8 +44,8 @@ export async function getStoreFunnel(db,{now=new Date()}={}){
  WHEN j.last_seen_at<=? THEN 'inactive' ELSE 'active' END AS outcome
  FROM v3_store_journeys j LEFT JOIN v2_orders o ON o.id=j.order_id WHERE j.started_at>=?
  ) SELECT j.stage,j.outcome,COUNT(*) AS n,${visits} FROM classified j GROUP BY j.stage,j.outcome`).bind(idle,since).all();
- const stages=FUNNEL_STAGES.map(stage=>({stage,reached:0,inactive:0})),outcomes={paid:0,cancelled:0,order_pending:0,inactive:0,active:0};let total=0;
- for(const row of rows.results||[]){total+=Number(row.n);outcomes[row.outcome]+=Number(row.n);for(let i=0;i<stages.length;i++)stages[i].reached+=Number(row['s'+i]||0);if(row.outcome==='inactive'){const stage=stages.find(x=>x.stage===row.stage);if(stage)stage.inactive+=Number(row.n);}}
+ const stages=FUNNEL_STAGES.map(stage=>({stage,reached:0,inactive:0,last:0,active:0})),outcomes={paid:0,cancelled:0,order_pending:0,inactive:0,active:0};let total=0;
+ for(const row of rows.results||[]){total+=Number(row.n);outcomes[row.outcome]+=Number(row.n);for(let i=0;i<stages.length;i++)stages[i].reached+=Number(row['s'+i]||0);{const stage=stages.find(x=>x.stage===row.stage);if(stage){stage.last+=Number(row.n);if(row.outcome==='inactive')stage.inactive+=Number(row.n);if(row.outcome==='active')stage.active+=Number(row.n);}}}
  return {since,total,outcomes,stages,idleHours:24,windowDays:30};
 }
 export async function purgeStoreFunnel(db,now=new Date()){

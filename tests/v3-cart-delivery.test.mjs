@@ -20,6 +20,10 @@ test('combined delivery uses all production points and a minimum 15-day window w
   assert.ok(preview.delivery.options.length);
   assert.ok(preview.delivery.options.every(x=>x.start>=day(15)));
   const first=preview.delivery.options[0];
+  assert.equal(first.recommended,true);
+  const earliest=preview.delivery.options.find(x=>x.earliest);assert.ok(earliest);
+  assert.equal(earliest.start,preview.delivery.options.map(x=>x.start).sort()[0]);
+  if(!first.earliest)assert.equal(preview.delivery.options[1].earliest,true);
   const selected=await previewV3CartDelivery(db,{...body,eventDate:day(65),deliveryWindow:first});
   assert.deepEqual(selected.delivery.selected,{start:first.start,end:first.end});
   for(const table of ['v2_orders','v2_payments','v2_checkout_holds']){

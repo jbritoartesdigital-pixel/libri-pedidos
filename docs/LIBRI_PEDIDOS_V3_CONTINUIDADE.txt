@@ -443,3 +443,13 @@ V70 CI 45455361202 success. Retirados links públicos de versão anterior (rodap
 
 V72 — REGRESSÃO DO ATALHO DE SIMULAÇÃO
 V71 CI 45456201178 falhou apenas por asserção que exigia o atalho removido da Central. V72 inverte essa asserção para proteger a ausência do atalho, mantendo os testes de isolamento da simulação legada e proteção contra cobranças. PR #145, CI novo pendente; publicação ainda não iniciada.
+
+
+V73 (etapa 1) — REFINAMENTO DA LOJA APÓS V72 PUBLICADA
+V72 produção 45458142573 success. Cards centralizados em maiúsculas, paleta suave (rosé, champanhe, lavanda como proposta), entrada curta com reduced-motion, explicações para leigos, benefícios concretos, formulário e álbum em português, adicionais de opção única sem modal. Retirado e-mail do checkout público; nome, WhatsApp, homenageado e data obrigatórios. Consulta de agenda automática, recomendada no topo seguida da primeira disponível. Preços, capacidade, contratos preservados. Próxima parte: recuperar surpresa e funil. CI pendente.
+
+V73 (etapa 2): funil inclui surpresa e encaminhamento de pagamento, contagem da última etapa/ativas/inativas. Recuperação de reserva legada por chave UUID original; código privado administrativo para reserva válida e não vinculada, identidade verificada, preserva prêmio e vencimento original. Reserva vinculada/expirada exige conferir o pedido; sem alterar prazo da campanha. CI pendente, nenhuma mudança publicada ainda. Corrigido local do parâmetro includeEarliest.
+
+V74 — revisão dos refinamentos antes da validação: etapa de link recebido após pedido criado aceita telemetria, não afirma abertura efetiva do Mercado Pago; não registra redirecionamento de encaixe/confirmado como pagamento. Aceites completos retornam à etapa pagamento. Participações expiradas/confirmadas não geram novo sorteio nem impedem nova compra com outra chave, sem revelar prêmio. Chave de reserva vigente segue privada. Paleta rosé/champanhe/sálvia. Testes de prioridade da agenda e última etapa. Cache do módulo administrativo atualizado. CI pendente no PR #146.
+
+V75 — CI V74 45460944574: sintaxe/imports aprovados; única falha registrada em teste Ateliê que exigia nome antigo 'Convites Digitais'. Atualizada asserção para categoria convite digital, mantendo proteção das rotas e categorias. CI V75 pendente, publicação ainda não iniciada. Não houve alteração de regras comerciais.

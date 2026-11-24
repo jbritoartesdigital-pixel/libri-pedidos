@@ -12,12 +12,12 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
   let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
-  let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false;
+  let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false,blackConflict=false;
   const hasInvite=cart.items.some(i=>! /^(atelie_|retrospectiva)/.test(i.productCode));
   const blackSelection=()=>blackClaim?{blackLibriClaimId:blackClaim.id,clientRequestId:attemptKey,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email}}:{};
   function readForm(){
     const couponDetails=root.querySelector('#v3-coupon-details');if(couponDetails)couponOpen=couponDetails.open;
-    for(const k of ['name','whatsapp','email','honoreeName','eventDate','paymentMethod','couponCode']){
+    for(const k of ['name','whatsapp','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
     const checked=root.querySelector('[name="deliveryWindow"]:checked');
@@ -43,11 +43,12 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     root.innerHTML='<section class="v3-panel"><h1 class="v3-title">Finalizar seu pedido</h1>'+
       (!enabled&&!busy&&terms?'<div class="v3-notice">Pagamento indisponível no momento.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
+      (blackConflict?'<div class="v3-black-recovery"><strong>Você já tem uma surpresa registrada!</strong><p>Seu presente não será sorteado novamente. Se a Libri enviou um código de recuperação, informe abaixo.</p><label for="v3-black-code">Código de recuperação</label><input id="v3-black-code" class="v3-at-input" autocomplete="off"><button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="black-recover">Recuperar presente</button><p class="v3-mini">Se não tiver o código, fale com a Libri antes de pagar para preservar o benefício.</p></div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+'</div>'+
-      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
-      '<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="agenda">Consultar agenda</button>'+
-      (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label style="display:block;padding:8px 0"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · sugerida':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
+      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'</div>'+
+      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName',eventType==='birthday'?'Nome da criança ou aniversariante':'Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
+      (busy&&form.eventDate?'<p class="v3-agenda-loading" role="status">Consultando datas disponíveis…</p>':'')+
+      (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label class="v3-agenda-option"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · Sugerida':o.earliest?' · Primeira disponível':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
       (urgentQuote?'<div class="v3-notice" data-v3-delivery-options><strong>Precisa de um encaixe?</strong><p>Não há janela normal para esta data. A Libri pode avaliar um encaixe com adicional de '+urgentQuote.urgencyPercent+'% ('+money(urgentQuote.urgencyAmountCents)+'). Nenhuma cobrança ou reserva será criada antes da aprovação.</p><label><input type="checkbox" name="urgencyAccepted" '+(urgentAccepted?'checked':'')+'> Solicitar análise pelo total de '+money(urgentQuote.totalCents)+'</label></div>':'')+
       '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
       '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
@@ -67,10 +68,12 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       terms=next;enabled=t.checkoutEnabled===true;
       if(agenda||hadUrgency){
         trackStoreStage('agenda');
-        options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
+        const previousWindow=form.deliveryWindow;options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
         if(!form.eventDate)throw Error('Informe a data do evento.');
         const result=await request('/api/v3/cart/delivery-options',{...selection,eventDate:form.eventDate});
         quote=result.quote;options=result.delivery.options||[];urgentQuote=result.urgencyQuote||null;
+        if(previousWindow&&options.some(o=>o.start===previousWindow.start&&o.end===previousWindow.end))form.deliveryWindow=previousWindow;
+        if(options.length||urgentQuote)trackStoreStage('pagamento');
         if(!options.length&&!urgentQuote)error='Não há uma janela automática para esta data. Consulte a Libri antes de contratar.';
       }
     }catch(e){error=e.message;quote=null;}finally{busy=false;render();}
@@ -87,18 +90,20 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
         keepV3CheckoutKey(attemptKey);
       }catch{error='O navegador não permite guardar a tentativa com segurança. Abra a loja em outro navegador.';render();return;}
       if(hasInvite&&!blackChecked){
+        trackStoreStage('surpresa');
         checkingBlack=true;
         let immediate=false,opening=true;
         try{
           const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=20261124-atelier-gift-v3');
-          await openBlackLibriBeforePayment({customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},clientRequestId:attemptKey,v3Cart:{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode},onContinue:claim=>{
-            blackChecked=true;
+          let legacyRequestId='';try{legacyRequestId=JSON.parse(localStorage.getItem('libriV2StoreState')||'null')?.clientRequestId||'';}catch{}
+          await openBlackLibriBeforePayment({legacyRequestId,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},clientRequestId:attemptKey,v3Cart:{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode},onContinue:claim=>{
+            blackChecked=true;blackConflict=false;
             if(claim?.status==='reserved')blackClaim=claim;
             if(opening&&!claim){immediate=true;return;}
             // Recalculate capacity after the gift and request a fresh confirmation.
             refresh({agenda:true});
           }});
-        }catch(e){error=e.message;render();return;}
+        }catch(e){blackConflict=e?.data?.code==='black_libri_private_claim';error=blackConflict?'A reserva existe, mas precisamos confirmar a chave de recuperação.':e.message;render();return;}
         finally{opening=false;checkingBlack=false;}
         if(!immediate)return;
       }
@@ -121,7 +126,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       // Retain the retry key until confirmed payment; do not create a new
       // attempt merely because the browser returns from the payment provider.
       if(result.alreadyPaid)clearV3CheckoutKey(attemptKey);
-      finishStoreJourney();location.assign(url.href);
+      if(!result.alreadyPaid&&!result.urgencyRequested)trackStoreStage('redirecionamento');finishStoreJourney();location.assign(url.href);
     }catch(e){error=e.message+' Retome a mesma tentativa para evitar duplicidade.';busy=false;render();}
   }
   root.addEventListener('click',handleClick);
@@ -131,19 +136,32 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   function handleClick(e){
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
     if(action==='back'&&!busy&&!attempt){detach();onBack();}
-    if(action==='agenda')refresh({agenda:true});
-    if(action==='coupon')refresh();
+
+    if(action==='coupon')refresh({agenda:!!form.eventDate});
+    if(action==='black-recover')recoverBlack();
     if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;
-    if(e.target.name==='whatsapp'&&!blackClaim)blackChecked=false;
-    if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;root.querySelector('[data-v3-delivery-options]')?.remove();const submit=root.querySelector('#v3-unified-checkout button[type="submit"]');if(submit)submit.disabled=true;}
+    if(e.target.name==='whatsapp'&&!blackClaim){blackChecked=false;blackConflict=false;}
+    if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
     if(e.target.name==='urgencyAccepted'){readForm();render();return;}
     if(e.target.name==='deliveryWindow')trackStoreStage('pagamento');
-    if(e.target.hasAttribute('data-v3-term'))trackStoreStage('revisao');
-    if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh();}
+    if(e.target.hasAttribute('data-v3-term')){readForm();trackStoreStage(terms&&accepted.has('general')&&terms.services.every(t=>accepted.has(t.family))?'pagamento':'revisao');}
+    if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh({agenda:!!form.eventDate});}
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}
-  render();refresh();
+  async function recoverBlack(){
+    if(busy||checkingBlack||attempt)return;
+    const key=root.querySelector('#v3-black-code')?.value.trim().toLowerCase()||'';
+    if(!/^[a-f0-9]{36}$/.test(key)){error='Confira o código enviado pela Libri.';render();return;}
+    readForm();busy=true;error='';render();
+    try{
+      const status=await request('/api/v3/cart/black/status',{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode,customer:{name:form.name,whatsapp:form.whatsapp,email:''},clientRequestId:key});
+      if(status.claim?.status!=='reserved')throw Error('Não foi encontrada uma reserva válida para esse código.');
+      keepV3CheckoutKey(key);attemptKey=key;blackClaim=status.claim;blackChecked=true;blackConflict=false;
+    }catch(e){error=e.message;busy=false;render();return;}
+    busy=false;render();await refresh({agenda:true});
+  }
+  render();refresh({agenda:!!form.eventDate});
 }

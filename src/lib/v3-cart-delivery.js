@@ -33,10 +33,9 @@ export async function previewV3CartDelivery(db,body={}){
   const productionDays=quote.productionDays;
   const params={eventDate:body.eventDate,pointsUnits:quote.pointsUnits,productionDays};
   // A common delivery window must accommodate the sum of all work, not one slot per service.
-  const delivery=await findV2DeliveryOptions(db,{...params,limit:8});
-  const options=(delivery.options||[]).map(x=>({
-    start:x.start,end:x.end,recommended:!!x.recommended
-  }));
+  const delivery=await findV2DeliveryOptions(db,{...params,limit:8,includeEarliest:true});
+  const chronological=(delivery.options||[]).slice().sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end));
+  const options=chronological.map((x,i)=>({start:x.start,end:x.end,recommended:!!x.recommended,earliest:i===0})).sort((a,b)=>Number(b.recommended)-Number(a.recommended)||a.start.localeCompare(b.start)||a.end.localeCompare(b.end));
   let selected=null;
   if(body.deliveryWindow!=null){
     const {start,end}=body.deliveryWindow;

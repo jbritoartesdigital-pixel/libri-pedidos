@@ -58,8 +58,8 @@ export async function searchV2AdminOrders(db, filters = {}) {
       UNION ALL
       SELECT o.id,
         CASE WHEN COALESCE(CASE WHEN json_valid(item.configuration_json) THEN json_extract(item.configuration_json,'$.productCode') END,product_catalog.code,item.item_code) LIKE 'atelie_%' THEN 'identidade_visual'
-        WHEN COALESCE(json_extract(item.configuration_json,'$.productCode'),product_catalog.code,item.item_code) LIKE 'retrospectiva_%' THEN 'retrospectiva' ELSE 'convite' END,
-        COALESCE(json_extract(item.configuration_json,'$.productCode'),product_catalog.code,item.item_code),
+        WHEN COALESCE(CASE WHEN json_valid(item.configuration_json) THEN json_extract(item.configuration_json,'$.productCode') END,product_catalog.code,item.item_code) LIKE 'retrospectiva_%' THEN 'retrospectiva' ELSE 'convite' END,
+        COALESCE(CASE WHEN json_valid(item.configuration_json) THEN json_extract(item.configuration_json,'$.productCode') END,product_catalog.code,item.item_code),
         item.item_code,COALESCE(CASE WHEN json_valid(item.configuration_json) THEN CAST(json_extract(item.configuration_json,'$.sceneCount') AS INTEGER) END,variant.scene_count,0),
         product_catalog.name,NULL,NULL,NULL,o.delivery_start,o.delivery_end
       FROM v2_orders o

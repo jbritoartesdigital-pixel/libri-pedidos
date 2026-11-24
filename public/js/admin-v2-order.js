@@ -12,6 +12,7 @@ import {
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
 import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-existing-checkout-gift-1';
 import { isAtelieOrderDetail, mountAtelieProduction } from './admin-v2-atelie-production.js';
+import { openV3AdminOrder } from './admin-v2-order-v3.js';
 import { mountAtelieCreativeBriefing } from './admin-v2-atelie-briefing.js';
 
 function whatsappBr(value) {
@@ -647,6 +648,11 @@ async function writeClipboard(value) {
 }
 
 export async function openOrder(code, onChanged = null) {
+  try {
+    const v3=await api('/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing');
+    if(v3.briefing)return openV3AdminOrder(code,v3.briefing,onChanged);
+    throw new Error('Não foi possível identificar o pedido.');
+  }catch(error){if(error.status!==404)throw error;}
   const data =
     await api(
       `/api/admin/v2/orders/${code}`,

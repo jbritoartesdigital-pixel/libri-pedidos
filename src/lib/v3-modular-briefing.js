@@ -106,7 +106,7 @@ export async function getV3ModularBriefing(db,token){
   if(locked)return {...base,modules:[]};
   const modules=['shared',...services.map(s=>s.family)].map(module=>({
     module,revision:revisions[module]||0,data:drafts[module]||{},editable:['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&
-      (module==='shared'||services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status))),schema:buildV3ModuleSchema(order,services,module,drafts)
+      (module==='shared'?!services.some(s=>s.briefing_status==='completed'):services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status))),schema:buildV3ModuleSchema(order,services,module,drafts)
   }));
   const uploads=(await db.prepare('SELECT id,family,field_key,original_filename,mime_type,size_bytes FROM v3_service_uploads WHERE order_id=? ORDER BY id').bind(order.id).all()).results||[];
   for(const m of modules){
@@ -153,6 +153,7 @@ export async function saveV3ModuleDraft(db,token,module,payload={}){
     if(!ctx||ctx.locked)fail('O briefing será liberado após o pagamento.',403);
     if(!['available','in_progress'].includes(ctx.order.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
       fail('O briefing não está disponível para edição.',409);
+    if(module==='shared'&&ctx.services.some(s=>s.briefing_status==='completed'))fail('Os dados compartilhados já foram usados em um briefing enviado. Solicite uma alteração à Libri.',409);
     if(module!=='shared'&&!ctx.services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status)))
       fail('Este serviço não permite edição.',409);
     if(!obj(payload.data)||JSON.stringify(payload.data).length>90000||!Number.isSafeInteger(payload.revision)||payload.revision<0)
@@ -197,5 +198,45 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
       VALUES(?,?,?,datetime('now'),?,?,?) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
       video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note,video_durations_json=excluded.video_durations_json,raw_video_seconds=excluded.raw_video_seconds`).bind(orderId,photoCount,videoCount,note.trim(),JSON.stringify(durations),rawVideoSeconds).run();
     return {photoCount,videoCount,videoDurations:durations,rawVideoSeconds,received:true};
+  });
+}
+
+export async function submitV3ServiceBriefing(db,token,family,payload={}){
+  const initial=await contextV3Briefing(db,token);
+  if(!initial)return null;
+  return withV2PaymentLock(db,initial.order.id,async()=>{
+    const ctx=await contextV3Briefing(db,token);
+    if(!ctx||ctx.locked)fail('O briefing será liberado após o pagamento.',403);
+    const service=ctx.services.find(s=>s.family===family);
+    if(!service)fail('Serviço não contratado.',404);
+    if(service.briefing_status==='completed')return getV3ModularBriefing(db,token);
+    if(!['available','in_progress'].includes(service.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
+      fail('Este briefing não permite envio.',409);
+    if(!Number.isSafeInteger(payload.revision)||payload.revision!==(ctx.revisions[family]||0)||
+      !Number.isSafeInteger(payload.sharedRevision)||payload.sharedRevision!==(ctx.revisions.shared||0))
+      fail('As respostas mudaram. Atualize o briefing antes de enviar.',409);
+    const missing=[];
+    for(const module of ['shared',family]){
+      const schema=buildV3ModuleSchema(ctx.order,ctx.services,module,ctx.drafts);
+      const data=ctx.drafts[module]||{};
+      for(const f of schema.sections.flatMap(s=>s.fields)){
+        if(f.required&&!['info','upload'].includes(f.type)&&!filled(data[f.key]))missing.push(f.label);
+      }
+      for(const rule of schema.uploadRules||[]){
+        if(rule.min>0){
+          const row=await db.prepare('SELECT COUNT(*) AS n FROM v3_service_uploads WHERE order_id=? AND family=? AND field_key=?').bind(ctx.order.id,module,rule.fieldKey).first();
+          if(!rule.authorized||Number(row.n)<rule.min)missing.push(rule.label+': envie pelo menos '+rule.min+' imagem(ns).');
+        }
+      }
+    }
+    const data=ctx.drafts[family]||{};
+    if(family==='retrospectiva'&&data.media_authorization!=='sim')missing.push('Autorização para uso das fotos e vídeos.');
+    if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))missing.push('Autorização do responsável para a ilustração da criança.');
+    if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;throw e;}
+    // Completing the artistic briefing is not a production release. Materials,
+    // dependencies and the independent agenda still require confirmation.
+    const result=await db.prepare("UPDATE v3_order_services SET briefing_status='completed',updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','in_progress')").bind(service.id).run();
+    if(Number(result.meta?.changes)!==1)fail('O briefing mudou. Atualize a página.',409);
+    return getV3ModularBriefing(db,token);
   });
 }

@@ -1,5 +1,6 @@
 import { nowIso } from './http.js';
 import { blackLibriOperational } from './v2-black-libri.js';
+import { blackV3Readiness } from './v3-black-libri.js';
 
 function error(message,status=422,code='black_libri_admin_invalid') {
   return Object.assign(new Error(message),{ status,code });
@@ -64,6 +65,7 @@ export async function getBlackLibriAdmin(env) {
     ok:true,migrationRequired:false,
     datesConfigured:!!(campaign?.valid_from&&campaign?.valid_until),
     active:await blackLibriOperational(env),
+    v3Readiness:await blackV3Readiness(env),
     // Datas mantidas na mesma interface de datas dos cupons.
     windowStart:campaign?.valid_from||null,
     windowEnd:campaign?.valid_until||null,

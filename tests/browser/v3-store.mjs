@@ -73,7 +73,7 @@ async function pageFor(width,height){
  // No outgoing requests to production or payment providers.
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
- await page.goto(origin+'/loja');await page.locator('[data-action="event"]').first().waitFor();
+ await page.goto(origin+'/loja');await page.locator('[data-action="event"]').first().waitFor();assert.equal(await page.locator('a[href*="versao=2"]').count(),0);assert.equal(await page.locator('#v3-live-basket').isVisible(),false);
  await page.locator('.libri-privacy-banner [data-privacy="deny"]').click();
  assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),'deny');
  return {context,page};
@@ -94,6 +94,7 @@ async function invite(p,fromCreation=false){
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
 }
 async function checkout(p){
+ assert.equal(await p.locator('[data-action="cart-delivery"]').count(),0);
  await p.locator('#v3CartEventDate').fill(day(65));
  await click(p,'cart-unified-checkout');
  await p.locator('#v3-unified-checkout').waitFor();

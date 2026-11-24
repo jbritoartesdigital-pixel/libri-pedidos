@@ -431,3 +431,15 @@ V67 CI 45452866576 falhou em duas asserções de versão CSS do Admin, não cheg
 
 V69 — CORREÇÃO DAS REGRESSÕES DE VERSIONAMENTO E TESTE DA CENTRAL
 V68 CI 45453550820: sintaxe aprovada, cinco testes de contrato de assets/markup falharam antes de migrações e Chromium. Atualizadas asserções de entrada e Central para v68, preservada versão v46 do módulo de Produção que não mudou; asserção do painel de capacidade inclui o novo id. Festas de hoje ficam visíveis na aba Hoje, não escondidas na Agenda. Adicionado teste de navegação da Central: prioridade, festas, atalho de novos pedidos, agenda, indicadores e busca. CI novo pendente. Não publicar nem afirmar experiência visual aprovada. Nenhuma alteração de backend/contratos/pagamentos.
+
+
+V70 — LIMPEZA DE VALIDAÇÃO, ANTES DE NOVA PUBLICAÇÃO
+V69 CI 45454299923 passou integralmente; PR #144 mesclado 9d53b4b16a282155055187232422b00bc0c5a2df antes da instrução posterior de limpar testes. Não há execução de deploy desse merge confirmada. Workflow de publicação anterior 45447349177 implantou Worker, mas smoke falhou em /pedido (não confirmada loja V3); não apagar gate, investigar antes de considerar produção correta. V70: uma instalação Playwright 1.58.2 por execução de produção (mantidos testes distintos legado Android e V3), uma verificação de imports via npm check, validação SQLite compartilhada PR/publicação com catálogo, termos e 3 pacotes Ateliê, um artefato de evidências de navegador por publicação, cancelar CI de PR obsoleto. Removidas checagens repetidas de sufixo de cache Admin nas suítes temáticas, preservada validação central de arquivo/versionamento e fechamento de tags, além dos testes funcionais. Sem remover testes de pagamento, migrações, navegador, segurança, smoke, dados, nem alterar preços. Branch separada; validar novo CI antes de publicar.
+
+
+V71 — LIMPEZA DA INTERFACE REAL
+V70 CI 45455361202 success. Retirados links públicos de versão anterior (rodapé, erro e noscript), rótulos V2/V3 e simulação legada na Central, mensagem de prévia, hero oculto, botões duplicados de carrinho, consulta antecipada de agenda duplicada (data transferida para checkout; prazo obrigatório preservado), subtotal repetido sem desconto e funções de apresentação de adicionais sem uso. Resumo vivo só aparece quando há seleção ou carrinho. Privacidade permanece opcional. Rotas antigas, contratos, catálogo, valores e dados preservados. Testes de ausência dos links, transferência da data e resumo inicial. CI V71 pendente; não publicar antes da validação. PR #145 aberto. Ainda não é auditoria visual de todas as telas.
+
+
+V72 — REGRESSÃO DO ATALHO DE SIMULAÇÃO
+V71 CI 45456201178 falhou apenas por asserção que exigia o atalho removido da Central. V72 inverte essa asserção para proteger a ausência do atalho, mantendo os testes de isolamento da simulação legada e proteção contra cobranças. PR #145, CI novo pendente; publicação ainda não iniciada.

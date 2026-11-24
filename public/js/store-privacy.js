@@ -30,7 +30,7 @@ export function mountStorePrivacy({store=true}={}){
  const banner=document.createElement('aside');banner.className='libri-privacy-banner';banner.setAttribute('aria-label','Análise de navegação opcional');wrapper.before(banner);banner.addEventListener('click',action);
  function renderBanner(){
   banner.hidden=!store||preference()!==null;
-  if(!banner.hidden)banner.innerHTML='<strong>Suas escolhas, sua privacidade</strong><p>Podemos medir as etapas da loja para melhorar a experiência? A compra funciona normalmente sem análise opcional.</p><div class="libri-privacy-actions"><button type="button" data-privacy="deny">Recusar</button><button type="button" data-privacy="allow">Permitir</button><button type="button" data-privacy="preferences">Saiba mais</button></div>';
+  if(!banner.hidden)banner.innerHTML='<strong>Privacidade</strong><p>Permitir análise opcional da navegação para melhorar a loja? A compra funciona mesmo sem permitir.</p><div class="libri-privacy-actions"><button type="button" data-privacy="deny">Recusar</button><button type="button" data-privacy="allow">Permitir</button><button type="button" data-privacy="preferences">Saiba mais</button></div>';
  }
  renderBanner();
 }

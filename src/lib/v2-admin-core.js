@@ -1,5 +1,5 @@
 import {getStoreFunnel} from './v3-store-funnel.js';
-import {listV3Production} from './v3-order-overview.js';
+import {listV3Production,getV3CentralQueues} from './v3-order-overview.js';
 import {
   nowIso,
   parseJson,
@@ -3268,6 +3268,7 @@ async function centralPendingPayments(
             ON p.order_id = o.id
           WHERE
             o.archived_at IS NULL
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
             AND o.status IN (
               'awaiting_payment',
               'urgency_approved'
@@ -3930,6 +3931,7 @@ export async function getV2Central(
       getStoreFunnel(db),
     ]);
 
+  const modularQueues=await getV3CentralQueues(db,modularOrders);
   return {
     today,
     attention,
@@ -3944,6 +3946,7 @@ export async function getV2Central(
     finance,
     workload,
     modularOrders,
+    modularQueues,
     funnel,
   };
 }

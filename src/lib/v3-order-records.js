@@ -6,6 +6,7 @@ import {normalizeV3Coupon} from './v3-promotions.js';
 import {normalizeV3ExtraSelection} from './v3-extras-catalog.js';
 import {quoteV3Cart,V3CartValidationError} from './v3-cart-quote.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
+import {assertV3UrgencyAvailable} from './v3-cart-delivery.js';
 
 const fail=(message,code)=>{throw new V3CartValidationError(message,code);};
 function required(value,max,label){
@@ -39,7 +40,7 @@ function canonicalItems(items){
       addonCodes:[...new Set(item.addonCodes??[])].sort(),extras:normalizeV3ExtraSelection(item.extras),comboCode:item.comboCode||''};
   }).sort((a,b)=>a.productCode.localeCompare(b.productCode));
 }
-export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={},contactSnapshot=null,manualDraft=null}){
+export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={},contactSnapshot=null,manualDraft=null,urgencyRequest=false}){
   // customerId, orderCode and publicToken must come from the trusted checkout
   // orchestrator, never from a public JSON payload.
   if(!Number.isSafeInteger(customerId)||customerId<=0)fail('Cliente inválida.','order_customer_invalid');
@@ -53,7 +54,8 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   if(!Number.isSafeInteger(body.expectedTotalCents)||body.expectedTotalCents<=0)fail('Confira o total do pedido.','order_total_invalid');
   const event={type:required(body.eventType,80,'Tipo de evento'),honoree:required(body.honoreeName,180,'Homenageado'),
     subtype:typeof body.eventSubtype==='string'?body.eventSubtype.trim().slice(0,120):'',date:date(body.eventDate)};
-  const delivery={start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
+  if(urgencyRequest&&(manualDraft||body.deliveryWindow!=null))fail('Solicitação de urgência não pode reservar uma janela antes da aprovação.','v3_urgency_invalid');
+  const delivery=urgencyRequest?{start:null,end:null}:{start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
   const items=canonicalItems(body.items);
   const couponCode=normalizeV3Coupon(body.couponCode);
   const blackLibriClaimId=body.blackLibriClaimId||'';
@@ -61,10 +63,11 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
-  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),...(blackLibriClaimId?{blackLibriClaimId}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(manualDraft?{manualDraft}:{}),...(contactSnapshot?{contactSnapshot}:{})}));
+  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),...(blackLibriClaimId?{blackLibriClaimId}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(manualDraft?{manualDraft}:{}),...(urgencyRequest?{urgencyRequest:true}:{}),...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
-  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode,blackLibriClaimId,customer:body.customer,clientRequestId:requestKey},{includeSnapshots:true,requireSale:true,customerId});
+  let quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode,blackLibriClaimId,customer:body.customer,clientRequestId:requestKey},{includeSnapshots:true,requireSale:true,customerId});
+  if(urgencyRequest)quote=await assertV3UrgencyAvailable(db,quote,event.date);
   if(quote.totalCents!==body.expectedTotalCents)fail('O total mudou. Revise o carrinho antes de confirmar.','order_total_changed');
   const terms=await db.prepare('SELECT version,body,content_hash FROM v2_terms_versions WHERE active=1 ORDER BY published_at DESC LIMIT 1').first();
   if(!terms||terms.version!==accepted.version)fail('As condições foram atualizadas. Confira novamente.','terms_changed');
@@ -86,9 +89,9 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     }
   }
   const capacity={eventDate:event.date,...delivery,pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
-  await validateV2DeliveryWindow(db,capacity);
+  if(!urgencyRequest){await validateV2DeliveryWindow(db,capacity);
   const plan=await planV2AllocationForWindow(db,capacity);
-  if(!plan.fits)fail('A agenda mudou. Escolha outra janela.','order_capacity_unavailable');
+  if(!plan.fits)fail('A agenda mudou. Escolha outra janela.','order_capacity_unavailable');}
   const stamp=new Date().toISOString();
   const percent=manualDraft?.depositPercent||100;
   if(![50,100].includes(percent)||percent===50&&body.paymentMethod!=='pix')fail('Entrada inválida.','order_payment_invalid');
@@ -102,14 +105,14 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const statements=[
     db.prepare(`INSERT INTO v2_orders(order_code,public_token,customer_id,event_type,event_subtype,honoree_display_name,event_date,
        status,next_action,delivery_start,delivery_end,urgency_enabled,briefing_status,source,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,'configuring','Preparando contratação conjunta',?,?,0,'locked',?,?,?)`)
-       .bind(orderCode,publicToken,customerId,event.type,event.subtype,event.honoree,event.date,delivery.start,delivery.end,manualDraft?'manual_whatsapp':'store',stamp,stamp),
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,0,'locked',?,?,?)`)
+       .bind(orderCode,publicToken,customerId,event.type,event.subtype,event.honoree,event.date,urgencyRequest?'awaiting_urgency_decision':'configuring',urgencyRequest?'Aguardando análise de encaixe':'Preparando contratação conjunta',delivery.start,delivery.end,manualDraft?'manual_whatsapp':'store',stamp,stamp),
     db.prepare(`INSERT INTO v3_order_checkout_snapshots(order_id,request_key,request_hash,quote_json,terms_version,created_at)
       VALUES(${idSql},?,?,?,?,?)`).bind(orderCode,requestKey,requestHash,JSON.stringify(pricing),terms.version,stamp),
     db.prepare(`INSERT INTO v2_order_pricing(order_id,subtotal_cents,combo_discount_cents,coupon_discount_cents,urgency_percent,
       urgency_amount_cents,total_cents,payment_method,deposit_percent,deposit_cents,balance_cents,currency,pricing_snapshot_json,updated_at)
-      VALUES(${idSql},?,?,?,0,0,?,?,?,?,?,'BRL',?,?)`)
-      .bind(orderCode,quote.subtotalCents,quote.discountCents-quote.couponDiscountCents,quote.couponDiscountCents,quote.totalCents,quote.paymentMethod,percent,deposit,quote.totalCents-deposit,JSON.stringify(pricing),stamp),
+      VALUES(${idSql},?,?,?,?,?,?,?,?,?,?,'BRL',?,?)`)
+      .bind(orderCode,quote.subtotalCents,quote.discountCents-quote.couponDiscountCents,quote.couponDiscountCents,quote.urgencyPercent||0,quote.urgencyAmountCents||0,quote.totalCents,quote.paymentMethod,percent,deposit,quote.totalCents-deposit,JSON.stringify(pricing),stamp),
     db.prepare(`INSERT INTO v2_briefings(order_id,schema_version,data_json,completion_percent,updated_at)
       VALUES(${idSql},'3.0','{}',0,?)`).bind(orderCode,stamp),
     ...(!manualDraft?[db.prepare(`INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json)
@@ -117,6 +120,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     db.prepare(`INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
       VALUES(${idSql},'order_created','Pedido combinado V3 preparado.',?,?)`).bind(orderCode,JSON.stringify({families:quote.items.map(x=>x.family),totalCents:quote.totalCents}),stamp)
   ];
+  if(urgencyRequest){statements.push(db.prepare(`INSERT INTO v2_urgency_requests(order_id,status,urgency_percent,requested_at) VALUES(${idSql},'pending',?,?)`).bind(orderCode,quote.urgencyPercent,stamp),db.prepare(`INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(${idSql},'urgency_requested','Solicitação de encaixe V3, sem cobrança.',?,?)`).bind(orderCode,JSON.stringify(quote.urgency),stamp));}
   if(manualDraft){
     const serviceTerms=quote.items.flatMap(l=>{const t=l.commercialSnapshot.variant.config?.atelie||l.commercialSnapshot.variant.config?.retrospective;return t?[{family:l.family,version:t.termsVersion,body:t.specificTerms}]:[];});
     statements.push(db.prepare(`INSERT INTO v3_order_revisions(order_id,request_key,kind,input_json,quote_json,terms_json,reason,created_at) VALUES(${idSql},?,'manual',?,?,?,?,?)`).bind(orderCode,requestKey,JSON.stringify({items,deliveryWindow:delivery,depositPercent:percent,manualFingerprint:manualDraft.fingerprint}),JSON.stringify(pricing),JSON.stringify({general:terms,services:serviceTerms}),manualDraft.reason,stamp));

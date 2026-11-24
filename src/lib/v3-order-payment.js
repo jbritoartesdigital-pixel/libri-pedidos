@@ -5,7 +5,7 @@ import {createCapacityHold,V2CheckoutError} from './v2-checkout.js';
 import {createMercadoPagoCheckout,syncMercadoPagoOrder,cancelMercadoPagoOrder} from './v2-mercadopago.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
-import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
+import {validateV2DeliveryWindow,planV2AllocationForWindow,validateV2UrgencyWindow} from './v2-agenda.js';
 import {nowIso} from './http.js';
 
 const terminalStatuses=new Set(['expired','cancelled','rejected']);
@@ -15,7 +15,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
   const db=env.DB;
   return withV2PaymentLock(db,orderId,async()=>{
     const row=await db.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.briefing_status,
-       o.event_date,o.delivery_start,o.delivery_end,o.archived_at,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
+       o.event_date,o.delivery_start,o.delivery_end,o.archived_at,o.urgency_enabled,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
        p.balance_cents,p.payment_method,s.quote_json,a.deposit_percent AS authorized_percent
        FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
        JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id LEFT JOIN v3_admin_payment_policies a ON a.order_id=o.id
@@ -33,7 +33,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
       fail('O pedido precisa de revisão antes do pagamento.','v3_order_inconsistent');
     const existing=(await db.prepare('SELECT provider,provider_order_id,checkout_url,status,amount_cents,method FROM v2_payments WHERE order_id=? ORDER BY id DESC').bind(orderId).all()).results||[];
     if(existing.some(x=>x.status==='approved')){const state=await originalV3FinancialState(db,orderId);if(!state.valid)fail('O histórico financeiro precisa de revisão.','v3_payment_reconciliation_required');return {ok:true,alreadyPaid:true,orderCode:row.order_code,depositPercent:row.deposit_percent,balanceCents:state.remainingCents};}
-    if(row.archived_at||!['configuring','awaiting_payment'].includes(row.status)||row.briefing_status!=='locked')
+    if(row.archived_at||!['configuring','awaiting_payment','urgency_approved'].includes(row.status)||row.briefing_status!=='locked')
       fail('O pedido não está disponível para cobrança.','v3_payment_unavailable');
     const hold=await db.prepare(`SELECT h.id,h.token,h.status,h.expires_at,
       COALESCE((SELECT SUM(points_units) FROM v2_checkout_hold_allocations WHERE hold_id=h.id),0) AS points
@@ -68,7 +68,8 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
     if(!liveHold){
       const capacity={eventDate:row.event_date,start:row.delivery_start,end:row.delivery_end,
         pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
-      await validateV2DeliveryWindow(db,capacity);
+      if(quote.urgency?.requested){const u=await db.prepare("SELECT status,requested_delivery_start,requested_delivery_end,urgency_percent FROM v2_urgency_requests WHERE order_id=?").bind(orderId).first();if(!row.urgency_enabled||u?.status!=='approved'||u.requested_delivery_start!==capacity.start||u.requested_delivery_end!==capacity.end||u.urgency_percent!==quote.urgency.percent||quote.productionDays!==0||quote.items.length!==1||quote.items[0].family!=='convite')fail('O encaixe precisa de aprovação e conferência.','v3_urgency_unapproved');validateV2UrgencyWindow(capacity.start,capacity.end,capacity.eventDate);}
+      else await validateV2DeliveryWindow(db,capacity);
       const plan=await planV2AllocationForWindow(db,capacity);
       if(!plan.fits)fail('A agenda não tem mais capacidade para o conjunto.','delivery_window_unavailable');
       const settings=await loadV2Settings(db);
@@ -80,7 +81,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
     }
     // Keep the hold for uncertain provider failures. Repeating with the same
     // hold token and payload reuses the existing Mercado Pago idempotency key.
-    await db.prepare("UPDATE v2_orders SET status='awaiting_payment',next_action='Aguardando pagamento',updated_at=? WHERE id=? AND status='configuring'").bind(nowIso(),orderId).run();
+    await db.prepare("UPDATE v2_orders SET status='awaiting_payment',next_action='Aguardando pagamento',updated_at=? WHERE id=? AND status IN ('configuring','urgency_approved')").bind(nowIso(),orderId).run();
     const checkout=await createMercadoPagoCheckout(request,env,{orderId,orderCode:row.order_code,publicToken:row.public_token,
       paymentMethod:row.payment_method,amountDueNowCents:row.deposit_cents,customerEmail:quote.contactSnapshot?quote.contactSnapshot.email:row.email});
     return {ok:true,recovered:!!liveHold,orderCode:row.order_code,providerOrderId:checkout.providerOrderId,
@@ -111,7 +112,7 @@ export async function reconcileV3Payment(env,orderId){
       WHERE order_id=? ORDER BY id DESC`).bind(orderId).all()).results||[];
     const hold=await db.prepare('SELECT status,expires_at FROM v2_checkout_holds WHERE order_id=? ORDER BY id DESC LIMIT 1').bind(orderId).first();
     const holdCount=Number((await db.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id=?').bind(orderId).first()).n);
-    if(!rows.length&&!hold&&order.status==='configuring')return {ok:true,notStarted:true,canRetry:true};
+    if(!rows.length&&!hold&&['configuring','urgency_approved'].includes(order.status))return {ok:true,notStarted:true,canRetry:true};
     if(!rows.length||holdCount!==rows.length||rows.some(p=>p.provider!=='mercado_pago'||!p.provider_order_id))
       return {ok:false,needsReview:true,reason:'provider_payment_unknown',canRetry:false};
     // Inspect oldest first. Old terminal callbacks cannot release a newer

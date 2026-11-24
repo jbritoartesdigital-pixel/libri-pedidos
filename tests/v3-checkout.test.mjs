@@ -6,6 +6,7 @@ import {previewV3CartDelivery} from '../src/lib/v3-cart-delivery.js';
 import {getV3CheckoutTerms} from '../src/lib/v3-checkout.js';
 import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
 import {randomToken} from '../src/lib/http.js';
+import {decideV2Urgency} from '../src/lib/v2-urgency-admin.js';
 const items=[{productCode:'retrospectiva_070',variantCode:'retrospectiva_070_default',addonCodes:[]}];
 const base={items,eventType:'birthday',paymentMethod:'pix'};
 async function setup(){
@@ -312,4 +313,20 @@ test('single invitation and standalone Atelie use one modular order and verified
  }
  assert.equal(mp.posts,2);assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_order_checkout_snapshots').get().n,2);
  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_order_services').get().n,2);
+});
+
+test('V3 urgent invitation requires admin approval, never charges before approval, and reuses original quote',async t=>{
+ const {DB,body,env,call}=await setup();const mp=providerMock(t);
+ const input={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],eventDate:day(2),deliveryWindow:undefined,urgencyRequested:true};
+ const preview=await previewV3CartDelivery(DB,input);assert.equal(preview.delivery.options.length,0);assert.ok(preview.urgencyQuote);assert.equal(preview.urgencyQuote.urgencyPercent,30);
+ input.expectedTotalCents=preview.urgencyQuote.totalCents;
+ const bad=await call({...input,expectedTotalCents:preview.quote.totalCents});assert.notEqual(bad.status,200);
+ const res=await call(input);assert.equal(res.status,200,await res.clone().text());const result=await res.json();assert.equal(result.urgencyRequested,true);assert.equal(mp.posts,0);
+ const retry=await (await call(input)).json();assert.equal(retry.publicToken,result.publicToken);assert.equal(mp.posts,0);
+ const key={publicToken:result.publicToken};assert.equal((await (await call(key,env,'recover')).json()).state,'urgency_pending');assert.equal((await call(key,env,'renew')).status,409);assert.equal(mp.posts,0);
+ await decideV2Urgency(DB,result.orderCode,{decision:'approve',deliveryStart:day(1),deliveryEnd:day(2),note:'Capacidade conferida'});
+ const approved=await (await call(key,env,'recover')).json();assert.equal(approved.state,'not_started');assert.equal(approved.canRenew,true);assert.equal(mp.posts,0);
+ const paid=await call(key,env,'renew');assert.equal(paid.status,200,await paid.clone().text());assert.equal(mp.posts,1);
+ assert.equal(DB.sqlite.prepare('SELECT total_cents FROM v2_order_pricing').get().total_cents,preview.urgencyQuote.totalCents);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
 });

@@ -62,6 +62,12 @@ async function compute(db,token,family,input={}){
  }
  const rows=(await db.prepare('SELECT * FROM v2_agenda_allocations WHERE order_id=? ORDER BY day,id').bind(ctx.order.id).all()).results||[];
  const partition=partitionV3Allocations(ctx.services,rows);
+ if(ctx.order.urgency_enabled&&ctx.services.length===1&&family==='convite'){
+  const u=await db.prepare('SELECT status,requested_delivery_start,requested_delivery_end FROM v2_urgency_requests WHERE order_id=?').bind(ctx.order.id).first();
+  const start=ctx.order.delivery_start,end=ctx.order.delivery_end;
+  if(u?.status!=='approved'||u.requested_delivery_start!==start||u.requested_delivery_end!==end||!valid(start)||!valid(end)||end<today()||partition.some(r=>r.day<start||r.day>end))fail('O encaixe aprovado precisa de revisão de agenda.');
+  return {ctx,s,partition,rows,options:[{start,end,allocation:partition}],depends,urgency:true};
+ }
  const settings=await loadV2Settings(db);
  const capacity=v2IntSetting(settings,'default_sellable_points_per_day_units',400);
  const now=today(),days=Math.max(s.production_days,family==='convite'?0:15);
@@ -99,6 +105,7 @@ export async function scheduleV3Service(db,token,family,input={}){
  const p=await compute(db,token,family,input);
  const selected=p.options.find(o=>o.start===input.start&&o.end===input.end);
  if(!selected)fail('A janela perdeu disponibilidade. Consulte novamente.');
+ if(p.urgency){await db.batch([db.prepare('UPDATE v2_agenda_allocations SET service_family=? WHERE order_id=? AND service_family IS NULL').bind(family,p.ctx.order.id),db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),production_status='ready',updated_at=datetime('now') WHERE id=?").bind(selected.start,selected.end,p.s.id)]);return {family,deliveryWindow:{start:selected.start,end:selected.end},pointsUnits:p.s.points_units,productionStatus:'ready'};}
  const keep=p.partition.filter(r=>r.service_family!==family);
  const next=[...keep,...selected.allocation.map(r=>({...r,service_family:family}))];
  if(sum(next)!==expectedCapacity(p.ctx.services))fail('A distribuição dos pontos está inconsistente.');

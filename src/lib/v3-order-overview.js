@@ -3,13 +3,14 @@ import {originalV3FinancialState} from './v3-admin-payment-policy.js';
 // just because one service has reached a different production stage.
 export const V3_SERVICE_LABELS=Object.freeze({pending:'Aguardando briefing ou conferência',ready:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue',cancelled:'Cancelado'});
 const statusMap={pending:'briefing_pending',ready:'ready_for_production',in_production:'in_production',waiting_customer:'waiting_customer',adjustments:'adjustments',approved:'approved',delivered:'finalized',cancelled:'cancelled'};
-const labels={briefing_pending:'Aguardando briefing ou conferência',ready_for_production:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',finalized:'Todos os serviços entregues',cancelled:'Cancelado',awaiting_payment:'Aguardando pagamento',capacity_review:'Agenda precisa de conferência'};
+const labels={awaiting_urgency_decision:'Encaixe aguardando aprovação',briefing_pending:'Aguardando briefing ou conferência',ready_for_production:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',finalized:'Todos os serviços entregues',cancelled:'Cancelado',awaiting_payment:'Aguardando pagamento',capacity_review:'Agenda precisa de conferência'};
 export function summarizeV3Order(services,{locked=false,orderStatus='',capacityReview=false}={}){
  const counts=Object.fromEntries(Object.keys(V3_SERVICE_LABELS).map(k=>[k,0]));
  for(const s of services){const status=s.production_status||s.productionStatus;if(Object.hasOwn(counts,status))counts[status]++;}
  const total=services.length,delivered=counts.delivered;
  let status;
  if(orderStatus==='cancelled')status='cancelled';
+ else if(orderStatus==='awaiting_urgency_decision')status='awaiting_urgency_decision';
  else if(locked)status='awaiting_payment';
  else if(total>0&&delivered===total)status='finalized';
  else if(capacityReview)status='capacity_review';
@@ -74,6 +75,7 @@ export async function getV3CentralQueues(db,production){
   const base={code:r.order_code,honoreeName:r.honoree_display_name,customerName:r.customer_name,paymentMethod:r.payment_method,totalCents:r.total_cents,modular:true};
   const add=(status,label,reason)=>exceptions.push({...base,status,statusLabel:label,attentionReason:reason});
   if(r.cancellation){if(r.cancellation==='review')add('cancellation_review','Cancelamento em revisão','Conferir cobranças e devoluções');continue;}
+  if(r.status==='awaiting_urgency_decision'){add('awaiting_urgency_decision','Encaixe urgente','Conferir capacidade e decidir antes de cobrar');continue;}
   if(r.revision){add('awaiting_payment','Proposta revisada','Aguardando aceite da cliente');continue;}
   const f=await originalV3FinancialState(db,r.id);
   if(!f)continue;

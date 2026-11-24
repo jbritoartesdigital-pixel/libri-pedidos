@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V80 (24/11/2026): PR #150, composição unificada, carregamento escuro, tema noturno opcional. Testes de publicação obrigatórios.
 # Release V76 (24/11/2026): PR #149, glass rosé, Manrope local, viewport fixo e modal de oferta; gate de testes obrigatório.
 # Release 24/11/2026: PR #148, vidro escuro e consulta de data alternativa; CI 45466359300 aprovado.
 # Release V75 (24/11/2026): refinamentos de compra, agenda automática e recuperação da surpresa; CI 45461720246 aprovado.

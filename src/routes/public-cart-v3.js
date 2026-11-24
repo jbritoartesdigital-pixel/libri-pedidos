@@ -1,5 +1,6 @@
 import {fail,json} from '../lib/http.js';
 import {quoteV3Cart,V3CartValidationError} from '../lib/v3-cart-quote.js';
+import {previewV3CartDelivery} from '../lib/v3-cart-delivery.js';
 import {listV3RetrospectivePackages} from '../lib/v3-retrospective-catalog.js';
 
 // V3 própria: etapa segura de cotação, não de pagamento.
@@ -8,7 +9,8 @@ export async function handlePublicCartV3Api(request,env,url) {
     if(request.method!=='GET')return fail('Método não permitido.',405);
     return json({ok:true,packages:await listV3RetrospectivePackages(env.DB)});
   }
-  if(url.pathname!=='/api/v3/cart/quote')return null;
+  const deliveryRoute=url.pathname==='/api/v3/cart/delivery-options';
+  if(!deliveryRoute&&url.pathname!=='/api/v3/cart/quote')return null;
   if(request.method!=='POST')return fail('Método não permitido.',405);
   try {
     if(!(request.headers.get('content-type')||'').includes('application/json'))
@@ -17,6 +19,7 @@ export async function handlePublicCartV3Api(request,env,url) {
     if(raw.length>12000)return fail('Carrinho muito grande.',413);
     let body;
     try{body=JSON.parse(raw);}catch{return fail('Dados do carrinho inválidos.',422);}
+    if(deliveryRoute)return json({ok:true,...await previewV3CartDelivery(env.DB,body)});
     const quote=await quoteV3Cart(env.DB,body);
     return json({ok:true,quote});
   }catch(error){

@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 16 | 23/11/2026 (Brasil)
+Versão 17 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -146,5 +146,11 @@ RETOMADA V16 — RECUPERAÇÃO E RENOVAÇÃO SEGURA DE PAGAMENTO
 - 286c91f: concilia todas as cobranças conhecidas com o Mercado Pago; recupera cobrança ativa, identifica pagamento confirmado, cancela tentativa pendente com reserva vencida e verifica novamente; renovação explícita só após todas anteriores terminais, sob lock, mesma ordem/total/método e revalidação da janela/capacidade. Divergência de reservas e cobranças ou resposta incerta bloqueia renovação para revisão, sem novo pagamento automático.
 - f120297/8c515ba: POST /api/v3/cart/recover e /api/v3/cart/renew por chave aleatória privada de 36 hex ou token privado do pedido. Consulta sem criação de cobrança; botão de renovação exige flag e estado elegível. Não expõe dados de contato nem busca por número público de pedido. Preserva número e link da área cliente.
 - 6243fa0/cf2abd4/2d74206: tela de recuperação integrada à loja e retry; guarda apenas credencial opaca no armazenamento local/sessão, sem dados pessoais, preços ou URL; permite retomar após reload/fechamento no mesmo navegador. Chave permanece se tentativa ainda não localizada; limpa após confirmação de pagamento e acesso à área. Links validados.
-- 0995fee: teste de recuperação por credencial, cobrança única enquanto válida, renovação após encerramento, aprovação, reserva órfã e bloqueio de duplicidade. CI a confirmar. Testes reais de navegador e integração da área cliente ainda pendentes.
+- 0995fee: teste de recuperação por credencial, cobrança única enquanto válida, renovação após encerramento, aprovação, reserva órfã e bloqueio de duplicidade. CI 45320687423 concluído com sucesso. Testes reais de navegador e integração da área cliente ainda pendentes.
 - Próximos: validar CI V16, montar área cliente modular e retomada por token no meu-pedido, Admin de materiais e briefing, submissão e uploads privados, agenda e acompanhamento por serviço, promoções/Black/cupom/campanha, complementos e entrega. Não ativar flag/checkout nem publicar parcial. PR #143 draft.
+
+RETOMADA V17 — ÁREA DA CLIENTE MODULAR
+- 1130689: API privada V3 inclui resumo financeiro, previsão inicial, status e extras por serviço, permissões de edição; sem expor dados de outros pedidos. Não cria prazo individual ainda, nem declara entrega definitiva.
+- 582ee86/c3b1f42: área cliente V3 no link /meu-pedido/:token, detectada antes de iniciar área V2; somente 404 permite fallback para legado. Resumo e navegação exclusivamente por módulos contratados + dados compartilhados, campos adaptativos com salvamento versionado, preservação de rascunho na falha. Cliente pode verificar pagamento/retomar pelo token via recovery V3; sem cobrar por rota antiga. Retrospectiva mostra limites ampliados, canal WhatsApp e recebimento registrado, sem upload ao R2.
+- 6768496/dee0f94: impede edição durante salvamento, testes de renderização, isolamento dos serviços, escaping, links WhatsApp e ausência de upload retro. CI a confirmar. Teste visual real ainda pendente.
+- Próximos: integração segura de uploads privados Convite/Ateliê, envio definitivo e validação dos briefings por serviço, recebimento completo Retro no Admin, agenda independente e dependências, aprovação/revisões/entrega, Admin V3, promoções e cobranças complementares. Rascunho não inicia produção; envio definitivo/arquivos ainda indisponíveis na UI. Não ativar vendas/flag nem publicar parcial. PR #143 draft.

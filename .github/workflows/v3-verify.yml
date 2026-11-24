@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: libri-v3-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   validate:
     name: Checar V2 + V3 sem deploy
@@ -23,21 +26,10 @@ jobs:
       - name: Testes automatizados
         run: npm test
       - name: Validar migrations em SQLite (sem produção)
-        run: |
-          python3 - <<'PY'
-          import pathlib,sqlite3
-          db=sqlite3.connect(':memory:')
-          for path in sorted(pathlib.Path('migrations').glob('*.sql')):
-              print('Validando',path.name)
-              db.executescript(path.read_text())
-          print('Tabelas:',db.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()[0])
-          assert db.execute("SELECT count(*) FROM v2_products").fetchone()[0]==7
-          assert db.execute("SELECT count(*) FROM v3_atelie_packages").fetchone()[0]==3
-          print('Migrações e catálogo V2 consistentes')
-          PY
+        run: python3 scripts/check-migrations.py
       - name: Navegação real Chromium (banco de teste, sem pagamentos)
         run: |
-          npm install --prefix "$RUNNER_TEMP/libri-browser" --no-save --no-audit --no-fund playwright@1.51.1
+          npm install --prefix "$RUNNER_TEMP/libri-browser" --no-save --no-audit --no-fund playwright@1.58.2
           "$RUNNER_TEMP/libri-browser/node_modules/.bin/playwright" install --with-deps chromium
           LIBRI_PLAYWRIGHT_MODULE="$RUNNER_TEMP/libri-browser/node_modules/playwright/index.mjs" node tests/browser/v3-store.mjs
       - name: Capturas de navegador do teste

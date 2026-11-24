@@ -13,6 +13,7 @@ import {handleAdminStoreConfigV2Api} from '../../src/routes/admin-store-config-v
 import {handleAdminFinanceV2Api} from '../../src/routes/admin-finance-v2.js';
 import {handleAdminAgendaV2Api} from '../../src/routes/admin-agenda-v2.js';
 import {handleAdminNotificationsV2Api} from '../../src/routes/admin-notifications-v2.js';
+import {previewV3ManualOrder,createV3ManualOrder} from '../../src/lib/v3-order-revisions.js';
 import {getV3CheckoutTerms,startV3Checkout} from '../../src/lib/v3-checkout.js';
 import {previewV3CartDelivery} from '../../src/lib/v3-cart-delivery.js';
 import {syncMercadoPagoOrder} from '../../src/lib/v2-mercadopago.js';
@@ -46,6 +47,17 @@ try{
  unpaidFixture=await make('Festa teste pendente','5561888888888');assert.equal(mp.posts,2);mockFetch=globalThis.fetch;
 }finally{globalThis.fetch=originalFetch;}
 const readEnv={DB:fixtureDb,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'};
+const manualDb=database();
+const manualEnv={DB:manualDb,LIBRI_V3_CHECKOUT_ENABLED:'true',LIBRI_V3_BLACK_LIBRI_ENABLED:'true',LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true',MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+await saveBlackLibriCampaign(manualEnv,{adminEnabled:true,complianceConfirmed:true,authorizationReference:'TESTE-INTERNO',adminNote:'Dados sintéticos',validFrom:'2020-01-01',validUntil:'2030-12-31'});
+manualDb.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
+const manualInput={customer:{name:'Cliente manual',whatsapp:'+351 912345678',email:''},event:{type:'birthday',honoreeName:'Vicente teste',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:50,reason:'Entrada autorizada pelo atendimento'};
+const manualPreview=await previewV3ManualOrder(manualDb,manualInput);
+const manualFixture=await createV3ManualOrder(manualEnv,{...manualInput,deliveryWindow:manualPreview.options[0],expectedTotalCents:manualPreview.totalCents,requestKey:randomToken(),confirmed:true});
+manualFixture.publicToken=manualFixture.customerAreaPath.split('/').pop();
+let manualMP,manualFetch;
+try{manualMP=providerMock({mock:{method:(obj,key,fn)=>{obj[key]=fn;}}});manualFetch=globalThis.fetch;}finally{globalThis.fetch=originalFetch;}
+
 let blocked=0;
 const server=createServer(async(req,res)=>{
  try{
@@ -67,9 +79,10 @@ const server=createServer(async(req,res)=>{
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/v3/manual/catalog')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/notifications')result=await handleAdminNotificationsV2Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
+   else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
    else if(url.pathname==='/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing/shared'&&req.method==='PATCH')result=await handleCustomerBriefingV3Api(request,readEnv,url);
-   else if(url.pathname==='/api/v3/cart/recover'&&req.method==='POST'){const body=await request.clone().json();assert.ok([paidFixture,unpaidFixture].some(o=>o.publicToken===body.publicToken));globalThis.fetch=mockFetch;try{result=await handlePublicCartV3Api(request,fixtureEnv,url);}finally{globalThis.fetch=originalFetch;}}
+   else if(url.pathname==='/api/v3/cart/recover'&&req.method==='POST'){const body=await request.clone().json();assert.ok([paidFixture,unpaidFixture,manualFixture].some(o=>o.publicToken===body.publicToken));const manual=body.publicToken===manualFixture.publicToken;globalThis.fetch=manual?manualFetch:mockFetch;try{result=await handlePublicCartV3Api(request,manual?manualEnv:fixtureEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else {blocked++;console.error('Unexpected test API',req.method,url.pathname);res.writeHead(403);res.end('Test: route not allowed');return;}
    res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));return;
   }
@@ -282,8 +295,33 @@ try{
  await admin.locator('[data-view="agenda"]').click();await admin.locator('.agenda-calendar').waitFor();assert.equal(await admin.locator('.agenda-advanced').count(),1);await admin.locator('[data-agenda-mode="capacity"]').click();await admin.locator('.capacity-tile').first().waitFor();assert.equal(await admin.locator('.agenda-calendar').isVisible(),false);await admin.screenshot({path:'artifacts/v3-browser/admin-capacity-mobile.png',fullPage:true});await admin.locator('[data-agenda-mode="list"]').click();await admin.locator('[data-agenda-page="list"]').waitFor();await admin.locator('[data-agenda-mode="week"]').click();await admin.locator('#agendaWeekRows').waitFor();await admin.locator('[data-agenda-mode="calendar"]').click();await admin.screenshot({path:'artifacts/v3-browser/admin-agenda-mobile.png',fullPage:true});
  await admin.locator('[data-view="manual"]').click();await admin.locator('.admin-manual-integrated').waitFor();assert.equal(await admin.locator('[data-family]').count(),3);await admin.locator('[data-contact="name"]').fill('Cliente teste');await admin.locator('[data-contact="whatsapp"]').fill('+351 912345678');await admin.locator('[data-event="date"]').fill('25122026');assert.equal(await admin.locator('[data-event="date"]').inputValue(),'25/12/2026');await admin.locator('[data-delivery="start"]').fill('01122026');await admin.locator('[data-delivery="end"]').fill('03122026');assert.equal(await admin.locator('[data-delivery="start"]').inputValue(),'01/12/2026');assert.equal(await admin.locator('[data-native-date="data-delivery-start"]').inputValue(),'2026-12-01');await admin.locator('[data-native-date="data-delivery-end"]').fill('2026-12-04');assert.equal(await admin.locator('[data-delivery="end"]').inputValue(),'04/12/2026');await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('[data-contact="name"]').inputValue(),'Cliente teste');await admin.screenshot({path:'artifacts/v3-browser/admin-manual-night-mobile.png',fullPage:true});
  await adminContext.close();
+ const manualContext=await browser.newContext({viewport:{width:390,height:740},reducedMotion:'reduce'});
+ await manualContext.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.request().url().startsWith('https://www.mercadopago.com.br/checkout/v1/redirect')?route.fulfill({status:200,contentType:'text/html',body:'<h1>Pagamento simulado</h1>'}):route.abort());
+ const manualPage=await manualContext.newPage();manualPage.on('pageerror',e=>errors.push(e.message));
+ await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.libri-manual-checkout .manual-extra').first().waitFor();
+ assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
+ assert.equal(await manualPage.locator('.manual-total').count(),1);
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-extras.png',fullPage:true});
+ const add=manualPage.locator('[data-manual-addon="confirmation"]');
+ await add.click();await manualPage.locator('[data-manual-addon="confirmation"]').filter({hasText:'Retirar'}).waitFor();await manualPage.locator('#app[aria-busy="false"]').waitFor();
+ await manualPage.locator('[data-manual-action="cart"]').click();
+ await manualPage.locator('[data-manual-terms]').waitFor();assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
+ assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-cart.png',fullPage:true});
+ await manualPage.locator('[data-manual-action="pay"]').click();await manualPage.locator('.manual-error').waitFor();assert.equal(manualMP.posts,0);
+ await manualPage.locator('[data-manual-terms]').check();await manualPage.locator('[data-manual-action="pay"]').click();
+ await manualPage.locator('.black-libri-overlay [data-black-slot]').first().waitFor();
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-black.png',fullPage:true});
+ await manualPage.locator('[data-black-sound]').click();await manualPage.locator('[data-black-slot]').first().click();await manualPage.locator('[data-black-continue]:enabled').waitFor();
+ await manualPage.locator('[data-black-continue]').click();await manualPage.waitForURL('https://www.mercadopago.com.br/checkout/v1/redirect?order=1');
+ assert.equal(manualMP.posts,1);assert.equal(manualDb.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
+ const manualOrder=manualDb.sqlite.prepare('SELECT * FROM v2_orders WHERE public_token=?').get(manualFixture.publicToken);const manualPay=manualDb.sqlite.prepare('SELECT * FROM v2_payments WHERE order_id=?').get(manualOrder.id);
+ assert.equal(manualDb.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_black_libri_claims WHERE order_id=? AND status='attached'").get(manualOrder.id).n,1);
+ manualMP.approve(manualPay.provider_order_id);globalThis.fetch=manualFetch;try{await syncMercadoPagoOrder(manualEnv,manualPay.provider_order_id);}finally{globalThis.fetch=originalFetch;}
+ await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('[data-v3-tab="shared"]').waitFor();await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-paid.png',fullPage:true});
+ await manualContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_store_journeys').get().n,0);
  console.log('Chromium: invite, Atelie, retro, three services, checkout terms, locked/unlocked customer shell, persisted draft, admin detail; test-only mock provider.');
-}finally{await browser.close();await new Promise(resolve=>server.close(resolve));db.sqlite.close();fixtureDb.sqlite.close();}
+}finally{await browser.close();await new Promise(resolve=>server.close(resolve));db.sqlite.close();fixtureDb.sqlite.close();manualDb.sqlite.close();}

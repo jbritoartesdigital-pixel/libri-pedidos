@@ -1,0 +1,178 @@
+// Internal modular briefing model. Public routes, authenticated Admin receipt
+// action, invite/Ateliê private upload integration and final submission follow.
+// Retrospectiva never creates R2 objects; only receipt metadata is persisted.
+import {buildV2BriefingSimulationSchema} from './v2-customer-area.js';
+import {buildAtelieBriefingBlueprint} from './v3-atelie-briefing.js';
+import {withV2PaymentLock} from './v2-payment-lock.js';
+const fail=(message,status=422)=>{const e=new Error(message);e.status=status;throw e;};
+const obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
+const parse=v=>JSON.parse(v||'{}');
+const field=(key,label,type='text',options={})=>({key,label,type,...options});
+const section=(id,title,fields)=>({id,title,fields});
+const sharedKeys=new Set(['theme_or_style','joint_celebration','joint_honorees','age','special_info','event_time','venue_name','venue_address']);
+const filled=v=>Array.isArray(v)?v.length>0:v!==null&&v!==undefined&&String(v).trim()!=='';
+function retroSpec(snapshot){
+  const r=snapshot.variant?.config?.retrospective;
+  if(!r||!Number.isSafeInteger(r.maxPhotos)||r.maxPhotos<1||!Number.isSafeInteger(r.maxVideos)||r.maxVideos<0)
+    fail('Os limites contratados da retrospectiva ainda precisam ser definidos.',409);
+  return r;
+}
+export function buildV3ModuleSchema(order,services,module,drafts={}){
+  const shared=drafts.shared||{};
+  const data=drafts[module]||{};
+  const invitation=services.find(s=>s.family==='convite');
+  const inviteSchema=invitation?buildV2BriefingSimulationSchema({
+    product:invitation.snapshot.product,eventType:order.event_type,addons:invitation.snapshot.addons||[],
+    data:{...drafts.convite,...shared}
+  }):null;
+  if(module==='shared'){
+    if(inviteSchema)return {sections:inviteSchema.sections.filter(s=>s.id==='event'),uploadRules:[]};
+    const fields=[field('theme_or_style','Tema ou estilo da comemoração','text',{required:true})];
+    if(order.event_type==='birthday'){
+      fields.push(field('joint_celebration','A festa tem mais de um aniversariante?','choice',{required:true,options:[{value:'no',label:'Não'},{value:'yes',label:'Sim'}]}));
+      fields.push(shared.joint_celebration==='yes'
+        ?field('joint_honorees','Nomes e idades','textarea',{required:true})
+        :field('age','Idade','number',{required:true,min:1,max:120}));
+    }
+    fields.push(field('special_info','Informações gerais adicionais','textarea'));
+    return {sections:[section('event','Sobre a comemoração',fields)],uploadRules:[]};
+  }
+  const service=services.find(s=>s.family===module);
+  if(!service)fail('Este serviço não faz parte do pedido.',404);
+  if(module==='convite'){
+    return {...inviteSchema,sections:inviteSchema.sections.filter(s=>s.id!=='event')};
+  }
+  if(module==='identidade_visual'){
+    const config=service.snapshot.variant?.config?.atelie||{};
+    const pkg=service.product_code.replace(/^atelie_/,'');
+    const atelie=buildAtelieBriefingBlueprint({event:{honoreeName:order.honoree_display_name,type:order.event_type,date:order.event_date},
+      packageCode:pkg,contractedApplications:config.contractedApplications||[],requiresChildPhoto:true,
+      data:{...data,theme:shared.theme_or_style,age:shared.age,multipleHonorees:shared.joint_celebration==='yes'?'sim':'não',honoreesNamesAges:shared.joint_honorees}});
+    const sections=atelie.sections.filter(s=>s.id!=='celebracao').map(s=>({...s,fields:s.fields.filter(f=>f.key!=='theme').map(f=>
+      f.key==='includedPosesInfo'&&config.includedMascotPoses?{...f,label:'Poses incluídas no pacote: '+config.includedMascotPoses}:f)}));
+    return {sections,uploadRules:[],privateUploadsPendingIntegration:true};
+  }
+  if(module==='retrospectiva'){
+    const r=retroSpec(service.snapshot);
+    return {sections:[section('story','A história que vamos contar',[
+      field('story','Conte um pouco da história e dos momentos importantes','textarea',{required:true}),
+      field('music_mode','Como vamos escolher a música?','choice',{required:true,options:['Libri escolhe','quero sugerir']}),
+      ...(data.music_mode==='quero sugerir'?[field('music_reference','Música ou referência','text',{required:true})]:[]),
+      field('dedication','Mensagem, homenagem ou dedicatória','textarea'),
+      field('sequence_notes','Ordem das fotos, períodos ou pessoas importantes','textarea'),
+      ...(r.captionsIncluded?[field('caption_notes','Legendas desejadas','textarea')]:[]),
+      field('media_authorization','Possui autorização para usar os materiais enviados na criação contratada?','choice',{required:true,options:['sim','não']})
+    ])],uploadRules:[],materials:{channel:'whatsapp',maxPhotos:r.maxPhotos,maxVideos:r.maxVideos,requiresAdminReceipt:true,storesFilesInR2:false}};
+  }
+  fail('Módulo inválido.');
+}
+async function context(db,token){
+  const order=await db.prepare(`SELECT o.*,p.total_cents,p.payment_method,p.deposit_percent,p.balance_cents
+    FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
+    JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.public_token=?`).bind(token).first();
+  if(!order)return null;
+  const services=(await db.prepare('SELECT * FROM v3_order_services WHERE order_id=? ORDER BY id').bind(order.id).all()).results.map(s=>({...s,snapshot:parse(s.commercial_snapshot_json)}));
+  const paid=order.deposit_percent===100&&order.balance_cents===0&&!!await db.prepare(`SELECT 1 AS paid FROM v2_payments
+    WHERE order_id=? AND provider='mercado_pago' AND status='approved' AND payment_type!='refund'
+      AND amount_cents=? AND method=? LIMIT 1`).bind(order.id,order.total_cents,order.payment_method).first();
+  const locked=!paid||order.briefing_status==='locked'||['configuring','awaiting_payment','cancelled'].includes(order.status);
+  const drafts=Object.create(null),revisions=Object.create(null);
+  if(!locked){
+    for(const r of (await db.prepare('SELECT module,data_json,revision FROM v3_order_briefing_drafts WHERE order_id=?').bind(order.id).all()).results){
+      drafts[r.module]=parse(r.data_json);revisions[r.module]=r.revision;
+    }
+  }
+  return {order,services,locked,drafts,revisions};
+}
+export async function getV3ModularBriefing(db,token){
+  const ctx=await context(db,token);
+  if(!ctx)return null;
+  const {order,services,locked,drafts,revisions}=ctx;
+  const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productName:s.snapshot.product.name}));
+  const base={orderCode:order.order_code,locked,event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
+  if(locked)return {...base,modules:[]};
+  const modules=['shared',...services.map(s=>s.family)].map(module=>({
+    module,revision:revisions[module]||0,data:drafts[module]||{},schema:buildV3ModuleSchema(order,services,module,drafts)
+  }));
+  const retro=modules.find(m=>m.module==='retrospectiva');
+  if(retro){
+    const setting=await db.prepare("SELECT value FROM v2_settings WHERE key='libri_whatsapp'").first();
+    const phone=String(setting?.value||'').replace(/\D/g,'');
+    const text='Olá! Vou enviar os materiais da retrospectiva do pedido '+order.order_code+'.';
+    retro.schema.materials.whatsappUrl=/^\d{10,15}$/.test(phone)?'https://wa.me/'+phone+'?text='+encodeURIComponent(text):null;
+    retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,received_at AS receivedAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
+  }
+  return {...base,modules};
+}
+function normalizeField(f,value){
+  if(!filled(value))return f.type==='multi_choice'?[]:'';
+  if(['choice','multi_choice'].includes(f.type)){
+    const options=(f.options||[]).map(x=>typeof x==='string'?x:x.value);
+    if(f.type==='multi_choice'){
+      if(!Array.isArray(value)||value.some(x=>typeof x!=='string'||!options.includes(x))||
+        (Number.isInteger(f.max)&&new Set(value).size>f.max))fail('Opção inválida: '+f.label);
+      return [...new Set(value)];
+    }
+    if(typeof value!=='string'||!options.includes(value))fail('Opção inválida: '+f.label);
+    return value;
+  }
+  if(f.type==='number'){
+    if(typeof value!=='string'&&typeof value!=='number')fail('Número inválido: '+f.label);
+    if(!/^\d+$/.test(String(value)))fail('Número inválido: '+f.label);
+    const n=Number(value);
+    if(!Number.isSafeInteger(n)||(f.min!=null&&n<f.min)||(f.max!=null&&n>f.max))fail('Número inválido: '+f.label);
+    return n;
+  }
+  if(typeof value!=='string'||value.length>(f.type==='textarea'?12000:2000))fail('Resposta inválida: '+f.label);
+  return value.trim();
+}
+export async function saveV3ModuleDraft(db,token,module,payload={}){
+  const initial=await context(db,token);
+  if(!initial)return null;
+  return withV2PaymentLock(db,initial.order.id,async()=>{
+    const ctx=await context(db,token);
+    if(!ctx||ctx.locked)fail('O briefing será liberado após o pagamento.',403);
+    if(!['available','in_progress'].includes(ctx.order.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
+      fail('O briefing não está disponível para edição.',409);
+    if(module!=='shared'&&!ctx.services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status)))
+      fail('Este serviço não permite edição.',409);
+    if(!obj(payload.data)||JSON.stringify(payload.data).length>90000||!Number.isSafeInteger(payload.revision)||payload.revision<0)
+      fail('Dados inválidos.');
+    if(payload.revision!==(ctx.revisions[module]||0))fail('O briefing mudou. Atualize antes de salvar.',409);
+    // Build conditional schema from proposed choices, then accept only visible
+    // fields. Hidden branches and file objects cannot be persisted as answers.
+    const proposed={...ctx.drafts,[module]:payload.data};
+    const schema=buildV3ModuleSchema(ctx.order,ctx.services,module,proposed);
+    const data=Object.create(null);
+    for(const f of schema.sections.flatMap(s=>s.fields)){
+      if(['info','upload'].includes(f.type))continue;
+      if(Object.hasOwn(payload.data,f.key))data[f.key]=normalizeField(f,payload.data[f.key]);
+    }
+    const result=await db.prepare(`INSERT INTO v3_order_briefing_drafts(order_id,module,data_json,revision,updated_at)
+      VALUES(?,?,?,1,datetime('now')) ON CONFLICT(order_id,module) DO UPDATE SET data_json=excluded.data_json,
+      revision=revision+1,updated_at=datetime('now') WHERE revision=?`).bind(ctx.order.id,module,JSON.stringify(data),payload.revision).run();
+    if(Number(result.meta?.changes)!==1)fail('O briefing mudou. Atualize antes de salvar.',409);
+    if(module!=='shared')await db.prepare("UPDATE v3_order_services SET briefing_status='in_progress' WHERE order_id=? AND family=? AND briefing_status='available'").bind(ctx.order.id,module).run();
+    return getV3ModularBriefing(db,token);
+  });
+}
+// Called only from authenticated Admin in the future. A WhatsApp click or
+// customer assertion is not receipt confirmation, and does not start production.
+export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoCount,note=''}={}){
+  if(!Number.isSafeInteger(orderId)||!Number.isSafeInteger(photoCount)||!Number.isSafeInteger(videoCount)||photoCount<0||videoCount<0||photoCount+videoCount===0||
+    typeof note!=='string'||note.length>500)fail('Informe os materiais efetivamente recebidos.');
+  return withV2PaymentLock(db,orderId,async()=>{
+    const row=await db.prepare(`SELECT s.commercial_snapshot_json,o.status,o.briefing_status,o.public_token
+      FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id WHERE s.order_id=? AND s.family='retrospectiva'`).bind(orderId).first();
+    if(!row)fail('Retrospectiva não contratada.',404);
+    const ctx=await context(db,row.public_token);
+    if(!ctx||ctx.locked||!['available','in_progress'].includes(row.briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
+      fail('Pedido indisponível para confirmação de materiais.',409);
+    const spec=retroSpec(parse(row.commercial_snapshot_json));
+    if(photoCount>spec.maxPhotos||videoCount>spec.maxVideos)fail('Os materiais excedem o limite contratado. Avalie um adicional antes de confirmar.');
+    await db.prepare(`INSERT INTO v3_retro_material_receipts(order_id,photo_count,video_count,received_at,note)
+      VALUES(?,?,?,datetime('now'),?) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
+      video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note`).bind(orderId,photoCount,videoCount,note.trim()).run();
+    return {photoCount,videoCount,received:true};
+  });
+}

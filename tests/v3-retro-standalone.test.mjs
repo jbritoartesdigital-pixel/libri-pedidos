@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {database,day,providerMock} from './helpers.mjs';
+import {quoteV3Cart} from '../src/lib/v3-cart-quote.js';
+import {previewV3CartDelivery} from '../src/lib/v3-cart-delivery.js';
+import {createV3OrderRecords} from '../src/lib/v3-order-records.js';
+import {prepareV3Payment} from '../src/lib/v3-order-payment.js';
+import {syncMercadoPagoOrder} from '../src/lib/v2-mercadopago.js';
+import {getV3ModularBriefing,recordV3RetroMaterialReceipt} from '../src/lib/v3-modular-briefing.js';
+import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
+const retro={productCode:'retrospectiva_070',variantCode:'retrospectiva_070_default',addonCodes:[],extras:[{code:'retro_more_photos',quantity:1},{code:'retro_more_videos',quantity:1}]};
+const base={eventType:'birthday',paymentMethod:'pix'};
+test('standalone and three-family retro quotes use approved prices, never legacy add-on',async()=>{
+  const db=database();
+  const q=await quoteV3Cart(db,{...base,items:[retro]});
+  assert.equal(q.totalCents,21900);
+  assert.equal(q.pointsUnits,400);
+  assert.equal(q.productionDays,15);
+  assert.equal(q.canCheckout,false);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[retro]},{requireSale:true}),/não está liberado/);
+  await setAtelieSaleStatus(db,'essencia',true);
+  const invitation={productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]};
+  const atelie={productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]};
+  const all=await quoteV3Cart(db,{...base,items:[invitation,atelie,retro]});
+  assert.equal(all.combinedDiscountPercent,10);
+  assert.equal(all.combinedDiscountCents,3430);
+  assert.equal(all.totalCents,37870);
+  assert.equal(all.pointsUnits,800);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,addonCodes:['retro_070']},retro]}),/duplicado/);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_products WHERE code LIKE 'retrospectiva_%'").get().n,0);
+});
+test('standalone order gated by sale flag, paid once and material receipt checks extras and durations',async t=>{
+  const db=database(),mp=providerMock(t),eventDate=day(65);
+  const customerId=Number(db.sqlite.prepare("INSERT INTO v2_customers(name,whatsapp) VALUES('Teste','5561999999999')").run().lastInsertRowid);
+  const items=[retro],preview=await previewV3CartDelivery(db,{...base,items,eventDate});
+  const body={...base,items,eventDate,honoreeName:'Ana',clientRequestId:'retro_test_request_0001',termsAccepted:true,
+    termsVersion:db.sqlite.prepare('SELECT version FROM v2_terms_versions WHERE active=1').get().version,
+    retrospectiveTermsAccepted:true,retrospectiveTermsVersion:db.sqlite.prepare("SELECT updated_at FROM v3_retrospective_packages WHERE code='RETRO_070'").get().updated_at,
+    expectedTotalCents:preview.quote.totalCents,deliveryWindow:preview.delivery.options[0]};
+  const input={customerId,orderCode:'LIBRI-9002',publicToken:'ord_'+crypto.randomUUID().replace(/-/g,'')+'abcd',body};
+  await assert.rejects(createV3OrderRecords(db,input),/não está liberado/);
+  db.sqlite.exec("UPDATE v3_retrospective_packages SET sale_enabled=1 WHERE code='RETRO_070'");
+  const order=await createV3OrderRecords(db,input);
+  const env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+  const pay=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+  assert.equal(pay.totalCents,21900);
+  assert.equal((await getV3ModularBriefing(db,order.publicToken)).locked,true);
+  mp.approve(pay.providerOrderId);await syncMercadoPagoOrder(env,pay.providerOrderId);
+  const brief=await getV3ModularBriefing(db,order.publicToken);
+  assert.equal(brief.locked,false);
+  assert.deepEqual(brief.modules.map(x=>x.module),['shared','retrospectiva']);
+  const schema=brief.modules[1].schema;
+  assert.equal(schema.materials.maxPhotos,95);
+  assert.equal(schema.materials.maxVideos,10);
+  assert.equal(schema.materials.maxTotalVideoSeconds,480);
+  assert.equal(schema.materials.storesFilesInR2,false);
+  await assert.rejects(recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:96,videoCount:0,videoDurations:[]}),/excedem/);
+  await assert.rejects(recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:95,videoCount:1,videoDurations:[61]}),/duração/);
+  await assert.rejects(recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:95,videoCount:9,videoDurations:Array(9).fill(60)}),/duração/);
+  const r=await recordV3RetroMaterialReceipt(db,order.orderId,{photoCount:95,videoCount:8,videoDurations:Array(8).fill(60)});
+  assert.equal(r.received,true);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_briefing_uploads').get().n,0);
+  assert.equal(db.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.orderId).status,'briefing_pending');
+});

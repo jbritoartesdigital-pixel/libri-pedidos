@@ -3,6 +3,7 @@
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
+import {suggestV3Upgrade} from './v3-upgrade-suggestion.js';
 import {calculateV3CombinedDiscount} from './v3-combined-discount.js';
 import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
@@ -86,7 +87,8 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
     const extras=quoteV3Extras(item.family,item.productCode,item.extras);
     const extrasCents=extras.reduce((n,x)=>n+x.totalCents,0);
     const extrasPointsUnits=extras.reduce((n,x)=>n+x.totalPointsUnits,0);
-    const snapshot={...quote,v3Extras:extras,extrasCents,extrasPointsUnits,pointsUnits:quote.pointsUnits+extrasPointsUnits,totalCents:quote.totalCents+extrasCents,subtotalCents:quote.subtotalCents+extrasCents};
+    const snapshot={...quote,v3Extras:extras,extrasCents,extrasPointsUnits,pointsUnits:quote.pointsUnits+extrasPointsUnits,totalCents:quote.totalCents+extrasCents,baseTotalCents:quote.baseTotalCents+extrasCents,subtotalCents:quote.subtotalCents+extrasCents,payment:{...quote.payment,depositCents:quote.totalCents+extrasCents,balanceCents:0}};
+    const upgradeSuggestion=await suggestV3Upgrade(db,{family:item.family,productCode:item.productCode,variantCode:quote.variant.code,quote,extras});
     quotes.push({
       lineId:'product_'+item.index,
       family:item.family,
@@ -96,7 +98,7 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
       variantName:quote.variant.label,
       addonCodes:quote.addons.map(x=>x.code),
       productCents:quote.productCents,
-      extras,extrasCents,
+      extras,extrasCents,upgradeSuggestion,
       grossCents:quote.productCents+quote.addonsCents+extrasCents,
       comboCode:quote.combo?.code||'',
       comboName:quote.combo?.name||'',

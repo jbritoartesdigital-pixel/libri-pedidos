@@ -12,6 +12,44 @@ const DAY_MS =
 const NORMAL_DELIVERY_WINDOW_DAYS =
   3;
 
+// A janela comercial continua com 3 dias; produção de Ateliê/Retros pode
+// utilizar a capacidade distribuída nos 15 dias corridos anteriores.
+function productionSpan(deliveryStart, productionDays, today) {
+  const earliest = addDays(today, 1);
+  const planned = addDays(deliveryStart, -productionDays);
+  return {
+    start: planned > earliest ? planned : earliest,
+    end: addDays(deliveryStart, -1)
+  };
+}
+
+function planSpreadAllocation(capacityMap, startDay, endDay, requiredUnits) {
+  const eligible = listDays(startDay, endDay).map(day => ({
+    day, free: capacityMap[day]?.free || 0
+  })).filter(row => row.free > 0);
+  const totalFree = eligible.reduce((sum, row) => sum + row.free, 0);
+  if (totalFree < requiredUnits) return {
+    fits:false, allocation:[], remainingUnits:requiredUnits-totalFree
+  };
+  let assigned = 0;
+  const distributed = eligible.map(row => {
+    const proportional = requiredUnits * row.free / totalFree;
+    const pointsUnits = Math.floor(proportional);
+    assigned += pointsUnits;
+    return {...row, pointsUnits, fraction:proportional-pointsUnits};
+  });
+  // Os centésimos restantes são atribuídos aos dias com maior fração;
+  // preservar exatamente a carga do contrato, sem ultrapassar capacidade.
+  for (const row of [...distributed].sort((a,b) => b.fraction-a.fraction)) {
+    if (assigned >= requiredUnits) break;
+    if (row.pointsUnits < row.free) { row.pointsUnits++; assigned++; }
+  }
+  return {fits:assigned===requiredUnits,
+    allocation:distributed.filter(row=>row.pointsUnits>0)
+      .map(row=>({day:row.day,pointsUnits:row.pointsUnits})),
+    remainingUnits:requiredUnits-assigned};
+}
+
 function isIsoDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/
     .test(
@@ -413,6 +451,8 @@ function buildCandidateWindows({
   lastPossibleEnd,
   targetDay,
   requiredUnits,
+  productionDays = 0,
+  todayDay,
 }) {
   const candidates = [];
 
@@ -453,13 +493,10 @@ function buildCandidateWindows({
         - 1,
       );
 
-    const plan =
-      planAllocation(
-        capacityMap,
-        start,
-        end,
-        requiredUnits,
-      );
+    const span = productionDays ? productionSpan(start, productionDays, todayDay) : {start,end};
+    const plan = productionDays
+      ? planSpreadAllocation(capacityMap,span.start,span.end,requiredUnits)
+      : planAllocation(capacityMap,start,end,requiredUnits);
 
     if (
       !plan.fits
@@ -500,6 +537,7 @@ export async function validateV2DeliveryWindow(
     eventDate,
     start,
     end,
+    productionDays = 0,
   },
 ) {
   const eventDay =
@@ -545,10 +583,11 @@ export async function validateV2DeliveryWindow(
     );
 
   const firstPossibleDay =
-    addDays(
-      currentBrazilDay(),
-      1,
-    );
+    addDays(currentBrazilDay(), Math.max(1,productionDays));
+
+  if (productionDays && startDay < firstPossibleDay) {
+    throw new Error('Ateliê e Retrospectivas precisam de pelo menos 15 dias corridos de produção antes da entrega.');
+  }
 
   const lastPossibleEnd =
     addDays(
@@ -579,6 +618,7 @@ export async function findV2DeliveryOptions(
     eventDate,
     pointsUnits,
     limit = 5,
+    productionDays = 0,
   },
 ) {
   const eventDay =
@@ -625,11 +665,7 @@ export async function findV2DeliveryOptions(
   const today =
     currentBrazilDay();
 
-  const firstPossibleDay =
-    addDays(
-      today,
-      1,
-    );
+  const firstPossibleDay = addDays(today,Math.max(1,productionDays));
 
   const lastPossibleEnd =
     addDays(
@@ -660,13 +696,10 @@ export async function findV2DeliveryOptions(
     };
   }
 
-  const capacityMap =
-    await loadCapacityMap(
-      db,
-      firstPossibleDay,
-      lastPossibleEnd,
-      settings,
-    );
+  const capacityStart = productionDays
+    ? productionSpan(firstPossibleDay, productionDays, today).start
+    : firstPossibleDay;
+  const capacityMap = await loadCapacityMap(db,capacityStart,lastPossibleEnd,settings);
 
   const candidates =
     buildCandidateWindows({
@@ -675,6 +708,8 @@ export async function findV2DeliveryOptions(
       lastPossibleEnd,
       targetDay,
       requiredUnits,
+      productionDays,
+      todayDay: today,
     });
 
   if (
@@ -824,9 +859,10 @@ export async function findV2DeliveryOptions(
 // fits its production load. Never move a window without the customer's OK.
 export async function findNextV2DeliveryWindow(
   db,
-  { eventDate, previousStart, pointsUnits, excludeOrderId = null },
+  { eventDate, previousStart, pointsUnits, excludeOrderId = null, productionDays = 0 },
 ) {
-  const firstPossibleDay = addDays(currentBrazilDay(), 1);
+  const today = currentBrazilDay();
+  const firstPossibleDay = addDays(today, Math.max(1,productionDays));
   const previousStartDay = parseIsoDay(previousStart);
   if (previousStartDay >= firstPossibleDay) return null;
 
@@ -843,14 +879,19 @@ export async function findNextV2DeliveryWindow(
   const lastPossibleStart = addDays(lastPossibleEnd, -(NORMAL_DELIVERY_WINDOW_DAYS - 1));
   if (firstPossibleDay > lastPossibleStart) return null;
 
-  const capacityMap = await loadCapacityMap(db, firstPossibleDay, lastPossibleEnd, settings, { excludeOrderId });
+  const capacityStart = productionDays
+    ? productionSpan(firstPossibleDay,productionDays,today).start : firstPossibleDay;
+  const capacityMap = await loadCapacityMap(db, capacityStart, lastPossibleEnd, settings, { excludeOrderId });
   for (
     let start = firstPossibleDay;
     start <= lastPossibleStart;
     start = addDays(start, 1)
   ) {
     const end = addDays(start, NORMAL_DELIVERY_WINDOW_DAYS - 1);
-    const plan = planAllocation(capacityMap, start, end, units);
+    const span = productionDays ? productionSpan(start,productionDays,today) : {start,end};
+    const plan = productionDays
+      ? planSpreadAllocation(capacityMap,span.start,span.end,units)
+      : planAllocation(capacityMap,start,end,units);
     if (plan.fits && plan.allocation.length) {
       return { start: formatIsoDay(start), end: formatIsoDay(end) };
     }
@@ -864,6 +905,7 @@ export async function planV2AllocationForWindow(
     start,
     end,
     pointsUnits,
+    productionDays = 0,
   },
 ) {
   const startDay =
@@ -907,20 +949,14 @@ export async function planV2AllocationForWindow(
       db,
     );
 
-  const capacityMap =
-    await loadCapacityMap(
-      db,
-      startDay,
-      endDay,
-      settings,
-    );
-
-  return planAllocation(
-    capacityMap,
-    startDay,
-    endDay,
-    requiredUnits,
-  );
+  const span = productionDays
+    ? productionSpan(startDay,productionDays,currentBrazilDay())
+    : {start:startDay,end:endDay};
+  if (span.start > span.end) return {fits:false,allocation:[],remainingUnits:requiredUnits};
+  const capacityMap = await loadCapacityMap(db,span.start,span.end,settings);
+  return productionDays
+    ? planSpreadAllocation(capacityMap,span.start,span.end,requiredUnits)
+    : planAllocation(capacityMap,startDay,endDay,requiredUnits);
 }
 
 export function validateV2UrgencyWindow(start, end, eventDate) {

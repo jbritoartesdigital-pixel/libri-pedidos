@@ -116,7 +116,7 @@ async function manualUpsell(db,row,r){
    const w=data.deliveryWindow,capacity={...p.capacity,...w};
    if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)continue;
    const depositCents=row.deposit_percent===50?Math.ceil(q.totalCents/2):q.totalCents;
-   return {key:c.key,title:c.title,description:c.description,increaseCents:q.totalCents-old.totalCents,totalCents:q.totalCents,depositCents,balanceCents:q.totalCents-depositCents,depositPercent:row.deposit_percent,items,pricing:{...q,schemaVersion:3,contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:q.paymentMethod,depositPercent:row.deposit_percent,depositCents,balanceCents:q.totalCents-depositCents}}};
+   return {key:c.key,title:c.title,description:c.description,increaseCents:q.totalCents-old.totalCents,totalCents:q.totalCents,depositCents,balanceCents:q.totalCents-depositCents,depositPercent:row.deposit_percent,items,pricing:{...q,schemaVersion:3,...(old.manualFlexibleDelivery===true?{manualFlexibleDelivery:true}:{}),contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:q.paymentMethod,depositPercent:row.deposit_percent,depositCents,balanceCents:q.totalCents-depositCents}}};
   }catch{/* Incompatible suggestions are skipped, never block the original. */}
  }
  return null;
@@ -185,7 +185,7 @@ function manualInput(input){
  const customer={name:String(input.customer?.name||'').trim(),whatsapp:normalizeWhatsapp(input.customer?.whatsapp),email:String(input.customer?.email||'').trim()};
  if(!customer.name||customer.name.length>160||!/^\d{10,15}$/.test(customer.whatsapp)||customer.email.length>240||customer.email&&!/^\S+@\S+\.\S+$/.test(customer.email))fail('Confira os dados da cliente.',422);
  const event=input.event||{};
- if(!['birthday','15_years','wedding','celebration','other'].includes(event.type)||!event.honoreeName||!/^\d{4}-\d{2}-\d{2}$/.test(event.date||'')||!event.type)fail('Confira os dados da comemoração.',422);
+ if(!event.honoreeName||!/^\d{4}-\d{2}-\d{2}$/.test(event.date||'')||!event.type)fail('Confira os dados da comemoração.',422);
  const depositPercent=input.depositPercent??100;
  if(!['pix','card'].includes(input.paymentMethod)||![50,100].includes(depositPercent)||depositPercent===50&&input.paymentMethod!=='pix')fail('Confira a forma de pagamento.',422);
  if(depositPercent===50&&(typeof input.reason!=='string'||input.reason.trim().length<5))fail('Informe o motivo da autorização excepcional de 50%.',422);

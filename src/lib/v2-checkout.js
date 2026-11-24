@@ -1210,6 +1210,10 @@ export async function resumeV2Payment(request, env, token, body = {}) {
     JOIN v2_customers c ON c.id = o.customer_id JOIN v2_order_pricing p ON p.order_id = o.id
     LEFT JOIN v2_urgency_requests u ON u.order_id = o.id WHERE o.public_token = ?`).bind(token).first();
   if (!order) throw new V2CheckoutError('Pedido não encontrado.', { status: 404 });
+  // V3 must never enter the legacy single-product repricing/retry path.
+  if (safeJsonObject(order.pricing_snapshot_json).schemaVersion === 3) {
+    throw new V2CheckoutError('Este pedido combinado exige recuperação pelo checkout V3.', { status: 409, code: 'v3_payment_recovery_required' });
+  }
   if (order.archived_at) {
     throw new V2CheckoutError(
       'O prazo de pagamento terminou, mas seu pedido está salvo. Entre em contato com a Libri para reativá-lo.',

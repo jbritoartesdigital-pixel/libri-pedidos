@@ -7,7 +7,7 @@ const day=v=>String(v).split('-').reverse().join('/');
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
-export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',preferredName='',contactDraft={},request,onBack}){
+export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',preferredName='',contactDraft={},simulationMode=false,request,onBack}){
   trackStoreStage('dados');
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
   let form={name:String(preferredName||'').trim().slice(0,60),whatsapp:'',email:'',instagram:'',honoreeName:'',...contactDraft,eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
@@ -53,7 +53,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       '</section><section class="v3-checkout-block" data-checkout-stage="pagamento"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
       '</section><section class="v3-checkout-block" data-checkout-stage="revisao"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
       '</section></fieldset><div class="v3-action-row">'+(!attempt?'<button type="button" class="v3-btn v3-btn-text" data-v3-checkout="back" '+(busy?'disabled':'')+'>Voltar ao carrinho</button>':'')+
-      '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length&&!(urgentQuote&&urgentAccepted))?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':urgentQuote&&urgentAccepted?'Solicitar encaixe, sem pagar agora':'Confirmar e pagar')+'</button></div></form></section>';
+      '<button type="'+(attempt?'button':'submit')+'" '+(attempt?'data-v3-checkout="retry"':'')+' class="v3-btn v3-btn-primary" '+(!enabled||busy||!quote||!terms||(!attempt&&!options.length&&!(urgentQuote&&urgentAccepted))?'disabled':'')+'>'+(busy?'Conferindo…':attempt?'Retomar a mesma tentativa':urgentQuote&&urgentAccepted?'Solicitar encaixe, sem pagar agora':simulationMode?'Concluir simulação':'Confirmar e pagar')+'</button></div></form></section>';
     root.setAttribute('aria-busy',String(busy));
   }
   async function refresh({agenda=false}={}){
@@ -65,7 +65,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       quote=p.quote;
       const next=t.terms;
       if(JSON.stringify(next)!==JSON.stringify(terms))accepted.clear();
-      terms=next;enabled=t.checkoutEnabled===true;
+      terms=next;enabled=simulationMode||t.checkoutEnabled===true;
       if(agenda||hadUrgency){
         const previousWindow=form.deliveryWindow;options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
         if(!form.eventDate)throw Error('Informe a data do evento.');
@@ -84,6 +84,11 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       if(!el.reportValidity())return;
       readForm();
       if(!quote||!terms||(!form.deliveryWindow&&!(urgentQuote&&urgentAccepted))||!accepted.has('general')||terms.services.some(x=>!accepted.has(x.family))){error='Confira a agenda e aceite todas as condições.';render();return;}
+      if(simulationMode){
+        const complete=()=>{detach();root.innerHTML='<section class="v3-panel" role="status"><span class="v3-eyebrow">Modo de teste</span><h1 class="v3-title">Simulação concluída!</h1><p>Você conferiu a contratação sem criar pedido, cobrança ou reserva real.</p>'+summary()+'<div class="v3-action-row"><a class="v3-btn v3-btn-primary" href="/loja?simular=1">Simular novamente</a><a class="v3-btn v3-btn-secondary" href="/loja">Sair do teste</a></div></section>';root.setAttribute('aria-busy','false');};
+        if(hasInvite){checkingBlack=true;try{const {openBlackLibriDemo}=await import('./black-libri-demo.js?v=96');await openBlackLibriDemo({onContinue:complete,continueLabel:'Concluir simulação'});}catch(e){error=e.message;render();}finally{checkingBlack=false;}}else complete();
+        return;
+      }
       try{
         attemptKey=pendingV3CheckoutKey()||token();
         keepV3CheckoutKey(attemptKey);

@@ -113,7 +113,7 @@ export async function getV3ModularBriefing(db,token){
   }));
   const uploads=(await db.prepare('SELECT id,family,field_key,original_filename,mime_type,size_bytes FROM v3_service_uploads WHERE order_id=? ORDER BY id').bind(order.id).all()).results||[];
   for(const m of modules){
-    m.uploads=uploads.filter(u=>u.family===m.module).map(u=>({id:u.id,fieldKey:u.field_key,originalFilename:u.original_filename,mimeType:u.mime_type,sizeBytes:u.size_bytes,
+    m.uploads=uploads.filter(u=>u.family===m.module&&services.some(s=>s.family===m.module&&(!s.originals_until||Date.now()<Date.parse(s.originals_until)))).map(u=>({id:u.id,fieldKey:u.field_key,originalFilename:u.original_filename,mimeType:u.mime_type,sizeBytes:u.size_bytes,
       contentPath:'/api/v2/customer-area/'+token+'/v3/briefing/'+u.family+'/uploads/'+u.id+'/content'}));
   }
   const retro=modules.find(m=>m.module==='retrospectiva');

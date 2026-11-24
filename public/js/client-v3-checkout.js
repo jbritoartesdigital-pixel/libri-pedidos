@@ -3,7 +3,7 @@
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
 const day=v=>String(v).split('-').reverse().join('/');
-const retryKey='libriV3PendingCheckout';
+import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBack}){
@@ -71,8 +71,8 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       readForm();
       if(!quote||!terms||!form.deliveryWindow||!accepted.has('general')||terms.services.some(x=>!accepted.has(x.family))){error='Confira a agenda e aceite todas as condições.';render();return;}
       try{
-        attemptKey=sessionStorage.getItem(retryKey);
-        if(!attemptKey){attemptKey=token();sessionStorage.setItem(retryKey,attemptKey);}
+        attemptKey=pendingV3CheckoutKey()||token();
+        keepV3CheckoutKey(attemptKey);
       }catch{error='O navegador não permite guardar a tentativa com segurança. Abra a loja em outro navegador.';render();return;}
       attempt={...cart,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},honoreeName:form.honoreeName,eventDate:form.eventDate,
         paymentMethod:form.paymentMethod,deliveryWindow:{start:form.deliveryWindow.start,end:form.deliveryWindow.end},expectedTotalCents:quote.totalCents,
@@ -91,6 +91,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
       if(result.alreadyPaid?url.origin!==location.origin:url.protocol!=='https:'||!/(^|\.)mercadopago\.com(\.br)?$/.test(url.hostname))throw Error('Link de pagamento indisponível.');
       // Retain the retry key until confirmed payment; do not create a new
       // attempt merely because the browser returns from the payment provider.
+      if(result.alreadyPaid)clearV3CheckoutKey(attemptKey);
       location.assign(url.href);
     }catch(e){error=e.message+' Retome a mesma tentativa para evitar duplicidade.';busy=false;render();}
   }
@@ -102,7 +103,7 @@ export function mountV3Checkout(root,{items,eventType,eventDate='',request,onBac
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
     if(action==='back'&&!busy&&!attempt){detach();onBack();}
     if(action==='agenda')refresh({agenda:true});
-    if(action==='retry')pay();
+    if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;

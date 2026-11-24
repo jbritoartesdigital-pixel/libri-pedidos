@@ -27,7 +27,7 @@ import {
   cancelMercadoPagoOrder,
 } from './v2-mercadopago.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
-import { productionDaysForQuote } from './v3-production-policy.js';
+import { productionDaysForQuote, productionDaysForStoredQuote } from './v3-production-policy.js';
 
 import { priceWithCardProcessingFee, baseTotalFromSnapshot } from './v2-payment-pricing.js';
 import { reservedBlackLibriForCheckout, findBlackLibriClaim, blackLibriOperational, applyBlackLibriToQuote, linkBlackLibriClaim, unlinkBlackLibriClaim } from './v2-black-libri.js';
@@ -1263,7 +1263,7 @@ export async function resumeV2Payment(request, env, token, body = {}) {
           eventDate: order.event_date,
           start: effectiveStart,
           end: effectiveEnd,
-          productionDays: productionDaysForQuote(snapshot),
+          productionDays: productionDaysForStoredQuote(snapshot),
         });
       } catch (error) {
         if (error.message !== 'Essa janela não é compatível com a data do evento.') {
@@ -1274,7 +1274,7 @@ export async function resumeV2Payment(request, env, token, body = {}) {
           previousStart: order.delivery_start,
           pointsUnits: snapshot.pointsUnits,
           excludeOrderId: order.id,
-          productionDays: productionDaysForQuote(snapshot),
+          productionDays: productionDaysForStoredQuote(snapshot),
         });
         if (!nextWindow) {
           throw new V2CheckoutError(
@@ -1360,7 +1360,7 @@ export async function resumeV2Payment(request, env, token, body = {}) {
       );
 
     const plan = await planV2AllocationForWindow(env.DB, { start: effectiveStart, end: effectiveEnd,
-      pointsUnits: snapshot.pointsUnits, productionDays: productionDaysForQuote(snapshot) });
+      pointsUnits: snapshot.pointsUnits, productionDays: productionDaysForStoredQuote(snapshot) });
     if (!plan.fits) throw new V2CheckoutError('A janela perdeu capacidade. Entre em contato com a Libri para revisar a entrega.', { status: 409, code: 'delivery_window_unavailable' });
     const { terms, termsHash, evidence, alreadyAccepted: termsAlreadyAccepted } =
       await paymentTermsEvidence(request, env, body, order.id);
@@ -1621,6 +1621,7 @@ export async function startV2Checkout(
         throw new V2CheckoutError('As condições do Ateliê foram atualizadas. Confira novamente.',{
           status:409,code:'atelie_terms_changed'});
     }
+    quote.productionDays = productionDaysForQuote(quote);
     // A Black Libri pertence aos convites, nunca aos pacotes do Ateliê.
     // Uma reserva vencida nunca desaparece do total sem aviso explícito.
     if (!isAtelie && await blackLibriOperational(env)) {

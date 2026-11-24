@@ -29,12 +29,13 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
   const shared=drafts.shared||{};
   const data=drafts[module]||{};
   const invitation=services.find(s=>s.family==='convite');
+  const addedInvite=!!invitation?.origin_supplement_id;
   const inviteSchema=invitation?buildV2BriefingSimulationSchema({
     product:invitation.snapshot.product,eventType:order.event_type,addons:invitation.snapshot.addons||[],
-    data:{...drafts.convite,...shared}
+    data:addedInvite?{...shared,...drafts.convite}:{...drafts.convite,...shared}
   }):null;
   if(module==='shared'){
-    if(inviteSchema)return {sections:inviteSchema.sections.filter(s=>s.id==='event'),uploadRules:[]};
+    if(inviteSchema&&!addedInvite)return {sections:inviteSchema.sections.filter(s=>s.id==='event'),uploadRules:[]};
     const fields=[field('theme_or_style','Tema ou estilo da comemoração','text',{required:true})];
     if(order.event_type==='birthday'){
       fields.push(field('joint_celebration','A festa tem mais de um aniversariante?','choice',{required:true,options:[{value:'no',label:'Não'},{value:'yes',label:'Sim'}]}));
@@ -49,6 +50,7 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
   if(!service)fail('Este serviço não faz parte do pedido.',404);
   if(module==='convite'){
     const sections=inviteSchema.sections.filter(s=>s.id!=='event');
+    if(addedInvite){const extras=inviteSchema.sections.filter(s=>s.id==='event').flatMap(s=>s.fields).filter(f=>!sharedKeys.has(f.key)||['event_time','venue_name','venue_address'].includes(f.key));if(extras.length)sections.unshift(section('added_event','Dados adicionais do convite',extras));}
     const personal=inviteSchema.uploadRules.some(r=>r.fieldKey==='person_photos');
     if(personal)sections.push(section('private_permission','Autorização de imagens',[
       field('private_photo_authorization','Você possui autorização da pessoa retratada ou de seu responsável legal para usar as fotos nesta criação?','choice',{required:true,options:['sim','não']})

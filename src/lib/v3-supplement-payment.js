@@ -21,7 +21,13 @@ async function access(db,token,family,id){
 const baseSnapshot=s=>s.effective_snapshot_json||s.commercial_snapshot_json;
 const snapshotMatches=(s,o)=>s.production_version===o.base_production_version&&baseSnapshot(s)===o.base_snapshot_json;
 const revisionOnly=o=>JSON.parse(o.offer_json).items.every(x=>x.code.endsWith('_revision'));
-function ensureEligible(s,o){
+function ensureEligible(s,o,ctx){
+ const q=JSON.parse(o.offer_json);
+ if(q.kind==='new_service'){
+  if(ctx.services.some(x=>x.family===q.targetFamily))fail('Esta linha já foi contratada.');
+  if(!q.deliveryWindow||q.deliveryWindow.end<=today())fail('A previsão do novo serviço precisa de revisão.');
+  return;
+ }
  if(!snapshotMatches(s,o))fail('A produção mudou. Solicite uma nova proposta.');
  if(s.production_status!=='ready'&&!(s.production_status==='adjustments'&&revisionOnly(o)))fail('Confirme a agenda e a etapa do serviço antes de cobrar o adicional.');
  if(!s.delivery_end||!s.scheduled_at)fail('O serviço precisa ter uma janela de entrega confirmada.');
@@ -34,13 +40,17 @@ function safeUrl(value){
 }
 async function plan(db,ctx,s,offer){
  // Keep the promised service window; never extend the date silently.
- const now=today(),end=s.delivery_end;
+ const q=JSON.parse(offer.offer_json),newService=q.kind==='new_service';
+ const now=today(),end=newService?q.deliveryWindow.end:s.delivery_end;
+ const workStart=newService&&q.productionDays===0?q.deliveryWindow.start:nextDay(now);
+ const workEnd=newService&&q.productionDays>0?new Date(Date.parse(q.deliveryWindow.start+'T12:00:00Z')-86400000).toISOString().slice(0,10):end;
+ if(newService&&q.productionDays>0&&Date.parse(q.deliveryWindow.start+'T12:00:00Z')-Date.parse(now+'T12:00:00Z')<q.productionDays*86400000)fail('Prazo mínimo do novo serviço indisponível. Solicite outra proposta.');
  if(end<=now)fail('A data de entrega precisa de revisão antes de cobrar.');
  const partition=(await db.prepare('SELECT service_family,allocation_type,points_units FROM v2_agenda_allocations WHERE order_id=?').bind(ctx.order.id).all()).results||[];
  if(partition.some(x=>!x.service_family||x.allocation_type!=='confirmed')||ctx.services.some(x=>partition.filter(a=>a.service_family===x.family).reduce((n,a)=>n+a.points_units,0)!==x.points_units))fail('A agenda original precisa estar distribuída por serviço.');
  const settings=await loadV2Settings(db),capacity=v2IntSetting(settings,'default_sellable_points_per_day_units',400);
  let left=offer.points_units,alloc=[];
- for(let d=nextDay(now);d<=end&&left;d=nextDay(d)){
+ for(let d=workStart>now?workStart:nextDay(now);d<=workEnd&&left;d=nextDay(d)){
    if([0,6].includes(new Date(d+'T12:00:00Z').getUTCDay()))continue;
    const row=await db.prepare(`SELECT COALESCE((SELECT CASE WHEN blocked=1 THEN 0 ELSE sellable_capacity_units END FROM v2_agenda_days WHERE day=?),?) AS capacity,
    COALESCE((SELECT SUM(points_units) FROM v2_agenda_allocations WHERE day=?),0) AS used,
@@ -54,9 +64,9 @@ async function plan(db,ctx,s,offer){
 export async function previewV3SupplementCapacity(db,token,family,id){
  const x=await access(db,token,family,id);if(!x)return null;
  if(x.offer.status!=='accepted')fail('A proposta precisa ser aceita.');
- ensureEligible(x.s,x.offer);
+ ensureEligible(x.s,x.offer,x.ctx);
  const p=await plan(db,x.ctx,x.s,x.offer);
- return {allocation:p.alloc,pointsUnits:x.offer.points_units,deliveryEnd:x.s.delivery_end};
+ return {allocation:p.alloc,pointsUnits:x.offer.points_units,deliveryEnd:JSON.parse(x.offer.offer_json).deliveryWindow?.end||x.s.delivery_end};
 }
 export async function startV3SupplementPayment(request,env,token,family,id,{renew=false}={}){
  // Separate release gate: no new real charges until end-to-end verification.
@@ -71,7 +81,7 @@ export async function startV3SupplementPayment(request,env,token,family,id,{rene
   if(p&&p.status!=='creating'&&active.includes(p.status))fail('A cobrança complementar anterior precisa ser conciliada.');
   if(p&&terminal.includes(p.status)&&!renew)fail('Confirme a renovação da cobrança anterior.');
   if(!['accepted','payment_pending'].includes(offer.status))fail('A proposta não está disponível para pagamento.');
-  ensureEligible(s,offer);
+  ensureEligible(s,offer,ctx);
   if(!p||terminal.includes(p.status)){
    const a=await plan(db,ctx,s,offer);
    const key=crypto.randomUUID(),hold='supplement_'+key,reference='SUP-'+key,at=stamp(),until=new Date(Date.now()+Math.min(180,Math.max(5,v2IntSetting(a.settings,'mercado_pago_order_expiry_minutes',25)))*60000).toISOString();
@@ -102,6 +112,7 @@ export async function startV3SupplementPayment(request,env,token,family,id,{rene
 }
 function effectiveScope(s,offer){
  const snapshot=JSON.parse(baseSnapshot(s)),q=JSON.parse(offer.offer_json);
+ if(q.kind==='upgrade'||q.kind==='new_service')return q.targetSnapshot;
  if(s.family==='convite')snapshot.addons=[...(snapshot.addons||[]),...q.items];
  else{
   const extras=[...(snapshot.v3Extras||[])];
@@ -113,6 +124,7 @@ function effectiveScope(s,offer){
   snapshot.v3Extras=extras;
  }
  snapshot.pointsUnits=s.points_units+offer.points_units;
+ snapshot.totalCents+=offer.subtotal_cents;snapshot.baseTotalCents+=offer.subtotal_cents;
  return snapshot;
 }
 export async function syncV3SupplementPayment(env,providerOrderId){
@@ -145,21 +157,26 @@ export async function syncV3SupplementPayment(env,providerOrderId){
   if(status==='approved'){
    const allocations=(await db.prepare('SELECT day,points_units FROM v2_checkout_hold_allocations WHERE hold_id=? ORDER BY day').bind(p.hold_id).all()).results||[];
    const hold=await db.prepare('SELECT status FROM v2_checkout_holds WHERE id=?').bind(p.hold_id).first();
-   const valid=snapshotMatches(s,offer)&&hold?.status==='active'&&allocations.reduce((n,r)=>n+r.points_units,0)===offer.points_units&&allocations.every(r=>r.day>=today()&&r.day<=s.delivery_end)&& (s.production_status==='ready'||s.production_status==='adjustments'&&revisionOnly(offer));
+   const q=JSON.parse(offer.offer_json),newService=q.kind==='new_service',targetFamily=newService?q.targetFamily:s.family;
+   let eligible=true;try{ensureEligible(s,offer,ctx);}catch{eligible=false;}
+   const end=newService?q.deliveryWindow.end:s.delivery_end;
+   const valid=eligible&&hold?.status==='active'&&allocations.reduce((n,r)=>n+r.points_units,0)===offer.points_units&&allocations.every(r=>r.day>=today()&&r.day<=end);
    const review=async()=>{await db.batch([db.prepare("UPDATE v3_supplement_payments SET status='review',paid_at=COALESCE(paid_at,?),updated_at=? WHERE id=?").bind(at,at,p.id),db.prepare("UPDATE v3_service_supplements SET status='review',updated_at=? WHERE id=?").bind(at,offer.id)]);return {found:true,status:'review',needsReview:true};};
    if(!valid)return review();
-   const snapshot=effectiveScope(s,offer),reopen=s.production_status==='ready';
+   const snapshot=effectiveScope(s,offer),reopen=!newService&&s.production_status==='ready';
    const statements=[
     db.prepare("UPDATE v2_checkout_holds SET status='converted',updated_at=? WHERE id=? AND status='active'").bind(at,p.hold_id),
-    ...allocations.map(r=>db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family) VALUES(?,?,?,'confirmed',?)").bind(ctx.order.id,r.day,r.points_units,s.family)),
-    db.prepare(`UPDATE v3_order_services SET effective_snapshot_json=?,points_units=points_units+?,production_version=production_version+1,
+    ...(newService?[db.prepare(`INSERT INTO v3_order_services(order_id,family,product_code,variant_code,gross_cents,discount_cents,total_cents,points_units,production_days,commercial_snapshot_json,briefing_status,production_status,origin_supplement_id)
+      VALUES(?,?,?,?,?,0,?,?,?,?,'available','pending',?)`).bind(ctx.order.id,targetFamily,q.productCode,q.variantCode,offer.subtotal_cents,offer.subtotal_cents,offer.points_units,q.productionDays,JSON.stringify(snapshot),offer.id)]:[
+    db.prepare(`UPDATE v3_order_services SET effective_snapshot_json=?,product_code=?,variant_code=?,points_units=points_units+?,production_version=production_version+1,
       production_status=CASE WHEN ? THEN 'pending' ELSE production_status END,
       briefing_status=CASE WHEN ? THEN 'in_progress' ELSE briefing_status END,
       reviewed_at=CASE WHEN ? THEN NULL ELSE reviewed_at END,scheduled_at=CASE WHEN ? THEN NULL ELSE scheduled_at END,
-      complement_note=CASE WHEN ? THEN 'Adicionais confirmados. Confira e complemente os dados.' ELSE complement_note END,updated_at=? WHERE id=?`).bind(JSON.stringify(snapshot),offer.points_units,Number(reopen),Number(reopen),Number(reopen),Number(reopen),Number(reopen),at,s.id),
+      complement_note=CASE WHEN ? THEN 'Adicionais confirmados. Confira e complemente os dados.' ELSE complement_note END,updated_at=? WHERE id=?`).bind(JSON.stringify(snapshot),q.kind==='upgrade'?q.productCode:s.product_code,q.kind==='upgrade'?q.variantCode:s.variant_code,offer.points_units,Number(reopen),Number(reopen),Number(reopen),Number(reopen),Number(reopen),at,s.id)]),
+    ...allocations.map(r=>db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family) VALUES(?,?,?,'confirmed',?)").bind(ctx.order.id,r.day,r.points_units,targetFamily)),
     db.prepare("UPDATE v3_supplement_payments SET status='approved',paid_at=COALESCE(paid_at,?),updated_at=? WHERE id=?").bind(at,at,p.id),
     db.prepare("UPDATE v3_service_supplements SET status='paid',applied_at=?,updated_at=? WHERE id=?").bind(at,at,offer.id),
-    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_supplement_paid','Pagamento complementar confirmado e escopo atualizado.',?,?)").bind(ctx.order.id,JSON.stringify({family:s.family,id:offer.id,providerOrderId,totalCents:offer.total_cents}),at)
+    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_supplement_paid','Pagamento complementar confirmado e escopo atualizado.',?,?)").bind(ctx.order.id,JSON.stringify({family:targetFamily,kind:q.kind||'extras',id:offer.id,providerOrderId,totalCents:offer.total_cents}),at)
    ];
    if(reopen){
     statements.push(db.prepare("UPDATE v3_order_briefing_drafts SET revision=revision+1,updated_at=? WHERE order_id=? AND module=?").bind(at,ctx.order.id,s.family));

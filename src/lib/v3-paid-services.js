@@ -5,7 +5,7 @@ export function isV3PaymentSnapshot(json){
 }
 export async function assertV3ConfirmedPayment(db,payment){
   const row=await db.prepare(`SELECT p.total_cents,p.deposit_cents,p.deposit_percent,p.balance_cents,p.payment_method,
-    s.quote_json,(SELECT COUNT(*) FROM v3_order_services WHERE order_id=p.order_id) AS service_count
+    s.quote_json,(SELECT COUNT(*) FROM v3_order_services WHERE order_id=p.order_id AND origin_supplement_id IS NULL) AS service_count
     FROM v2_order_pricing p JOIN v3_order_checkout_snapshots s ON s.order_id=p.order_id WHERE p.order_id=?`)
     .bind(payment.order_id).first();
   const quote=JSON.parse(row?.quote_json||'{}');

@@ -15,7 +15,11 @@ function retroSpec(snapshot){
   const r=snapshot.variant?.config?.retrospective;
   if(!r||!Number.isSafeInteger(r.maxPhotos)||r.maxPhotos<1||!Number.isSafeInteger(r.maxVideos)||r.maxVideos<0)
     fail('Os limites contratados da retrospectiva ainda precisam ser definidos.',409);
-  return r;
+  const quantity=code=>(snapshot.v3Extras||[]).filter(x=>x.code===code).reduce((n,x)=>n+x.quantity,0);
+  return {...r,maxPhotos:r.maxPhotos+25*quantity('retro_more_photos'),maxVideos:r.maxVideos+5*quantity('retro_more_videos'),
+    maxTotalVideoSeconds:Number.isSafeInteger(r.maxTotalVideoSeconds)?r.maxTotalVideoSeconds+300*quantity('retro_more_videos'):null,
+    captionsIncluded:r.captionsIncluded||quantity('retro_captions')>0,
+    rawVideoSeconds:600*quantity('retro_long_video')};
 }
 export function buildV3ModuleSchema(order,services,module,drafts={}){
   const shared=drafts.shared||{};
@@ -62,7 +66,7 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
       field('sequence_notes','Ordem das fotos, períodos ou pessoas importantes','textarea'),
       ...(r.captionsIncluded?[field('caption_notes','Legendas desejadas','textarea')]:[]),
       field('media_authorization','Possui autorização para usar os materiais enviados na criação contratada?','choice',{required:true,options:['sim','não']})
-    ])],uploadRules:[],materials:{channel:'whatsapp',maxPhotos:r.maxPhotos,maxVideos:r.maxVideos,requiresAdminReceipt:true,storesFilesInR2:false}};
+    ])],uploadRules:[],materials:{channel:'whatsapp',maxPhotos:r.maxPhotos,maxVideos:r.maxVideos,maxVideoSeconds:r.maxVideoSeconds||null,maxTotalVideoSeconds:r.maxTotalVideoSeconds,rawVideoSeconds:r.rawVideoSeconds,requiresAdminReceipt:true,storesFilesInR2:false}};
   }
   fail('Módulo inválido.');
 }
@@ -100,7 +104,7 @@ export async function getV3ModularBriefing(db,token){
     const phone=String(setting?.value||'').replace(/\D/g,'');
     const text='Olá! Vou enviar os materiais da retrospectiva do pedido '+order.order_code+'.';
     retro.schema.materials.whatsappUrl=/^\d{10,15}$/.test(phone)?'https://wa.me/'+phone+'?text='+encodeURIComponent(text):null;
-    retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,received_at AS receivedAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
+    retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,video_durations_json AS videoDurationsJson,raw_video_seconds AS rawVideoSeconds,received_at AS receivedAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
   }
   return {...base,modules};
 }
@@ -158,7 +162,7 @@ export async function saveV3ModuleDraft(db,token,module,payload={}){
 }
 // Called only from authenticated Admin in the future. A WhatsApp click or
 // customer assertion is not receipt confirmation, and does not start production.
-export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoCount,note=''}={}){
+export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoCount,videoDurations,rawVideoSeconds=0,note=''}={}){
   if(!Number.isSafeInteger(orderId)||!Number.isSafeInteger(photoCount)||!Number.isSafeInteger(videoCount)||photoCount<0||videoCount<0||photoCount+videoCount===0||
     typeof note!=='string'||note.length>500)fail('Informe os materiais efetivamente recebidos.');
   return withV2PaymentLock(db,orderId,async()=>{
@@ -170,9 +174,13 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
       fail('Pedido indisponível para confirmação de materiais.',409);
     const spec=retroSpec(parse(row.commercial_snapshot_json));
     if(photoCount>spec.maxPhotos||videoCount>spec.maxVideos)fail('Os materiais excedem o limite contratado. Avalie um adicional antes de confirmar.');
-    await db.prepare(`INSERT INTO v3_retro_material_receipts(order_id,photo_count,video_count,received_at,note)
-      VALUES(?,?,?,datetime('now'),?) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
-      video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note`).bind(orderId,photoCount,videoCount,note.trim()).run();
-    return {photoCount,videoCount,received:true};
+    if(!Number.isSafeInteger(rawVideoSeconds)||rawVideoSeconds<0||rawVideoSeconds>spec.rawVideoSeconds)fail('Material bruto excede o limite contratado.');
+    if(spec.maxVideoSeconds&&(!Array.isArray(videoDurations)||videoDurations.length!==videoCount||videoDurations.some(x=>!Number.isSafeInteger(x)||x<1||x>spec.maxVideoSeconds)||videoDurations.reduce((n,x)=>n+x,0)>spec.maxTotalVideoSeconds))
+      fail('Confira a duração de cada vídeo e o limite acumulado contratado.');
+    const durations=spec.maxVideoSeconds?videoDurations:[];
+    await db.prepare(`INSERT INTO v3_retro_material_receipts(order_id,photo_count,video_count,received_at,note,video_durations_json,raw_video_seconds)
+      VALUES(?,?,?,datetime('now'),?,?,?) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
+      video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note,video_durations_json=excluded.video_durations_json,raw_video_seconds=excluded.raw_video_seconds`).bind(orderId,photoCount,videoCount,note.trim(),JSON.stringify(durations),rawVideoSeconds).run();
+    return {photoCount,videoCount,videoDurations:durations,rawVideoSeconds,received:true};
   });
 }

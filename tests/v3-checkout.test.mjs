@@ -200,7 +200,8 @@ test('Black V3 uses a private claim, adds gift capacity and preserves it through
  env.LIBRI_V3_BLACK_LIBRI_ENABLED='true';
  await saveBlackLibriCampaign(env,{adminEnabled:true,complianceConfirmed:true,authorizationReference:'TESTE-INTERNO',adminNote:'Dados sintéticos',validFrom:'2020-01-01',validUntil:'2030-12-31'});
  const cart={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},...body.items]};
- assert.equal((await (await call(cart,env,'black/status')).json()).enabled,false,'unmapped gifts block activation');
+ assert.equal((await (await call(cart,{...env,LIBRI_V3_BLACK_LIBRI_ENABLED:'false'},'black/status')).json()).enabled,false,'release flag blocks activation');
+ assert.equal((await (await call(cart,env,'black/status')).json()).enabled,true,'all current gifts have workloads');
  DB.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
  const plain=await previewV3CartDelivery(DB,cart);
  const status=await call(cart,env,'black/status');assert.equal(status.status,200);assert.equal((await status.json()).enabled,true);

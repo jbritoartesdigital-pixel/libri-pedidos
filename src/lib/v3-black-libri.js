@@ -2,6 +2,21 @@ import {blackLibriOperational,findBlackLibriClaim,revealBlackLibri,matchingBlack
 import {normalizeWhatsapp} from './http.js';
 const fail=(message,code='black_libri_invalid',status=422)=>{throw Object.assign(new Error(message),{code,status});};
 const mapped={save_static:'save_static',save_animated:'save_animated',reminder_static:'reminder_static',reminder_animated:'reminder_animated',photo_filter:'custom_filter'};
+// Provisional internal workload estimates for gift-only deliverables.
+// They are not retail products or new prize probabilities.
+export const V3_BLACK_GIFT_WORKLOAD=Object.freeze({
+ thanks_card:50,countdown:100,personalized_art:50,welcome_sign:50,
+ thanks_video:100,mini_retrospective:150,character_birthday:100,child_birthday:150
+});
+async function giftDefinition(db,code,label){
+ if(mapped[code]){
+   const row=await db.prepare('SELECT code,name,points_units,config_json FROM v2_addons WHERE code=?').bind(mapped[code]).first();
+   if(!row||!Number.isSafeInteger(row.points_units)||row.points_units<0)return null;
+   return {code:row.code,name:row.name,priceCents:0,pointsUnits:row.points_units,config:{...JSON.parse(row.config_json||'{}'),blackLibriGift:true,blackLibriPrizeCode:code}};
+ }
+ if(!Object.hasOwn(V3_BLACK_GIFT_WORKLOAD,code))return null;
+ return {code:'black_gift_'+code,name:label,priceCents:0,pointsUnits:V3_BLACK_GIFT_WORKLOAD[code],config:{blackLibriGift:true,blackLibriPrizeCode:code,giftOnly:true}};
+}
 function key(body){
  if(!/^[a-f0-9]{36}$/.test(body?.clientRequestId||''))fail('Identificador privado da surpresa inválido.');
  const whatsapp=normalizeWhatsapp(body.customer?.whatsapp);
@@ -15,11 +30,9 @@ export async function blackV3Ready(env,body){
  if(env.LIBRI_V3_CHECKOUT_ENABLED!=='true'||env.LIBRI_V3_BLACK_LIBRI_ENABLED!=='true'||!eligibleBlackV3(body)||!await blackLibriOperational(env))return false;
  // Do not silently change existing prize probabilities to work around missing
  // production definitions. Every enabled gift needs a verified workload.
- const gifts=(await env.DB.prepare("SELECT code FROM v2_black_libri_prizes WHERE enabled=1 AND kind='gift'").all()).results||[];
+ const gifts=(await env.DB.prepare("SELECT code,label FROM v2_black_libri_prizes WHERE enabled=1 AND kind='gift'").all()).results||[];
  for(const gift of gifts){
-   if(!mapped[gift.code])return false;
-   const row=await env.DB.prepare('SELECT points_units FROM v2_addons WHERE code=?').bind(mapped[gift.code]).first();
-   if(!Number.isSafeInteger(row?.points_units)||row.points_units<0)return false;
+   if(!await giftDefinition(env.DB,gift.code,gift.label))return false;
  }
  return true;
 }
@@ -51,12 +64,10 @@ export async function v3BlackCandidate(db,claim,line){
    duplicate=matchingBlackLibriGift(snapshot,claim);
    if(duplicate)cents=duplicate.creditCents;
    else{
-     const code=mapped[claim.prize_code];
-     if(!code)fail('Este presente precisa de conferência de produção.','black_libri_gift_review',409);
-     const row=await db.prepare('SELECT code,name,points_units,config_json FROM v2_addons WHERE code=?').bind(code).first();
-     if(!row||!Number.isSafeInteger(row.points_units)||row.points_units<0)fail('Presente sem capacidade configurada.','black_libri_gift_review',409);
-     if(row.code==='custom_filter'&&snapshot.addons.some(a=>a.config?.filterIncluded===true))duplicate={code:'custom_filter',creditCents:0};
-     else gift={code:row.code,name:row.name,priceCents:0,pointsUnits:row.points_units,config:JSON.parse(row.config_json||'{}')};
+     const definition=await giftDefinition(db,claim.prize_code,claim.label);
+     if(!definition)fail('Presente sem capacidade configurada.','black_libri_gift_review',409);
+     if(definition.code==='custom_filter'&&snapshot.addons.some(a=>a.config?.filterIncluded===true))duplicate={code:'custom_filter',creditCents:0};
+     else gift=definition;
    }
  }
  cents=Math.max(0,Math.min(line.grossCents-100,cents));

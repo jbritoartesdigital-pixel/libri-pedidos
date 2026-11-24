@@ -54,13 +54,22 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
   let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null;
   function current(){return area.modules.find(m=>m.module===active);}
+  function deliveryHtml(s){
+    const d=s.delivery;if(!d?.delivered)return '';
+    const base='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/delivery/'+esc(s.family)+'/files/';
+    return '<section class="card"><h4>Seu serviço foi entregue!</h4><p>Entrega em '+day(d.deliveredAt.slice(0,10))+'</p>'+
+    (d.files.length?'<p>Arquivos finais disponíveis para download até '+day(d.downloadUntil.slice(0,10))+'.</p>':'')+
+    (d.warning&&d.files.length?'<p role="status"><strong>'+esc(d.warning)+'</strong></p>':'')+
+    d.files.map(f=>'<p>'+esc(f.filename)+' '+(f.available?'<a class="btn primary" href="'+esc(base+f.id)+'">Baixar arquivo</a>':'· Prazo de download encerrado')+'</p>').join('')+
+    (d.interactiveUrl?'<p><a class="btn primary" href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir meu convite interativo</a></p><p>A validade do convite segue a contratação, independentemente do prazo de download.</p>':'')+'</section>';
+  }
   function productionHtml(s){
     const p=s.progress;if(!p)return '';
     const preview=p.preview,family=esc(s.family);
     const url='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/production/'+family+'/preview/'+preview?.id;
     const button=(action,label)=>'<button class="btn primary" type="button" data-v3-production="'+action+'" data-family="'+family+'" '+(busy?'disabled':'')+'>'+label+'</button>';
     return '<div class="card"><h4>'+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</h4>'+
-      (preview?'<p><a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a></p>':'')+
+      (preview&&preview.available!==false?'<p><a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a></p>':'')+
       (p.revisionsIncluded!==null?'<p>Rodadas de ajustes utilizadas: '+esc(p.revisionsUsed)+' de '+esc(p.revisionsIncluded)+'</p>':'')+
       (s.productionStatus==='waiting_customer'&&preview?.status==='active'?'<p>Solicite ajustes até '+day(preview.adjustmentDeadline.slice(0,10))+'. A falta de resposta não aprova automaticamente a prévia.</p>'+button('approve','Aprovar prévia')+
       (Date.now()<=Date.parse(preview.adjustmentDeadline)?'<label for="v3-adjust-'+family+'">O que deseja ajustar?</label><textarea id="v3-adjust-'+family+'" class="textarea" maxlength="2000" data-adjust-note="'+family+'"></textarea>'+button('request_adjustments','Solicitar ajustes'):'<p>Prazo de ajustes encerrado. Fale com a Libri se precisar de ajuda.</p>'):'')+
@@ -72,7 +81,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></section>'+
       area.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><p>'+esc(briefingLabels[s.briefingStatus]||'Em acompanhamento')+' · '+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
         (s.deliveryWindow?'<p><strong>Entrega prevista:</strong> '+day(s.deliveryWindow.start)+' a '+day(s.deliveryWindow.end)+'</p>':'<p>Prazo individual aguardando conferência.</p>')+(s.complementNote?'<p><strong>Complemento solicitado:</strong> '+esc(s.complementNote)+'</p>':'')+'<p>'+money(s.totalCents)+'</p>'+s.extras.map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+
-        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+'</section>').join('');
+        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+deliveryHtml(s)+'</section>').join('');
   }
   function paymentHtml(){
     if(!area.locked)return '';

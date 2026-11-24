@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 13 | 23/11/2026 (Brasil)
+Versão 14 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -126,5 +126,12 @@ RETOMADA V13 — RETROSPECTIVA INDEPENDENTE E LIMITES DE MATERIAIS
 - c35a544/620d9e8/bffcf90: persistência e pagamento internos aceitam uma retrospectiva ou múltiplos serviços; compra real exige flag sale_enabled e termos específicos; quantidade de serviços deve corresponder ao snapshot. Ainda não existe endpoint público de cobrança V3. Não ativar flag manualmente em produção; ativação automática somente com integração final.
 - 026ec9a: upgrade Retro compara pacotes aprovados da própria tabela, sem depender de produto V2. 9f350d3: vitrine com preços, limites, entregáveis, seleção para carrinho, prévia da agenda também no serviço avulso, bloqueio de pagamento legado para Retro, retira textos antigos de mockup do Ateliê.
 - 1a1475c/e6c850c: migration 0044 e briefing/recebimento aplicam limites do snapshot com +25 fotos e +5 vídeos de até 60s/+300s de total por adicional; recorte bruto contratado +600s; legendas extras liberam campo no briefing. Admin registra contagem e duração individual/total, sem R2, mídia ou início automático de produção. Não substitui confirmação de materiais completos.
-- cae2328/1ab75af: teste de cotação avulsa, 3 famílias com 10%, gate de venda, pagamento mock integral, desbloqueio de briefing e limites; CI a confirmar. Exemplo Memórias R$149 + 25 fotos R$35 + 5 vídeos R$35 = R$219, 4 pontos; 95 fotos, 10 vídeos, 8 minutos acumulados, 60s por vídeo.
+- cae2328/1ab75af: teste de cotação avulsa, 3 famílias com 10%, gate de venda, pagamento mock integral, desbloqueio de briefing e limites; CI 45318588432 concluído com sucesso. Exemplo Memórias R$149 + 25 fotos R$35 + 5 vídeos R$35 = R$219, 4 pontos; 95 fotos, 10 vídeos, 8 minutos acumulados, 60s por vídeo.
 - Próximos: validar CI, implementar orquestrador checkout V3 público seguro, cliente/termos/reserva/pagamento, recuperação de tentativas e bloqueios de rotas legadas; Admin e área cliente para briefings/materiais, submissão/agenda individual; promoções, cupons e cobrança complementar; ativar catálogo somente com testes integrais. PR #143 draft sem publicação.
+
+RETOMADA V14 — ORQUESTRADOR DO CHECKOUT V3
+- 7642160/2ca7e5f: reutiliza sequência atômica LIBRI e cria orquestrador startV3Checkout: valida contato, chave privada aleatória de 36 hex, cotação real, termos, pedido e hold, pagamento Mercado Pago integral. Recupera a tentativa pelo hash sem duplicar pedido ou cobrança; não atualiza contato legado só por informar WhatsApp.
+- e22813a/8b436a0: snapshot privado do contato vinculado ao hash; e-mail de pagamento vem dos dados confirmados nesta contratação, sem sobrescrever cadastro histórico.
+- fbc02a4: POST /api/v3/cart/terms consulta termos gerais e específicos por serviço; POST /api/v3/cart/checkout orquestra pagamento SOMENTE com LIBRI_V3_CHECKOUT_ENABLED='true' e pacote liberado. Flag não configurada na produção; manter bloqueada até conclusão integral, inclusive promoções/Black, UI, segurança e Admin. Nenhuma cobrança real.
+- 70e222f: testes de API, padrão bloqueado, termos, alteração de preço/contato, idempotência e cobrança mock. CI a confirmar.
+- Próximo passo: validar CI, integrar formulário de checkout (cliente, evento, agenda, seleção Pix/cartão e termos), incluir Ateliê avulso com extras no V3, tratar recuperação/expiração e falha de pagamento com segurança; integrar área cliente e Admin, promoções/Black, cupom e campanha, agenda por serviço, submissão e uploads, cobranças complementares, entregas. Não ativar vendas nem publicar parcialmente. PR #143 draft.

@@ -189,3 +189,28 @@ html .v3-modal-root .v101-retro-detail .v3-action-row .v3-btn{min-height:44px;fo
 }
 @keyframes studio-paper-reveal{from{opacity:0;transform:var(--paper-entry)}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.studio-paper{animation:none}}
+
+/* V103 — correction based on actual V102 Chromium captures, not a speculative palette. */
+html body .v3-panel--guided.v3-stage-format .v3-format-card .v3-format-select .v3-choice-copy .v3-price,
+html body .v3-panel--guided.v3-stage-format .v3-format-card .v3-example-link{
+ color:var(--store-rose)!important;
+ text-shadow:none!important;
+ opacity:1!important;
+}
+html body .v3-panel--guided.v3-stage-format .v3-format-card .v3-example-link{
+ background:var(--store-glass)!important;border:1px solid var(--store-line)!important;
+ border-radius:999px;padding:7px 14px;min-height:36px;text-decoration:none;font-weight:700;
+}
+html body .v3-panel--guided.v3-stage-format .v3-format-card .v3-price{font-size:18px;font-weight:750}
+html body .v3-panel--guided .v3-choice .v3-price,html body .v3-panel--guided .v3-choice .v3-price small{color:var(--store-rose)!important;text-shadow:none}
+@media(max-width:959px) and (min-height:700px){
+ html body:has(.v3-panel--guided) .v3-panel--guided:is(.v3-stage-event,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-stage-body{display:flex;flex-direction:column;justify-content:safe center}
+ html body .v3-panel--guided.v3-stage-creation .v3-choice{min-height:118px;padding:15px}
+ html body .v3-panel--guided.v3-stage-format .v3-format-card{padding:14px 12px 11px}
+ html body .v3-panel--guided.v3-stage-scenes .v3-duration-card{min-height:105px}
+ html body .v3-panel--guided.v3-stage-event .v3-choice{min-height:84px}
+}
+@media(min-width:960px) and (min-height:690px){
+ html body .v3-panel--guided.v3-stage-creation .v3-choices-stack{min-height:100%;grid-template-rows:minmax(150px,1.15fr) minmax(135px,1fr);grid-auto-rows:auto}
+ html body .v3-panel--guided.v3-stage-creation .v3-choice:first-child{min-height:150px}
+}

@@ -1,5 +1,6 @@
 import {
   bindNav,
+  esc,
   loading,
   setBellCount,
   showToast,
@@ -7,7 +8,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261123-admin-v3-1';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-81';
 
 import {
   ensureAuth,
@@ -16,7 +17,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-73';
+} from './admin-v2-central.js?v=20261124-admin-v3-81';
 
 import {
   renderProduction,
@@ -24,7 +25,7 @@ import {
 
 import {
   renderManualOrder,
-} from './admin-v2-manual.js?v=20261027-delivery-chronological-1';
+} from './admin-v2-manual.js?v=20261124-admin-v3-81';
 
 import {
   openOrder,
@@ -58,6 +59,7 @@ import {
 const ADMIN_VIEWS =
   new Set([
     'central',
+    'orders',
     'manual',
     'production',
     'agenda',
@@ -153,6 +155,8 @@ function syncViewQuery() {
 }
 
 async function renderCurrent() {
+  // Clear view-owned delegated handlers before mounting the next screen.
+  const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;
   loading();
 
   const open =
@@ -165,7 +169,15 @@ async function renderCurrent() {
   if (
     state.view === 'manual'
   ) {
-    await renderManualOrder();
+    try {
+      const {renderV3ManualOrder}=await import('./admin-v3-manual.js?v=81');
+      await renderV3ManualOrder(renderManualOrder);
+    } catch(error){
+      root.innerHTML='<section class="card"><h2>Não foi possível preparar o novo pedido</h2><p>'+esc(error.message)+'</p><button type="button" class="btn btn-secondary" id="manualClassicFallback">Abrir pedido manual clássico</button></section>';
+      root.querySelector('#manualClassicFallback').addEventListener('click',renderManualOrder);
+    }
+  } else if(state.view==='orders') {
+    await renderCentral(open,{ordersOnly:true});
   } else if (
     state.view === 'production'
   ) {
@@ -207,7 +219,7 @@ async function navigateTo(view, storeTab, service) {
   const more = document.getElementById('adminMoreMenu');
   if (more && !['archived', 'notifications', 'security'].includes(view)) more.open = false;
   const url = new URL(window.location.href);
-  if (view === 'production' && ['atelie','convites'].includes(service)) {
+  if (view === 'production' && ['atelie','convites','retrospectivas'].includes(service)) {
     url.searchParams.set('service',service);
     url.searchParams.delete('artStage');
   }
@@ -234,7 +246,7 @@ async function ready() {
           .getElementById('viewRoot')
           .innerHTML = `
             <div class="card empty">
-              ${error.message}
+              ${esc(error.message)}
             </div>
           `;
       }
@@ -330,9 +342,9 @@ ensureAuth(ready)
         .getElementById('authGate')
         .innerHTML = `
           <section class="auth-card">
-            <span class="eyebrow">Admin V2</span>
+            <span class="eyebrow">Libri Gestão</span>
             <h1>Não foi possível abrir o painel</h1>
-            <p>${error.message}</p>
+            <p>${esc(error.message)}</p>
           </section>
         `;
     },

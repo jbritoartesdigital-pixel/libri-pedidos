@@ -195,6 +195,13 @@ try{
  assert.equal(await admin.locator('.monthly-goal-card').isVisible(),true);
  assert.equal(await admin.locator('#advancedOrderSearch').isVisible(),true);
  await admin.screenshot({path:'artifacts/v3-browser/admin-central-desktop.png',fullPage:true});
+ await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
+ assert.equal(await admin.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(32, 24, 27)');
+ await admin.locator('[data-view="orders"]').click();await admin.locator('#viewTitle').filter({hasText:'Pedidos'}).waitFor();await admin.locator('#advancedOrderSearch').waitFor();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('#central-parties-today').count(),0);
+ await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-desktop.png',fullPage:true});
+ await admin.reload();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
+ await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+ await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-mobile.png',fullPage:true});await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'light');
  await adminContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);

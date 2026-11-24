@@ -60,3 +60,7 @@ V61 CI 45443115366 aprovado. V62 adiciona gate V3 no workflow de publicação, p
 
 ## V65–V67 — correções após rejeição visual da loja real
 PR #143 mesclado, PR corretivo #144 em branch separada. Duração 3/6/personalizada e navegação direta, extras opcionais concentrados, formatos ilustrados e ficha Admin em abas, sem mexer no backend. V65 falhou legenda Ateliê, V66 falhou valor explícito WhatsApp; V67 corrige e amplia Chromium. CI novo pendente; não declarar experiência aprovada ou completa. Pendem Central, pacotes, checkout e comparação visual original.
+
+
+## V81 — revisão administrativa após V80 em produção
+V80 confirmada no run 45471175718. Decisão recuperada: Central, Pedidos, Produção, Agenda, Financeiro, Loja; +Novo pedido separado, Ateliê dentro da Loja. Não criar outro Admin. V81 corrige desvios concretos de navegação e entrada manual, modo noturno, marca, fonte e estados. Reutiliza API e busca/filas existentes. Não alegar cobertura de todas as telas: revisar ficha, produção, agenda, financeiro, catálogo (incluindo retrospectivas), edição e exceções, testar desktop/mobile e confirmar CI. Nenhuma mudança de dados ou regras comerciais. Branch feature/v81-admin-integrado-20261124.

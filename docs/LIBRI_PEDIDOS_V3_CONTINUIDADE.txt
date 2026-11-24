@@ -1,5 +1,6 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 64 | 24/11/2026 (Brasil)
+Versão 81 | 24/11/2026 (Brasil)
+ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V81 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -475,3 +476,7 @@ CHECKPOINT 24/11/2026 | V79 | PR #150 ampliado após revisão de acabamento. V78
 
 
 CHECKPOINT 24/11/2026 | V80 | PR #150 ampliado. V79 CI 45470230461 aprovado. Usuária esclareceu: preservar abertura original escura, não tornar carregamento branco sem aprovação; corrigir tipografia e acabamento. V80 restaura fundo escuro da identidade apenas no carregamento de marca, mantém abertura animada e tema padrão claro, oferece botão de modo noturno persistente (somente preferência local) no cabeçalho, com CSS de contraste para seleções, carrinho, formulários, agenda, modais, recuperação e privacidade. Melhora legibilidade de microtextos e áreas de toque. Testes de alternância sem perda do estado, carregamento escuro e checkout. CI e revisão visual pendentes; não publicar sem autorização.
+
+
+CHECKPOINT V81 — ADMIN INTEGRADO
+Decisão recuperada de 23/11: seis áreas Central, Pedidos, Produção, Agenda, Financeiro, Loja; Ateliê dentro de Loja/pedidos; +Novo pedido como ação separada. V80 produção confirmada. Auditoria de código: Pedidos estava apenas em aba da Central, Novo pedido abria formulário clássico, tema Admin ausente, tipografia Georgia/Inter, carregamento texto solto, localizador não incluía produção de Retro, busca exibindo alguns status internos. Corrigidos nesta branch: Pedidos como destino próprio com busca e filas existentes sem duplicação de dados, novo pedido integrado por padrão com clássico explícito, reset de handlers delegados, retro no localizador, status traduzidos, Manrope/identidade e tema noturno persistente, carregamento, contraste e espaçamento. Sem alterações de API, catálogo, banco, agenda ou pagamentos. Testes Chromium de navegação, persistência de tema e mobile; CI pendente. Ainda auditar visualmente e funcionalmente produção, agenda, financeiro, loja, ficha V2/V3 e formulário manual completo, comparar fontes originais e testar ações seguras. Não declarar redesign integral concluído. Próximo: verificar PR/CI e capturas, resolver falhas e completar auditoria de funcionalidades pendentes antes de publicação.

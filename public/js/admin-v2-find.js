@@ -1,14 +1,15 @@
 // Mapa local de navegação. Não consulta clientes nem executa operações de escrita.
 export const ADMIN_FEATURES = Object.freeze([
-  { title: 'Buscar pedido', section: 'Pedidos', view: 'central', detail: 'Nome, WhatsApp, código, situação e filtros' },
+  { title: 'Buscar pedido', section: 'Pedidos', view: 'orders', detail: 'Nome, WhatsApp, código, situação e filtros' },
   { title: 'Novos pedidos e prioridades', section: 'Pedidos', view: 'central', detail: 'Fila do dia e pedidos que precisam de atenção' },
   { title: 'Cadastrar pedido manual', section: 'Pedidos', view: 'manual', detail: 'Criar pedido com condições de pagamento da Central' },
   { title: 'Pedidos arquivados', section: 'Pedidos', view: 'archived', detail: 'Consultar ou reabrir histórico' },
   { title: 'Produção dos convites', section: 'Produção', view: 'production', service:'convites', detail: 'Fila de convites digitais e próximos passos' },
   { title: 'Produção do Ateliê', section: 'Produção', view: 'production', service:'atelie', keywords:'identidade visual brasao criacao arte revisão aprovação', detail: 'Briefings pagos, direção de arte, revisões e entrega das identidades visuais' },
+  { title: 'Produção de retrospectivas', section: 'Produção', view: 'production', service:'retrospectivas', detail: 'Fila de produção, revisão e entrega de retrospectivas' },
   { title: 'Agenda e bloqueios', section: 'Produção', view: 'agenda', detail: 'Datas, capacidade e disponibilidade' },
   { title: 'Pagamentos e saldos', section: 'Financeiro', view: 'finance', detail: 'Recebimentos, saldos Pix e movimentações' },
-  { title: 'Registrar Pix recebido', section: 'Financeiro', view: 'central', detail: 'Encontre o pedido e abra o detalhe para registrar' },
+  { title: 'Registrar Pix recebido', section: 'Financeiro', view: 'orders', detail: 'Encontre o pedido e abra o detalhe para registrar' },
   { title: 'Meta e faturamento', section: 'Financeiro', view: 'finance', detail: 'Indicadores financeiros e vendas' },
   { title: 'Produtos e preços', section: 'Loja', view: 'store', tab: 'products', detail: 'Catálogo, variações por cenas e valores' },
   { title: 'Libri Ateliê', section: 'Loja', view: 'store', tab: 'atelie', keywords: 'identidade visual essencia encanto universo brasao monograma estampas', detail: 'Pacotes, entregáveis, preços, revisões, capacidade e ativação comercial individual.' },

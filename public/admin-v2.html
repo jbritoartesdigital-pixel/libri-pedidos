@@ -7,7 +7,9 @@
   <meta name="theme-color" content="#f7f3f1">
   <title>Libri Gestão | Pedidos e serviços</title>
   <link rel="manifest" href="/admin-manifest-v2.webmanifest">
-  <link rel="stylesheet" href="/css/admin-v2.css?v=20261124-admin-v3-73">
+  <script src="/js/admin-theme.js?v=81"></script>
+  <link rel="preload" href="/fonts/manrope-variable.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="/css/admin-v2.css?v=20261124-admin-v3-81">
 </head>
 <body>
   <div id="authGate" class="auth-gate hidden" aria-live="polite"></div>
@@ -15,7 +17,7 @@
   <div id="adminApp" class="admin-app hidden">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">L</span>
+        <img class="brand-mark" src="/images/libri-emblem.png" width="44" height="44" alt="">
         <div>
           <strong>Libri Convites</strong>
           <small>Painel de Gestão</small>
@@ -26,12 +28,13 @@
         <span class="nav-group-label">Seu trabalho</span>
         <div class="nav-primary">
           <button type="button" data-view="central" class="nav-btn active">Central</button>
-          <button type="button" data-view="manual" class="nav-btn nav-btn-create">+ Novo pedido</button>
+          <button type="button" data-view="orders" class="nav-btn">Pedidos</button>
           <button type="button" data-view="production" class="nav-btn">Produção</button>
           <button type="button" data-view="agenda" class="nav-btn">Agenda</button>
           <button type="button" data-view="finance" class="nav-btn">Financeiro</button>
           <button type="button" data-view="store" class="nav-btn">Loja</button>
         </div>
+        <button type="button" data-view="manual" class="nav-btn nav-btn-create">+ Novo pedido</button>
         <details class="nav-more" id="adminMoreMenu">
           <summary>Mais opções <span aria-hidden="true">⌄</span></summary>
           <div class="nav-secondary">
@@ -53,6 +56,7 @@
         </div>
 
         <div class="top-actions">
+          <button id="adminThemeToggle" class="icon-btn admin-theme-toggle" type="button" aria-label="Ativar modo noturno" aria-pressed="false" title="Ativar modo noturno" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 15.1A8.5 8.5 0 0 1 8.9 4a8.5 8.5 0 1 0 11.1 11.1Z"/></svg></button>
           <button id="notificationBell" class="icon-btn" type="button" aria-label="Notificações">
             🔔
             <span id="bellCount" class="bell-count hidden">0</span>
@@ -79,6 +83,6 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script defer src="/js/admin-v2-boot-watchdog.js?v=20261010-admin-recovery-1"></script>
-  <script type="module" src="/js/admin-v2.js?v=20261124-admin-v3-73"></script>
+  <script type="module" src="/js/admin-v2.js?v=20261124-admin-v3-81"></script>
 </body>
 </html>

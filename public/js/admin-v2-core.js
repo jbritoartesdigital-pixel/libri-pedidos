@@ -254,9 +254,7 @@ export function setViewMeta(title, eyebrow) {
 
 export function loading(label = 'Carregando...') {
   viewRoot.innerHTML = `
-    <div class="card empty">
-      ${esc(label)}
-    </div>
+    <div class="card admin-loading" role="status"><img src="/images/libri-emblem.png" alt="" width="44" height="44"><strong>${esc(label==='Carregando...'?'Preparando seu painel':label)}</strong><span class="admin-loading-line" aria-hidden="true"></span></div>
   `;
 }
 

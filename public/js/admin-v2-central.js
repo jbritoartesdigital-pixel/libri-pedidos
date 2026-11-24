@@ -129,10 +129,10 @@ function upcomingPartyRow(item) {
                 `;
 }
 
-export async function renderCentral(openOrder) {
+export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   setViewMeta(
-    'Central',
-    'Visão do dia',
+    ordersOnly?'Pedidos':'Central',
+    ordersOnly?'Acompanhe suas contratações':'Visão do dia',
   );
 
   const data =
@@ -182,7 +182,7 @@ export async function renderCentral(openOrder) {
     <div class="central-quick-summary" aria-label="Resumo operacional">
       <a href="#central-new" class="central-quick-item"><small>Novos pedidos</small><strong>${newOrders.length}</strong><span>Conferir e programar</span></a>
       <a href="#central-payments" class="central-quick-item"><small>Pagamentos pendentes</small><strong>${pendingPayments.length}</strong><span>Entradas e saldos</span></a>
-      <a href="#central-ongoing" class="central-quick-item"><small>Em andamento</small><strong>${modular.length}</strong><span>Pedidos integrados</span></a>
+      <a href="#central-ongoing" class="central-quick-item"><small>Pedidos integrados em andamento</small><strong>${modular.length}</strong><span>Serviços ativos</span></a>
       <a href="#central-deadlines" class="central-quick-item"><small>Prazos próximos</small><strong>${soon.length}</strong><span>Até 7 dias</span></a>
     </div>
     ${exceptions.length?`<section class="card" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
@@ -199,7 +199,7 @@ export async function renderCentral(openOrder) {
         ${
           attentionItems.length
             ? attentionItems.map(attentionRow).join('')
-            : empty('Nada pedindo sua atenção agora ✨')
+            : empty('Nenhuma pendência prioritária agora.')
         }
       </div>
     </section>
@@ -508,7 +508,14 @@ export async function renderCentral(openOrder) {
   function showSection(id){if(!panels[id])return;for(const [k,el] of Object.entries(panels))el.hidden=k!==id;for(const b of nav.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.centralSection===id));}
   nav.addEventListener('click',e=>{const b=e.target.closest('[data-central-section]');if(b)showSection(b.dataset.centralSection);});
   for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});
-  showSection('today');
+  if(ordersOnly){
+    viewRoot.querySelector('.central-quick-summary')?.remove();
+    for(const id of ['today','agenda','numbers'])panels[id].remove();
+    nav.remove();
+    const exception=viewRoot.querySelector(':scope > .card:not(#advancedOrderSearch)');
+    if(exception)panels.orders.prepend(exception);
+    showSection('orders');
+  }else showSection('today');
 
   const searchButton = document.getElementById('runAdvancedOrderSearch');
   const quickSearch = document.getElementById('advOrderQuery');
@@ -563,7 +570,7 @@ export async function renderCentral(openOrder) {
             • ${item.modular?'Pedido integrado':esc(SEARCH_MODEL_LABELS[item.productCode] || item.productCode || 'Modelo não informado')}
             ${Number(item.sceneCount) > 0
               ? `• ${Number(item.sceneCount)} ${Number(item.sceneCount) === 1 ? 'cena' : 'cenas'}` : ''}
-            • ${esc(item.status)} ${item.archived ? '• Arquivado' : ''}</small>
+            • ${esc(item.statusLabel||({awaiting_payment:'Aguardando pagamento',briefing_pending:'Dados pendentes',ready_for_production:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando cliente',adjustments:'Ajustes',approved:'Aprovado',balance_pending:'Saldo pendente',ready_for_delivery:'Pronto para entrega',finalized:'Finalizado',capacity_review:'Agenda em revisão',cancellation_review:'Cancelamento em revisão',cancelled:'Cancelado'})[item.status]||item.status)} ${item.archived ? '• Arquivado' : ''}</small>
           ${item.modular?(item.services||[]).map(s=>`<small><strong>${esc(s.productName||SEARCH_MODEL_LABELS[s.productCode]||s.productCode)}</strong> · ${esc(s.statusLabel||'Aguardando')} ${s.sceneCount>0?'· '+Number(s.sceneCount)+' cenas':''}</small>`).join(''):''}
         </button>`).join('') || empty('Nenhum pedido encontrado.');
       results.querySelectorAll('[data-searched-order]').forEach(button =>

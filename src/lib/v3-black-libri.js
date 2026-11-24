@@ -2,7 +2,7 @@ import {blackLibriOperational,findBlackLibriClaim,revealBlackLibri,matchingBlack
 import {normalizeWhatsapp} from './http.js';
 const fail=(message,code='black_libri_invalid',status=422)=>{throw Object.assign(new Error(message),{code,status});};
 const mapped={save_static:'save_static',save_animated:'save_animated',reminder_static:'reminder_static',reminder_animated:'reminder_animated',photo_filter:'custom_filter'};
-// Provisional internal workload estimates for gift-only deliverables.
+// Final internal gift workload approved by the owner on 24/11/2026.
 // They are not retail products or new prize probabilities.
 export const V3_BLACK_GIFT_WORKLOAD=Object.freeze({
  thanks_card:50,countdown:100,personalized_art:50,welcome_sign:50,

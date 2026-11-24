@@ -606,7 +606,12 @@ export default {
       );
     }
 
-    // Prévia privada da V3: nunca altera as rotas públicas V2, o Admin ou a área da cliente.
+    // V3 is the main storefront only after release. Explicit legacy links, simulations,
+    // product paths and private customer/admin paths are preserved.
+    if (env.LIBRI_V3_CHECKOUT_ENABLED==='true'&&['/pedido','/pedido/'].includes(url.pathname)&&![...url.searchParams.keys()].some(k=>!/^utm_|^(gclid|fbclid|ref)$/.test(k))) {
+      return serveStaticShell(request,env,'/client-v3.html');
+    }
+    // Dedicated V3 routes remain valid.
     if (['/loja','/loja/','/pedido-v3','/pedido-v3/'].includes(url.pathname)) {
       return serveStaticShell(request, env, '/client-v3.html');
     }

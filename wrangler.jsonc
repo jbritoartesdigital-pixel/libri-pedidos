@@ -13,6 +13,10 @@
 
   "vars": {
     "ENVIRONMENT": "production",
+    "LIBRI_V3_CHECKOUT_ENABLED": "true",
+    "LIBRI_V3_ADMIN_PAYMENT_ENABLED": "true",
+    "LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED": "true",
+    "LIBRI_V3_BLACK_LIBRI_ENABLED": "true",
     "ADMIN_PASSKEY_ORIGIN": "https://pedidos.libriconvites.com.br",
     "ADMIN_PASSKEY_RP_ID": "pedidos.libriconvites.com.br",
     "VAPID_SUBJECT": "https://pedidos.libriconvites.com.br"

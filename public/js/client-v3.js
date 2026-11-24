@@ -105,7 +105,7 @@ function save() {
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
 function message(text) {
-  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido">Abrir a loja atual</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
+  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido?versao=2">Abrir a versão anterior</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {

@@ -47,7 +47,7 @@ concurrency:
 jobs:
   deploy:
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: libri-pedidos-finalizar-20261010')) }}
+      ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.event.head_commit.message, 'release: libri-pedidos-finalizar-20261010') || startsWith(github.event.head_commit.message, 'release: libri-pedidos-v3-integral'))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
 
@@ -75,6 +75,14 @@ jobs:
 
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
+
+      - name: Exigir migrations para a primeira publicação V3
+        if: ${{ !inputs.preflight_only }}
+        run: |
+          node --input-type=module -e "import {readFileSync} from 'node:fs';const c=JSON.parse(readFileSync('wrangler.jsonc','utf8'));if(c.vars.LIBRI_V3_CHECKOUT_ENABLED==='true'&&(process.env.APPLY_MIGRATIONS==='false'||process.env.COMMIT_MESSAGE.includes('[sem-migracoes]')))throw Error('A publicação V3 exige migrations verificadas.');"
+        env:
+          APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
       - name: Validar sintaxe JavaScript
         run: npm run check
@@ -244,6 +252,20 @@ jobs:
         env:
           WRANGLER_SEND_METRICS: 'false'
 
+      - name: Conferir existência dos secrets de pagamentos (sem revelar valores)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler secret list --format json > /tmp/libri-secrets-names.json
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const secrets=JSON.parse(readFileSync('/tmp/libri-secrets-names.json','utf8'));
+          if(!Array.isArray(secrets)||!['MERCADO_PAGO_ACCESS_TOKEN','MERCADO_PAGO_WEBHOOK_SECRET'].every(n=>secrets.some(x=>x.name===n)))throw Error('Secrets de pagamento não confirmados; publicação bloqueada.');
+          console.log('Secrets de pagamento presentes; valores não consultados.');
+          NODE
+          rm -f /tmp/libri-secrets-names.json
+
       - name: Conferir bucket privado existente sem criar serviços
         run: |
           npx wrangler r2 bucket info libri-pedidos-files >/dev/null || {
@@ -385,6 +407,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Verificar loja V3 publicada sem criar pedidos ou cobranças
+        if: ${{ !inputs.preflight_only }}
+        run: node scripts/v3-release-smoke.mjs
 
       - name: Verificar status público Black Libri sem usar dados de clientes
         if: ${{ !inputs.preflight_only }}

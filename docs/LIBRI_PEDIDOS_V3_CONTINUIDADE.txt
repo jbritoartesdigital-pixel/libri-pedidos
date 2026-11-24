@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 62 | 24/11/2026 (Brasil)
+Versão 64 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -404,3 +404,7 @@ HEAD documental V61 f47da231b78a6028a06468ce24114d405888d9a2, CI 45443115366 suc
 
 V63 — Correção de decisão recuperada e liberação comercial automatizada
 V62 CI 45444353042 success. Removida a simulação de decoração da lista comum de entregáveis do Ateliê, que ainda contrariava a decisão posterior. Criado helper de ativação dos 8 pacotes aprovados com validação de preços, pontos, escopo, prazo e termos, lote D1 com guarda de alterações concorrentes, idempotência, preservação de histórico e teste de bloqueio por divergência. Workflow chama somente quando checkout V3 estiver explicitamente habilitado em wrangler.jsonc e publicação ocorrer na main; nenhuma flag ligada agora. CI novo pendente. Recuperação das CVs não trouxe aprovação explícita das cargas provisórias dos oito brindes Black; não tratar ok genérico como aprovação. Sem acesso remoto ou deploy. Não repetir definições já aprovadas.
+
+
+V64 — CONFIGURAÇÃO DE LANÇAMENTO
+Aprovação expressa da usuária (24/11): pontos de brindes exclusivos Black definitivos: cartão 0,5; contagem 1; arte 0,5; plaquinha 0,5; vídeo agradecimento 1; mini retrospectiva 1,5; vídeo personagem 1; vídeo criança Stories 1,5. Não alteram preço, estoque ou probabilidades, nem estado de campanha. V63 CI 45444918447 success. Configuração versionada da branch habilita checkout, operações administrativas, complementos e integração Black, ainda sem deploy; a Black continua subordinada à validade e autorização existentes no D1. /pedido passa a V3 quando habilitada, preservando links de produto, simulação, parâmetros legados e área da cliente, fallback ?versao=2. Gate de produção exige migrations, verifica presença dos secrets MP, ativa catálogo aprovado, publica e faz smoke sem cobrança real. CI V64 a verificar; nenhuma publicação executada. Integração Black não equivale a ligar campanha. Exceções financeiras não comprovadas continuam revisão humana. Não restaurar D1 automaticamente, preservar pedidos novos. Não criar outra rodada comercial.

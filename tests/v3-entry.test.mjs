@@ -53,3 +53,12 @@ test('V3 excludes commercial claims for non-configured products and supports red
   assert.match(js, /prefers-reduced-motion: reduce/);
   assert.match(css, /prefers-reduced-motion:reduce/);
 });
+
+import worker from '../src/index.js';
+test('release switches ordinary storefront links, preserving explicit legacy and direct orders',async()=>{
+ const env={LIBRI_V3_CHECKOUT_ENABLED:'true',ASSETS:{fetch:async r=>new Response(new URL(r.url).pathname)}};
+ for(const [path,asset] of [['/pedido','/client-v3.html'],['/pedido?utm_source=instagram','/client-v3.html'],['/pedido?versao=2','/client-v2.html'],['/pedido?simular=1','/client-v2.html'],['/pedido?evento=birthday','/client-v2.html'],['/pedido/cinematografico-interativo?cenas=3','/client-v2.html'],['/meu-pedido/ord_'+'a'.repeat(36),'/client-v2.html'],['/admin-v2','/admin-v2.html']]){
+  const r=await worker.fetch(new Request('https://test'+path),env,{waitUntil(){}});assert.equal(await r.text(),asset,path);
+ }
+ const disabled=await worker.fetch(new Request('https://test/pedido'),{...env,LIBRI_V3_CHECKOUT_ENABLED:'false'},{waitUntil(){}});assert.equal(await disabled.text(),'/client-v2.html');
+});

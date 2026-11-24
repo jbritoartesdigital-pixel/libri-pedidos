@@ -17,3 +17,11 @@ export function productionDaysForQuote(quote = {}) {
   return atelie || retrospectiveMain || retrospectiveAddon
     ? MIN_PRODUCTION_DAYS_ATELIE_RETRO : 0;
 }
+
+// Pedidos antigos continuam com a reserva e o prazo originais. A política nova
+// é gravada no snapshot dos NOVOS pedidos, evitando mudar retroativamente
+// encomendas já criadas ou pagamentos pendentes.
+export function productionDaysForStoredQuote(snapshot = {}) {
+  return snapshot?.productionDays === MIN_PRODUCTION_DAYS_ATELIE_RETRO
+    ? MIN_PRODUCTION_DAYS_ATELIE_RETRO : 0;
+}

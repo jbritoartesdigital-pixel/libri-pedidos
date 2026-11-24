@@ -20,6 +20,8 @@ export async function getV3AdminBriefing(db,token){
    for(const u of m.uploads||[])u.contentPath=base+m.module+'/uploads/'+u.id+'/content';
  }
  const financialCtx=await contextV3Briefing(db,token);
+ const contactRow=await db.prepare('SELECT quote_json FROM v3_order_checkout_snapshots WHERE order_id=?').bind(financialCtx.order.id).first();
+ try{const contact=JSON.parse(contactRow?.quote_json||'{}').contactSnapshot;if(contact?.instagram&&/^[A-Za-z0-9._]{1,30}$/.test(contact.instagram))brief.instagram=contact.instagram;}catch{}
  brief.cancellation=await getV3Cancellation(db,financialCtx.order.id,{admin:true});
  brief.adminPayment={canCancelPaid:!brief.cancellation&&!financialCtx.order.archived_at&&brief.orderStatus!=='cancelled'&&financialCtx.finance?.payments.some(p=>p.paid_at||['approved','refunded'].includes(p.status)),canChangeDeposit:brief.locked&&brief.payment.method==='pix'&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canCancelUnpaid:brief.locked&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canRecordBalance:!brief.locked&&brief.payment.depositPercent===50&&brief.payment.remainingCents>0};
  if(brief.cancellation){brief.adminPayment={};brief.history=await getV3OrderHistory(db,financialCtx.order.id);}

@@ -14,10 +14,10 @@ function windowEndingOn(end){
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
-export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',preferredName='',request,onBack}){
+export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',preferredName='',contactDraft={},request,onBack}){
   trackStoreStage('dados');
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
-  let form={name:String(preferredName||'').trim().slice(0,60),whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
+  let form={name:String(preferredName||'').trim().slice(0,60),whatsapp:'',email:'',instagram:'',honoreeName:'',...contactDraft,eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
   let requestedEnd='',deliveryFeedback='';
   let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false,blackConflict=false;
@@ -25,7 +25,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   const blackSelection=()=>blackClaim?{blackLibriClaimId:blackClaim.id,clientRequestId:attemptKey,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email}}:{};
   function readForm(){
     const couponDetails=root.querySelector('#v3-coupon-details');if(couponDetails)couponOpen=couponDetails.open;
-    for(const k of ['name','whatsapp','honoreeName','eventDate','paymentMethod','couponCode']){
+    for(const k of ['name','whatsapp','instagram','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
     const custom=root.querySelector('[name="requestedDeliveryEnd"]');if(custom)requestedEnd=custom.value;
@@ -54,7 +54,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       (blackConflict?'<div class="v3-black-recovery"><strong>Você já tem uma surpresa registrada!</strong><p>Seu presente não será sorteado novamente. Se a Libri enviou um código de recuperação, informe abaixo.</p><label for="v3-black-code">Código de recuperação</label><input id="v3-black-code" class="v3-at-input" autocomplete="off"><button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="black-recover">Recuperar presente</button><p class="v3-mini">Se não tiver o código, fale com a Libri antes de pagar para preservar o benefício.</p></div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'</div>'+
+      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'<details class="v3-instagram-optional" '+(form.instagram?'open':'')+'><summary>Adicionar Instagram (opcional)</summary>'+field('instagram','Seu perfil no Instagram','text',false,31)+'<small>Para contato sobre sua encomenda, se desejar. Não autoriza mensagens promocionais.</small></details></div>'+
       '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName',eventType==='birthday'?'Nome da criança ou aniversariante':'Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
       (busy&&form.eventDate?'<p class="v3-agenda-loading v3-inline-loading" role="status"><span class="v3-inline-line" aria-hidden="true"></span>Consultando a agenda da Libri…</p>':'')+
       (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label class="v3-agenda-option"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · Sugerida':o.earliest?' · Primeira disponível':'')+'</label>').join('')+'<div class="v3-delivery-custom"><label for="v3c-requested-end">Quer receber em outra data?</label><input class="v3-at-input" id="v3c-requested-end" name="requestedDeliveryEnd" type="date" value="'+esc(requestedEnd)+'" max="'+esc(form.eventDate)+'"><button class="v3-btn v3-btn-secondary" type="button" data-v3-checkout="custom-delivery">Consultar outra data</button><p class="v3-mini">Informe o último dia desejado da janela de entrega de 3 dias. A agenda confirma se há disponibilidade.</p>'+(deliveryFeedback?'<p class="v3-mini" role="status">'+esc(deliveryFeedback)+'</p>':'')+'</div><p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
@@ -143,7 +143,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
         if(!immediate)return;
       }
       trackStoreStage('tentativa');
-      attempt={...cart,...blackSelection(),storeJourneyId:storeJourneyId(),customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},honoreeName:form.honoreeName,eventDate:form.eventDate,
+      attempt={...cart,...blackSelection(),storeJourneyId:storeJourneyId(),customer:{name:form.name,whatsapp:form.whatsapp,email:form.email,...(form.instagram.trim()?{instagram:form.instagram.trim()}: {})},honoreeName:form.honoreeName,eventDate:form.eventDate,
         paymentMethod:form.paymentMethod,couponCode:form.couponCode,...(urgentQuote&&urgentAccepted?{urgencyRequested:true,expectedTotalCents:urgentQuote.totalCents}:{deliveryWindow:{start:form.deliveryWindow.start,end:form.deliveryWindow.end},expectedTotalCents:quote.totalCents}),
         clientRequestId:attemptKey,termsAccepted:true,termsVersion:terms.general.version};
       for(const t of terms.services){
@@ -170,7 +170,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   function detach(){root.removeEventListener('click',handleClick);root.removeEventListener('change',handleChange);root.removeEventListener('submit',handleSubmit);}
   function handleClick(e){
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
-    if(action==='back'&&!busy&&!attempt){detach();onBack();}
+    if(action==='back'&&!busy&&!attempt){readForm();detach();onBack({name:form.name,whatsapp:form.whatsapp,instagram:form.instagram,honoreeName:form.honoreeName});}
 
     if(action==='coupon')refresh({agenda:!!form.eventDate});
     if(action==='custom-delivery')checkCustomDelivery();

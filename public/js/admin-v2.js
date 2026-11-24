@@ -18,7 +18,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-88';
+} from './admin-v2-central.js?v=20261124-admin-v3-90';
 
 import {
   renderProduction,
@@ -30,7 +30,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261124-admin-v3-83&detail=87';
+} from './admin-v2-order.js?v=20261124-admin-v3-83&detail=90';
 
 import {
   renderAgenda,

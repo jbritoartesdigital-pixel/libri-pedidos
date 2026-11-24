@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=89';
+import { mountV3Checkout } from './client-v3-checkout.js?v=90';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -68,7 +68,7 @@ const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let catalog = null, quote = null, offer = null, cartQuote = null, cartError = '', ateliePackages = [], retrosPackages = [];
-let cartEventDate='',cartRevision=0,cartOpenDetails=new Set();
+let cartEventDate='',cartRevision=0,cartOpenDetails=new Set(),checkoutContactDraft={};
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -791,7 +791,7 @@ async function handleStoreClick(event) {
       if(!cartQuote||cartError||!state.cartItems.length)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
-      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,request,onBack:()=>openCart()});
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,contactDraft:checkoutContactDraft,request,onBack:draft=>{checkoutContactDraft=draft||{};return openCart();}});
       return;
     }
     if(action==='back'){

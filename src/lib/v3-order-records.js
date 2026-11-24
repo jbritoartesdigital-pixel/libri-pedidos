@@ -29,7 +29,7 @@ async function existingOrder(db,requestKey,requestHash){
   return {orderId:row.id,orderCode:row.order_code,publicToken:row.public_token,recovered:true};
 }
 function canonicalItems(items){
-  if(!Array.isArray(items)||items.length<2||items.length>3)fail('Selecione dois ou três serviços.','order_multi_required');
+  if(!Array.isArray(items)||items.length<1||items.length>3)fail('Selecione de um a três serviços.','order_multi_required');
   return items.map(item=>{
     if(!item||typeof item!=='object'||Array.isArray(item)||!Array.isArray(item.addonCodes??[]))fail('Serviço inválido.','order_item_invalid');
     // No client-supplied monetary values or capacity enter the order.
@@ -54,13 +54,14 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     subtype:typeof body.eventSubtype==='string'?body.eventSubtype.trim().slice(0,120):'',date:date(body.eventDate)};
   const delivery={start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
   const items=canonicalItems(body.items);
+  if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
   const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
-  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod},{includeSnapshots:true});
+  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod},{includeSnapshots:true,requireSale:true});
   if(quote.totalCents!==body.expectedTotalCents)fail('O total mudou. Revise o carrinho antes de confirmar.','order_total_changed');
   const terms=await db.prepare('SELECT version,body,content_hash FROM v2_terms_versions WHERE active=1 ORDER BY published_at DESC LIMIT 1').first();
   if(!terms||terms.version!==accepted.version)fail('As condições foram atualizadas. Confira novamente.','terms_changed');

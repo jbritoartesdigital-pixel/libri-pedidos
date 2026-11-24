@@ -1,4 +1,5 @@
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
+import {previewV3ServiceAgenda,scheduleV3Service} from '../lib/v3-service-agenda.js';
 import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
 import {json,fail,readJson} from '../lib/http.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
@@ -42,6 +43,17 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+  const agenda=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/agenda\/(convite|identidade_visual|retrospectiva)\/(preview|schedule)$/);
+  if(agenda){
+    if(request.method!=='POST')return fail('Método não permitido.',405);
+    try{
+      const row=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(agenda[1]).first();
+      if(!row)return fail('Pedido V3 não encontrado.',404);
+      const body=await boundedJson(request);
+      const result=agenda[3]==='preview'?await previewV3ServiceAgenda(env.DB,row.public_token,agenda[2],body):await scheduleV3Service(env.DB,row.public_token,agenda[2],body);
+      return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+    }catch(e){return errorResponse(e);}
+  }
   const match=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/briefing(?:\/(retro-materials)|(\/(?:convite|identidade_visual|retrospectiva)\/review)|(\/(?:convite|identidade_visual)\/uploads\/\d+\/content))?$/);
   if(!match)return null;
   try{

@@ -9,6 +9,7 @@ import {
   viewRoot,
 } from './admin-v2-core.js';
 
+const V3_NOTIFICATION_LABELS={V3_APPROVAL_REMINDER:'Lembretes de aprovação da prévia',V3_SERVICE_DELIVERY_DUE:'Prazo de entrega por serviço',V3_DOWNLOAD_EXPIRING:'Prazo de download dos arquivos'};
 function b64urlToUint8(value) {
   const padded =
     value
@@ -235,7 +236,7 @@ export async function renderNotifications() {
           ${prefsData.preferences.map(
             (pref) => `
               <div class="row-card">
-                <strong>${esc(pref.eventCode)}</strong>
+                <strong>${esc(V3_NOTIFICATION_LABELS[pref.eventCode]||pref.eventCode)}</strong>
 
                 <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
                   <label>

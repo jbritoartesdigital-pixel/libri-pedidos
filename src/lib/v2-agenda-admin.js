@@ -1,3 +1,4 @@
+import {V3_SERVICE_LABELS} from './v3-order-overview.js';
 import {
   nowIso,
 } from './http.js';
@@ -426,6 +427,10 @@ async function futureAllocations(
         day:
           row.day,
 
+        serviceFamily:row.service_family||null,
+        modular:Boolean(row.modular),
+        serviceStatus:row.service_status||null,
+        provisional:!!row.modular&&!row.scheduled_at,
         pointsUnits:
           Number(
             row.points_units
@@ -723,6 +728,7 @@ async function bestCandidateForPool(
           WHERE
             o.id != ?
             AND o.status = 'ready_for_production'
+            AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id)
             AND o.briefing_status = 'completed'
             AND EXISTS (
               SELECT 1
@@ -983,6 +989,7 @@ export async function getV2AgendaRange(
     holds,
     allocationOrders,
     eventOrders,
+    modularWindows,
   ] =
     await Promise.all([
       defaultCapacities(
@@ -1071,7 +1078,12 @@ export async function getV2AgendaRange(
             SELECT
               a.day,
               a.points_units,
-
+              a.service_family,
+              EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id) AS modular,
+              svc.production_status AS service_status,
+              svc.scheduled_at,
+              svc.delivery_start AS service_start,
+              svc.delivery_end AS service_end,
               o.order_code,
               o.honoree_display_name,
               o.status,
@@ -1080,6 +1092,7 @@ export async function getV2AgendaRange(
             FROM v2_agenda_allocations a
             INNER JOIN v2_orders o
               ON o.id = a.order_id
+            LEFT JOIN v3_order_services svc ON svc.order_id=o.id AND svc.family=a.service_family
             WHERE a.day BETWEEN ? AND ?
             ORDER BY
               a.day,
@@ -1102,6 +1115,7 @@ export async function getV2AgendaRange(
               o.delivery_start,
               o.delivery_end,
               o.order_code,
+              EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id) AS modular,
               o.honoree_display_name,
               o.status,
               c.name AS customer_name,
@@ -1120,7 +1134,7 @@ export async function getV2AgendaRange(
             WHERE
               (
                 o.event_date BETWEEN ? AND ?
-                OR o.delivery_end BETWEEN ? AND ?
+                OR (o.delivery_start <= ? AND o.delivery_end >= ?)
               )
               AND (
                 o.status IN (
@@ -1147,11 +1161,20 @@ export async function getV2AgendaRange(
         .bind(
           rangeStart,
           rangeEnd,
-          rangeStart,
           rangeEnd,
+          rangeStart,
           today,
         )
         .all(),
+      db.prepare(`SELECT s.family,s.production_status,s.scheduled_at,s.delivery_start,s.delivery_end,
+        o.order_code,o.honoree_display_name,o.event_date,c.name AS customer_name,
+        json_extract(COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json),'$.product.name') AS product_name
+        FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id JOIN v2_customers c ON c.id=o.customer_id
+        WHERE s.scheduled_at IS NOT NULL AND s.production_status NOT IN ('delivered','cancelled')
+        AND s.delivery_start<=? AND s.delivery_end>=? AND o.archived_at IS NULL
+        AND o.status NOT IN ('cancelled','configuring','awaiting_payment') AND o.briefing_status!='locked'
+        AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
+        ORDER BY s.delivery_start,o.id,s.id`).bind(rangeEnd,rangeStart).all(),
     ]);
 
   const configs =
@@ -1241,6 +1264,10 @@ export async function getV2AgendaRange(
         status:
           row.status,
 
+        serviceFamily:row.service_family||null,
+        modular:Boolean(row.modular),
+        serviceStatus:row.service_status||null,
+        provisional:!!row.modular&&!row.scheduled_at,
         pointsUnits:
           Number(
             row.points_units
@@ -1252,11 +1279,8 @@ export async function getV2AgendaRange(
           === 'finalized',
 
         deliveryWindow: {
-          start:
-            row.delivery_start,
-
-          end:
-            row.delivery_end,
+          start:row.modular?(row.service_start||null):row.delivery_start,
+          end:row.modular?(row.service_end||null):row.delivery_end,
         },
       });
   }
@@ -1278,9 +1302,10 @@ export async function getV2AgendaRange(
       row.product_name
       || '',
 
-    status:
-      row.status,
-
+    status:row.production_status||row.status,
+    statusLabel:row.production_status?V3_SERVICE_LABELS[row.production_status]:null,
+    serviceFamily:row.family||null,
+    modular:Boolean(row.modular||row.family),
     eventDate:
       row.event_date,
 
@@ -1323,7 +1348,7 @@ export async function getV2AgendaRange(
     }
 
     if (
-      row.status
+      !row.modular && row.status
       !== 'finalized'
       && row.delivery_start
       && row.delivery_end
@@ -1374,6 +1399,10 @@ export async function getV2AgendaRange(
     }
   }
 
+  for(const row of modularWindows.results||[]){
+    const first=row.delivery_start<rangeStart?rangeStart:row.delivery_start,last=row.delivery_end>rangeEnd?rangeEnd:row.delivery_end;
+    for(const d of listDays(first,last)){(deliveriesByDay[d]??=[]).push(calendarOrder(row));}
+  }
   const days =
     listDays(
       rangeStart,
@@ -1597,7 +1626,7 @@ export async function setV2AgendaPeriod(db, {
 
 export async function getV2CascadeSuggestions(db) {
   const sources = await db.prepare(`SELECT DISTINCT o.id, o.order_code FROM v2_orders o JOIN v2_agenda_allocations a
-    ON a.order_id = o.id WHERE o.status = 'finalized' AND a.day >= ? ORDER BY o.id`).bind(todayInSaoPaulo()).all();
+    ON a.order_id = o.id WHERE o.status = 'finalized' AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id) AND a.day >= ? ORDER BY o.id`).bind(todayInSaoPaulo()).all();
   const suggestions = [];
   const releaseable = [];
 
@@ -1639,6 +1668,7 @@ export async function anticipateV2Production(db, { sourceOrderCode, targetOrderC
   const source = await orderByCode(db, sourceOrderCode);
   const target = await orderByCode(db, targetOrderCode);
   if (!source || !target || source.id === target.id) throw new Error('Confira os pedidos de origem e destino.');
+  if(await db.prepare('SELECT 1 FROM v3_order_checkout_snapshots WHERE order_id IN (?,?)').bind(source.id,target.id).first())throw new Error('Pedidos integrados precisam de planejamento por serviço; a cascata antiga não se aplica.');
   const ids = [source.id, target.id].sort((a, b) => a - b);
   return withV2PaymentLock(db, ids[0], () => withV2PaymentLock(db, ids[1], async () => {
     const freshSource = await orderByCode(db, sourceOrderCode);
@@ -1676,6 +1706,7 @@ export async function anticipateV2Production(db, { sourceOrderCode, targetOrderC
 export async function releaseV2CascadeSurplus(db, { sourceOrderCode, force = false }) {
   const source = await orderByCode(db, sourceOrderCode);
   if (!source || source.status !== 'finalized') throw new Error('Pedido de origem não está finalizado.');
+  if(await db.prepare('SELECT 1 FROM v3_order_checkout_snapshots WHERE order_id=?').bind(source.id).first())throw new Error('A liberação de capacidade de pedidos integrados exige revisão por serviço.');
   return withV2PaymentLock(db, source.id, async () => {
     const pool = await futureAllocations(db, source.id);
     const suggestion = pool.length ? await bestCandidateForPool(db, source.id, pool[0].day) : null;

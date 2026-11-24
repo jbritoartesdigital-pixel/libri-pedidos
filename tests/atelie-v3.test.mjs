@@ -10,7 +10,7 @@ import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
 
 test('Ateliê V4.1 registra valores antigos e 3/4/5 poses com paleta e tipografia sem abrir venda',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   for(const [code,price,poses] of [['essencia',15900,3],['encanto',29900,4],['universo',54900,5]]) {
     const spec=ATELIE_V41_APPROVED_CATALOG[code];
     assert.equal(spec.priceCents,price);
@@ -20,14 +20,15 @@ test('Ateliê V4.1 registra valores antigos e 3/4/5 poses com paleta e tipografi
     assert.ok(spec.includedItems.some(x=>new RegExp(poses+' poses').test(x)));
     const patch=getAtelieV41CatalogDraft(code);
     assert.equal(patch.priceCents,price);
-    assert.equal(patch.pointsUnits,null);
+    assert.equal(patch.pointsUnits,spec.pointsUnits);
     await updateAtelieDraft(db,code,patch);
     await updateAtelieDraft(db,code,{scopeApproved:true});
   }
   const admin=await listAteliePackages(db,{admin:true});
   assert.deepEqual(admin.map(x=>x.priceCents),[15900,29900,54900]);
-  assert.ok(admin.every(x=>x.scopeApproved && !x.saleEnabled && x.pointsUnits===null));
-  assert.ok(admin.every(x=>x.releaseMissing.includes('Carga de produção não definida')));
+  assert.ok(admin.every(x=>x.scopeApproved && !x.saleEnabled));
+  assert.deepEqual(admin.map(x=>x.pointsUnits),[300,500,800]);
+  assert.ok(admin.every(x=>!x.releaseMissing.includes('Carga de produção não definida')));
   const publicRows=await listAteliePackages(db);
   assert.ok(publicRows.every(x=>x.includedItems.some(i=>/paleta/i.test(i))));
   assert.ok(publicRows.every(x=>!('priceCents' in x)&&!x.purchaseAvailable));
@@ -35,7 +36,7 @@ test('Ateliê V4.1 registra valores antigos e 3/4/5 poses com paleta e tipografi
 });
 
 test('Ateliê starts with exactly three safe packages, no prices and no V2 sale products', async () => {
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   const admin=await listAteliePackages(db,{admin:true});
   assert.deepEqual(admin.map(p=>p.code),['essencia','encanto','universo']);
   assert.ok(admin.every(p=>p.priceCents===null&&p.pointsUnits===null&&p.revisionLimit===null));
@@ -50,7 +51,7 @@ test('Ateliê starts with exactly three safe packages, no prices and no V2 sale 
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_payments").get().n,0);
 });
 test('Draft price stays private, invalid scope is rejected and public excludes hidden package', async () => {
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   const draft=await updateAtelieDraft(db,'essencia',{
     shortDescription:'Artes coordenadas para sua festa.',
     priceCents:15900,pointsUnits:250,
@@ -69,7 +70,7 @@ test('Draft price stays private, invalid scope is rejected and public excludes h
   assert.ok((await listAteliePackages(db,{admin:true})).some(x=>x.code==='universo'));
 });
 test('Changing approved package scope revokes publication until a new V4.1 review', async () => {
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await updateAtelieDraft(db,'essencia',{
     includedItems:['Brasão (escopo ilustrativo de teste)'],
     excludedItems:['Impressão física'],revisionLimit:1,scopeReference:'V4.1'
@@ -86,14 +87,14 @@ test('Changing approved package scope revokes publication until a new V4.1 revie
   assert.deepEqual((await listAteliePackages(db)).find(x=>x.code==='essencia').includedItems,[]);
 });
 test('Ateliê cannot go through existing V2 checkout or invoice quote', async () => {
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await assert.rejects(calculateCommercialV2Quote(db,{
     productCode:'atelie_essencia',paymentMethod:'pix',addonCodes:['confirmation_libri']
   }),/não está liberado para compra/);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_orders").get().n,0);
 });
 test('Read-only public endpoint hides all draft values', async () => {
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   await updateAtelieDraft(db,'essencia',{priceCents:54900,commercialNotes:'SECRETO: DESCONTO INTERNO'});
   const response=await worker.fetch(
     new Request('https://pedidos.libriconvites.com.br/api/v2/atelie/catalog'),
@@ -109,7 +110,7 @@ test('Read-only public endpoint hides all draft values', async () => {
   assert.ok(data.packages.every(x=>x.purchaseAvailable===false));
 });
 test('Ateliê private drafts and production routes require existing Admin Passkey session', async () => {
-  const DB=database(),ctx={waitUntil(){}};
+  const DB=database({beforeApprovedAtelie:true}),ctx={waitUntil(){}};
   for(const [path,method] of [
     ['/api/admin/v2/atelie/packages','GET'],
     ['/api/admin/v2/atelie/packages/essencia','PATCH'],

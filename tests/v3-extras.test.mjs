@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {database} from './helpers.mjs';
+import {quoteV3Extras,listV3Extras} from '../src/lib/v3-extras-catalog.js';
+import {quoteV3Cart} from '../src/lib/v3-cart-quote.js';
+import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
+import worker from '../src/index.js';
+test('approved extras are family scoped, quantity priced and exclude included features',()=>{
+  const items=quoteV3Extras('identidade_visual','atelie_essencia',[{code:'atelie_pose',quantity:3,priceCents:1},{code:'atelie_child',quantity:2}]);
+  assert.equal(items.reduce((n,x)=>n+x.totalCents,0),12000);
+  assert.equal(items.reduce((n,x)=>n+x.totalPointsUnits,0),350);
+  assert.ok(!listV3Extras('retrospectiva','retrospectiva_250').some(x=>['retro_narration','retro_trailer','retro_captions'].includes(x.code)));
+  assert.ok(listV3Extras('retrospectiva','retrospectiva_070').some(x=>x.code==='retro_captions'));
+  assert.throws(()=>quoteV3Extras('convite','interactive_essential',[{code:'atelie_pose',quantity:1}]),/incompatível/);
+  assert.throws(()=>quoteV3Extras('identidade_visual','atelie_essencia',[{code:'atelie_pose',quantity:0}]),/Quantidade/);
+  assert.throws(()=>quoteV3Extras('identidade_visual','atelie_essencia',[{code:'atelie_pose',quantity:1},{code:'atelie_pose',quantity:1}]),/Quantidade/);
+});
+test('V3 cart extras affect totals and capacity without changing V2 checkout',async()=>{
+  const db=database();await setAtelieSaleStatus(db,'essencia',true);
+  const items=[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[],extras:[{code:'atelie_pose',quantity:3}]}];
+  const q=await quoteV3Cart(db,{items,eventType:'birthday',paymentMethod:'pix'},{includeSnapshots:true});
+  assert.equal(q.totalCents,21900);
+  assert.equal(q.pointsUnits,450);
+  assert.equal(q.items[0].extrasCents,6000);
+  assert.equal(q.items[0].commercialSnapshot.v3Extras[0].quantity,3);
+  assert.equal(q.canCheckout,false);
+  const response=await worker.fetch(new Request('https://test/api/v3/extras/catalog?productCode=atelie_essencia'),{DB:db},{waitUntil(){}});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).extras.length,10);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
+});

@@ -7,12 +7,13 @@ import {
 import {
   startManualOrder,
   startStore,
-} from './client-v2-store.js?v=20261111-skip-offer-ios-1';
+} from './client-v2-store.js?v=20261124-atelier-gift-v3';
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261111-rose-v2-2';
+} from './client-v2-area.js?v=20261124-atelier-gift-v3';
 
+import {mountStorePrivacy} from './store-privacy.js';
 async function bootstrap() {
   const route =
     pathInfo();
@@ -39,6 +40,7 @@ async function bootstrap() {
     return;
   }
 
+  mountStorePrivacy();
   await startStore(
     route.productSlug,
   );

@@ -303,6 +303,7 @@ export async function renderManualOrder() {
       );
 
   viewRoot.innerHTML = `
+    <section class="card"><button id="openV3Manual" class="btn btn-primary" type="button">Novo pedido V3 · serviços combinados</button></section>
     <section class="card">
       <div class="section-title">
         <h2>Preparar pedido</h2>
@@ -436,6 +437,7 @@ export async function renderManualOrder() {
     <div id="manualQuoteArea"></div>
   `;
 
+  document.getElementById('openV3Manual')?.addEventListener('click',async()=>{try{const {renderV3ManualOrder}=await import('./admin-v3-manual.js');await renderV3ManualOrder(renderManualOrder);}catch(e){showToast(e.message);}});
   let lookupTimer = null;
   const phone = document.getElementById('manualWhatsapp');
   const notice = document.getElementById('returningCustomerNotice');

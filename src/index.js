@@ -75,7 +75,10 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import {guardV3LegacyAdmin,guardV3LegacyCustomer} from './lib/v3-legacy-guard.js';
+import {handleCustomerBriefingV3Api,handleAdminBriefingV3Api} from './routes/briefing-v3.js';
 import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
+import { handlePublicCartV3Api } from './routes/public-cart-v3.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -323,6 +326,10 @@ async function handleAdminV2Api(
     return authFailure;
   }
 
+  const v3=await handleAdminBriefingV3Api(request,env,url);
+  if(v3)return v3;
+  const guarded=await guardV3LegacyAdmin(request,env.DB,url);
+  if(guarded)return guarded;
   const handlers = [
     handleAdminV2CoreApi,
     handleAdminAgendaV2Api,
@@ -370,6 +377,10 @@ async function handleCustomerV2Api(
    * As rotas mais específicas vêm antes do núcleo público
    * para evitar que a área privada fique acoplada ao checkout.
    */
+  const v3=await handleCustomerBriefingV3Api(request,env,url);
+  if(v3)return v3;
+  const guarded=await guardV3LegacyCustomer(request,env.DB,url);
+  if(guarded)return guarded;
   const handlers = [
     handleCustomerAreaV2Api,
     handleCustomerPreviewV2Api,
@@ -464,6 +475,12 @@ export default {
                 '/admin-v2',
             },
           );
+        }
+
+        // Cotação de carrinho V3 isolada. NUNCA executa pagamento.
+        if(url.pathname.startsWith('/api/v3/')) {
+          const result=await handlePublicCartV3Api(request,env,url);
+          return result || fail('Rota V3 não encontrada.',404);
         }
 
         /* ==================================================
@@ -589,7 +606,12 @@ export default {
       );
     }
 
-    // Prévia privada da V3: nunca altera as rotas públicas V2, o Admin ou a área da cliente.
+    // V3 is the main storefront only after release. Explicit legacy links, simulations,
+    // product paths and private customer/admin paths are preserved.
+    if (env.LIBRI_V3_CHECKOUT_ENABLED==='true'&&['/pedido','/pedido/'].includes(url.pathname)&&![...url.searchParams.keys()].some(k=>!/^utm_|^(gclid|fbclid|ref)$/.test(k))) {
+      return serveStaticShell(request,env,'/client-v3.html');
+    }
+    // Dedicated V3 routes remain valid.
     if (['/loja','/loja/','/pedido-v3','/pedido-v3/'].includes(url.pathname)) {
       return serveStaticShell(request, env, '/client-v3.html');
     }

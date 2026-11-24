@@ -60,14 +60,14 @@ async function updateClaimStatus(db, claim) {
       SELECT paid_at FROM v2_payments WHERE order_id = ? AND status = 'approved'
       AND paid_at IS NOT NULL ORDER BY paid_at LIMIT 1`
     ).bind(claim.order_id).first();
-    if (payment && Date.parse(payment.paid_at) <= Date.parse(claim.expires_at)) {
+    if (payment && (claim.client_request_id.startsWith('v3:') || Date.parse(payment.paid_at) <= Date.parse(claim.expires_at))) {
       await db.prepare(`UPDATE v2_black_libri_claims SET status='redeemed',updated_at=?
         WHERE id=? AND status IN ('reserved','attached')`
       ).bind(nowIso(),claim.id).run();
       return { ...claim, status:'redeemed' };
     }
   }
-  if (Date.parse(claim.expires_at) <= Date.now()) {
+  if (Date.parse(claim.expires_at) <= Date.now() && !(claim.status==='attached'&&claim.client_request_id.startsWith('v3:'))) {
     await db.prepare(`UPDATE v2_black_libri_claims SET status='expired',updated_at=?
       WHERE id=? AND status IN ('reserved','attached')`
     ).bind(nowIso(),claim.id).run();
@@ -76,9 +76,13 @@ async function updateClaimStatus(db, claim) {
   return claim;
 }
 
-export async function findBlackLibriClaim(env, customer) {
+export async function findBlackLibriClaim(env, customer, {privateRequestId=null,checkConflict=false}={}) {
   const key = await customerKey(env, customer);
   const claim = await env.DB.prepare(currentClaimSql).bind(key).first();
+  if(claim&&(claim.client_request_id.startsWith('v3:')||privateRequestId)&&claim.client_request_id!==privateRequestId){
+    if(checkConflict)throw Object.assign(new Error('Já existe uma surpresa registrada para esta participação. Fale com a Libri para recuperar.'),{status:409,code:'black_libri_private_claim'});
+    return null;
+  }
   return updateClaimStatus(env.DB, claim);
 }
 
@@ -112,16 +116,17 @@ function cryptoChoice(weightSum) {
   return bucket[0] % weightSum;
 }
 
-export async function revealBlackLibri(env, customer, clientRequestId) {
+export async function revealBlackLibri(env, customer, clientRequestId, {privateV3=false}={}) {
   if (!(await blackLibriOperational(env))) {
     throw Object.assign(new Error('A Black Libri ainda não está disponível.'), { status: 409, code: 'black_libri_disabled' });
   }
   const requestId = String(clientRequestId || '').trim();
-  if (requestId.length < 12 || requestId.length > 120) {
+  if (requestId.length < 12 || requestId.length > 120 || (privateV3?!/^v3:[a-f0-9]{36}$/.test(requestId):requestId.startsWith('v3:'))) {
     throw Object.assign(new Error('Reabra o pedido e tente novamente.'), { status:422 });
   }
   const key = await customerKey(env, customer);
-  const existing = await findBlackLibriClaim(env, customer);
+  const options={privateRequestId:privateV3?requestId:null,checkConflict:true};
+  const existing = await findBlackLibriClaim(env, customer, options);
   if (existing) return { ok:true, enabled:true, claim:publicClaim(existing), alreadyRevealed:true };
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -132,7 +137,7 @@ export async function revealBlackLibri(env, customer, clientRequestId) {
         (p.max_claims IS NULL OR
           (SELECT count(*) FROM v2_black_libri_claims c WHERE c.prize_code=p.code AND
            (c.status='redeemed' OR
-            (c.status IN ('reserved','attached') AND c.expires_at > ?))) < p.max_claims)
+            (c.status IN ('reserved','attached') AND (c.expires_at > ? OR (c.status='attached' AND c.client_request_id LIKE 'v3:%'))))) < p.max_claims)
       ORDER BY p.sort_order`
     ).bind(nowIso()).all();
     const choices = (available.results || []).filter(p=>Number(p.weight)>0);
@@ -156,12 +161,12 @@ export async function revealBlackLibri(env, customer, clientRequestId) {
         (p.max_claims IS NULL OR
           (SELECT count(*) FROM v2_black_libri_claims c WHERE c.prize_code=p.code AND
             (c.status='redeemed' OR
-             (c.status IN ('reserved','attached') AND c.expires_at > ?))) < p.max_claims)
+             (c.status IN ('reserved','attached') AND (c.expires_at > ? OR (c.status='attached' AND c.client_request_id LIKE 'v3:%'))))) < p.max_claims)
     `).bind(id,key,requestId,stamp,expires,stamp,choice.code,stamp).run();
     if (Number(result.meta?.changes||0)>0) {
-      return { ok:true,enabled:true,claim:publicClaim(await findBlackLibriClaim(env,customer)),alreadyRevealed:false };
+      return { ok:true,enabled:true,claim:publicClaim(await findBlackLibriClaim(env,customer,options)),alreadyRevealed:false };
     }
-    const concurrent = await findBlackLibriClaim(env,customer);
+    const concurrent = await findBlackLibriClaim(env,customer,options);
     if (concurrent) return { ok:true,enabled:true,claim:publicClaim(concurrent),alreadyRevealed:true };
   }
   throw Object.assign(new Error('Muitos acessos simultâneos. Tente novamente.'), { status:409,code:'black_libri_busy' });
@@ -278,7 +283,7 @@ export async function linkBlackLibriClaim(db, claim, orderId) {
 export async function unlinkBlackLibriClaim(db, orderId) {
   await db.prepare(`
     UPDATE v2_black_libri_claims SET order_id=NULL,status='reserved',updated_at=?
-    WHERE order_id=? AND status='attached' AND expires_at>?
+    WHERE order_id=? AND status='attached' AND expires_at>? AND client_request_id NOT LIKE 'v3:%'
   `).bind(nowIso(),orderId,nowIso()).run();
 }
 
@@ -288,10 +293,10 @@ export async function expireBlackLibriClaims(db) {
     UPDATE v2_black_libri_claims SET status='redeemed', updated_at=?
     WHERE status IN ('reserved','attached') AND order_id IS NOT NULL
       AND EXISTS(SELECT 1 FROM v2_payments p WHERE p.order_id=v2_black_libri_claims.order_id
-      AND p.status='approved' AND p.paid_at IS NOT NULL AND p.paid_at<=v2_black_libri_claims.expires_at)
+      AND p.status='approved' AND p.paid_at IS NOT NULL AND (p.paid_at<=v2_black_libri_claims.expires_at OR v2_black_libri_claims.client_request_id LIKE 'v3:%'))
   `).bind(stamp).run();
   await db.prepare(`
     UPDATE v2_black_libri_claims SET status='expired', updated_at=?
-    WHERE status IN ('reserved','attached') AND expires_at<=?
+    WHERE status IN ('reserved','attached') AND expires_at<=? AND NOT(status='attached' AND client_request_id LIKE 'v3:%')
   `).bind(stamp,stamp).run();
 }

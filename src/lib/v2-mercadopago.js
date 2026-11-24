@@ -1,3 +1,4 @@
+import {reserveCheckoutCoupon,bindCheckoutCouponProvider,releaseCheckoutCouponAfterTerminal} from './shared-coupon-reservations.js';
 import {
   nowIso,
 } from './http.js';
@@ -10,10 +11,11 @@ import {
 import {
   commitV2CouponUse,
 } from './v2-commercial-pricing.js';
-import { planV2AllocationForWindow } from './v2-agenda.js';
+import { planV2AllocationForWindow,validateV2DeliveryWindow,validateV2UrgencyWindow } from './v2-agenda.js';
 import { createV2AdminNotification } from './v2-notifications.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
 import { openPaidCapacityReview } from './v2-capacity-review.js';
+import {isV3PaymentSnapshot,assertV3ConfirmedPayment,v3PaidServiceUnlockStatement} from './v3-paid-services.js';
 
 const MP_API_BASE =
   'https://api.mercadopago.com';
@@ -42,7 +44,7 @@ function safeJson(
   return {};
 }
 
-function paymentMethodConfig(
+export function paymentMethodConfig(
   method,
   settings,
 ) {
@@ -212,7 +214,7 @@ function cardOrderDiagnostic(response, data, body) {
   };
 }
 
-async function mpFetch(
+export async function mpFetch(
   env,
   path,
   {
@@ -474,6 +476,7 @@ export async function createMercadoPagoCheckout(
   const idempotencyKey =
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 
+  await reserveCheckoutCoupon(env.DB,orderId,hold.token);
   const mpOrder =
     await mpFetch(
       env,
@@ -514,6 +517,7 @@ export async function createMercadoPagoCheckout(
     );
   }
 
+  await bindCheckoutCouponProvider(env.DB,orderId,hold.token,providerOrderId);
   const stamp =
     nowIso();
 
@@ -892,7 +896,7 @@ function orderIsApproved(
   );
 }
 
-function normalizePaymentStatus(
+export function normalizePaymentStatus(
   mpOrder,
 ) {
   if (
@@ -1278,6 +1282,7 @@ async function reconcileMercadoPagoFinance(
 export async function convertHoldToAgenda(
   db,
   orderId,
+  {replacementWindow=null}={},
 ) {
   const existing =
     await db
@@ -1301,6 +1306,7 @@ export async function convertHoldToAgenda(
     )
     > 0
   ) {
+    if(replacementWindow)return {converted:false,reason:'already_allocated'};
     await db
       .prepare(
         `
@@ -1339,6 +1345,7 @@ export async function convertHoldToAgenda(
           SELECT
             o.delivery_start,
             o.delivery_end,
+            o.event_date,o.urgency_enabled,
             p.pricing_snapshot_json
           FROM v2_orders o
           INNER JOIN v2_order_pricing p
@@ -1378,6 +1385,13 @@ export async function convertHoldToAgenda(
     snapshot = {};
   }
 
+  const modular=snapshot.schemaVersion===3;
+  const productionDays=modular?Number(snapshot.productionDays):0;
+  if(modular){
+    if(!Number.isInteger(productionDays)||productionDays<0||!Array.isArray(snapshot.items)||snapshot.items.some(i=>i.family!=='convite')&&productionDays<15)return {converted:false,reason:'invalid_production_days'};
+    if(replacementWindow){if(order.urgency_enabled||snapshot.urgency?.requested)return {converted:false,reason:'urgent_window_requires_review'};order.delivery_start=replacementWindow.start;order.delivery_end=replacementWindow.end;}
+    try{if(snapshot.urgency?.requested){if(!order.urgency_enabled)throw Error('urgency');validateV2UrgencyWindow(order.delivery_start,order.delivery_end,order.event_date);}else await validateV2DeliveryWindow(db,{eventDate:order.event_date,start:order.delivery_start,end:order.delivery_end,productionDays});}catch{return {converted:false,reason:'delivery_window_expired'};}
+  }else if(replacementWindow)return {converted:false,reason:'legacy_window'};
   const snapshotPointsUnits =
     Number(
       snapshot.pointsUnits
@@ -1431,10 +1445,11 @@ export async function convertHoldToAgenda(
 
   const holdStillReserved =
     Boolean(
-      hold
+      !replacementWindow&&hold
       && hold.status === 'active'
       && hold.expires_at > nowIso()
-      && rows.length,
+      && rows.length
+      && (!modular||rows.reduce((n,r)=>n+Number(r.points_units),0)===snapshotPointsUnits),
     );
 
   if (!holdStillReserved) {
@@ -1475,7 +1490,7 @@ export async function convertHoldToAgenda(
           end:
             order.delivery_end,
 
-          pointsUnits,
+          pointsUnits,productionDays,
         },
       );
 
@@ -1667,6 +1682,7 @@ export async function convertHoldToAgenda(
     );
   }
 
+  if(replacementWindow){statements.push(db.prepare(`UPDATE v2_orders SET delivery_start=?,delivery_end=?,updated_at=? WHERE id=? AND (SELECT COALESCE(SUM(points_units),0) FROM v2_agenda_allocations WHERE order_id=?)=?`).bind(order.delivery_start,order.delivery_end,nowIso(),orderId,orderId,snapshotPointsUnits));}
   const conversion =
     await db.batch(
       statements,
@@ -1913,10 +1929,13 @@ async function syncMercadoPagoOrderUnlocked(
     });
   }
 
+  if(isV3PaymentSnapshot(localPayment.pricing_snapshot_json)&&await env.DB.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(localPayment.order_id).first())return {found:true,approved:false,paymentStatus,needsReview:true,orderId:localPayment.order_id};
   if (
     paymentStatus
     === 'approved'
   ) {
+    const combinedV3=isV3PaymentSnapshot(localPayment.pricing_snapshot_json);
+    if(combinedV3)await assertV3ConfirmedPayment(env.DB,localPayment);
     let financeReconciliation = {
       reconciled:
         false,
@@ -1973,6 +1992,7 @@ async function syncMercadoPagoOrderUnlocked(
       if (localPayment.briefing_status === 'locked') {
         await openPaidCapacityReview(env.DB, localPayment.order_id, 'mercado_pago');
       }
+      if(combinedV3)await v3PaidServiceUnlockStatement(env.DB,localPayment.order_id,nowIso()).run();
       await createV2AdminNotification(env, {
         eventCode: 'PAYMENT_CONFIRMED', orderId: localPayment.order_id,
         title: 'Pagamento recebido; dados liberados, revisar capacidade',
@@ -2097,6 +2117,7 @@ async function syncMercadoPagoOrderUnlocked(
           localPayment
             .order_id,
         ),
+      ...(combinedV3?[v3PaidServiceUnlockStatement(env.DB,localPayment.order_id,nowIso())]:[]),
     ]);
 
     return {
@@ -2137,6 +2158,7 @@ async function syncMercadoPagoOrderUnlocked(
       AND id > ? AND status IN ('pending', 'approved') LIMIT 1`)
       .bind(localPayment.order_id, localPayment.payment_id).first();
     if (newer) return { found: true, approved: false, paymentStatus, superseded: true };
+    await releaseCheckoutCouponAfterTerminal(env.DB,localPayment.order_id,providerOrderId);
     await releaseHold(
       env.DB,
       localPayment

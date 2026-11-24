@@ -1,4 +1,5 @@
-import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261111-rose-v2-2';
+import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261124-atelier-gift-v3';
+import { startV3CustomerArea } from './client-v2-area-v3.js';
 import { atelieBriefingHtml, bindAtelieBriefing } from './client-v2-atelie-briefing.js';
 
 import {
@@ -1400,6 +1401,14 @@ export async function startCustomerArea(
   setSubtitle(
     'Meu pedido',
   );
+
+  // Detect V3 before loading legacy forms or starting V2 payment actions.
+  // Only a definite 404 permits fallback to the historical single-service area.
+  try {
+    const modular=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing');
+    if(modular.briefing)return startV3CustomerArea(app,{token,initial:modular.briefing,api});
+    throw new Error('Não foi possível identificar seu pedido.');
+  } catch(error) { if(error.status!==404)throw error; }
 
   let activeTab =
     new URLSearchParams(

@@ -58,7 +58,7 @@ export async function renderAtelieStore(panel) {
     panel.querySelectorAll('[data-atelie-package]').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.ateliePackage;render();}));
     panel.querySelector('#atImportV41')?.addEventListener('click',async()=>{
       if(p.saleEnabled)return showToast('Pause as vendas para atualizar o catálogo.');
-      if(!window.confirm('Aplicar valores e entregáveis V4.1 aprovados neste pacote? Os pontos serão limpos e as vendas continuarão desativadas.'))return;
+      if(!window.confirm('Aplicar valores e entregáveis V4.1 aprovados neste pacote? Os pontos aprovados serão restaurados e as vendas continuarão desativadas.'))return;
       const button=panel.querySelector('#atImportV41');
       button.disabled=true;
       try{
@@ -66,7 +66,7 @@ export async function renderAtelieStore(panel) {
           method:'POST',body:'{}'
         });
         packages[packages.findIndex(x=>x.code===selected)]=result.package;
-        showToast('Catálogo aprovado aplicado. Falta validar os pontos para vender.');
+        showToast('Catálogo e pontos aprovados aplicados. As vendas continuam desativadas.');
         render();
       }catch(e){showToast(e.message||'Não foi possível aplicar o catálogo.');button.disabled=false;}
     });

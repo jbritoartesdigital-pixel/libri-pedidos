@@ -1,3 +1,5 @@
+import {safeLinkStoreOrder} from '../lib/v3-store-funnel.js';
+import {syncV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {
   fail,
   json,
@@ -425,11 +427,8 @@ export async function handlePublicV2Api(
      * Não confiamos no status vindo no webhook.
      * Consultamos a Order diretamente no Mercado Pago.
      */
-    const result =
-      await syncMercadoPagoOrder(
-        env,
-        providerOrderId,
-      );
+    const supplement=await syncV3SupplementPayment(env,providerOrderId);
+    const result=supplement.found?supplement:await syncMercadoPagoOrder(env,providerOrderId);
 
     return json({
       ok: true,
@@ -784,6 +783,7 @@ export async function handlePublicV2Api(
           body,
         );
 
+      if(body.storeJourneyId&&result.order?.publicToken){try{const row=await env.DB.prepare('SELECT id FROM v2_orders WHERE public_token=?').bind(result.order.publicToken).first();if(row)await safeLinkStoreOrder(env.DB,body.storeJourneyId,row.id);}catch{}}
       return json(
         result,
         201,

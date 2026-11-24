@@ -47,6 +47,15 @@ export async function handleCustomerAreaV2Api(
   const method =
     request.method.toUpperCase();
 
+  // Do not allow a combined order to be submitted or overwritten by an
+  // older single-product briefing endpoint. The modular route runs first.
+  const legacyBriefing=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/(?:atelie\/)?briefing(?:\/|$)/);
+  if(legacyBriefing){
+    const combined=await env.DB.prepare(`SELECT 1 AS found FROM v3_order_checkout_snapshots s
+      JOIN v2_orders o ON o.id=s.order_id WHERE o.public_token=?`).bind(legacyBriefing[1]).first();
+    if(combined)return fail('Este pedido utiliza o briefing modular V3.',409);
+  }
+
   const paymentMatch = url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/payment$/);
   if (paymentMatch && method === 'POST') {
     try { return json(await resumeV2Payment(request, env, paymentMatch[1], await readJson(request))); }

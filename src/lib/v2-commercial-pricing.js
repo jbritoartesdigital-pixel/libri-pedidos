@@ -1,3 +1,4 @@
+import {couponUsageCount} from './shared-coupon-reservations.js';
 import {
   parseJson,
 } from './http.js';
@@ -56,7 +57,7 @@ function boundedDiscount(
   );
 }
 
-function discountValue(
+export function discountValue(
   baseCents,
   type,
   value,
@@ -386,7 +387,7 @@ function comboMatches(
     );
 }
 
-function couponRestrictionsMatch(
+export function couponRestrictionsMatch(
   restrictions,
   {
     quote,
@@ -590,75 +591,10 @@ async function activeCoupon(
     );
   }
 
-  const useCount =
-    await db
-      .prepare(
-        `
-          SELECT COUNT(*) AS total
-          FROM v2_coupon_uses
-          WHERE coupon_id = ?
-        `,
-      )
-      .bind(
-        coupon.id,
-      )
-      .first();
-
-  if (
-    coupon.max_uses !== null
-    && Number(
-      useCount
-        ?.total
-      || 0,
-    )
-      >= Number(
-        coupon.max_uses,
-      )
-  ) {
-    throw new Error(
-      'Este cupom atingiu o limite de usos.',
-    );
-  }
-
-  if (
-    customerId
-    && coupon
-      .max_uses_per_customer
-      !== null
-  ) {
-    const customerUseCount =
-      await db
-        .prepare(
-          `
-            SELECT COUNT(*) AS total
-            FROM v2_coupon_uses
-            WHERE
-              coupon_id = ?
-              AND customer_id = ?
-          `,
-        )
-        .bind(
-          coupon.id,
-          customerId,
-        )
-        .first();
-
-    if (
-      Number(
-        customerUseCount
-          ?.total
-        || 0,
-      )
-      >= Number(
-        coupon
-          .max_uses_per_customer,
-      )
-    ) {
-      throw new Error(
-        'Este cupom já atingiu o limite de uso para esta cliente.',
-      );
-    }
-  }
+  if(coupon.max_uses!==null&&await couponUsageCount(db,coupon.id)>=coupon.max_uses)
+    throw new Error('Este cupom atingiu o limite de usos.');
+  if(customerId&&coupon.max_uses_per_customer!==null&&await couponUsageCount(db,coupon.id,customerId)>=coupon.max_uses_per_customer)
+    throw new Error('Este cupom já atingiu o limite de uso para esta cliente.');
 
   const restrictions =
     parseJson(

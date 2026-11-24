@@ -13,6 +13,10 @@
 
   "vars": {
     "ENVIRONMENT": "production",
+    "LIBRI_V3_CHECKOUT_ENABLED": "true",
+    "LIBRI_V3_ADMIN_PAYMENT_ENABLED": "true",
+    "LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED": "true",
+    "LIBRI_V3_BLACK_LIBRI_ENABLED": "true",
     "ADMIN_PASSKEY_ORIGIN": "https://pedidos.libriconvites.com.br",
     "ADMIN_PASSKEY_RP_ID": "pedidos.libriconvites.com.br",
     "VAPID_SUBJECT": "https://pedidos.libriconvites.com.br"
@@ -30,11 +34,19 @@
       "/api/*",
       "/pedido",
       "/pedido/*",
+      "/loja",
+      "/loja/",
+      "/pedido-v3",
+      "/pedido-v3/",
       "/meu-pedido/*",
       "/admin-v2",
       "/admin-v2/"
     ]
   },
+
+  "ratelimits": [
+    {"name":"FUNNEL_RATE_LIMIT","namespace_id":"20261124043","simple":{"limit":120,"period":60}}
+  ],
 
   "d1_databases": [
     {

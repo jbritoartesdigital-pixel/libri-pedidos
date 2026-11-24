@@ -29,9 +29,9 @@ export async function getBlackLibriAdmin(env) {
         p.description,p.sort_order,
         COALESCE(SUM(CASE WHEN c.status='redeemed' THEN 1 ELSE 0 END),0) AS redeemed,
         COALESCE(SUM(CASE WHEN c.status IN ('reserved','attached')
-          AND c.expires_at > ? THEN 1 ELSE 0 END),0) AS reserved,
+          AND (c.expires_at > ? OR (c.status='attached' AND c.client_request_id LIKE 'v3:%')) THEN 1 ELSE 0 END),0) AS reserved,
         COALESCE(SUM(CASE WHEN c.status='expired' OR
-          (c.status IN ('reserved','attached') AND c.expires_at<=?)
+          (c.status IN ('reserved','attached') AND c.expires_at<=? AND NOT(c.status='attached' AND c.client_request_id LIKE 'v3:%'))
           THEN 1 ELSE 0 END),0) AS expired,
         COUNT(c.id) AS total_revealed
       FROM v2_black_libri_prizes p
@@ -116,7 +116,7 @@ export async function saveBlackLibriPrize(env,code,body) {
   const stock=await env.DB.prepare(`
     SELECT COUNT(*) AS qty FROM v2_black_libri_claims
     WHERE prize_code=? AND (status='redeemed'
-      OR (status IN ('reserved','attached') AND expires_at>?))
+      OR (status IN ('reserved','attached') AND (expires_at>? OR (status='attached' AND client_request_id LIKE 'v3:%'))))
   `).bind(code,nowIso()).first();
   if(limit!==null && limit<Number(stock?.qty||0)) {
     throw error('Este limite é menor que os prêmios já reservados e confirmados.',409);

@@ -1,11 +1,10 @@
 // Catálogo comercial Libri Ateliê V4.1, revisão 2026-11-23.
-// Preços, direitos e entregáveis definidos em conversa; pontos continuam sem
-// aprovação definitiva. NÃO libera vendas, altera D1 ou cobra extras por si só.
+// Preços, direitos, entregáveis e capacidade aprovados. Não libera vendas por si só.
 export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   essencia: {
     name: 'Essência',
     priceCents:15900,
-    pointsUnits:null,
+    pointsUnits:300,
     revisionLimit:1,
     mascotPoses:3,
     shortDescription:'Identidade visual digital personalizada com brasão, logotipo, monograma, 3 poses da criança ilustrada, elementos, estampa, paleta e tipografia.',
@@ -20,7 +19,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '1 rodada de ajustes'
     ],
     excludedItems:[
@@ -36,7 +34,7 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   encanto: {
     name:'Encanto',
     priceCents:29900,
-    pointsUnits:null,
+    pointsUnits:500,
     revisionLimit:1,
     mascotPoses:4,
     shortDescription:'Identidade visual ampliada com 4 poses, mais elementos e estampas, paleta, tipografia e 2 artes de papelaria à escolha.',
@@ -52,7 +50,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '1 rodada de ajustes'
     ],
     excludedItems:[
@@ -68,7 +65,7 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   universo: {
     name:'Universo',
     priceCents:54900,
-    pointsUnits:null,
+    pointsUnits:800,
     revisionLimit:2,
     mascotPoses:5,
     shortDescription:'Identidade visual mais completa com 5 poses, brasão alternativo, monogramas, mais estampas, elementos e 4 artes de papelaria.',
@@ -84,7 +81,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '2 rodadas de ajustes'
     ],
     excludedItems:[
@@ -104,7 +100,7 @@ export const ATELIE_V41_COMMON_TERMS = [
   'Mascotinho, brasão, logotipo, monograma e elementos em PNG de alta resolução, com fundo transparente quando adequado.',
   'Estampas e composições em PNG/JPG de alta resolução, de acordo com o uso definido.',
   'Artes de papelaria contratadas em PDF dimensionado para impressão, conforme medidas e textos fornecidos no briefing.',
-  'Apresentação da identidade em PDF e uma simulação conceitual digital de decoração.',
+  'Apresentação da identidade em PDF. Não inclui simulação de decoração.',
   'Paleta com códigos de cores e seleção tipográfica por nomes/referências, sem distribuição de arquivos de fontes licenciadas.',
   'Licença de uso pessoal para a festa e reprodução dos personalizados da própria comemoração; sem revenda, sublicença ou transferência de editáveis.',
   'Cada rodada de revisão permite agrupar ajustes ao conceito aprovado. Correções de erros da Libri não consomem rodada.',
@@ -126,10 +122,10 @@ export function getAtelieV41CatalogDraft(code) {
     includedItems:[...p.includedItems],
     excludedItems:[...p.excludedItems],
     revisionLimit:p.revisionLimit,
-    pointsUnits:null,
+    pointsUnits:p.pointsUnits,
     scopeReference:'Libri Ateliê V4.1 | Catálogo comercial aprovado em 23/11/2026',
     specificTerms:ATELIE_V41_COMMON_TERMS,
-    // Não aprovar pontos nem ativar venda: produção e briefing tardio pendentes.
+    // A importação não ativa venda: checkout e briefing tardio pendentes.
     scopeApproved:false,
     showcaseVisible:true
   };

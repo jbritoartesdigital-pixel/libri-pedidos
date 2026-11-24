@@ -46,7 +46,11 @@ export async function decideV2Urgency(db, orderCode, body) {
       const snapshot = JSON.parse(row.pricing_snapshot_json || '{}');
       const plan = await planV2AllocationForWindow(db, { start, end, pointsUnits: snapshot.pointsUnits });
       if (!plan.fits) throw Object.assign(new Error('A janela não tem capacidade disponível.'), { status: 409 });
-      pricing = await repriceApprovedV2Urgency(db, row.id);
+      if(snapshot.schemaVersion===3){
+        const actual=await db.prepare('SELECT total_cents,urgency_amount_cents,urgency_percent FROM v2_order_pricing WHERE order_id=?').bind(row.id).first();
+        if(!snapshot.urgency?.requested||snapshot.items?.length!==1||snapshot.items[0].family!=='convite'||snapshot.productionDays!==0||snapshot.urgency.percent!==urgencyPercent||actual?.urgency_percent!==urgencyPercent||actual.urgency_amount_cents!==snapshot.urgency.amountCents||actual.total_cents!==snapshot.totalCents||await db.prepare('SELECT 1 FROM v2_payments WHERE order_id=?').bind(row.id).first())throw Object.assign(new Error('A proposta de urgência precisa de conferência; nenhuma cobrança foi criada.'),{status:409});
+        pricing={totalCents:actual.total_cents,urgencyPercent,urgencyAmountCents:actual.urgency_amount_cents};
+      }else pricing = await repriceApprovedV2Urgency(db, row.id);
     }
     const stamp = nowIso();
     await db.batch([

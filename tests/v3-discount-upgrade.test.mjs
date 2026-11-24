@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {database} from './helpers.mjs';
+import {calculateV3CombinedDiscount} from '../src/lib/v3-combined-discount.js';
+import {quoteV3Cart} from '../src/lib/v3-cart-quote.js';
+import {quoteV3Extras} from '../src/lib/v3-extras-catalog.js';
+import {compareV3Upgrade} from '../src/lib/v3-upgrade-suggestion.js';
+import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
+const base={eventType:'birthday',paymentMethod:'pix'};
+const invitation={productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]};
+const atelie={productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]};
+test('three distinct families earn 10 percent with deterministic cent allocation, only on primary products',()=>{
+  const lines=[{family:'convite',productCents:3501,discountCents:0},{family:'identidade_visual',productCents:15904,discountCents:0},{family:'retrospectiva',productCents:14904,discountCents:0}];
+  const q=calculateV3CombinedDiscount(lines);
+  assert.equal(q.percent,10);
+  assert.equal(q.combinedDiscountCents,3431);
+  assert.equal(Object.values(q.allocations).reduce((n,x)=>n+x,0),3431);
+  assert.deepEqual(q,calculateV3CombinedDiscount([...lines].reverse()));
+});
+test('combined discount leaves extras at full price, keeps capacity and replaces a smaller invitation combo',async()=>{
+  const db=database();await setAtelieSaleStatus(db,'essencia',true);
+  db.sqlite.exec("INSERT INTO v2_combos(code,name,discount_type,discount_value,active) VALUES ('small','Combo menor','fixed',100,1)");
+  const q=await quoteV3Cart(db,{...base,items:[{...invitation,comboCode:'small'},{...atelie,extras:[{code:'atelie_pose',quantity:3}]}]},{includeSnapshots:true});
+  assert.equal(q.combinedDiscountCents,970);
+  assert.equal(q.discountCents,970);
+  assert.equal(q.totalCents,24430);
+  assert.equal(q.pointsUnits,550);
+  assert.equal(q.items[0].comboCode,'');
+  assert.equal(q.items[0].commercialSnapshot.combo,null);
+  assert.equal(q.items[1].commercialSnapshot.payment.depositCents,21105);
+  assert.equal(q.items[1].extrasCents,6000);
+});
+test('upgrade is only offered for an available approved package and retains extras not included in it',async()=>{
+  const db=database();await setAtelieSaleStatus(db,'essencia',true);
+  const extras=[{code:'atelie_pose',quantity:1},{code:'atelie_pattern',quantity:1},{code:'atelie_element',quantity:3},{code:'atelie_stationery',quantity:2},{code:'atelie_pet',quantity:1}];
+  const items=[{...atelie,extras}];
+  assert.equal((await quoteV3Cart(db,{...base,items})).items[0].upgradeSuggestion,null);
+  await setAtelieSaleStatus(db,'encanto',true);
+  const upgrade=(await quoteV3Cart(db,{...base,items})).items[0].upgradeSuggestion;
+  assert.equal(upgrade.productCode,'atelie_encanto');
+  assert.equal(upgrade.savingsCents,0);
+  assert.deepEqual(upgrade.extras,[{code:'atelie_pet',quantity:1}]);
+});
+test('retro upgrade preserves extra video blocks when higher package cannot cover their total duration',()=>{
+  const current={priceCents:14900,maxPhotos:70,maxVideos:5,maxTotalVideoSeconds:180,counts:{}};
+  const candidate={priceCents:19900,productCode:'retrospectiva_100',variantCode:'retrospectiva_100_default',name:'Recordações',maxPhotos:100,maxVideos:10,maxTotalVideoSeconds:300,counts:{retro_captions:1}};
+  const extras=quoteV3Extras('retrospectiva','retrospectiva_070',[{code:'retro_more_photos',quantity:1},{code:'retro_more_videos',quantity:1},{code:'retro_captions',quantity:1}]);
+  const suggestion=compareV3Upgrade({family:'retrospectiva',current,candidates:[candidate],extras});
+  assert.equal(suggestion.savingsCents,1500);
+  assert.deepEqual(suggestion.extras,[{code:'retro_more_videos',quantity:1}]);
+});

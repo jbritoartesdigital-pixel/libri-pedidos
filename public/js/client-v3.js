@@ -1,18 +1,21 @@
-import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
+import {trackStoreStage} from './store-funnel.js';
+import {mountStorePrivacy} from './store-privacy.js';
+import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
+import { mountV3Checkout } from './client-v3-checkout.js';
 // Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
 // O catálogo, os preços e o cálculo de descontos permanecem nas APIs V2.
 // A etapa de pagamento continua exclusivamente no fluxo V2 existente.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
+const basket=document.getElementById('v3-live-basket');
+const basketBody=document.getElementById('v3-basket-body');
+const basketTotal=document.getElementById('v3-basket-total');
+if(basket)basket.open=window.matchMedia('(min-width: 900px)').matches;
 const STORE_KEY = 'libriV3Draft';
-const V2_KEY = 'libriV2StoreState';
 const EVENTS = [
-  ['birthday', 'Aniversário', 'Uma comemoração cheia de personalidade.'],
-  ['15_years', 'Festa de 15 anos', 'Uma celebração para guardar na memória.'],
-  ['wedding', 'Casamento', 'Cada detalhe de um dia especial.'],
-  ['celebration', 'Chá ou celebração', 'Chá de bebê, revelação e outros momentos.'],
-  ['other', 'Outro evento', 'Vamos encontrar um formato para você.']
+ ['birthday','Aniversário','Infantil ou adulto'],['15_years','15 anos','Uma celebração especial'],['wedding','Casamento','A história do casal'],['celebration','Chá ou celebração','Bebê, revelação, chá de panela e outros'],['other','Outra celebração','Formatura, bodas e mais']
 ];
+const EVENT_SUBTYPES={celebration:[['Chá de bebê','Chá de bebê'],['Chá revelação','Chá revelação'],['Chá de panela','Chá de panela'],['Outro chá','Outro chá']],other:[['Formatura','Formatura'],['Bodas','Bodas'],['Outra celebração','Outra celebração']]};
 const PRODUCTS = {
   cinematic_video: {
     title: 'Cinematográfico em Vídeo',
@@ -59,7 +62,8 @@ const money = cents => new Intl.NumberFormat('pt-BR', {style:'currency',currency
 const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-let catalog = null, quote = null, offer = null, ateliePackages = [];
+let catalog = null, quote = null, offer = null, cartQuote = null, cartError = '', ateliePackages = [], retrosPackages = [];
+let cartDelivery=null,cartDeliveryError='',cartEventDate='',cartDeliveryBusy=false,cartRevision=0,cartOpenDetails=new Set();
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -69,25 +73,39 @@ try {
 if (!state || typeof state !== 'object') state = {};
 state = {
   eventType: '', creation: '', intent: '', productCode: '', variantCode: '',
-  addonCodes: [], ateliePackage: '', step: 'event', offerFinished: false, dismissed: [],
+  addonCodes: [], ateliePackage: '', step: 'event', offerFinished: false, dismissed: [], cartItems: [],
   ...state
 };
 if (!Array.isArray(state.addonCodes)) state.addonCodes = [];
 if (!Array.isArray(state.dismissed)) state.dismissed = [];
+// Store selection identifiers only: no personal data, prices or payment authority.
+state.cartItems = Array.isArray(state.cartItems) ? state.cartItems.filter(x=>x&&typeof x.productCode==='string'&&typeof x.variantCode==='string'&&Array.isArray(x.addonCodes)).slice(0,3) : [];
+const cartFamily = code => code.startsWith('atelie_')?'identity':/^retrospectiva(?:_|$)/.test(code)?'retrospective':'invitation';
+function putCart(item) {
+  const old=state.cartItems.find(x=>cartFamily(x.productCode)===cartFamily(item.productCode));
+  if(old){
+    if(old.productCode!==item.productCode||old.variantCode!==item.variantCode){if(!window.confirm('Substituir o serviço anterior por este? Confira novamente os itens e adicionais do novo pacote.'))return false;}
+    else if(old.extras?.length&&!item.extras)item={...item,extras:old.extras};
+  }
+  cartQuote=null;
+  state.cartItems = state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(item.productCode)).concat(item);
+  save();return true;
+}
+function cartButton(){return state.cartItems.length?'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="open-cart">Ver meu carrinho ('+state.cartItems.length+')</button></div>':'';}
 const getProduct = code => (catalog?.products || []).find(item => item.code === code);
 const getAddon = code => (catalog?.addons || []).find(item => item.code === code);
 const currentProduct = () => getProduct(state.productCode);
 const currentVariant = () => currentProduct()?.variants.find(item => item.code === state.variantCode);
 const groupCode = code => getAddon(code)?.group;
 const hasGroup = group => state.addonCodes.some(code => groupCode(code) === group);
-const labelForEvent = () => EVENTS.find(x => x[0] === state.eventType)?.[1] || 'Seu evento';
+const labelForEvent = () => state.eventSubtype || EVENTS.find(x => x[0] === state.eventType)?.[1] || 'Seu evento';
 const selectedAddons = () => state.addonCodes.map(getAddon).filter(Boolean);
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   catch { /* O navegador pode bloquear o armazenamento. A sessão continua ativa. */ }
 }
 function message(text) {
-  root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido">Abrir a loja atual</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
+  hideBasket();root.innerHTML = '<section class="v3-panel"><span class="v3-eyebrow">Libri Convites</span><h1 class="v3-title">Não conseguimos continuar</h1><p class="v3-text">' + clean(text) + '</p><div class="v3-action-row"><a class="v3-btn v3-btn-secondary" href="/pedido?versao=2">Abrir a versão anterior</a><button type="button" class="v3-btn v3-btn-primary" data-action="retry">Tentar novamente</button></div></section>';
   root.setAttribute('aria-busy', 'false');
 }
 async function request(path, body) {
@@ -148,21 +166,55 @@ async function priceFor(productCode, variantCode, addonCodes) {
   });
   return data.quote;
 }
+let liveQuoteKey='';
+const quoteKey=()=>JSON.stringify([state.eventType,state.productCode,state.variantCode,[...state.addonCodes].sort()]);
 async function refreshQuote() {
   if (!state.productCode || !state.variantCode) {quote = null;return;}
-  quote = await priceFor(state.productCode, state.variantCode, state.addonCodes);
+  const key=quoteKey();
+  const result=await priceFor(state.productCode, state.variantCode, state.addonCodes);
+  if(key===quoteKey()){quote=result;liveQuoteKey=key;}
+
 }
+const stepNames=['Evento','Serviço','Escolhas','Personalização','Carrinho'];
+const symbols={invitation:'mail',identity:'palette',retrospective:'film',birthday:'cake','15_years':'sparkles',wedding:'heart',celebration:'gift',other:'star',story:'film',simple:'mail'};
+function choiceIcon(kind){const icons={mail:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/>',palette:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 1-2.8h2A4 4 0 0 0 21 10c0-4-4-7-9-7Z"/><path d="M7 11h.01M10 7h.01M15 7h.01" stroke-width="3"/>',film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 12h4m10 0h4m-11-3 4 3-4 3Z"/>',cake:'<path d="M4 13h16v7H4zM2 20h20M4 13l4 3 4-3 4 3 4-3M8 9V6m4 3V5m4 4V6"/>',heart:'<path d="M12 21 4 13C-2 6 7 1 12 8c5-7 14-2 8 5Z"/>',gift:'<rect x="4" y="10" width="16" height="11" rx="1"/><path d="M3 6h18v4H3zM12 6v15M12 6C3-1 4 7 12 6c9-7 8 1 0 0Z"/>',star:'<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"/>',sparkles:'<path d="m12 2 2 7 7 3-7 3-2 7-2-7-7-3 7-3Z"/>'};return icons[kind]?'<span class="v3-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">'+icons[kind]+'</svg></span>':'';}
 function stepBar(index) {
-  return '<div class="v3-steps" aria-hidden="true">' +
-    Array.from({length:5},(_,i)=>'<span class="' + (i<=index ? 'is-active' : '') + '"></span>').join('') +
-    '</div>';
+  return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span><span>'+(index+1)+' de 5</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
+}
+let basketRequestKey='',basketRequestQuote=null,basketRequestSeq=0;
+function hideBasket(){if(basket)basket.hidden=true;basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
+function renderBasket(){
+ if(!basket||!basketBody||!basketTotal)return;
+ if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
+ basket.hidden=false;
+ const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
+ const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
+ const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
+ const rows=state.cartItems.map(x=>'<li><span>'+clean(getProduct(x.productCode)?.name||ateliePackages.find(p=>'atelie_'+p.code===x.productCode)?.name||retrosPackages.find(p=>p.productCode===x.productCode)?.name||'Serviço selecionado')+'</span><small>Adicionado ao carrinho</small></li>').join('');
+ basketBody.innerHTML='<p class="v3-basket-event">'+clean(labelForEvent())+'</p>'+
+ (rows?'<ul class="v3-basket-list">'+rows+'</ul>':'')+
+ (staged?'<div class="v3-basket-draft"><small>Convite em configuração</small><strong>'+clean(PRODUCTS[state.productCode]?.title||currentProduct()?.name||'Convite')+'</strong>'+(currentVariant()?.sceneCount?'<span>'+Number(currentVariant().sceneCount)+' cenas</span>':'')+selectedAddons().map(x=>'<span>'+clean(x.name)+'</span>').join('')+(live?'<b>'+money(live.totalCents)+'</b><small>Total do convite no Pix</small>':'<small>Escolha a configuração para consultar o total.</small>')+'</div>':'')+
+ (item?'<div class="v3-basket-draft"><small>Pacote em seleção</small><strong>'+clean(item.name)+'</strong>'+(item.purchaseAvailable?'<b>'+money(item.priceCents)+'</b>':'')+'</div>':'')+
+ (!rows&&!staged&&!item?'<p class="v3-mini">Suas escolhas aparecem aqui, conforme você monta a comemoração.</p>':'')+
+ (rows?'<button type="button" class="v3-btn v3-btn-secondary" id="v3-basket-open">Ver carrinho ('+state.cartItems.length+')</button><p class="v3-mini">O valor conjunto e os descontos são confirmados no carrinho.</p>':'');
+ basketTotal.textContent='Em construção';
+ const pending=live?{productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:live.combo?.code||''}:item?.purchaseAvailable?{productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}:null;
+ const old=pending?state.cartItems.find(x=>cartFamily(x.productCode)===cartFamily(pending.productCode)):null;
+ if(old&&old.productCode===pending.productCode&&old.variantCode===pending.variantCode&&old.extras?.length)pending.extras=old.extras;
+ const combined=pending?state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(pending.productCode)).concat(pending):[...state.cartItems];
+ const key=JSON.stringify([state.eventType,combined]);
+ const applyTotal=q=>{if(basket.hidden||key!==basketRequestKey)return;basketTotal.textContent=money(q.totalCents);const el=basketBody.querySelector('#v3-basket-verified');if(el)el.textContent=(pending?'Total estimado com a seleção atual':'Total do carrinho')+' no Pix'+(q.combinedDiscountPercent?' · desconto combinado de '+q.combinedDiscountPercent+'%':'');};
+ if(combined.length){basketBody.insertAdjacentHTML('beforeend','<p class="v3-basket-verified" id="v3-basket-verified">Conferindo total no catálogo…</p>');basketTotal.textContent='Conferindo…';if(key===basketRequestKey&&basketRequestQuote)applyTotal(basketRequestQuote);else{basketRequestKey=key;basketRequestQuote=null;const seq=++basketRequestSeq;request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:combined}).then(data=>{if(seq!==basketRequestSeq||key!==basketRequestKey)return;basketRequestQuote=data.quote;applyTotal(data.quote);}).catch(()=>{if(seq!==basketRequestSeq||key!==basketRequestKey)return;basketTotal.textContent='A conferir';const el=basketBody.querySelector('#v3-basket-verified');if(el)el.textContent='Confira a combinação no carrinho.';});}}
+ else{basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
+ basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
 function panel(title, subtitle, content, buttons, index=0) {
-  root.innerHTML = '<section class="v3-panel">' + stepBar(index) +
+  document.getElementById('v3-landing')?.toggleAttribute('hidden',state.step!=='event');
+  root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
     '<span class="v3-eyebrow">Libri Convites · seu pedido</span>' +
     '<h1 class="v3-title">' + title + '</h1><p class="v3-text">' + subtitle + '</p>' +
     content + (buttons || '') + '</section>';
-  root.setAttribute('aria-busy','false');
+  root.setAttribute('aria-busy','false');renderBasket();
 }
 function actions(back, nextText, nextAction = 'next') {
   return '<div class="v3-action-row">' +
@@ -172,15 +224,11 @@ function actions(back, nextText, nextAction = 'next') {
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    '<strong>' + clean(title) + '</strong>' + (subtitle ? '<small>' + clean(subtitle) + '</small>' : '') +
-    (price != null ? '<span class="v3-price">' + money(price) + '</span>' : '') + '</button>';
+    choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
 }
 function intro() {
-  root.innerHTML = '<section class="v3-panel v3-panel--entrance">' +
-    '<div class="v3-entrance-emblem" aria-hidden="true"><span>L</span></div>' +
-    '<span class="v3-eyebrow">Libri Convites</span>' +
-    '<h1 class="v3-title">Toda celebração começa com uma história.</h1>' +
-    '<p class="v3-text">Uma experiência criada especialmente para você.</p>' +
+  hideBasket();document.getElementById('v3-landing')?.setAttribute('hidden','');root.innerHTML = '<section class="v3-intro-screen">' +
+    '<div class="v3-intro-inner"><span>UM ATELIÊ DE CELEBRAÇÕES</span><img src="/images/libri-wordmark.png" alt="Libri Convites" width="440" height="128"><i aria-hidden="true"></i><h1>Cada celebração tem sua própria história.</h1><span>FEITO COM ENCANTO. FEITO PARA VOCÊ.</span></div>' +
     '<button class="v3-btn v3-btn-text" type="button" data-action="skip-intro">Pular abertura</button></section>';
 }
 function renderEvent() {
@@ -188,31 +236,44 @@ function renderEvent() {
     '<div class="v3-grid">' + EVENTS.map(item => choice(item[0],item[1],item[2],state.eventType,'event')).join('') + '</div>',
     actions(false,'Continuar'),0);
 }
+function renderEventSubtype(){
+ const options=EVENT_SUBTYPES[state.eventType]||[];
+ panel('Qual é a celebração?','Assim podemos adaptar os formatos e as perguntas ao seu evento.','<div class="v3-choices-stack">'+options.map(x=>choice(x[0],x[1],'',state.eventSubtype,'event-subtype')).join('')+'</div>',actions(true,'Continuar'),0);
+}
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Escolha uma das duas linhas da Libri. As duas fazem parte do mesmo aplicativo.',
+    'Escolha um serviço para começar. Você pode reunir outros no mesmo pedido.',
     '<div class="v3-choices-stack">' +
     choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
     choice('identity','Identidade Visual para Festas | Libri Ateliê',
       'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
-    '</div><p class="v3-mini" style="margin-top:18px"><button type="button" class="v3-btn v3-btn-text" data-action="retrospective-info">Conhecer retrospectivas (em preparação)</button></p>',
+    choice('retrospective','Retrospectiva de fotos e vídeos',
+      'Uma homenagem em vídeo com suas lembranças, músicas e dedicatória. Você escolhe conforme a quantidade de fotos e vídeos.',state.creation,'creation') +
+    '</div>'+cartButton(),
     actions(true,'Continuar'),1);
 }
 function renderUnready() {
-  panel('Retrospectiva','O serviço de retrospectivas continua planejado, mas seus pacotes ainda não foram integrados ao novo catálogo.',
-    '<div class="v3-notice">Enquanto isso, os convites disponíveis continuam na loja atual, sem alterações.</div>',
-    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button><a href="/pedido" class="v3-btn v3-btn-secondary">Loja atual</a></div>',1);
+  const cards=retrosPackages.map(item=>
+    '<article class="v3-package-card"><div class="v3-package-heading"><strong>'+clean(item.name)+'</strong>'+(item.previewAvailable?'<b>'+money(item.previewPriceCents)+'</b>':'')+'</div>'+
+    '<div class="v3-package-facts"><span><b>'+Number(item.maxPhotos)+'</b> fotos</span><span><b>'+Number(item.maxVideos)+'</b> vídeos</span></div><p class="v3-mini">Até '+Number(item.maxVideoSeconds)+' s por vídeo · '+Number(item.maxTotalVideoSeconds)/60+' min no conjunto.</p>'+
+    '<details><summary>Ver o que está incluído</summary><ul>'+item.included.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul></details>'+
+    (item.previewAvailable?'<button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'<p class="v3-mini">Pacote indisponível.</p>')+'</article>'
+  ).join('');
+  panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
+    '<div class="v3-notice">Envie os materiais organizados pelo WhatsApp após a contratação. Prazo mínimo de 15 dias corridos após pagamento, briefing completo e recebimento dos materiais.</div>'+
+    '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+cartButton(),
+    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
 function renderAtelie() {
   const cards = ateliePackages.map(item =>
     '<button type="button" class="v3-choice '+(item.code===state.ateliePackage?'is-selected':'')+
       '" data-action="atelie-package" data-value="'+clean(item.code)+'" aria-pressed="'+(item.code===state.ateliePackage)+'">'+
-      '<strong>'+clean(item.name)+'</strong><small>'+clean(item.shortDescription)+'</small>'+
-      '<span class="v3-mini">'+(item.purchaseAvailable?('Pacote disponível · '+money(item.priceCents)):'Ver detalhes · valores ainda não publicados')+'</span></button>'
+      '<span class="v3-choice-copy"><strong>'+clean(item.name)+'</strong><small>'+clean(item.shortDescription)+'</small>'+
+      '<span class="v3-price">'+(item.purchaseAvailable?money(item.priceCents):'Consultar detalhes')+'</span></span><span class="v3-choice-check" aria-hidden="true"></span></button>'
   ).join('');
   panel('Sua festa, com tudo combinando',
     'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
-    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação visual e uma simulação de decoração para imaginar como a identidade ficaria na festa. A simulação não é a decoração executada.</div>'+
+    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação da identidade visual em PDF. Não inclui projeto ou simulação de decoração.</div>'+
       '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
       '<p class="v3-mini" style="margin-top:16px">Não inclui impressão ou fabricação, montagem da festa nem convite em vídeo ou interativo. Peças especiais, personagens elaborados a partir de fotos e alterações grandes precisam de orçamento individual.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>'+
@@ -222,24 +283,24 @@ function renderAtelieDetail() {
   const item = ateliePackages.find(p=>p.code===state.ateliePackage);
   if (!item) {state.step='atelie';renderAtelie();return;}
   const includes=item.scopeApproved&&item.includedItems.length
-    ? '<div class="v3-lines">'+item.includedItems.map(x=>'<div class="v3-line"><span>'+clean(x)+'</span></div>').join('')+'</div>'
+    ? '<ul class="v3-included">'+item.includedItems.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>'
     : '<p class="v3-text">Os itens e quantidades exatos ainda aguardam aprovação do catálogo oficial. Não vamos prometer entregas antes disso.</p>';
   const exclusions=[...(item.excludedCommon||[]),...(item.excludedItems||[])];
   const excluded='<ul class="v3-mini">'+exclusions.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>';
   panel('Pacote '+clean(item.name),clean(item.shortDescription),
-    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual e uma simulação conceitual de decoração.</p></div>'+
+    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual em PDF.</p></div>'+
     '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
-    '<h2 class="v3-title" style="font-size:23px;margin-top:22px">O que não está incluído</h2>'+excluded+
+    '<details class="v3-terms-disclosure"><summary>O que não está incluído</summary>'+excluded+'</details>'+
     '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
-    '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso e identificação de simulações conceituais.</p>',
+    '',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
-    '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Contratar este pacote':'Contratação em preparação')+'</button></div>',3);
+    '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
 }
 function renderIntent() {
   panel('Como imagina seu convite?',
     'Não precisa conhecer os nomes dos modelos. Escolha o que gostaria que seus convidados recebessem.',
     '<div class="v3-choices-stack">' +
-      choice('story','Uma história animada','Um vídeo com personagens, cenários e animações criados especialmente para o evento.',state.intent,'intent') +
+      choice('story','Uma história animada','Uma história personalizada com personagens, cenários, animações e possibilidade de falas, definidas depois no briefing.',state.intent,'intent') +
       choice('simple','Um convite mais simples','Uma arte no celular, com informações da festa e botões para os convidados usarem.',state.intent,'intent') +
     '</div>',actions(true,'Ver formatos'),2);
 }
@@ -258,7 +319,7 @@ function renderFormats() {
     '<div class="v3-choices-stack">' + codes.map(code => {
       const product = getProduct(code), detail = PRODUCTS[code];
       return choice(code,detail?.title || product.name,detail?.description || product.shortDescription,
-        state.productCode,'product',product.variants[0]?.priceCents);
+        state.productCode,'product',product.variants[0]?.priceCents)+'<button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplos deste formato</button>';
     }).join('') + '</div>',
     actions(true,SCENE_PRODUCTS.has(state.productCode) ? 'Escolher cenas' : 'Continuar'),2);
 }
@@ -266,7 +327,7 @@ function renderScenes() {
   const product = currentProduct();
   if (!product || product.pricingMode !== 'scene_count') {state.step='extras';render();return;}
   const options = product.variants.filter(item => Number.isInteger(Number(item.sceneCount))).sort((a,b)=>a.sceneCount-b.sceneCount);
-  panel('Quantas cenas gostaria?', 'Cada cena mostra um momento da história. A abertura já vem incluída e não entra nessa contagem.',
+  panel('Quantas cenas gostaria?', 'Cada cena mostra um momento da história. A abertura já vem incluída. O preço de cada opção é o valor total do convite, não um preço por cena.',
     '<div class="v3-grid">' + options.map(item => {
       const label = String(item.sceneCount) + (Number(item.sceneCount)===1 ? ' cena' : ' cenas');
       const sub = Number(item.sceneCount)===3 ? 'Uma história mais curtinha · sugestão Libri' :
@@ -293,13 +354,44 @@ function addonCard(group) {
 function priceBar() {
   return quote ? '<div class="v3-total"><div><strong>Total até agora</strong><div><small>Calculado pelo catálogo oficial · Pix</small></div></div><b>' + money(quote.totalCents) + '</b></div>' : '';
 }
-function renderExtras() {
-  const free = INTERACTIVE.has(state.productCode)
-    ? '<div class="v3-notice"><strong>Já incluído: confirmação simples pelo WhatsApp · R$ 0,00.</strong> O convidado toca na opção, o WhatsApp abre com uma mensagem pronta, e ele só precisa tocar em Enviar. Não tem painel de convidados.</div>' : '';
-  panel('Gostaria de completar seu pedido?',
-    'Aqui você pode acrescentar artes e serviços. Tudo é opcional, e o preço aparece antes de adicionar.',
-    free + '<div class="v3-choices-stack">' + availableGroups().map(addonCard).join('') + '</div>' + priceBar(),
-    actions(true,'Conferir meu pedido'),4);
+const ADDON_QUESTIONS={
+ save_the_date:'Quer avisar a data antes de enviar o convite?',
+ reminder:'Quer lembrar seus convidados quando a festa estiver chegando?',
+ confirmation:'Como gostaria de acompanhar as confirmações?',
+ moments:'Quer guardar as fotos que seus convidados tirarem na festa?',
+ filter:'Quer um filtro de fotos personalizado com o tema da festa?'
+};
+function renderExtras(){
+ const groups=availableGroups();
+ if(!groups.length){panel('Seu convite está pronto para conferir','Nenhum adicional disponível para este formato.',priceBar(),actions(true,'Conferir meu pedido'),3);return;}
+ const i=Math.max(0,Math.min(groups.length-1,Number(state.addonQuestion)||0));
+ state.addonQuestion=i;
+ const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
+ const variants=(catalog.addons||[]).filter(a=>a.group===group);
+ const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · R$ 0,00</strong><p>O convidado escolhe a resposta, abre uma mensagem pronta no WhatsApp e toca em Enviar. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
+ const choiceList=group==='confirmation'?choice(group,'Continuar com WhatsApp','Sem custo adicional',selected?null:group,'guided-skip')+choice(group,'Quero acompanhar pelo painel da Libri',selected?'Selecionado: '+selected.name:'Veja as opções de Confirmação Libri',selected?group:null,'guided-options'):choice(group,selected?'Alterar '+g[1]:'Sim, quero ver as opções',selected?selected.name+' · '+money(selected.priceCents):'Confira os valores antes de decidir',selected?group:null,'guided-options')+choice(group,'Agora não','Sem adicionar custo',selected?null:group,'guided-skip');
+ panel(ADDON_QUESTIONS[group]||g[1],g[2],
+  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">' +choiceList+'</div></div>'+priceBar(),
+  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+}
+let guidedBusy=false;
+async function advanceGuided(group,code){
+ if(guidedBusy)return;
+ guidedBusy=true;
+ try{
+ const groups=availableGroups(),index=groups.findIndex(g=>g[0]===group);
+ if(index<0)return;
+ if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
+ const before=[...state.addonCodes],dismissed=[...state.dismissed];
+ state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
+ if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);}
+ else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
+ try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
+ state.offerFinished=false;
+ const next=availableGroups().findIndex(g=>ADDON_GROUPS.findIndex(x=>x[0]===g[0])>ADDON_GROUPS.findIndex(x=>x[0]===group));
+ if(next<0){state.addonQuestion=0;await go('review');}
+ else{state.addonQuestion=next;render();window.scrollTo({top:0,behavior:'auto'});}
+ }finally{guidedBusy=false;}
 }
 function linesHtml() {
   let all = [
@@ -323,36 +415,158 @@ function renderReview() {
   panel('Seu pedido está tomando forma!', 'Confira suas escolhas. O próximo passo conclui o pedido com segurança no checkout Libri.',
     '<div class="v3-notice"><b>' + clean(labelForEvent()) + '</b> · ' + clean(PRODUCTS[state.productCode]?.title || '') +
     '</div>' + linesHtml() + priceBar() + offerHtml() +
-    '<p class="v3-mini">Você informará a data da festa, escolherá a entrega e concluirá o pedido com o checkout seguro Libri.</p>',
+    '<p class="v3-mini">Você pode guardar este convite no carrinho e escolher outro serviço para o mesmo evento.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
-    '<button class="v3-btn v3-btn-primary" type="button" data-action="handoff">Continuar para o pagamento</button></div>',4);
+    '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
+}
+function cartDeliveryHtml(){
+  if(!cartQuote||cartError||!state.cartItems.length)return '';
+  const formatDate=s=>s.split('-').reverse().join('/');
+  const options=cartDelivery?.options||[];
+  return '<div class="v3-notice"><strong>Quando é a festa?</strong><p>Consulte a agenda para todos os serviços juntos.</p>'+
+    '<label for="v3CartEventDate" class="v3-mini">Data do evento</label>'+
+    '<input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input">'+
+    '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-delivery" '+(cartDeliveryBusy?'disabled':'')+'>'+(cartDeliveryBusy?'Consultando…':'Consultar prazos')+'</button>'+
+    (cartDeliveryError?'<p role="alert">'+clean(cartDeliveryError)+'</p>':'')+
+    (cartDelivery?'<div role="status"><p><strong>Previsão de entrega conjunta</strong></p>'+
+      (options.length?options.map(o=>'<p>'+clean(formatDate(o.start))+' a '+clean(formatDate(o.end))+(o.recommended?' · sugerida':'')+'</p>').join(''):'<p>Sem janela automática para esta data. Será necessário avaliar a disponibilidade antes de pagar.</p>')+
+      '<p class="v3-mini">'+(cartDelivery.provisionalUntilBriefing?'Mínimo de 15 dias corridos após pagamento e briefing completos. ':'')+'Consulta sem reserva de vaga. A data ainda deverá ser confirmada na contratação.</p></div>':'')+'</div>';
+}
+let cartExtrasCatalog=Object.create(null);
+const EXTRA_INTENTS={
+ Personagens:['Quer personalizar mais alguém ou ter outras poses?','Inclua apenas uma nova criação individual ou uma pose além do pacote. Personagens temáticos já previstos não contam como extras.'],
+ Identidade:['Precisa de mais peças de identidade visual?','O pacote já contém os itens contratados; estas opções ampliam a quantidade.'],
+ Aplicações:['Quer aplicar a identidade em mais peças de papelaria?','Você recebe a arte digital; a impressão não está incluída.'],
+ Materiais:['Tem mais fotos, vídeos ou materiais para organizar?','Os materiais devem respeitar os limites contratados e ser enviados pelo WhatsApp.'],
+ Edição:['Quer dar um toque especial à retrospectiva?','Mostramos apenas recursos ainda não incluídos no seu pacote.'],
+ Ajustes:['Precisa contratar mais uma rodada de ajustes?','As revisões previstas no pacote permanecem incluídas.']
+};
+let extraFlow=null;
+function cartExtrasHtml(item,i){
+ const extras=cartExtrasCatalog[item.productCode]||[];if(!extras.length)return '';
+ const selected=(item.extras||[]).map(x=>{const extra=extras.find(e=>e.code===x.code);return extra?'<li>'+Number(x.quantity)+' × '+clean(extra.name)+'</li>':'';}).join('');
+ return '<div class="v3-package-personalize"><strong>Quer personalizar além do pacote?</strong>'+
+ (selected?'<ul class="v3-included">'+selected+'</ul>':'<p class="v3-mini">Seu pacote já está completo. Os extras são opcionais.</p>')+
+ '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar adicionais':'Ver opções de personalização')+'</button></div>';
+}
+function renderExtraQuestion(){
+ const f=extraFlow;if(!f)return;
+ const item=state.cartItems[f.index];if(!item||item.productCode!==f.productCode){modalClose();return;}
+ const all=cartExtrasCatalog[item.productCode]||[],group=f.groups[f.step],choices=all.filter(x=>x.category===group);
+ const [question,description]=EXTRA_INTENTS[group]||['Quer acrescentar '+group+'?','Confira as opções e os valores.'];
+ const current=f.selection;
+ const controls=choices.map(x=>{
+ const quantity=current.get(x.code)||0;
+ return '<div class="v3-extra-quantity"><div><strong>'+clean(x.name)+'</strong><small>'+money(x.priceCents)+' por unidade</small></div><div class="v3-quantity-actions"><button type="button" class="v3-btn v3-btn-secondary" aria-label="Diminuir '+clean(x.name)+'" data-action="guided-cart-minus" data-value="'+clean(x.code)+'" '+(!quantity?'disabled':'')+'>−</button><b>'+quantity+'</b><button type="button" class="v3-btn v3-btn-secondary" aria-label="Aumentar '+clean(x.name)+'" data-action="guided-cart-plus" data-value="'+clean(x.code)+'" '+(quantity>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
+ }).join('');
+ const total=all.reduce((n,x)=>n+x.priceCents*(current.get(x.code)||0),0);
+ modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" aria-labelledby="v3-extra-title" tabindex="-1"><span class="v3-eyebrow">Personalização opcional · '+(f.step+1)+' de '+f.groups.length+'</span><h2 id="v3-extra-title">'+clean(question)+'</h2><p>'+clean(description)+'</p>'+
+ (f.expanded?controls:'<div class="v3-choices-stack">'+choice(group,'Sim, quero ver as opções','Confira os valores e quantidades',null,'guided-cart-expand')+choice(group,'Agora não','Sem acrescentar custo',null,'guided-cart-skip')+'</div>')+
+ '<div class="v3-total"><strong>Adicionais selecionados</strong><b>'+money(total)+'</b></div><p class="v3-mini">O total do pedido e os descontos serão recalculados antes de confirmar.</p><div class="v3-action-row">'+(f.step>0?'<button type="button" class="v3-btn v3-btn-text" data-action="guided-cart-back">Voltar</button>':'')+(f.expanded?'<button type="button" class="v3-btn v3-btn-primary" data-action="guided-cart-next">'+(f.step===f.groups.length-1?'Aplicar escolhas':'Continuar')+'</button>':'')+'<button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Cancelar alterações</button></div></div>';
+ modalRoot.hidden=false;
+}
+async function moveExtraFlow({skip=false}={}){
+ const f=extraFlow;if(!f)return;
+ if(skip){const group=f.groups[f.step];for(const x of cartExtrasCatalog[f.productCode]||[])if(x.category===group)f.selection.delete(x.code);}
+ if(f.step<f.groups.length-1){f.step++;f.expanded=(cartExtrasCatalog[f.productCode]||[]).some(x=>x.category===f.groups[f.step]&&f.selection.has(x.code));renderExtraQuestion();return;}
+ const item=state.cartItems[f.index];if(!item||item.productCode!==f.productCode){modalClose();return;}
+ const proposed=Array.from(f.selection,([code,quantity])=>({code,quantity}));
+ const proposedItems=state.cartItems.map((x,i)=>i===f.index?{...x,extras:proposed}:x);
+ // No mutation or persistence before the server validates all selected quantities.
+ const confirmButton=modalRoot.querySelector('[data-action="guided-cart-next"]');if(confirmButton)confirmButton.disabled=true;
+ if(f.busy)return;f.busy=true;
+ try{
+  const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:proposedItems});
+  if(extraFlow!==f)return;
+  if(!window.confirm('Confirmar personalização? Novo total no Pix: '+money(data.quote.totalCents)+'. Nenhuma cobrança será criada agora.')){f.busy=false;renderExtraQuestion();return;}
+  state.cartItems=proposedItems;modalClose();await openCart();
+ }catch(e){f.busy=false;renderExtraQuestion();const msg=document.createElement('p');msg.setAttribute('role','alert');msg.textContent=e.message;modalRoot.querySelector('.v3-modal-card')?.prepend(msg);}
+}
+function renderCart() {
+  trackStoreStage('carrinho');
+  const items=state.cartItems;
+  const lines=items.map((item,i)=>{
+    const priced=cartQuote?.items?.find(x=>x.productCode===item.productCode&&x.variantCode===item.variantCode);
+    const product=getProduct(item.productCode);
+    const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
+    const upgrade=priced?.upgradeSuggestion;
+    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade" data-value="'+i+'">Trocar pacote</button></div>':'';
+    return '<article class="v3-cart-item"><div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
+      (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
+      (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
+      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
+  }).join('');
+  const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
+    (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
+    '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
+  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':items.length?'<p class="v3-mini">Confira os dados, os prazos e as condições na contratação. Nenhuma cobrança foi criada.</p>':'';
+  panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
+    '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
+    '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
+    (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
+}
+async function openCart(){
+  const revision=cartRevision+1;
+  if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
+  hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
+  root.setAttribute('aria-busy','true');
+  root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
+  if(state.cartItems.length){
+    try {
+      await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));
+      const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems});
+      if(revision!==cartRevision||state.step!=='cart')return;
+      cartQuote=data.quote;
+    } catch(e){if(revision!==cartRevision||state.step!=='cart')return;cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
+  }
+  if(revision!==cartRevision||state.step!=='cart')return;
+  renderCart();window.scrollTo({top:0,behavior:'auto'});
 }
 function render() {
+  trackStoreStage(({event:'evento',creation:'servico',unready:'servico',atelie:'modelo','atelie-detail':'configuracao','atelie-checkout':'dados',intent:'modelo',format:'modelo',scenes:'configuracao',extras:'adicionais',review:'revisao',cart:'carrinho'})[state.step]||'evento');
   save();
   switch(state.step) {
     case 'event': renderEvent(); break;
+    case 'event-subtype': renderEventSubtype();break;
     case 'creation': renderCreation(); break;
     case 'unready': renderUnready(); break;
     case 'atelie': renderAtelie(); break;
     case 'atelie-detail': renderAtelieDetail(); break;
-    case 'atelie-checkout': {
-      const item=ateliePackages.find(p=>p.code===state.ateliePackage);
-      mountAtelieCheckout(root,{item,eventType:state.eventType,onBack:()=>go('atelie-detail')});
-      break;
-    }
+    case 'atelie-checkout': openCart().catch(e=>message(e.message));break;
     case 'intent': renderIntent(); break;
     case 'format': renderFormats(); break;
     case 'scenes': renderScenes(); break;
     case 'extras': renderExtras(); break;
     case 'review': renderReview(); break;
+    case 'cart': renderCart(); break;
     default: state.step='event';renderEvent();
   }
 }
 function modalClose() {
+  extraFlow=null;
   modalRoot.hidden = true;
   modalRoot.innerHTML = '';
 }
-function openAddonGroup(group) {
+async function showExamples(code){
+ if(!getProduct(code)||!formatCodes().includes(code))return;
+ modalRoot.hidden=false;modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1"><h2>Exemplos deste formato</h2><p>Carregando exemplos da galeria…</p><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar</button></div>';
+ try{
+  const response=await request('/api/v2/gallery?productCode='+encodeURIComponent(code)+'&eventType='+encodeURIComponent(state.eventType));
+  const cards=(response.items||[]).filter(x=>x.productCode===code).slice(0,8).map(x=>{
+    const media=/^\/api\/v2\/gallery\/\d+\/media$/.test(x.mediaPath||'')?x.mediaPath:'';
+    const preview=/^\/api\/v2\/gallery\/\d+\/preview$/.test(x.previewPath||'')?x.previewPath:'';
+    const url=/^https:\/\//i.test(x.externalUrl||'')?x.externalUrl:'';
+    return '<article class="v3-gallery-example">'+(preview?'<img src="'+clean(preview)+'" loading="lazy" alt="Exemplo da Libri">':media&&x.mediaType==='image'?'<img src="'+clean(media)+'" loading="lazy" alt="Exemplo da Libri">':'')+
+      (media&&x.mediaType==='video'?'<video controls playsinline preload="none" '+(preview?'poster="'+clean(preview)+'" ':'')+'src="'+clean(media)+'"></video>':'')+
+      (url?'<a href="'+clean(url)+'" target="_blank" rel="noopener noreferrer">Abrir exemplo</a>':'')+
+      (x.themeLabel?'<strong>'+clean(x.themeLabel)+'</strong>':'')+(x.caption?'<p>'+clean(x.caption)+'</p>':'')+'</article>';
+  }).join('');
+  if(modalRoot.hidden)return;
+  modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" aria-labelledby="v3-example-title" tabindex="-1"><h2 id="v3-example-title">'+clean(PRODUCTS[code]?.title||'Exemplos')+'</h2><p>Veja exemplos reais disponíveis deste formato. A arte do seu pedido será personalizada.</p><div class="v3-gallery-grid">'+(cards||'<p>Ainda não há exemplos publicados desse formato para esta celebração. Você pode falar com a Libri para saber mais.</p>')+'</div><button type="button" class="v3-btn v3-btn-secondary" data-action="close-modal">Voltar às opções</button></div>';
+ }catch(e){if(!modalRoot.hidden)modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true"><p>Não foi possível carregar a galeria agora. Sua escolha foi mantida.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="close-modal">Voltar</button></div>';}
+ modalRoot.querySelector('[role="dialog"]')?.focus();
+}
+function openAddonGroup(group,guided=false) {
   const variants = (catalog?.addons || []).filter(a => a.group === group);
   if (!variants.length) return;
   const groupItem = ADDON_GROUPS.find(x=>x[0]===group);
@@ -368,11 +582,11 @@ function openAddonGroup(group) {
     '<h2 id="v3-modal-title">'+clean(groupItem?.[1]||'Adicional')+'</h2><p>'+clean(explanations[group]||groupItem?.[2]||'')+'</p>' +
     '<div class="v3-modal-actions">' + variants.map(a=>{
       const extra = a.config?.photoLimit ? ' · até '+a.config.photoLimit+' fotos' : '';
-      return '<button type="button" class="v3-choice '+(selected===a.code?'is-selected':'')+'" data-action="select-addon" data-value="'+clean(a.code)+'">' +
+      return '<button type="button" class="v3-choice '+(selected===a.code?'is-selected':'')+'" data-action="'+(guided?'guided-addon':'select-addon')+'" data-value="'+clean(a.code)+'">' +
         '<strong>'+clean(a.name)+'</strong><small>'+clean(extra || (a.code.endsWith('_animated')?'Com movimento':a.code.endsWith('_static')?'Sem movimento':''))+'</small>' +
         '<span class="v3-price">+ '+money(a.priceCents)+'</span></button>';
     }).join('') +
-    (selected ? '<button class="v3-btn v3-btn-secondary" data-action="remove-addon" data-value="'+clean(group)+'">Retirar esse adicional</button>' : '') +
+    (selected ? '<button class="v3-btn v3-btn-secondary" data-action="'+(guided?'guided-skip':'remove-addon')+'" data-value="'+clean(group)+'">Retirar esse adicional</button>' : '') +
     '<button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar sem alterar</button></div></div>';
   modalRoot.hidden = false;
   modalRoot.querySelector('[role="dialog"]')?.focus();
@@ -457,57 +671,46 @@ async function go(target) {
   render();
   window.scrollTo({top:0,behavior:'auto'});
 }
-function handoff() {
-  // Transferir somente os dados que o checkout V2 já compreende.
-  // Ele continua responsável por agenda, termos, pagamento e briefing.
-  const product = currentProduct();
-  if (!product || !currentVariant()) return message('Escolha um modelo disponível antes de continuar.');
-  const order = {
-    step: 3,
-    deepProductSlug: '',
-    event: {type:state.eventType,subtype:'',honoreeName:'',date:''},
-    customer: {name:'',whatsapp:'',email:''},
-    selection: {
-      productSlug: product.slug,productCode: product.code,
-      variantCode:state.variantCode,addonCodes:state.addonCodes,
-      comboCode:quote?.combo?.code || '',couponCode:'',paymentMethod:'pix'
-    },
-    termsAccepted:false
-  };
-  try {
-    localStorage.setItem(V2_KEY,JSON.stringify(order));
-  } catch {
-    return message('Seu navegador não permitiu transferir a seleção. Você pode acessar a loja atual e escolher novamente.');
-  }
-  window.location.assign('/pedido');
-}
-root.addEventListener('click', async event => {
+let storeActionBusy=false;
+async function handleStoreClick(event) {
   const button=event.target.closest('[data-action]');
-  if (!button) return;
+  if (!button||storeActionBusy) return;
   const action=button.dataset.action, value=button.dataset.value;
+  storeActionBusy=true;
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='event'){if(state.eventType===value){render();return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.eventSubtype='';state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
+    if(action==='event-subtype'){state.eventSubtype=value;render();return;}
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
-    if(action==='retrospective-info'){state.creation='retrospective';await go('unready');return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
+    if(action==='retro-buy'){
+      const item=retrosPackages.find(p=>p.code===value);
+      if(!item?.previewAvailable)return message('Pacote indisponível.');
+      if(putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
+    }
     if(action==='atelie-buy'){
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
-      if(!item?.purchaseAvailable)return message('Pacote indisponível para compra.');
-      await go('atelie-checkout');return;
+      if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
+      if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
     }
-    if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];render();return;}
+    if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
     if(action==='product'){
       const product=getProduct(value);if(!product)return;
+      if(value===state.productCode&&state.variantCode){render();return;}
       state.productCode=value;
       state.variantCode=product.pricingMode==='scene_count'?'':product.variants[0]?.code||'';
-      state.addonCodes=[];
+      state.addonCodes=[];state.addonQuestion=0;
       state.offerFinished=false;state.dismissed=[];
-      quote=null;render();return;
+      quote=null;liveQuoteKey='';if(state.variantCode)await refreshQuote();render();return;
     }
-    if(action==='variant'){state.variantCode=value;state.offerFinished=false;render();return;}
+    if(action==='variant'){state.variantCode=value;state.offerFinished=false;state.addonQuestion=0;await refreshQuote();render();return;}
+    if(action==='show-examples'){await showExamples(value);return;}
+    if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
+    if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
+    if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
+    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){
@@ -538,10 +741,70 @@ root.addEventListener('click', async event => {
       }
       state.offerFinished=true;offer=null;await go('review');return;
     }
-    if(action==='handoff'){handoff();return;}
+    if(action==='add-invitation'){
+      if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
+      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))await openCart();return;
+    }
+    if(action==='open-cart'){await openCart();return;}
+    if(action==='cart-delivery'){
+      if(cartDeliveryBusy||!cartQuote||!state.cartItems.length)return;
+      const revision=cartRevision;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||'';
+      cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=true;renderCart();
+      try{
+        const result=await request('/api/v3/cart/delivery-options',{eventType:state.eventType,eventDate:cartEventDate,paymentMethod:'pix',items:state.cartItems});
+        if(revision===cartRevision&&state.step==='cart'){cartDelivery=result.delivery;cartQuote=result.quote;}
+      }catch(e){if(revision===cartRevision)cartDeliveryError=e.message||'Não foi possível consultar a agenda.';}
+      finally{if(revision===cartRevision){cartDeliveryBusy=false;if(state.step==='cart')renderCart();}}
+      return;
+    }
+    if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}
+    if(action==='cart-edit'){
+      const item=state.cartItems[Number(value)];if(!item)return;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
+      const family=cartFamily(item.productCode);state.creation=family;
+      if(family==='invitation'){state.productCode=item.productCode;state.variantCode=item.variantCode;state.intent=SCENE_PRODUCTS.has(item.productCode)?'story':'simple';state.addonCodes=[...item.addonCodes];state.addonQuestion=0;state.offerFinished=true;state.dismissed=[];await go('review');}
+      else if(family==='identity'){state.ateliePackage=item.productCode.replace(/^atelie_/,'');await go('atelie-detail');}
+      else await go('unready');
+      return;
+    }
+    if(action==='remove-cart'){
+      const i=Number(value);
+      if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
+      await openCart();return;
+    }
+    if(action==='cart-upgrade'){
+      const i=Number(value),item=state.cartItems[i];
+      const suggestion=cartQuote?.items?.find(x=>x.productCode===item?.productCode&&x.variantCode===item?.variantCode)?.upgradeSuggestion;
+      if(!item||!suggestion||cartError)return;
+      state.cartItems[i]={productCode:suggestion.productCode,variantCode:suggestion.variantCode,addonCodes:[],extras:suggestion.extras};
+      await openCart();return;
+    }
+    if(action==='cart-extra-start'){
+      const i=Number(value),item=state.cartItems[i],extras=cartExtrasCatalog[item?.productCode]||[];if(!extras.length)return;
+      extraFlow={index:i,productCode:item.productCode,groups:[...new Set(extras.map(x=>x.category))],step:0,expanded:false,selection:new Map((item.extras||[]).map(x=>[x.code,x.quantity]))};
+      extraFlow.expanded=extras.some(x=>x.category===extraFlow.groups[0]&&extraFlow.selection.has(x.code));renderExtraQuestion();modalRoot.querySelector('[role="dialog"]')?.focus();return;
+    }
+    if(action.startsWith('guided-cart-')){
+      const f=extraFlow;if(!f||f.busy)return;
+      if(action==='guided-cart-expand'){f.expanded=true;renderExtraQuestion();return;}
+      if(action==='guided-cart-back'){f.step=Math.max(0,f.step-1);f.expanded=(cartExtrasCatalog[f.productCode]||[]).some(x=>x.category===f.groups[f.step]&&f.selection.has(x.code));renderExtraQuestion();return;}
+      if(action==='guided-cart-next'||action==='guided-cart-skip'){await moveExtraFlow({skip:action==='guided-cart-skip'});return;}
+      const extra=(cartExtrasCatalog[f.productCode]||[]).find(x=>x.code===value&&x.category===f.groups[f.step]);if(!extra)return;
+      const n=Math.max(0,Math.min(extra.maxQuantity,(f.selection.get(value)||0)+(action==='guided-cart-plus'?1:-1)));
+      if(n)f.selection.set(value,n);else f.selection.delete(value);
+      renderExtraQuestion();return;
+    }
+    if(action==='cart-unified-checkout'||action==='cart-single-checkout'){
+      if(!cartQuote||cartError||!state.cartItems.length||cartDeliveryBusy)return;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
+      state.step='cart';save();
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,request,onBack:()=>openCart()});
+      return;
+    }
     if(action==='back'){
       const previous={
-        creation:'event',unready:'creation',atelie:'creation','atelie-detail':'atelie',intent:'creation',
+        'event-subtype':'event',creation:EVENT_SUBTYPES[state.eventType]?'event-subtype':'event',unready:'creation',atelie:'creation','atelie-detail':'atelie',intent:'creation',
         format:'intent',scenes:'format',
         extras:SCENE_PRODUCTS.has(state.productCode)?'scenes':'format',
         review:'extras'
@@ -549,33 +812,41 @@ root.addEventListener('click', async event => {
       await go(previous[state.step]||'event');return;
     }
     if(action==='next'){
-      const next={event:'creation',creation:state.creation==='invitation'?'intent':state.creation==='identity'?'atelie':'unready',
+      const next={event:EVENT_SUBTYPES[state.eventType]?'event-subtype':'creation','event-subtype':'creation',creation:state.creation==='invitation'?'intent':state.creation==='identity'?'atelie':'unready',
         intent:'format',
         format:SCENE_PRODUCTS.has(state.productCode)?'scenes':'extras',
         scenes:'extras',extras:'review'};
       if(state.step==='event'&&!state.eventType)return message('Escolha o tipo de evento para continuar.');
+      if(state.step==='event-subtype'&&!state.eventSubtype)return message('Escolha o tipo de celebração para continuar.');
       if(state.step==='creation'&&!state.creation)return message('Escolha o que gostaria de criar.');
       if(state.step==='intent'&&!state.intent)return message('Escolha o estilo do convite.');
       if(state.step==='format'&&!state.productCode)return message('Escolha o formato do convite.');
       if(state.step==='scenes'&&!state.variantCode)return message('Escolha quantas cenas quer no vídeo.');
       await go(next[state.step]||'event');
     }
-  }catch(err){message(err.message || 'Não foi possível continuar.');}
-});
-modalRoot.addEventListener('click', event => {
-  if(event.target===modalRoot)modalClose();
+  }catch(err){message(err.message || 'Não foi possível continuar.');}finally{storeActionBusy=false;}
+}
+root.addEventListener('click',handleStoreClick);
+modalRoot.addEventListener('click',event=>{
+ if(event.target===modalRoot)modalClose();else handleStoreClick(event);
 });
 document.addEventListener('keydown', event => {
   if(event.key==='Escape'&&!modalRoot.hidden)modalClose();
 });
-async function init() {
+async function init({skipRecovery=false}={}) {
+  if(!skipRecovery&&pendingV3CheckoutKey()){
+    const handled=await mountV3PaymentRecovery(root,{request,onMissing:()=>init({skipRecovery:true})});
+    if(handled||pendingV3CheckoutKey())return;
+  }
   root.setAttribute('aria-busy','true');
-  const [result, atelie] = await Promise.all([
+  const [result, atelie, retrospective] = await Promise.all([
     request('/api/v2/catalog'),
-    request('/api/v2/atelie/catalog').catch(()=>({packages:[]}))
+    request('/api/v2/atelie/catalog').catch(()=>({packages:[]})),
+    request('/api/v3/retrospectivas/catalog').catch(()=>({packages:[]}))
   ]);
   catalog=result.catalog;
   ateliePackages=atelie.packages || [];
+  retrosPackages=retrospective.packages || [];
   if(state.ateliePackage && !ateliePackages.some(p=>p.code===state.ateliePackage)) state.ateliePackage='';
   if(!catalog?.products?.length)throw new Error('O catálogo está indisponível. Confira a loja atual.');
   // Um código de produto desativado nunca deve ficar selecionado em rascunhos antigos.
@@ -587,7 +858,9 @@ async function init() {
     state.step=SCENE_PRODUCTS.has(state.productCode)?'scenes':'format';
   }
   if(!state.eventType)state.step='event';
+  if(state.step==='cart'||state.step==='atelie-checkout'){await openCart();return;}
   if(state.step==='extras'||state.step==='review'){await go(state.step);return;}
+  if(state.productCode&&state.variantCode&&['format','scenes'].includes(state.step))await refreshQuote();
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(!sessionStorage.getItem('libriV3IntroSeen')&&state.step==='event'&&!reduced){
     intro();
@@ -599,4 +872,5 @@ async function init() {
     },2300);
   }else render();
 }
+mountStorePrivacy();
 init().catch(err=>message(err.message));

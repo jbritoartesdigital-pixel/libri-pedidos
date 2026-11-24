@@ -1,3 +1,4 @@
+import {getV3SupplementFinance,getV3RefundFinance,combineV3FinanceSummary} from './v3-finance-report.js';
 import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 import { reconcileV2LegacyPixStatus } from './v2-legacy-payment-reconcile.js';
 
@@ -319,6 +320,12 @@ function numberValue(
   );
 }
 
+// Only finance read paths can treat a proven, refunded V3 receipt as a
+// historical inflow. Never reuse this predicate to authorize production.
+function historicalReceipt(alias='p'){
+ return `(${alias}.status='approved' OR (${alias}.status='refunded' AND ${alias}.payment_type!='refund' AND EXISTS (SELECT 1 FROM v3_cancellation_charges cc WHERE cc.order_id=${alias}.order_id AND cc.charge_key='original:'||${alias}.id AND cc.status='refunded' AND cc.refund_confirmed_at IS NOT NULL)))`;
+}
+
 async function summaryForRange(
   db,
   range,
@@ -333,7 +340,7 @@ async function summaryForRange(
               MIN(p.paid_at) AS sale_at
             FROM v2_payments p
             WHERE
-              p.status = 'approved'
+              ${historicalReceipt('p')}
               AND p.payment_type != 'refund'
               AND p.paid_at IS NOT NULL
             GROUP BY p.order_id
@@ -377,6 +384,7 @@ async function summaryForRange(
               SUM(
                 CASE
                   WHEN pr.payment_method = 'pix'
+                    AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
                     AND o.status NOT IN (
                       'cancelled',
                       'finalized'
@@ -499,9 +507,9 @@ async function summaryForRange(
               ),
               0
             ) AS net_cash_before_refunds_cents
-          FROM v2_payments
+          FROM v2_payments p
           WHERE
-            status = 'approved'
+            ${historicalReceipt('p')}
             AND paid_at >= ?
             AND paid_at < ?
         `,
@@ -553,6 +561,7 @@ async function summaryForRange(
             ON pr.order_id = o.id
           WHERE
             pr.payment_method = 'pix'
+            AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
             AND o.status NOT IN (
               'cancelled',
               'finalized'
@@ -680,116 +689,62 @@ async function summaryForRange(
   };
 }
 
-async function salesByProduct(
-  db,
-  range,
-) {
-  const result =
-    await db
-      .prepare(
-        `
-          WITH first_sales AS (
-            SELECT
-              p.order_id,
-              MIN(p.paid_at) AS sale_at
-            FROM v2_payments p
-            WHERE
-              p.status = 'approved'
-              AND p.payment_type != 'refund'
-              AND p.paid_at IS NOT NULL
-            GROUP BY p.order_id
-          ),
-          main_product AS (
-            SELECT
-              oi.order_id,
-
-              COALESCE(
-                json_extract(
-                  oi.configuration_json,
-                  '$.productCode'
-                ),
-                oi.item_code
-              ) AS product_code
-            FROM v2_order_items oi
-            WHERE oi.item_type = 'product'
-          )
-          SELECT
-            mp.product_code,
-
-            COALESCE(
-              product.name,
-              mp.product_code
-            ) AS product_name,
-
-            COUNT(*) AS sales_count,
-
-            COALESCE(
-              SUM(pr.total_cents),
-              0
-            ) AS sales_cents,
-
-            COALESCE(
-              SUM((
-                SELECT COALESCE(SUM(
-                  CASE WHEN pay.payment_type = 'refund' THEN -pay.amount_cents
-                    WHEN pay.net_cents IS NOT NULL THEN pay.net_cents
-                    ELSE pay.amount_cents - COALESCE(pay.fee_cents, 0)
-                  END
-                ), 0)
-                FROM v2_payments pay
-                WHERE pay.order_id = s.order_id
-                  AND pay.status = 'approved'
-              )), 0
-            ) AS received_net_cents
-          FROM first_sales s
-          INNER JOIN v2_order_pricing pr
-            ON pr.order_id = s.order_id
-          INNER JOIN main_product mp
-            ON mp.order_id = s.order_id
-          LEFT JOIN v2_products product
-            ON product.code = mp.product_code
-          WHERE
-            s.sale_at >= ?
-            AND s.sale_at < ?
-          GROUP BY
-            mp.product_code,
-            product.name
-          ORDER BY
-            sales_cents DESC,
-            sales_count DESC,
-            product_name
-        `,
-      )
-      .bind(
-        range.start,
-        range.endExclusive,
-      )
-      .all();
-
-  return (
-    result.results
-    || []
-  )
-    .map(
-      (row) => ({
-        productCode:
-          row.product_code,
-
-        productName:
-          row.product_name,
-
-        salesCount:
-          numberValue(
-            row.sales_count,
-          ),
-
-        salesCents:
-          numberValue(
-            row.sales_cents,
-          ),
-        receivedNetCents: numberValue(row.received_net_cents),
-      }),
-    );
+// Largest remainder: allocate integer cents once, with deterministic tie-breaks.
+export function allocateFinanceCents(amount,weights){
+ const cents=Math.abs(Math.trunc(Number(amount)||0)),sign=amount<0?-1:1;
+ if(!weights.length)return [];
+ const safe=weights.map(x=>Math.max(0,Math.trunc(Number(x)||0)));
+ if(!safe.some(Boolean))safe[0]=1;
+ const total=safe.reduce((n,x)=>n+x,0);
+ const parts=safe.map((w,i)=>({i,n:Math.floor(cents*w/total),r:(cents*w)%total}));
+ const left=cents-parts.reduce((n,p)=>n+p.n,0);
+ for(const p of [...parts].sort((a,b)=>b.r-a.r||a.i-b.i).slice(0,left))p.n++;
+ return parts.map(p=>p.n*sign);
+}
+async function salesByProduct(db,range){
+ const rows=(await db.prepare(`
+ WITH first_sales AS (
+  SELECT p.order_id,MIN(p.paid_at) AS sale_at FROM v2_payments p
+  WHERE ${historicalReceipt('p')} AND p.payment_type!='refund' AND p.paid_at IS NOT NULL GROUP BY p.order_id
+ )
+ SELECT s.order_id,pr.total_cents,snap.quote_json,
+  (SELECT json_group_array(json_object('code',x.code,'name',x.name,'weight',x.weight)) FROM
+   (SELECT COALESCE(CASE WHEN json_valid(i.configuration_json) THEN json_extract(i.configuration_json,'$.productCode') END,i.item_code) AS code,
+      i.name_snapshot AS name,i.unit_price_cents*i.quantity AS weight
+    FROM v2_order_items i WHERE i.order_id=s.order_id AND i.item_type='product' ORDER BY i.id) x) AS legacy_products,
+  COALESCE((SELECT SUM(CASE WHEN p.payment_type='refund' THEN -p.amount_cents ELSE p.amount_cents END) FROM v2_payments p WHERE p.order_id=s.order_id AND ${historicalReceipt('p')}),0) AS received_gross,
+  COALESCE((SELECT SUM(CASE WHEN p.payment_type='refund' THEN -p.amount_cents WHEN p.net_cents IS NOT NULL THEN p.net_cents WHEN p.provider!='mercado_pago' THEN p.amount_cents-COALESCE(p.fee_cents,0) ELSE 0 END) FROM v2_payments p WHERE p.order_id=s.order_id AND ${historicalReceipt('p')}),0) AS received_net,
+  (SELECT COUNT(*) FROM v2_payments p WHERE p.order_id=s.order_id AND ${historicalReceipt('p')} AND p.payment_type!='refund' AND p.provider='mercado_pago' AND p.net_cents IS NULL) AS fee_unknown,
+  COALESCE((SELECT SUM(cc.amount_cents) FROM v3_cancellation_charges cc WHERE cc.order_id=s.order_id AND cc.charge_key LIKE 'original:%' AND cc.status='refunded' AND cc.refund_confirmed_at IS NOT NULL),0) AS refunded,
+  EXISTS(SELECT 1 FROM v3_cancellation_charges cc WHERE cc.order_id=s.order_id AND cc.charge_key LIKE 'original:%' AND (cc.status IN ('review','refund_requested') OR (cc.status='refunded' AND (cc.provider='mercado_pago' OR cc.original_paid_at IS NULL OR cc.refund_confirmed_at IS NULL)))) AS refund_unknown
+ FROM first_sales s JOIN v2_order_pricing pr ON pr.order_id=s.order_id
+ LEFT JOIN v3_order_checkout_snapshots snap ON snap.order_id=s.order_id
+ WHERE s.sale_at>=? AND s.sale_at<?
+ `).bind(range.start,range.endExclusive).all()).results||[];
+ const products=new Map();
+ for(const row of rows){
+  let lines=[];
+  if(row.quote_json){
+   try{const q=JSON.parse(row.quote_json);lines=(q.items||[]).filter(x=>x.productCode).map(x=>({code:x.productCode,name:x.productName||x.commercialSnapshot?.product?.name||x.productCode,weight:x.totalCents}));}catch{}
+  }else{
+   try{lines=JSON.parse(row.legacy_products||'[]');}catch{}
+  }
+  if(!lines.length)lines=[{code:'unclassified',name:'Produto não identificado',weight:1}];
+  const weights=lines.map(x=>x.weight);
+  const sales=allocateFinanceCents(row.total_cents,weights),gross=allocateFinanceCents(row.received_gross-row.refunded,weights),net=allocateFinanceCents(row.received_net-row.refunded,weights);
+  const counts=new Set();
+  for(let i=0;i<lines.length;i++){
+   const l=lines[i],key=l.code||'unclassified';
+   const p=products.get(key)||{productCode:key,productName:l.name||key,salesCount:0,salesCents:0,receivedGrossCents:0,receivedNetCents:0,netComplete:true};
+   if(!counts.has(key)){p.salesCount++;counts.add(key);}
+   p.salesCents+=sales[i];p.receivedGrossCents+=gross[i];p.receivedNetCents+=net[i];p.netComplete=p.netComplete&&!row.fee_unknown&&!row.refund_unknown;
+   products.set(key,p);
+  }
+ }
+ // Resolve canonical catalogue labels, not the scene-specific legacy label.
+ const catalog=(await db.prepare('SELECT code,name FROM v2_products').all()).results||[];
+ const names=Object.fromEntries(catalog.map(x=>[x.code,x.name]));
+ return [...products.values()].map(p=>({...p,productName:names[p.productCode]||p.productName,receivedNetCents:p.netComplete?p.receivedNetCents:null})).sort((a,b)=>b.salesCents-a.salesCents||b.salesCount-a.salesCount||a.productName.localeCompare(b.productName));
 }
 
 async function salesByPaymentMethod(
@@ -806,7 +761,7 @@ async function salesByPaymentMethod(
               MIN(p.paid_at) AS sale_at
             FROM v2_payments p
             WHERE
-              p.status = 'approved'
+              ${historicalReceipt('p')}
               AND p.payment_type != 'refund'
               AND p.paid_at IS NOT NULL
             GROUP BY p.order_id
@@ -906,9 +861,9 @@ async function cashByProvider(
               ),
               0
             ) AS fee_cents
-          FROM v2_payments
+          FROM v2_payments p
           WHERE
-            status = 'approved'
+            ${historicalReceipt('p')}
             AND paid_at >= ?
             AND paid_at < ?
           GROUP BY
@@ -1021,7 +976,7 @@ async function movementsForRange(
   } = {},
 ) {
   const clauses = [
-    `p.status = 'approved'`,
+    historicalReceipt('p'),
     'p.paid_at >= ?',
     'p.paid_at < ?',
   ];
@@ -1125,6 +1080,8 @@ async function movementsForRange(
         `
           SELECT
             p.id,
+            p.status AS receipt_status,
+            EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=p.order_id) AS cancellation_record,
             p.provider,
             p.provider_order_id,
             p.provider_payment_id,
@@ -1302,7 +1259,7 @@ async function movementsForRange(
           editable:
             row.provider
             === 'direct_pix'
-            && !isRefund,
+            && !isRefund && row.receipt_status==='approved' && !row.cancellation_record,
         };
       },
     );
@@ -1383,6 +1340,7 @@ async function openReceivables(
             ON pr.order_id = o.id
           WHERE
             pr.payment_method = 'pix'
+            AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
             AND o.status NOT IN (
               'cancelled',
               'finalized'
@@ -2326,6 +2284,7 @@ export async function getV2FinanceDashboard(
       ),
     ]);
 
+  const [supplemental,refunds]=await Promise.all([getV3SupplementFinance(db,range),getV3RefundFinance(db,range)]);
   let productionCosts = {};
   try {
     const row = await db.prepare(
@@ -2343,7 +2302,7 @@ export async function getV2FinanceDashboard(
       averageTicketCents: row.salesCount ? Math.round(row.salesCents / row.salesCount) : 0,
       unitCostCents,
       totalCostCents,
-      estimatedMarginCents: totalCostCents === null ? null : row.receivedNetCents - totalCostCents,
+      estimatedMarginCents: totalCostCents === null || !row.netComplete ? null : row.receivedNetCents - totalCostCents,
       costConfigured,
     };
   });
@@ -2351,7 +2310,9 @@ export async function getV2FinanceDashboard(
   return {
     range,
 
-    summary,
+    summary:combineV3FinanceSummary(summary,supplemental,refunds),
+    supplemental,
+    refunds,
 
     breakdown: {
       byProduct: enrichedProducts,
@@ -2379,10 +2340,6 @@ export async function getV2FinanceSummary(
   return {
     range,
 
-    summary:
-      await summaryForRange(
-        db,
-        range,
-      ),
+    summary:combineV3FinanceSummary(await summaryForRange(db,range),await getV3SupplementFinance(db,range),await getV3RefundFinance(db,range)),
   };
 }

@@ -1,3 +1,4 @@
+import {listV3Production} from '../lib/v3-order-overview.js';
 import {
   fail,
   json,
@@ -117,6 +118,7 @@ export async function handleAdminV2CoreApi(
   ) {
     return json({
       ok: true,
+      v3Orders:await listV3Production(env.DB,Object.fromEntries(url.searchParams)),
       orders:
         await listV2Production(
           env.DB,

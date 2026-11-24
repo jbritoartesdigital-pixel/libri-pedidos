@@ -1,15 +1,15 @@
 // Prévia visual isolada: NÃO usa banco, sorteio, carrinho ou Mercado Pago.
 // Compartilhada entre Loja > Black Libri e simulador do pedido.
-const colors=['#ad6b83','#d7a2b1','#bc8196','#e0b3be',
- '#b2768e','#c88ea3','#9e637c','#e9c2c9',
- '#b98295','#d6a6b4','#bc849f','#dbb0bc'];
+const colors=['#c88ca4','#edc5d0','#c9a46e','#a56786',
+ '#e2bbaf','#d398ae','#af7591','#eed6b3',
+ '#bb7996','#e7b6c7','#c8a575','#d4a4b7'];
 
 async function ensureStyle() {
   if(document.getElementById('blackLibriClientStyles')) return;
   const link=document.createElement('link');
   link.id='blackLibriClientStyles';
   link.rel='stylesheet';
-  link.href='/css/client-v2-black-libri.css?v=20261111-rose-v2-2';
+  link.href='/css/client-v2-black-libri.css?v=20261124-atelier-gift-v3';
   await new Promise(resolve=>{
     link.onload=resolve;link.onerror=resolve;
     document.head.appendChild(link);
@@ -41,16 +41,16 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
         aria-labelledby="blackLibriDemoTitle">
         <button class="black-libri-close" type="button" aria-label="Fechar prévia">×</button>
         <div class="black-libri-brand-slot"><span class="black-libri-brand">LIBRI CONVITES</span></div>
-        <span class="black-libri-kicker">EDIÇÃO ESPECIAL · PRÉVIA SEM COBRANÇA</span>
+        <span class="black-libri-kicker">UMA SURPRESA DA LIBRI</span>
         <div class="black-libri-campaign">BLACK <em>LIBRI</em></div>
-        <p class="black-libri-strapline">Seu convite merece uma surpresa!</p>
+        
         <h2 class="black-libri-heading" id="blackLibriDemoTitle">
           ${chosen<0?'Escolha seu balão!':'VOCÊ GANHOU!'}
         </h2>
         <p class="black-libri-subtitle">
           ${chosen<0
-            ? 'Esta é uma demonstração: você pode testar sem gastar nenhum prêmio.'
-            : 'Veja como sua cliente receberá a surpresa.'}
+            ? 'Escolha um balão e toque para revelar seu presente.'
+            : 'Surpresa para você!'}
         </p>
         ${chosen<0?'<div class="black-libri-grid">'+colors.map((color,index)=>`
           <button type="button" class="black-libri-balloon"
@@ -61,7 +61,7 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
             aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>`:`
           <div class="black-libri-result" role="status">
             <span aria-hidden="true">🎁</span>
-            <strong>Save the Date estático</strong>
+            <small>SEU PRESENTE</small><strong>Save the Date estático</strong>
             <p>Prêmio ilustrativo. Nesta demonstração, nada é reservado, cobrado ou salvo.</p>
           </div>
           <button type="button" class="black-libri-button" data-demo-continue>
@@ -101,7 +101,7 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
             }
           }catch{/* Som opcional */ }
         }
-        window.setTimeout(paint,500);
+        window.setTimeout(()=>{paint();overlay.querySelector('[data-demo-continue]')?.focus();},650);
       });
     });
     overlay.querySelector('[data-demo-continue]')?.addEventListener('click',

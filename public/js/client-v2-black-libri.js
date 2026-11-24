@@ -1,16 +1,14 @@
 import {api,esc,money,showToast} from './client-v2-core.js';
 
-const palette=[
- '#ad6b83','#d7a2b1','#bc8196','#e0b3be',
- '#b2768e','#c88ea3','#9e637c','#e9c2c9',
- '#b98295','#d6a6b4','#bc849f','#dbb0bc'
-];
+const palette=['#c88ca4','#edc5d0','#c9a46e','#a56786',
+ '#e2bbaf','#d398ae','#af7591','#eed6b3',
+ '#bb7996','#e7b6c7','#c8a575','#d4a4b7'];
 
 async function ensureStyles(){
  if(document.getElementById('blackLibriClientStyles'))return;
  const link=document.createElement('link');
  link.id='blackLibriClientStyles';link.rel='stylesheet';
- link.href='/css/client-v2-black-libri.css?v=20261111-rose-v2-2';
+ link.href='/css/client-v2-black-libri.css?v=20261124-atelier-gift-v3';
  await new Promise(resolve=>{link.onload=resolve;link.onerror=resolve;document.head.appendChild(link);});
 }
 
@@ -50,16 +48,17 @@ function prizePanel(claim,quote,{readonly=false,paid=false}={}){
   readonly||redeemed||claim.status==='attached'?'Seu benefício já está vinculado ao pedido.':
   'Seu presente fica reservado por 24 horas.';
  return `<div class="black-libri-result" role="status">
-  <span aria-hidden="true">${expired?'⌛':'✦'}</span>
-  <small>VOCÊ GANHOU!</small>
+  <span aria-hidden="true">${expired?'⌛':'🎁'}</span>
+  <small>${expired?'RESERVA ENCERRADA':'SEU PRESENTE'}</small>
   <strong>${esc(claim.label||'Presente especial')}</strong>
   ${claim.description?`<p>${esc(claim.description)}</p>`:''}
   <p>${note}</p>
   ${!expired&&discount>0?`<p class="black-libri-saved">
-    ${claim.convertedToDiscount?'Crédito aplicado: ':'Desconto aplicado: '}${money(discount)}
+    ${(quote?.blackLibri?.convertedToDiscount||claim.convertedToDiscount)?'Crédito aplicado: ':'Desconto aplicado: '}${money(discount)}
   </p>`:''}
+  ${quote?.blackLibri?.applied===false&&!expired?'<p>O benefício já disponível é igual ou maior, ou este serviço já está incluído. Mantivemos a melhor condição.</p>':''}
   ${quote?.totalCents!=null&&!expired&&!redeemed?`
-    <p class="black-libri-saved">Total do convite: ${money(quote.totalCents)}</p>
+    <p class="black-libri-saved">Total do pedido: ${money(quote.totalCents)}</p>
   `:''}
  </div>`;
 }
@@ -87,9 +86,9 @@ function brandHeader(title,subtitle){
  return `<div class="black-libri-brand-slot" aria-label="Libri Convites">
      <span class="black-libri-brand">LIBRI CONVITES</span>
    </div>
-   <span class="black-libri-kicker">EDIÇÃO ESPECIAL · SURPRESA PREMIADA</span>
+   <span class="black-libri-kicker">UMA SURPRESA DA LIBRI</span>
    <div class="black-libri-campaign" aria-label="Black Libri">BLACK <em>LIBRI</em></div>
-   <p class="black-libri-strapline">Seu convite merece uma surpresa!</p>
+   
    <h2 class="black-libri-heading" id="blackLibriTitle">${isPrize?'VOCÊ GANHOU!':title}</h2>
    <p class="black-libri-subtitle">${subtitle}</p>`;
 }
@@ -117,12 +116,12 @@ export async function openBlackLibriPrizeDetails(prize,{paid=false}={}){
 
 // Mantém o callback de pagamento e a seleção criptográfica no servidor.
 export async function openBlackLibriBeforePayment({
- customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null
+ customer,clientRequestId,selection,event,onContinue,manualToken=null,manualSelection=null,v3Cart=null
 }){
- const endpoint=manualToken
+ const endpoint=v3Cart?'/api/v3/cart/black':manualToken
   ?'/api/v2/manual-order/'+encodeURIComponent(manualToken)+'/black-libri'
   :'/api/v2/black-libri';
- const payload=manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
+ const payload=v3Cart?{...v3Cart,customer,clientRequestId}:manualToken?{...(manualSelection||{})}:{customer,clientRequestId,selection,event};
  let response=await api(endpoint+'/status',{method:'POST',body:JSON.stringify(payload)});
  if(!response.enabled){onContinue();return;}
  await ensureStyles();
@@ -132,7 +131,7 @@ export async function openBlackLibriBeforePayment({
  const preview=async()=>{
   if(!claim||claim.status==='expired'||claim.status==='redeemed')return;
   try{
-   const result=await api(endpoint+'/preview',{method:'POST',body:JSON.stringify(payload)});
+   const result=await api(endpoint+'/preview',{method:'POST',body:JSON.stringify(v3Cart?{...payload,blackLibriClaimId:claim.id}:payload)});
    quote=result.quote||null;
   }catch(error){quote=null;showToast(error.message||'Não foi possível conferir o valor do presente.');}
  };
@@ -143,7 +142,7 @@ export async function openBlackLibriBeforePayment({
    <button class="black-libri-balloon" type="button"
     style="--balloon:${color};--slot:${i}" data-black-slot="${i}"
     aria-label="Estourar balão ${i+1}" ${selected||active?'disabled':''}>
-    <span class="bulb"></span><span class="knot"></span><span class="string"></span>
+    <span class="bulb" aria-hidden="true"></span><span class="knot" aria-hidden="true"></span><span class="string" aria-hidden="true"></span>
    </button>`).join('');
   const label=claim?.status==='expired'?'Continuar sem brinde':
    ['attached','redeemed'].includes(claim?.status)?'Continuar para meu pedido':'Resgatar meu presente';
@@ -151,9 +150,9 @@ export async function openBlackLibriBeforePayment({
    aria-labelledby="blackLibriTitle">
    <button class="black-libri-close" type="button" aria-label="Fechar">×</button>
    ${brandHeader(selected?'Seu presente especial!':'Escolha seu balão!',
-    selected?'Surpresa para você! O seu presente já está registrado.':'Toque em um dos 12 balões e descubra seu presente.')}
+    selected?'Surpresa para você! Seu presente está reservado.':'Escolha um balão e toque para revelar seu presente.')}
    ${selected?prizePanel(claim,quote):`
-    <div class="black-libri-grid" aria-label="Doze balões rosé">${balloons}</div>
+    <div class="black-libri-grid" aria-label="Escolha um dos 12 balões de presente">${balloons}</div>
     <button type="button" class="black-libri-sound" data-black-sound
        aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>
    `}
@@ -164,7 +163,7 @@ export async function openBlackLibriBeforePayment({
      ?'Seu prêmio anterior não será substituído.':
      'Continue para vincular o benefício ao pedido e ao pagamento.'}</p>
    `:''}
-   <p class="black-libri-foot">Seu presente fica registrado · Reserva de 24 horas ♡</p>
+   <p class="black-libri-foot">${selected?'':'Seu presente fica reservado por 24 horas.'}</p>
   </section>`;
   overlay.querySelector('.black-libri-close')?.addEventListener('click',close);
   overlay.querySelector('[data-black-sound]')?.addEventListener('click',e=>{
@@ -180,13 +179,13 @@ export async function openBlackLibriBeforePayment({
    try{
     const [reveal]=await Promise.all([
      api(endpoint+'/reveal',{method:'POST',body:JSON.stringify({...payload,balloon:chosen})}),
-     new Promise(resolve=>window.setTimeout(resolve,500))
+     new Promise(resolve=>window.setTimeout(resolve,650))
     ]);
     claim=reveal.claim;
     await preview();
    }catch(error){
     chosen=-1;showToast(error.message||'Não conseguimos revelar seu presente.');
-   }finally{active=false;paint();}
+   }finally{active=false;paint();(overlay.querySelector('[data-black-continue]')||overlay.querySelector('.black-libri-close'))?.focus();}
   }));
   overlay.querySelector('[data-black-continue]')?.addEventListener('click',()=>{
    if(active||(claim?.status==='reserved'&&!quote))return;

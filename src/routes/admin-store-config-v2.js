@@ -1,3 +1,4 @@
+import {listV3CombinedCampaigns,createV3CombinedCampaign,pauseV3CombinedCampaign} from '../lib/v3-promotions.js';
 import {
   fail,
   json,
@@ -61,6 +62,11 @@ export async function handleAdminStoreConfigV2Api(
     });
   }
 
+  if(path==='/api/admin/v2/store-config/v3/campaigns'){
+    try{if(method==='GET')return json({ok:true,campaigns:await listV3CombinedCampaigns(env.DB)});if(method==='POST')return json({ok:true,campaigns:await createV3CombinedCampaign(env.DB,await readJson(request))},201);return fail('Método não permitido.',405);}catch(e){return routeError(e);}
+  }
+  const campaign=path.match(/^\/api\/admin\/v2\/store-config\/v3\/campaigns\/(\d+)\/pause$/);
+  if(campaign&&method==='POST'){try{return json({ok:true,campaigns:await pauseV3CombinedCampaign(env.DB,Number(campaign[1]))});}catch(e){return routeError(e);}}
   const productMatch =
     path.match(
       /^\/api\/admin\/v2\/store-config\/products\/([a-z0-9_-]+)$/i,

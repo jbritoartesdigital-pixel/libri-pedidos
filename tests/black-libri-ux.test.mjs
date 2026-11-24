@@ -32,13 +32,13 @@ test('admin oferece prévia independente sem cobrar nem reservar',()=>{
 });
 test('client HTML aponta para o novo módulo em cache separado',()=>{
   const entry=readFileSync(new URL('../public/js/client-v2.js',import.meta.url),'utf8');
-  assert.match(shell,/\/js\/client-v2\.js\?v=20261111-skip-offer-ios-1/);
-  assert.match(entry,/client-v2-store\.js\?v=20261111-skip-offer-ios-1/);
-  assert.match(store,/black-libri-demo\.js\?v=20261111-rose-v2-2/);
+  assert.match(shell,/\/js\/client-v2\.js\?v=20261124-atelier-gift-v3/);
+  assert.match(entry,/client-v2-store\.js\?v=20261124-atelier-gift-v3/);
+  assert.match(store,/black-libri-demo\.js\?v=20261124-atelier-gift-v3/);
 });
 
 
-test('Rose Edition keeps server reveal, pop sound and stored gift re-opening',()=>{
+test('Atelier gift edition keeps server reveal, pop sound and stored gift re-opening',()=>{
  const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
  const area=readFileSync(new URL('../public/js/client-v2-area.js',import.meta.url),'utf8');
  const server=readFileSync(new URL('../src/lib/v2-customer-area.js',import.meta.url),'utf8');
@@ -56,7 +56,7 @@ test('Rose Edition keeps server reveal, pop sound and stored gift re-opening',()
 });
 
 
-test('Rosé V2 mantém quatro colunas e o sorteio original',()=>{
+test('Atelier gift mantém quatro colunas e o sorteio original',()=>{
  const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
  assert.match(live,/class="black-libri-campaign"/);
@@ -65,4 +65,13 @@ test('Rosé V2 mantém quatro colunas e o sorteio original',()=>{
  assert.match(live,/playBalloonPop\(soundOn\)/);
  assert.match(live,/api\(endpoint\+'\/reveal'/);
  assert.match(live,/onContinue\(claim\)/);
+});
+
+
+test('real and demo share the new visual edition and maintain a single reveal',()=>{
+ const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
+ for(const source of [live,demo]){assert.match(source,/20261124-atelier-gift-v3/);assert.match(source,/UMA SURPRESA DA LIBRI/);assert.match(source,/#c9a46e/);assert.match(source,/650/);}
+ assert.match(css,/prefers-reduced-motion:reduce/);assert.match(css,/libri-reveal/);assert.match(css,/data:image/);
+ assert.match(live,/if\(active\|\|claim\)return/);
 });

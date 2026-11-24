@@ -53,7 +53,7 @@ test('Personagens do tema previstos na composição não são classificados como
 });
 
 test('Ateliê release records one principal illustrated subject and poses by package',async()=>{
-  const db=database();
+  const db=database({beforeApprovedAtelie:true});
   for(const [code,n] of [['essencia',3],['encanto',4],['universo',5]]){
     await updateAtelieDraft(db,code,{
       includedItems:['Marca',n+' poses do mascote'],excludedItems:['Produção física'],

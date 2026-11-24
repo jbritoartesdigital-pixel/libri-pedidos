@@ -8,7 +8,7 @@ permissions:
 jobs:
   validate:
     name: Checar V2 + V3 sem deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -35,3 +35,16 @@ jobs:
           assert db.execute("SELECT count(*) FROM v3_atelie_packages").fetchone()[0]==3
           print('Migrações e catálogo V2 consistentes')
           PY
+      - name: Navegação real Chromium (banco de teste, sem pagamentos)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/libri-browser" --no-save --no-audit --no-fund playwright@1.51.1
+          "$RUNNER_TEMP/libri-browser/node_modules/.bin/playwright" install --with-deps chromium
+          LIBRI_PLAYWRIGHT_MODULE="$RUNNER_TEMP/libri-browser/node_modules/playwright/index.mjs" node tests/browser/v3-store.mjs
+      - name: Capturas de navegador do teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libri-v3-browser
+          path: artifacts/v3-browser/
+          if-no-files-found: ignore
+          retention-days: 7

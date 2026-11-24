@@ -39,6 +39,28 @@ export async function setAtelieSaleStatus(db,code,enabled=false) {
     const error=new Error('Antes de liberar este pacote: '+problems.join('; ')+'.');
     error.details={missing:problems};throw error;
   }
+  await db.batch(atelieActivationStatements(db,row));
+  return {code,enabled:true,productCode:product,variantCode:variant};
+}
+export async function verifyAtelieQuoteSelection(db,selection,productCode) {
+  if(!/^atelie_(essencia|encanto|universo)$/.test(productCode||''))return false;
+  const packageCode=productCode.slice(7);
+  const packageRow=await db.prepare('SELECT * FROM v3_atelie_packages WHERE code=?').bind(packageCode).first();
+  if(!packageRow || Number(packageRow.sale_enabled)!==1 || verifyAtelieRelease(packageRow).length)
+    throw new Error('Este pacote do Ateliê não está liberado para compra.');
+  if(selection.variantCode && selection.variantCode!==variantCode(packageCode))
+    throw new Error('Configuração do pacote não encontrada.');
+  if(Array.isArray(selection.addonCodes)&&selection.addonCodes.length)
+    throw new Error('Os adicionais do Ateliê precisam estar configurados e aprovados. Escolha apenas o pacote.');
+  if(selection.comboCode||selection.couponCode)
+    throw new Error('Promoções e cupons de convites não se aplicam automaticamente ao Ateliê.');
+  return true;
+}
+
+// Reutilizado na liberação integral, sem alterar preços ou termos do pacote.
+export function atelieActivationStatements(db,row){
+  const code=row.code,product=atelieProductCode(code),variant=variantCode(code);
+  if(verifyAtelieRelease(row).length)throw Error('Catálogo Ateliê inválido: '+code);
   const snap={
     revisionLimit:row.revision_limit,
     scopeReference:row.scope_reference,
@@ -57,7 +79,7 @@ export async function setAtelieSaleStatus(db,code,enabled=false) {
   const productConfig=JSON.stringify({category:'atelie',packageCode:code});
   const variantConfig=JSON.stringify({atelie:snap});
   // db.batch é transacional no D1. O principal e a variante devem ficar coerentes.
-  await db.batch([
+  return [
     db.prepare(
       "INSERT INTO v2_products(code,slug,name,short_description,pricing_mode,active,sort_order,config_json) "+
       "VALUES(?,?,?,?,'fixed',1,?,?) "+
@@ -73,20 +95,5 @@ export async function setAtelieSaleStatus(db,code,enabled=false) {
     db.prepare("UPDATE v3_atelie_packages SET sale_enabled=1,activated_at=datetime('now') "+
       "WHERE code=? AND scope_approved=1 AND price_cents=? AND points_units=? AND revision_limit=?")
       .bind(code,row.price_cents,row.points_units,row.revision_limit)
-  ]);
-  return {code,enabled:true,productCode:product,variantCode:variant};
-}
-export async function verifyAtelieQuoteSelection(db,selection,productCode) {
-  if(!/^atelie_(essencia|encanto|universo)$/.test(productCode||''))return false;
-  const packageCode=productCode.slice(7);
-  const packageRow=await db.prepare('SELECT * FROM v3_atelie_packages WHERE code=?').bind(packageCode).first();
-  if(!packageRow || Number(packageRow.sale_enabled)!==1 || verifyAtelieRelease(packageRow).length)
-    throw new Error('Este pacote do Ateliê não está liberado para compra.');
-  if(selection.variantCode && selection.variantCode!==variantCode(packageCode))
-    throw new Error('Configuração do pacote não encontrada.');
-  if(Array.isArray(selection.addonCodes)&&selection.addonCodes.length)
-    throw new Error('Os adicionais do Ateliê precisam estar configurados e aprovados. Escolha apenas o pacote.');
-  if(selection.comboCode||selection.couponCode)
-    throw new Error('Promoções e cupons de convites não se aplicam automaticamente ao Ateliê.');
-  return true;
+  ];
 }

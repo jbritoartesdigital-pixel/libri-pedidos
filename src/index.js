@@ -75,6 +75,7 @@ import {
 } from './routes/customer-contracts-v2.js';
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
+import {guardV3LegacyAdmin,guardV3LegacyCustomer} from './lib/v3-legacy-guard.js';
 import {handleCustomerBriefingV3Api,handleAdminBriefingV3Api} from './routes/briefing-v3.js';
 import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
 import { handlePublicCartV3Api } from './routes/public-cart-v3.js';
@@ -325,6 +326,10 @@ async function handleAdminV2Api(
     return authFailure;
   }
 
+  const v3=await handleAdminBriefingV3Api(request,env,url);
+  if(v3)return v3;
+  const guarded=await guardV3LegacyAdmin(request,env.DB,url);
+  if(guarded)return guarded;
   const handlers = [
     handleAdminV2CoreApi,
     handleAdminAgendaV2Api,
@@ -334,7 +339,6 @@ async function handleAdminV2Api(
     handleAdminOrdersV2Api,
     handleAdminBriefingV2Api,
     handleAdminStoreConfigV2Api,
-    handleAdminBriefingV3Api,
     handleAdminAtelieV3Api,
     handleAdminContractsV2Api,
     handleAdminBlackLibriV2Api,
@@ -373,8 +377,11 @@ async function handleCustomerV2Api(
    * As rotas mais específicas vêm antes do núcleo público
    * para evitar que a área privada fique acoplada ao checkout.
    */
+  const v3=await handleCustomerBriefingV3Api(request,env,url);
+  if(v3)return v3;
+  const guarded=await guardV3LegacyCustomer(request,env.DB,url);
+  if(guarded)return guarded;
   const handlers = [
-    handleCustomerBriefingV3Api,
     handleCustomerAreaV2Api,
     handleCustomerPreviewV2Api,
     handleCustomerContractsV2Api,

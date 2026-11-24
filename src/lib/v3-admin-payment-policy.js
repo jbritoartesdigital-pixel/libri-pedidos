@@ -14,6 +14,9 @@ export async function originalV3FinancialState(db,orderId){
  LEFT JOIN v3_admin_payment_policies a ON a.order_id=o.id WHERE o.id=?`).bind(orderId).first();
  if(!row)return null;
  const payments=(await db.prepare('SELECT id,provider,payment_type,status,amount_cents,method,paid_at,provider_order_id FROM v2_payments WHERE order_id=? ORDER BY id').bind(orderId).all()).results||[];
+ return evaluateV3FinancialState(row,payments);
+}
+export function evaluateV3FinancialState(row,payments){
  const approved=payments.filter(p=>p.status==='approved'&&p.payment_type!=='refund');
  const refunds=payments.filter(p=>p.status==='approved'&&p.payment_type==='refund');
  const initial=approved.filter(p=>p.provider==='mercado_pago'&&p.amount_cents===row.deposit_cents&&p.method===row.payment_method&&p.payment_type!=='balance');

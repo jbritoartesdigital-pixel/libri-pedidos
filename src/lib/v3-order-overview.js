@@ -1,4 +1,4 @@
-import {originalV3FinancialState} from './v3-admin-payment-policy.js';
+import {evaluateV3FinancialState} from './v3-admin-payment-policy.js';
 // Operational read model. Never mutate the parent payment/briefing state
 // just because one service has reached a different production stage.
 export const V3_SERVICE_LABELS=Object.freeze({pending:'Aguardando briefing ou conferência',ready:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue',cancelled:'Cancelado'});
@@ -26,8 +26,10 @@ export async function listV3Production(db,{status='',q='',when='',service='',art
  if(service&&!family)return [];
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const weekDate=new Date(today+'T12:00:00Z');weekDate.setUTCDate(weekDate.getUTCDate()+6);
- const clauses=["NOT EXISTS(SELECT 1 FROM v3_paid_cancellations x WHERE x.order_id=o.id)","o.archived_at IS NULL","o.status NOT IN ('cancelled','configuring','awaiting_payment')","o.briefing_status!='locked'","((p.deposit_percent=100 AND p.balance_cents=0) OR (p.deposit_percent=50 AND p.payment_method='pix' AND EXISTS(SELECT 1 FROM v3_admin_payment_policies a WHERE a.order_id=o.id AND a.deposit_percent=50)))",
- "EXISTS(SELECT 1 FROM v2_payments pay WHERE pay.order_id=o.id AND pay.provider='mercado_pago' AND pay.status='approved' AND pay.payment_type!='refund' AND pay.amount_cents=p.deposit_cents AND pay.method=p.payment_method)"];
+ const clauses=["NOT EXISTS(SELECT 1 FROM v3_paid_cancellations x WHERE x.order_id=o.id)","o.archived_at IS NULL","o.status NOT IN ('cancelled','configuring','awaiting_payment')","o.briefing_status!='locked'","((p.deposit_percent=100 AND p.deposit_cents=p.total_cents AND p.balance_cents=0) OR (p.deposit_percent=50 AND p.deposit_cents=(p.total_cents+1)/2 AND p.balance_cents=p.total_cents-p.deposit_cents AND p.payment_method='pix' AND EXISTS(SELECT 1 FROM v3_admin_payment_policies a WHERE a.order_id=o.id AND a.deposit_percent=50)))",
+ "(SELECT COUNT(*) FROM v2_payments pay WHERE pay.order_id=o.id AND pay.provider='mercado_pago' AND pay.status='approved' AND pay.payment_type NOT IN ('refund','balance') AND pay.amount_cents=p.deposit_cents AND pay.method=p.payment_method)=1",
+ "NOT EXISTS(SELECT 1 FROM v2_payments pay WHERE pay.order_id=o.id AND (pay.status IN ('refunded','pending') OR (pay.status='approved' AND NOT ((pay.provider='mercado_pago' AND pay.payment_type NOT IN ('refund','balance') AND pay.amount_cents=p.deposit_cents AND pay.method=p.payment_method) OR (p.deposit_percent=50 AND pay.provider='direct_pix' AND pay.payment_type='balance' AND pay.method='pix')))))",
+ "(SELECT COALESCE(SUM(amount_cents),0) FROM v2_payments pay WHERE pay.order_id=o.id AND pay.status='approved')<=p.total_cents"];
  const params=[];
  if(when==='today'){clauses.push('o.event_date=?');params.push(today);}
  if(when==='week'){clauses.push('o.event_date BETWEEN ? AND ?');params.push(today,weekDate.toISOString().slice(0,10));}
@@ -63,13 +65,17 @@ export async function getV3OrderHistory(db,orderId){
 
 export async function getV3CentralQueues(db,production){
  const newOrders=production.filter(o=>o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+(s.productionStatus==='ready'?'Iniciar produção':s.briefingStatus==='completed'?(s.reviewedAt?'Confirmar agenda':'Conferir briefing'):'Aguardar briefing')).join(' · ')}));
- const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.status,o.briefing_status,c.name AS customer_name,p.payment_method,p.total_cents,p.deposit_cents,
+ const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.status,o.briefing_status,c.name AS customer_name,p.payment_method,p.total_cents,p.deposit_cents,p.balance_cents,p.deposit_percent,
+  (SELECT deposit_percent FROM v3_admin_payment_policies WHERE order_id=o.id) AS authorized_percent,
+  (SELECT COUNT(*) FROM v2_checkout_holds h WHERE h.order_id=o.id AND h.status IN ('active','converted')) AS live_holds,
   (SELECT status FROM v3_paid_cancellations WHERE order_id=o.id) AS cancellation,
   EXISTS(SELECT 1 FROM v3_order_revisions WHERE order_id=o.id AND status='offered') AS revision,
   EXISTS(SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=o.id AND a.status='review') AS supplement_review
  FROM v3_order_checkout_snapshots snap JOIN v2_orders o ON o.id=snap.order_id JOIN v2_customers c ON c.id=o.customer_id JOIN v2_order_pricing p ON p.order_id=o.id
  WHERE o.archived_at IS NULL AND o.status!='cancelled'
  ORDER BY o.created_at DESC,o.id DESC`).all()).results||[];
+ const payments=(await db.prepare(`SELECT p.order_id,p.id,p.provider,p.payment_type,p.status,p.amount_cents,p.method,p.paid_at,p.provider_order_id FROM v2_payments p JOIN v3_order_checkout_snapshots snap ON snap.order_id=p.order_id JOIN v2_orders o ON o.id=p.order_id WHERE o.archived_at IS NULL AND o.status!='cancelled' ORDER BY p.order_id,p.id`).all()).results||[];
+ const byOrder=new Map();for(const p of payments){if(!byOrder.has(p.order_id))byOrder.set(p.order_id,[]);byOrder.get(p.order_id).push(p);}
  const exceptions=[],pendingPayments=[];
  for(const r of rows){
   const base={code:r.order_code,honoreeName:r.honoree_display_name,customerName:r.customer_name,paymentMethod:r.payment_method,totalCents:r.total_cents,modular:true};
@@ -77,9 +83,9 @@ export async function getV3CentralQueues(db,production){
   if(r.cancellation){if(r.cancellation==='review')add('cancellation_review','Cancelamento em revisão','Conferir cobranças e devoluções');continue;}
   if(r.status==='awaiting_urgency_decision'){add('awaiting_urgency_decision','Encaixe urgente','Conferir capacidade e decidir antes de cobrar');continue;}
   if(r.revision){add('awaiting_payment','Proposta revisada','Aguardando aceite da cliente');continue;}
-  const f=await originalV3FinancialState(db,r.id);
-  if(!f)continue;
+  const f=evaluateV3FinancialState(r,byOrder.get(r.id)||[]);
   if(!f.valid&&f.payments.some(p=>['approved','refunded'].includes(p.status))){add('capacity_review','Financeiro em conferência','Verificar pagamentos antes de liberar produção');continue;}
+  if(!f.depositConfirmed&&(f.payments.some(p=>p.provider!=='mercado_pago'||!p.provider_order_id)||r.live_holds&&!f.payments.length)){add('capacity_review','Tentativa em conferência','Verificar a tentativa anterior antes de gerar nova cobrança');continue;}
   if(!f.depositConfirmed){pendingPayments.push({...base,status:'awaiting_payment',dueCents:r.deposit_cents,statusLabel:r.status==='configuring'?'Pedido ainda não enviado ao pagamento':'Aguardando pagamento'});continue;}
   if(r.status==='capacity_review'||r.briefing_status==='locked')add('capacity_review','Agenda em revisão','Confirmar capacidade e liberação do briefing');
   if(r.supplement_review)add('capacity_review','Complemento em conferência','Verificar cobrança complementar');

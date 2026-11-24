@@ -37,3 +37,6 @@ CI V53 45425771151 falhou em contrato de carregamento da página legada (somente
 
 ## V55 — urgência
 Implementada solicitação de encaixe de convite avulso no checkout V3: valor projetado pelo servidor, taxa oficial padrão 30%, aceite explícito, pedido bloqueado sem cobrança, decisão administrativa, recuperação após aprovação, reserva revalidada e agenda de produção preservada. Ateliê e retrospectiva continuam sem atalhos de urgência (prazo mínimo protegido); combinação sem capacidade regular exige revisão humana, não gera cobrança. Novo teste cobre tentativa sem cobrança, idempotência, aprovação e criação simulada de uma única cobrança. CI e UI ainda precisam validação; sem publicação.
+
+## V56 — consistência operacional
+Corrigidos filtros cruzados por mesma linha, exclusão de históricos financeiros inválidos das filas de produção, redução de consultas D1 na Central, data de aplicação dos complementos e distinção de devolução a conciliar. Recuperação de encaixe rejeitado verificada sem cobranças e sem reservas antes de permitir nova tentativa. Novas regressões cobrem solicitação de urgência indevida/rejeitada. CI final e navegador pendentes.

@@ -74,6 +74,8 @@ export async function searchV2AdminOrders(db, filters = {}) {
         CASE WHEN o.status='cancelled' THEN 'cancelled'
           WHEN EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id AND cc.status='review') THEN 'cancellation_review'
           WHEN NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots snap WHERE snap.order_id=o.id) THEN o.status
+          WHEN o.status='awaiting_urgency_decision' THEN 'awaiting_urgency_decision'
+          WHEN o.status='urgency_approved' THEN 'urgency_approved'
           WHEN o.briefing_status='locked' OR o.status IN ('configuring','awaiting_payment') THEN 'awaiting_payment'
           WHEN o.status='capacity_review' THEN 'capacity_review'
           WHEN EXISTS(SELECT 1 FROM lines l WHERE l.order_id=o.id AND l.production_status='adjustments') THEN 'adjustments'
@@ -89,12 +91,15 @@ export async function searchV2AdminOrders(db, filters = {}) {
     SELECT o.*, (SELECT json_group_array(json_object('family',l.family,'productCode',l.product_code,'variantCode',l.variant_code,'sceneCount',l.scene_count,'productName',l.product_name,'productionStatus',l.production_status,'briefingStatus',l.briefing_status,'reviewedAt',l.reviewed_at,'deliveryStart',l.delivery_start,'deliveryEnd',l.delivery_end)) FROM lines l WHERE l.order_id=o.id) AS services_json
     FROM orders o
     WHERE (?='' OR o.order_code LIKE ? OR o.honoree_display_name LIKE ? OR o.customer_name LIKE ? OR o.whatsapp LIKE ?)
-      AND (?='' OR o.status=? OR (o.modular=1 AND o.cancellation IS NULL AND o.status NOT IN ('cancelled','awaiting_payment') AND EXISTS(SELECT 1 FROM lines l WHERE l.order_id=o.id AND l.production_status=CASE ? WHEN 'briefing_pending' THEN 'pending' WHEN 'ready_for_production' THEN 'ready' ELSE ? END)))
-      AND EXISTS(SELECT 1 FROM lines l WHERE l.order_id=o.id AND (?='' OR l.family=?) AND (?='' OR l.product_code=? OR l.variant_code=?) AND (?=0 OR l.scene_count=?))
+      AND EXISTS(SELECT 1 FROM lines l WHERE l.order_id=o.id AND (?='' OR l.family=?) AND (?='' OR l.product_code=? OR l.variant_code=?) AND (?=0 OR l.scene_count=?)
+        AND (?='' OR ((o.modular=0 OR ? NOT IN ('briefing_pending','ready_for_production','in_production','waiting_customer','adjustments','approved','finalized')) AND o.status=?)
+          OR (o.modular=1 AND o.cancellation IS NULL AND o.status NOT IN ('cancelled','awaiting_payment','awaiting_urgency_decision','urgency_approved','capacity_review')
+          AND l.production_status=CASE ? WHEN 'briefing_pending' THEN 'pending' WHEN 'ready_for_production' THEN 'ready' WHEN 'finalized' THEN 'delivered' ELSE ? END
+          AND (?!='finalized' OR ?!='' OR ?!='' OR ?>0 OR o.status='finalized'))))
       AND (?='' OR o.event_date=?) AND (?='' OR o.event_date>=?) AND (?='' OR o.event_date<=?)
       AND (?='all' OR (?='yes' AND o.archived_at IS NOT NULL) OR (?='no' AND o.archived_at IS NULL))
     ORDER BY CASE WHEN ?=1 THEN o.event_date END ASC,o.created_at DESC,o.id DESC LIMIT 100
-  `).bind(query,pattern,pattern,pattern,pattern,status,status,status,status,family,family,product,product,product,sceneCount,sceneCount,eventDate,eventDate,from,from,to,to,archived,archived,archived,eventDate||from||to?1:0).all();
+  `).bind(query,pattern,pattern,pattern,pattern,family,family,product,product,product,sceneCount,sceneCount,status,status,status,status,status,status,family,product,sceneCount,eventDate,eventDate,from,from,to,to,archived,archived,archived,eventDate||from||to?1:0).all();
   return (result.results||[]).map(row=>{
     const services=JSON.parse(row.services_json||'[]').map(s=>({...s,statusLabel:V3_SERVICE_LABELS[s.productionStatus]||null}));
     const first=services.find(s=>s.family==='convite')||services[0]||{};

@@ -330,3 +330,14 @@ test('V3 urgent invitation requires admin approval, never charges before approva
  assert.equal(DB.sqlite.prepare('SELECT total_cents FROM v2_order_pricing').get().total_cents,preview.urgencyQuote.totalCents);
  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
 });
+
+test('urgency rejects non-invitation and normal windows; rejected request permits a new order without any charge',async t=>{
+ const {DB,body,env,call}=await setup();const mp=providerMock(t);
+ const input={...body,items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],deliveryWindow:undefined,urgencyRequested:true};
+ const regular=await previewV3CartDelivery(DB,input);assert.equal(regular.urgencyQuote,null);assert.notEqual((await call({...input,expectedTotalCents:regular.quote.totalCents})).status,200);
+ assert.notEqual((await call({...body,eventDate:day(2),deliveryWindow:undefined,urgencyRequested:true})).status,200);
+ input.eventDate=day(2);input.expectedTotalCents=(await previewV3CartDelivery(DB,input)).urgencyQuote.totalCents;
+ const r=await call(input);assert.equal(r.status,200,await r.clone().text());const order=await r.json();
+ await decideV2Urgency(DB,order.orderCode,{decision:'reject',note:'Sem capacidade'});
+ const recovery=await (await call({publicToken:order.publicToken},env,'recover')).json();assert.equal(recovery.state,'urgency_rejected');assert.equal(recovery.canStartNew,true);assert.equal(mp.posts,0);
+});

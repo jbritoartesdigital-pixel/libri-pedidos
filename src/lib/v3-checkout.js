@@ -85,6 +85,7 @@ export async function recoverV3Checkout(request,env,body,{renew=false}={}){
   const base={found:true,orderCode:row.order_code,customerAreaPath:'/meu-pedido/'+row.public_token,totalCents:row.total_cents,paymentMethod:row.payment_method,depositPercent:row.deposit_percent,amountDueNowCents:row.deposit_cents,balanceCents:row.balance_cents,
     deliveryWindow:{start:row.delivery_start,end:row.delivery_end}};
   if(row.status==='awaiting_urgency_decision'){if(renew)fail('Aguarde a aprovação do encaixe.','v3_urgency_pending',409);return {...base,state:'urgency_pending',canRenew:false};}
+  if(row.status==='cancelled'&&await env.DB.prepare("SELECT 1 FROM v2_urgency_requests WHERE order_id=? AND status='rejected'").bind(row.id).first()&&!await env.DB.prepare('SELECT 1 FROM v2_payments WHERE order_id=?').bind(row.id).first()&&!await env.DB.prepare('SELECT 1 FROM v2_checkout_holds WHERE order_id=?').bind(row.id).first()){if(renew)fail('O encaixe não foi aprovado.','v3_urgency_rejected',409);return {...base,state:'urgency_rejected',canRenew:false,canStartNew:true};}
   const status=await reconcileV3Payment(env,row.id);
   if(status.revisionRequired)return {...base,state:'review',revisionRequired:true,canRenew:false};
   if(status.alreadyPaid)return {...base,balanceCents:status.balanceCents??row.balance_cents,state:'paid',capacityReview:!!status.capacityReview,canRenew:false};

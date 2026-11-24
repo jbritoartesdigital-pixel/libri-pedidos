@@ -30,6 +30,7 @@ export async function mountV3PaymentRecovery(root,{request,onMissing,credential}
   if(!body.clientRequestId&&!body.publicToken)return false;
   let state=null,busy=false,error='';
   const descriptions={
+    urgency_rejected:'O encaixe não foi aprovado e nenhuma cobrança foi criada. Você pode ajustar suas escolhas e iniciar outro pedido.',
     urgency_pending:'Solicitação de encaixe enviada. Aguarde a decisão da Libri; ainda não existe cobrança.',
     paid:'Pagamento confirmado. Acesse seu pedido para acompanhar os serviços.',
     pending:'A cobrança anterior está disponível. Continue pelo mesmo link, sem gerar outra cobrança.',
@@ -47,6 +48,7 @@ export async function mountV3PaymentRecovery(root,{request,onMissing,credential}
       '<div class="v3-action-row">'+
       (provider?'<button type="button" class="v3-btn v3-btn-primary" data-v3-recovery="continue" '+(busy?'disabled':'')+'>Continuar pagamento</button>':'')+
       (state?.canRenew?'<button type="button" class="v3-btn v3-btn-primary" data-v3-recovery="renew" '+(busy?'disabled':'')+'>Gerar cobrança</button>':'')+
+      (state?.canStartNew&&key?'<button type="button" class="v3-btn v3-btn-primary" data-v3-recovery="new" '+(busy?'disabled':'')+'>Rever meu pedido</button>':'')+
       (validPath?'<button type="button" class="v3-btn v3-btn-secondary" data-v3-recovery="order" '+(busy?'disabled':'')+'>Acessar meu pedido</button>':'')+
       '<button type="button" class="v3-btn v3-btn-text" data-v3-recovery="refresh" '+(busy?'disabled':'')+'>'+(busy?'Consultando…':'Atualizar situação')+'</button></div></section>';
     root.setAttribute('aria-busy',String(busy));
@@ -69,6 +71,7 @@ export async function mountV3PaymentRecovery(root,{request,onMissing,credential}
   function detach(){root.removeEventListener('click',click);}
   function click(event){
     const action=event.target.closest('[data-v3-recovery]')?.dataset.v3Recovery;if(!action||busy)return;
+    if(action==='new'&&state?.canStartNew&&key){clearV3CheckoutKey(key);detach();onMissing?.();return;}
     if(action==='refresh')check();
     if(action==='renew'&&state?.canRenew)check(true);
     if(action==='continue'&&state?.state==='pending'){

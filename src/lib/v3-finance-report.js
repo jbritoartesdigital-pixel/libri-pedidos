@@ -9,14 +9,13 @@ export async function getV3SupplementFinance(db,range){
  FROM v3_supplement_payments p JOIN v3_service_supplements a ON a.id=p.supplement_id JOIN v3_order_services s ON s.id=a.service_id
  WHERE p.paid_at IS NOT NULL AND p.status IN ('approved','review','refunded') ORDER BY p.paid_at,p.id`).all()).results||[];
  const inRange=d=>!!d&&String(d)>=range.start&&String(d)<range.endExclusive;
- const by=new Map();for(const p of payments){if(!by.has(p.supplement_id))by.set(p.supplement_id,[]);by.get(p.supplement_id).push(p);}
- const paid=rows.filter(r=>r.applied_at&&inRange(by.get(r.id)?.[0]?.paid_at));
+ const paid=rows.filter(r=>inRange(r.applied_at));
  const cash=payments.filter(p=>inRange(p.paid_at));
  const pending=rows.filter(r=>['accepted','payment_pending'].includes(r.status)&&!r.cancellation_status);
  const review=rows.filter(r=>r.status==='review'&&r.cancellation_status!=='completed');
  const sum=xs=>xs.reduce((n,r)=>n+Number(r.total_cents),0);
  const rowMap=new Map(rows.map(r=>[r.id,r]));
- const view=(r,p=null)=>({id:r.id,chargeId:p?.id||null,orderCode:r.order_code,customerName:r.customer_name,family:JSON.parse(r.offer_json).targetFamily||r.family,kind:JSON.parse(r.offer_json).kind||'extras',status:p?(p.refund_status==='refunded'||p.status==='refunded'?'refunded':!r.applied_at||p.status==='review'?'review':'paid'):r.status,amountCents:r.total_cents,paymentMethod:r.payment_method,paidAt:p?.paid_at||null});
+ const view=(r,p=null)=>({id:r.id,chargeId:p?.id||null,orderCode:r.order_code,customerName:r.customer_name,family:JSON.parse(r.offer_json).targetFamily||r.family,kind:JSON.parse(r.offer_json).kind||'extras',status:p?(p.refund_status==='refunded'?'refunded':!r.applied_at||p.status==='review'||p.status==='refunded'?'review':'paid'):r.status,amountCents:r.total_cents,paymentMethod:r.payment_method,paidAt:p?.paid_at||null});
  return {paidCount:paid.length,paidCents:sum(paid),cashCount:cash.length,cashCents:sum(cash),unreconciledRefundCount:payments.filter(p=>p.status==='refunded'&&p.refund_status!=='refunded').length,pendingCents:sum(pending),pendingPeriodCents:sum(pending.filter(r=>inRange(r.decided_at))),reviewCents:sum(review),movements:cash.map(p=>view(rowMap.get(p.supplement_id),p)),receivables:pending.map(r=>view(r)),review:review.map(r=>view(r))};
 }
 // Refunds are separate cash outflows; use the confirmation timestamp, not the

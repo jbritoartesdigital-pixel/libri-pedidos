@@ -76,3 +76,5 @@ V86: aprovadas todas as 25 propostas. Fundação de navegação e identidade imp
 V87: Kanban de consulta por serviço, filtros rápidos da produção e histórico/ação na ficha V3 implementados; aguardam CI, inspeção e validação sem alteração de estado. Pendem financeiro visual, agenda lista/mapa, funil e auditoria geral.
 
 V88: financeiro visual com dados existentes, calendário semanal/lista/mapa de capacidade, funil visual observacional. Implementação em branch; validação de comportamento e revisão visual ainda pendentes. Sem mudanças de dados, preço ou regra.
+
+V89: personalização opcional da conversa pública aprovada pela usuária, sem alterar sequência/catálogo. Nome só em memória e prefill editável; flag sem nome por sessão. Testar fluxo, não confundir exemplo de duração com alteração de produto.

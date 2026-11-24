@@ -14,10 +14,10 @@ function windowEndingOn(end){
 import {pendingV3CheckoutKey,keepV3CheckoutKey,clearV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(18)),b=>b.toString(16).padStart(2,'0')).join('');
 const labels={identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
-export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',request,onBack}){
+export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate='',preferredName='',request,onBack}){
   trackStoreStage('dados');
   const cart={items:JSON.parse(JSON.stringify(items)),eventType,eventSubtype};
-  let form={name:'',whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
+  let form={name:String(preferredName||'').trim().slice(0,60),whatsapp:'',email:'',honoreeName:'',eventDate,paymentMethod:'pix',couponCode:'',deliveryWindow:null};
   let quote=null,terms=null,enabled=false,options=[],accepted=new Set(),busy=false,error='',attempt=null,attemptKey=null;
   let requestedEnd='',deliveryFeedback='';
   let blackChecked=false,blackClaim=null,checkingBlack=false,urgentQuote=null,urgentAccepted=false,couponOpen=false,blackConflict=false;

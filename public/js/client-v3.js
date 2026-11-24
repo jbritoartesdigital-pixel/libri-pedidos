@@ -1,7 +1,7 @@
 import {trackStoreStage} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=79';
+import { mountV3Checkout } from './client-v3-checkout.js?v=89';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -10,6 +10,13 @@ const basketBody=document.getElementById('v3-basket-body');
 const basketTotal=document.getElementById('v3-basket-total');
 if(basket)basket.open=false;
 const STORE_KEY = 'libriV3Draft';
+// Personalização de conversa apenas em memória. Nunca incluir nome no rascunho,
+// nos eventos de análise ou nas solicitações de catálogo/agenda.
+let conversationName='',welcomeAnswered=false;
+try{welcomeAnswered=sessionStorage.getItem('libriV3WelcomeSeen')==='1';}catch{}
+function personalTitle(text){return conversationName?clean(conversationName)+', '+text:text.charAt(0).toUpperCase()+text.slice(1);}
+function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;try{sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
+function shouldAskName(){return !welcomeAnswered&&state.step==='event'&&!state.eventType&&!state.cartItems.length;}
 const EVENTS = [
  ['birthday','Aniversário','Infantil ou adulto'],['15_years','15 anos','Uma celebração especial'],['wedding','Casamento','A história do casal'],['celebration','Chá ou celebração','Bebê, revelação, chá de panela e outros'],['other','Outra celebração','Formatura, bodas e mais']
 ];
@@ -234,8 +241,14 @@ function intro() {
     '<div class="v3-intro-inner"><span>UM ATELIÊ DE CELEBRAÇÕES</span><img src="/images/libri-wordmark.png" alt="Libri Convites" width="440" height="128"><i aria-hidden="true"></i><h1>Cada celebração tem sua própria história.</h1><span>FEITO COM ENCANTO. FEITO PARA VOCÊ.</span></div>' +
     '<button class="v3-btn v3-btn-text" type="button" data-action="skip-intro">Pular abertura</button></section>';
 }
+function renderWelcome(){
+  hideBasket();
+  root.innerHTML='<section class="v3-panel v3-panel--guided v3-stage-welcome"><div class="v3-stage-heading"><span class="v3-welcome-kicker">VAMOS COMEÇAR?</span><h1 class="v3-title">Como posso chamar você?</h1><p class="v3-text">Quero conhecer um pouquinho de você antes de criarmos algo especial.</p></div><div class="v3-stage-body"><form id="v3-welcome-form" class="v3-welcome-form"><label for="v3-welcome-name">Seu primeiro nome (opcional)</label><input id="v3-welcome-name" class="v3-at-input" maxlength="60" type="text" autocomplete="given-name" placeholder="Como você prefere ser chamada ou chamado?"><button type="submit" class="v3-btn v3-btn-primary">Continuar</button><button type="button" class="v3-btn v3-btn-text" data-action="welcome-skip">Prefiro não informar</button></form></div></section>';
+  root.setAttribute('aria-busy','false');
+  root.querySelector('#v3-welcome-form').addEventListener('submit',event=>{event.preventDefault();finishWelcome(root.querySelector('#v3-welcome-name').value);});
+}
 function renderEvent() {
-  panel('Qual é o seu evento?', '',
+  panel(personalTitle('qual é o seu evento?'), '',
     '<div class="v3-grid">' + EVENTS.map(item => choice(item[0],item[1],item[2],state.eventType,'event')).join('') + '</div>',
     '',0);
 }
@@ -297,7 +310,7 @@ function renderAtelieDetail() {
     '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
 }
 function renderIntent() {
-  panel('Como imagina seu convite?',
+  panel(personalTitle('como imagina seu convite?'),
     '',
     '<div class="v3-choices-stack">' +
       choice('story','Convite cinematográfico','Uma história animada criada para sua festa, com personagens e cenários personalizados.',state.intent,'intent') +
@@ -396,7 +409,7 @@ function offerHtml() {
     '<button class="v3-btn v3-btn-primary" type="button" data-action="accept-offer">Quero adicionar</button></div></div>';
 }
 function renderReview() {
-  panel('Seu convite', 'Confira antes de adicionar ao carrinho.',
+  panel('Seu convite', conversationName?clean(conversationName)+', confira se está tudo do jeitinho que você imaginou.':'Confira antes de adicionar ao carrinho.',
     linesHtml() + priceBar(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
@@ -501,6 +514,7 @@ async function openCart(){
   renderCart();window.scrollTo({top:0,behavior:'auto'});
 }
 function render() {
+  if(shouldAskName()){renderWelcome();return;}
   trackStoreStage(({event:'evento',creation:'servico',unready:'servico',atelie:'modelo','atelie-detail':'configuracao','atelie-checkout':'dados',intent:'modelo',format:'modelo',scenes:'configuracao',extras:'adicionais',review:'revisao',cart:'carrinho'})[state.step]||'evento');
   save();
   switch(state.step) {
@@ -660,6 +674,7 @@ async function handleStoreClick(event) {
   storeActionBusy=true;
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
+    if(action==='welcome-skip'){finishWelcome();return;}
     if(action==='retry'){await init();return;}
     if(action==='event'){if(!EVENTS.some(x=>x[0]===value))return;if(state.eventType===value){await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.eventSubtype='';state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}
     if(action==='event-subtype'){if(!(EVENT_SUBTYPES[state.eventType]||[]).some(x=>x[0]===value))return;state.eventSubtype=value;await go('creation');return;}
@@ -776,7 +791,7 @@ async function handleStoreClick(event) {
       if(!cartQuote||cartError||!state.cartItems.length)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
-      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,request,onBack:()=>openCart()});
+      hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventSubtype:state.eventSubtype||'',eventDate:cartEventDate,preferredName:conversationName,request,onBack:()=>openCart()});
       return;
     }
     if(action==='back'){

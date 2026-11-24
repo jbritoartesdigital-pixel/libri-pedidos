@@ -77,7 +77,7 @@ test('Ateliê no Mercado Pago exige termos próprios e mantém os fluxos Pix exi
     event:{honoreeName:'Ana',date:day(65),type:'birthday',subtype:''},
     selection:{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',
       addonCodes:[],paymentMethod:'pix'},
-    deliveryWindow:{start:day(10),end:day(12)},
+    deliveryWindow:{start:day(20),end:day(22)},
     termsAccepted:true,termsVersion:version,
     atelieTermsVersion:pkg.updated_at
   });

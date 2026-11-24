@@ -51,6 +51,11 @@ export function renderV3Uploads(m,busy=false){
  (m.editable?'<button type="button" class="btn secondary" data-v3-delete="'+esc(x.id)+'" '+(busy?'disabled':'')+'>Remover</button>':'')+'</div>').join('')+'</section>';
 }
 export async function startV3CustomerArea(root,{token,initial,api}){
+  if(initial.locked&&initial.revision?.kind==='manual'&&!initial.cancellation&&['configuring','awaiting_payment'].includes(initial.orderStatus)){
+    const {startV3ManualCheckout}=await import('./client-v3-manual-checkout.js?v=109');
+    return startV3ManualCheckout(root,{token,api});
+  }
+  root.classList.add('libri-v3-area');document.body.classList.add('libri-v3-area-body');
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
   let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null,upsellSeen=false,acceptedUpsell=null;
   function current(){return area.modules.find(m=>m.module===active);}
@@ -141,12 +146,12 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const url=payment?.state==='pending'?safePayment(payment.checkoutUrl):null;
     return '<section class="card"><h3>Pagamento</h3><p>'+esc(payment?.state==='urgency_pending'?'Solicitação em análise.':payment?.state==='paid'?'Pagamento confirmado. Atualize o pedido para conferir a liberação.':payment?.state==='expired'?'Cobrança anterior encerrada.':payment?.state==='review'?'Entre em contato com a Libri para revisar a cobrança.':'Confira a situação do pagamento para liberar os dados contratados.')+'</p>'+
       (url?'<a href="'+esc(url)+'" class="btn primary">Continuar pagamento</a>':'')+
-      (payment?.canRenew?'<button type="button" class="btn primary" data-v3-action="renew">Gerar nova cobrança</button>':'')+
+      (payment?.canRenew?'<button type="button" class="btn primary" data-v3-action="renew">'+(payment?.state==='not_started'?'Pagar pedido':'Gerar nova cobrança')+'</button>':'')+
       '<button type="button" class="btn secondary" data-v3-action="payment">Verificar pagamento</button></section>';
   }
   function render(){
     const m=current();
-    root.innerHTML=(area.capacityReview?'<section class="card"><h3>Pagamento recebido, agenda em conferência</h3><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+'<section class="card"><h1>Meu pedido · '+esc(area.orderCode)+'</h1><p>Escolha o serviço que deseja acompanhar.</p><div class="grid two"><button type="button" class="btn secondary" data-v3-tab="summary">Resumo</button>'+
+    root.innerHTML=(area.capacityReview?'<section class="card"><h3>Pagamento recebido, agenda em conferência</h3><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+'<section class="card"><h1>Meu pedido · '+esc(area.orderCode)+'</h1><p>'+(area.locked?'Acompanhe seu pagamento.':'Escolha o serviço que deseja acompanhar.')+'</p><div class="grid two"><button type="button" class="btn secondary" data-v3-tab="summary">Resumo</button>'+
       (!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</div></section>'+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. Salve as respostas para atualizar as próximas perguntas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+

@@ -63,7 +63,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
-  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode},{includeSnapshots:true,requireSale:true});
+  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode},{includeSnapshots:true,requireSale:true,customerId});
   if(quote.totalCents!==body.expectedTotalCents)fail('O total mudou. Revise o carrinho antes de confirmar.','order_total_changed');
   const terms=await db.prepare('SELECT version,body,content_hash FROM v2_terms_versions WHERE active=1 ORDER BY published_at DESC LIMIT 1').first();
   if(!terms||terms.version!==accepted.version)fail('As condições foram atualizadas. Confira novamente.','terms_changed');

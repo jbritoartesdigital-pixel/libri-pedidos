@@ -84,9 +84,14 @@ if (!Array.isArray(state.dismissed)) state.dismissed = [];
 state.cartItems = Array.isArray(state.cartItems) ? state.cartItems.filter(x=>x&&typeof x.productCode==='string'&&typeof x.variantCode==='string'&&Array.isArray(x.addonCodes)).slice(0,3) : [];
 const cartFamily = code => code.startsWith('atelie_')?'identity':/^retrospectiva(?:_|$)/.test(code)?'retrospective':'invitation';
 function putCart(item) {
+  const old=state.cartItems.find(x=>cartFamily(x.productCode)===cartFamily(item.productCode));
+  if(old){
+    if(old.productCode!==item.productCode||old.variantCode!==item.variantCode){if(!window.confirm('Substituir o serviço anterior por este? Confira novamente os itens e adicionais do novo pacote.'))return false;}
+    else if(old.extras?.length&&!item.extras)item={...item,extras:old.extras};
+  }
   cartQuote=null;
   state.cartItems = state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(item.productCode)).concat(item);
-  save();
+  save();return true;
 }
 function cartButton(){return state.cartItems.length?'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="open-cart">Ver meu carrinho ('+state.cartItems.length+')</button></div>':'';}
 const getProduct = code => (catalog?.products || []).find(item => item.code === code);
@@ -178,7 +183,8 @@ function choiceIcon(kind){const icons={mail:'<rect x="3" y="5" width="18" height
 function stepBar(index) {
   return '<div class="v3-progress" aria-label="Etapa '+(index+1)+' de 5"><div class="v3-progress-label"><span>'+stepNames[index]+'</span><span>'+(index+1)+' de 5</span></div><div class="v3-steps" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<span class="'+(i<=index?'is-active':'')+'"></span>').join('')+'</div></div>';
 }
-function hideBasket(){if(basket)basket.hidden=true;}
+let basketRequestKey='',basketRequestQuote=null,basketRequestSeq=0;
+function hideBasket(){if(basket)basket.hidden=true;basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
 function renderBasket(){
  if(!basket||!basketBody||!basketTotal)return;
  if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
@@ -193,8 +199,16 @@ function renderBasket(){
  (item?'<div class="v3-basket-draft"><small>Pacote em seleção</small><strong>'+clean(item.name)+'</strong>'+(item.purchaseAvailable?'<b>'+money(item.priceCents)+'</b>':'')+'</div>':'')+
  (!rows&&!staged&&!item?'<p class="v3-mini">Suas escolhas aparecem aqui, conforme você monta a comemoração.</p>':'')+
  (rows?'<button type="button" class="v3-btn v3-btn-secondary" id="v3-basket-open">Ver carrinho ('+state.cartItems.length+')</button><p class="v3-mini">O valor conjunto e os descontos são confirmados no carrinho.</p>':'');
- basketTotal.textContent=live&&!rows?money(live.totalCents):item?.purchaseAvailable&&!rows?money(item.priceCents):rows?state.cartItems.length+' serviço(s)':'Em construção';
- basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy)openCart().catch(e=>message(e.message));});
+ basketTotal.textContent='Em construção';
+ const pending=live?{productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:live.combo?.code||''}:item?.purchaseAvailable?{productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}:null;
+ const old=pending?state.cartItems.find(x=>cartFamily(x.productCode)===cartFamily(pending.productCode)):null;
+ if(old&&old.productCode===pending.productCode&&old.variantCode===pending.variantCode&&old.extras?.length)pending.extras=old.extras;
+ const combined=pending?state.cartItems.filter(x=>cartFamily(x.productCode)!==cartFamily(pending.productCode)).concat(pending):[...state.cartItems];
+ const key=JSON.stringify([state.eventType,combined]);
+ const applyTotal=q=>{if(basket.hidden||key!==basketRequestKey)return;basketTotal.textContent=money(q.totalCents);const el=basketBody.querySelector('#v3-basket-verified');if(el)el.textContent=(pending?'Total estimado com a seleção atual':'Total do carrinho')+' no Pix'+(q.combinedDiscountPercent?' · desconto combinado de '+q.combinedDiscountPercent+'%':'');};
+ if(combined.length){basketBody.insertAdjacentHTML('beforeend','<p class="v3-basket-verified" id="v3-basket-verified">Conferindo total no catálogo…</p>');basketTotal.textContent='Conferindo…';if(key===basketRequestKey&&basketRequestQuote)applyTotal(basketRequestQuote);else{basketRequestKey=key;basketRequestQuote=null;const seq=++basketRequestSeq;request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:combined}).then(data=>{if(seq!==basketRequestSeq||key!==basketRequestKey)return;basketRequestQuote=data.quote;applyTotal(data.quote);}).catch(()=>{if(seq!==basketRequestSeq||key!==basketRequestKey)return;basketTotal.textContent='A conferir';const el=basketBody.querySelector('#v3-basket-verified');if(el)el.textContent='Confira a combinação no carrinho.';});}}
+ else{basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
+ basketBody.querySelector('#v3-basket-open')?.addEventListener('click',()=>{if(!guidedBusy&&!storeActionBusy)openCart().catch(e=>message(e.message));});
 }
 function panel(title, subtitle, content, buttons, index=0) {
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
@@ -480,7 +494,7 @@ function renderCart() {
     return '<article class="v3-cart-item"><div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
       (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
       (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
-      '<button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
+      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
   }).join('');
   const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
@@ -637,31 +651,33 @@ async function go(target) {
   render();
   window.scrollTo({top:0,behavior:'auto'});
 }
+let storeActionBusy=false;
 async function handleStoreClick(event) {
   const button=event.target.closest('[data-action]');
-  if (!button) return;
+  if (!button||storeActionBusy) return;
   const action=button.dataset.action, value=button.dataset.value;
+  storeActionBusy=true;
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
+    if(action==='event'){if(state.eventType===value){render();return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='retro-buy'){
       const item=retrosPackages.find(p=>p.code===value);
       if(!item?.previewAvailable)return message('Pacote indisponível.');
-      putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]});await openCart();return;
+      if(putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
     }
     if(action==='atelie-buy'){
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
       if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
-      putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]});
-      await openCart();return;
+      if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
     }
     if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
     if(action==='product'){
       const product=getProduct(value);if(!product)return;
+      if(value===state.productCode&&state.variantCode){render();return;}
       state.productCode=value;
       state.variantCode=product.pricingMode==='scene_count'?'':product.variants[0]?.code||'';
       state.addonCodes=[];state.addonQuestion=0;
@@ -704,9 +720,8 @@ async function handleStoreClick(event) {
       state.offerFinished=true;offer=null;await go('review');return;
     }
     if(action==='add-invitation'){
-      if(!currentVariant()||!quote)return message('Confira a configuração do convite.');
-      putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''});
-      await openCart();return;
+      if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
+      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))await openCart();return;
     }
     if(action==='open-cart'){await openCart();return;}
     if(action==='cart-delivery'){
@@ -721,7 +736,16 @@ async function handleStoreClick(event) {
       finally{if(revision===cartRevision){cartDeliveryBusy=false;if(state.step==='cart')renderCart();}}
       return;
     }
-    if(action==='cart-more'){await go('creation');return;}
+    if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}
+    if(action==='cart-edit'){
+      const item=state.cartItems[Number(value)];if(!item)return;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
+      const family=cartFamily(item.productCode);state.creation=family;
+      if(family==='invitation'){state.productCode=item.productCode;state.variantCode=item.variantCode;state.intent=SCENE_PRODUCTS.has(item.productCode)?'story':'simple';state.addonCodes=[...item.addonCodes];state.addonQuestion=0;state.offerFinished=true;state.dismissed=[];await go('review');}
+      else if(family==='identity'){state.ateliePackage=item.productCode.replace(/^atelie_/,'');await go('atelie-detail');}
+      else await go('unready');
+      return;
+    }
     if(action==='remove-cart'){
       const i=Number(value);
       if(Number.isInteger(i)&&i>=0&&i<state.cartItems.length)state.cartItems.splice(i,1);
@@ -750,7 +774,7 @@ async function handleStoreClick(event) {
       renderExtraQuestion();return;
     }
     if(action==='cart-unified-checkout'||action==='cart-single-checkout'){
-      if(!cartQuote||cartError||!state.cartItems.length)return;
+      if(!cartQuote||cartError||!state.cartItems.length||cartDeliveryBusy)return;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
       hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventDate:cartEventDate,request,onBack:()=>openCart()});
@@ -777,7 +801,7 @@ async function handleStoreClick(event) {
       if(state.step==='scenes'&&!state.variantCode)return message('Escolha quantas cenas quer no vídeo.');
       await go(next[state.step]||'event');
     }
-  }catch(err){message(err.message || 'Não foi possível continuar.');}
+  }catch(err){message(err.message || 'Não foi possível continuar.');}finally{storeActionBusy=false;}
 }
 root.addEventListener('click',handleStoreClick);
 modalRoot.addEventListener('click',event=>{

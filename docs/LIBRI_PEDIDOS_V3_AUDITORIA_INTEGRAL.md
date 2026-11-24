@@ -1,0 +1,27 @@
+# Auditoria de entrega integral da Libri Pedidos V3
+Atualização 24/11/2026. PR #143, branch de refatoração, produção intocada.
+Fontes: plano original Libri_Pedidos_V3_Plano_de_Reformulacao.md (23/11), protótipo apenas estrutural, correções recuperadas das conversas Reformular App De Pedidos / Refatoração do Libri Pedidos / Branch, TXT mestre e código do PR. A recuperação de conversas não é uma transcrição completa; detalhes estéticos não verificáveis não são considerados aprovados.
+
+| Decisão | Evidência no código | Situação de entrega |
+|---|---|---|
+| Um app, três famílias, um pedido/pagamento | v3-cart-quote.js, v3-order-records.js, v3-checkout.js, checkout público comum | Corrigido desvio avulso V2/Ateliê; verificar novo CI e teste real |
+| Compra por evento e intenção | client-v3.js | Implementado; ainda verificar todo evento, modelo e navegação |
+| Explicar recursos antes do aceite; adicionais sem checklist | perguntas guiadas convite; opções em pop-up; extraFlow Ateliê/Retro | Corrigido; validar preço, retorno, recusa, upgrade, cancelamento do modal |
+| WhatsApp gratuito diferente de RSVP | confirmação no fluxo interativo; R$ 0,00 e instrução de enviar | Implementado, validar todos formatos |
+| Preço oficial, total contínuo, combinação sem desconto duplicado | quoteV3Cart e renderBasket, preço no Pix | Implementado, validar reedição e múltiplas famílias |
+| Catálogos aprovados, nenhuma simulação no Ateliê, mascotinho opcional | migrations/catalogue, v3-extras-catalog.js, briefing | Implementado, verificar correspondência de todos entregáveis com decisões |
+| 15 dias Ateliê/Retro após pagamento/briefing/materiais; dias úteis de capacidade | v3-production-policy.js, v3-service-agenda.js | Implementado, validar fronteiras e dependência entre famílias |
+| Urgência aprovada de convite +30%, sem reduzir mínimo das demais famílias | V2 possui fluxo de solicitação/aprovação; V3 preview identifica needsUrgencyReview, mas não oferece solicitação integrada | BLOQUEADOR DE PUBLICAÇÃO: implementar aprovação integrada ou solução explicitamente compatível com regra; não substituir silenciosamente por recusa nem gerar cobrança |
+| Checkout com Pix/cartão integral; 50% excepcional no Admin, sem cobrança duplicada | v3-admin-payment-policy.js, v3-order-payment.js, v3-checkout.test.mjs | Backend e testes simulados; testar recuperação, Pix, cartão, edição e capacidade |
+| Black Libri, cupom e desconto combinado 5%/10% | v3-promotions.js, v3-black-libri.js | Implementado com flags desativadas; 8 estimativas de pontos provisórias precisam confirmação, não ativar sem validação |
+| Briefing por serviço, após pagamento, sem repetição | v3-modular-briefing.js, client-v2-area-v3.js, admin-v2-order-v3.js | Backend/UI implementados; validação de formulários, upload e experiência real ainda necessária |
+| Retro materiais WhatsApp, prévia/entrega WhatsApp ou Drive, sem R2 | v3-retro-external-media.js, v3-service-delivery.js, v3-retro-standalone.test.mjs | Testes simulados implementados |
+| Agenda, produção, aprovação, entrega, prazo downloads e histórico | módulos V3 e testes | Implementados, verificar ações reais e isolamento |
+| Central única, busca modelo/cena/data, financeiro, funil e notificações | admin-v2-central.js, v2-admin-search.js, v2-finance.js, v3-finance-report.js | Testes automatizados anteriores verdes; visual e custo de consultas D1 não validados |
+| Complementos, upgrades, novos serviços, revisão de contratação e cancelamento pago | v3-supplement-payment.js, v3-paid-cancellation.js | Testes simulados implementados; conciliação de taxas/reembolsos complementares e datas ainda pendentes |
+| Visual premium sem lavanda, mobile-first, paleta oficial | CSS V3 alinhado com V2; estrutura original com resumo | Não aprovado visualmente; capturas de código real em Chromium, não desenho ilustrativo |
+| Privacidade e proteção | funil sem conteúdo de formulários, rate limit, retenção | Verificar namespace e transparência também no fluxo legado |
+| Publicação integral | PR rascunho, flags desativadas, sem deploy | BLOQUEADA até CI, navegação real, pendências técnicas/comerciais e validação integral |
+
+## Verificação
+CI anterior V49: 45421872762, aprovado. Novo teste de checkout avulso encontrou a condição order_multi_required no servidor; removida no commit 74dc404. CI 45423470153 falhou nesse teste, não considerar válido. O workflow de verificação existente foi estendido com Chromium real, servidor local, catálogo SQLite em memória, nenhuma API de escrita financeira permitida, acesso externo bloqueado, capturas do código real como artefato quando geradas. Nunca publicar por passar apenas testes estáticos.

@@ -72,6 +72,7 @@ try{
  const {context,page}=await pageFor(390,844);
  await invite(page);
  await page.screenshot({path:'artifacts/v3-browser/cart-mobile.png',fullPage:true});
+ await click(page,'cart-edit','0');await page.locator('[data-action="add-invitation"]').waitFor();await click(page,'add-invitation');await page.locator('[data-action="cart-unified-checkout"]').waitFor();
  await checkout(page);
  await page.screenshot({path:'artifacts/v3-browser/checkout-mobile.png',fullPage:true});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
@@ -80,6 +81,8 @@ try{
  await click(p,'event','birthday');await click(p,'next');await click(p,'creation','identity');await click(p,'next');
  await click(p,'atelie-package','essencia');await click(p,'atelie-detail');await click(p,'atelie-buy');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
+ await click(p,'cart-extra-start');await p.locator('#v3-modal [data-action="guided-cart-expand"]').waitFor();await click(p,'guided-cart-expand');await click(p,'guided-cart-plus','atelie_pose');await click(p,'guided-cart-next');
+ await click(p,'guided-cart-skip');await click(p,'guided-cart-skip');p.once('dialog',d=>d.accept());await click(p,'guided-cart-skip');await p.locator('[data-action="cart-unified-checkout"]').waitFor();await p.getByText('1 × Pose extra',{exact:true}).waitFor();
  await p.screenshot({path:'artifacts/v3-browser/atelie-cart-desktop.png',fullPage:true});
  await checkout(p);await desktop.context.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);

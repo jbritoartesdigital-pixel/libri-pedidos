@@ -555,3 +555,19 @@ html[data-v3-theme=dark] .v3-main .v3-total{background:linear-gradient(128deg,#3
 @media(max-height:660px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{gap:7px;padding-top:10px}.v3-panel--guided .v3-stage-heading{padding-bottom:8px}.v3-main .v3-title{font-size:26px}.v3-stage-heading .v3-text{margin-top:4px}.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice{min-height:70px;padding:10px}}
 @media(hover:hover){.v3-panel--guided :is(.v3-choice,.v3-format-card):hover{transform:translateY(-1px)}}
 @media(prefers-reduced-motion:reduce){.v3-panel--guided :is(.v3-choice,.v3-format-card){transition:none;transform:none}}
+
+/* V94: compact choices and a quiet loading spinner; original intro untouched. */
+.v3-main .v3-panel--status:not(.v3-panel--error){background:transparent;box-shadow:none;border:0}
+.v3-panel--status:not(.v3-panel--error) .v3-status-content>:not(.v3-status-line),.v3-cart-transition-copy>:not(.v3-cart-transition-line){position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap}
+.v3-panel--status:not(.v3-panel--error) :is(.v3-status-line,.v3-cart-transition-line),.v3-inline-loading .v3-inline-line{display:block;width:30px;height:30px;border:2px solid #c99b8a40;border-top-color:#b68077;border-radius:50%;background:transparent;animation:v94-spin .8s linear infinite;overflow:visible;box-sizing:border-box}
+.v3-panel--status:not(.v3-panel--error) :is(.v3-status-line,.v3-cart-transition-line)::after,.v3-inline-loading .v3-inline-line::after{display:none}
+@keyframes v94-spin{to{transform:rotate(360deg)}}
+.v3-panel--guided.v3-stage-extras .v3-optional-list{gap:6px}
+.v3-panel--guided.v3-stage-extras .v3-optional-card{min-height:0;padding:9px 12px;gap:4px}
+.v3-panel--guided.v3-stage-extras .v3-choice-copy strong{font-size:14px;letter-spacing:.045em!important}
+.v3-panel--guided.v3-stage-extras .v3-choice-copy small{font-size:12px;line-height:1.25}
+.v3-panel--guided.v3-stage-extras .v3-optional-action{min-height:0;padding:3px 0;font-size:12px}
+.v3-panel--guided .v3-choice-copy strong{font-size:clamp(16px,4vw,21px);text-transform:uppercase;letter-spacing:.04em!important}
+.v3-modal-root .v3-offer-card{animation:v94-offer-nudge .55s ease-out}
+@keyframes v94-offer-nudge{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-3px)}40%,80%{transform:translateX(3px)}}
+@media(prefers-reduced-motion:reduce){.v3-modal-root .v3-offer-card,.v3-panel--status:not(.v3-panel--error) :is(.v3-status-line,.v3-cart-transition-line),.v3-inline-loading .v3-inline-line{animation:none}}

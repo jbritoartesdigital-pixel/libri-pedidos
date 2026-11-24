@@ -185,7 +185,7 @@ function actions(back, nextText, nextAction = 'next') {
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
+    choiceIcon(symbols[value])+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span><span class="v3-choice-check" aria-hidden="true"></span></button>';
 }
 function intro() {
   root.innerHTML = '<section class="v3-panel v3-panel--entrance">' +
@@ -334,7 +334,11 @@ function renderExtras(){
   '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">'+choiceList+choice(group,group==='confirmation'?'Continuar com WhatsApp':'Agora não','Sem adicionar custo',selected?null:group,'guided-skip')+'</div></div>'+priceBar(),
   '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
+let guidedBusy=false;
 async function advanceGuided(group,code){
+ if(guidedBusy)return;
+ guidedBusy=true;
+ try{
  const groups=availableGroups(),index=groups.findIndex(g=>g[0]===group);
  if(index<0)return;
  if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
@@ -344,9 +348,10 @@ async function advanceGuided(group,code){
  else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
  try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
  state.offerFinished=false;
- const next=availableGroups().findIndex(g=>groups.slice(index+1).some(old=>old[0]===g[0]));
+ const next=availableGroups().findIndex(g=>ADDON_GROUPS.findIndex(x=>x[0]===g[0])>ADDON_GROUPS.findIndex(x=>x[0]===group));
  if(next<0){state.addonQuestion=0;await go('review');}
  else{state.addonQuestion=next;render();window.scrollTo({top:0,behavior:'auto'});}
+ }finally{guidedBusy=false;}
 }
 function linesHtml() {
   let all = [
@@ -630,8 +635,8 @@ root.addEventListener('click', async event => {
     }
     if(action==='variant'){state.variantCode=value;state.offerFinished=false;render();return;}
     if(action==='guided-addon'||action==='guided-skip'){button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
-    if(action==='guided-back'){if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){state.addonQuestion=0;await go('review');return;}
+    if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
+    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

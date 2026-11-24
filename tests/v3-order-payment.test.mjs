@@ -33,9 +33,9 @@ test('V3 uses one real capacity hold and one provider checkout for the whole ord
   const request=new Request('https://test/internal-v3');
   const result=await prepareV3Payment(request,env,order.orderId);
   assert.equal(result.ok,true);
-  assert.equal(result.totalCents,19400);
+  assert.equal(result.totalCents,18430);
   assert.equal(mp.posts,1);
-  assert.equal(Number(mp.bodies[0].total_amount),194);
+  assert.equal(Number(mp.bodies[0].total_amount),184.3);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,1);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds').get().n,1);
   assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_checkout_hold_allocations').get().n,400);

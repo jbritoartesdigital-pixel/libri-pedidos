@@ -238,10 +238,18 @@ function actions(back, nextText, nextAction = 'next') {
     (back ? '<button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>' : '<span></span>') +
     (nextAction?'<button class="v3-btn v3-btn-primary" type="button" data-action="' + nextAction + '">' + clean(nextText) + '</button>':'')+'</div>';
 }
+// Deliberate editorial line breaks; keep the accessible full title as text.
+function cardTitleHtml(value,title,action){
+  const lines=action==='intent'?{story:['Convite','cinematográfico'],simple:['Convite','interativo simples']}[value]:
+    action==='creation'?{invitation:['Convite','digital'],identity:['Identidade','visual']}[value]:
+    action==='product'?{cinematic_video:['Cinematográfico','em vídeo'],cinematic_interactive:['Cinematográfico','interativo'],interactive_essential:['Interativo','essencial'],interactive_gif:['Interativo','em movimento'],interactive_animated:['Interativo','com abertura animada']}[value]:null;
+  if(!lines||lines.join(' ').toLocaleLowerCase('pt-BR')!==String(title).toLocaleLowerCase('pt-BR'))return clean(title);
+  return lines.map(line=>'<span class="v106-title-line">'+clean(line)+'</span>').join(' ');
+}
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    (action==='creation'?'<span class="v97-card-overline">'+({invitation:'PARA CONVIDAR',identity:'PARA PERSONALIZAR',retrospective:'PARA EMOCIONAR'}[value]||'')+'</span>':'')+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
+    (action==='creation'?'<span class="v97-card-overline">'+({invitation:'PARA CONVIDAR',identity:'PARA PERSONALIZAR',retrospective:'PARA EMOCIONAR'}[value]||'')+'</span>':'')+'<span class="v3-choice-copy"><strong>'+cardTitleHtml(value,title,action)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
 }
 function intro() {
   hideBasket();root.innerHTML = '<section class="v3-intro-screen">' +
@@ -350,7 +358,7 @@ function renderFormats(){
  const cards=codes.map(code=>{
   const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
   const label=code==='cinematic_video'?'VÍDEO PARA ENVIAR':code==='cinematic_interactive'?'EXPERIÊNCIA INTERATIVA':code==='interactive_essential'?'ARTE PERSONALIZADA':code==='interactive_gif'?'ARTE EM MOVIMENTO':code==='interactive_animated'?'ABERTURA ANIMADA':'CONVITE INTERATIVO';
-  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+cardTitleHtml(code,detail?.title||product.name,'product')+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
  }).join('');
  panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
 }

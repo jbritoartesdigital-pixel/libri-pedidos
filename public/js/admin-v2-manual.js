@@ -437,7 +437,7 @@ export async function renderManualOrder() {
     <div id="manualQuoteArea"></div>
   `;
 
-  document.getElementById('openV3Manual')?.addEventListener('click',async()=>{try{const {renderV3ManualOrder}=await import('./admin-v3-manual.js?v=81');await renderV3ManualOrder(renderManualOrder);}catch(e){showToast(e.message);}});
+  document.getElementById('openV3Manual')?.addEventListener('click',async()=>{try{const {renderV3ManualOrder}=await import('./admin-v3-manual.js?v=108');await renderV3ManualOrder(renderManualOrder);}catch(e){showToast(e.message);}});
   let lookupTimer = null;
   const phone = document.getElementById('manualWhatsapp');
   const notice = document.getElementById('returningCustomerNotice');

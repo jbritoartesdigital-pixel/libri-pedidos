@@ -1,3 +1,4 @@
+import {couponUsageCount} from './shared-coupon-reservations.js';
 import {couponRestrictionsMatch,discountValue} from './v2-commercial-pricing.js';
 const fail=(message)=>{const e=new Error(message);e.status=422;e.code='cart_promotion_invalid';throw e;};
 export function normalizeV3Coupon(code){
@@ -27,15 +28,14 @@ export async function pauseV3CombinedCampaign(db,id){
  await db.prepare('UPDATE v3_combined_campaigns SET active=0 WHERE id=?').bind(id).run();
  return listV3CombinedCampaigns(db);
 }
-export async function quoteV3Coupon(db,code,lines,eventType,now=new Date()){
+export async function quoteV3Coupon(db,code,lines,eventType,now=new Date(),customerId=null){
  code=normalizeV3Coupon(code);if(!code)return null;
  const c=await db.prepare('SELECT * FROM v2_coupons WHERE code=? COLLATE NOCASE AND active=1').bind(code).first();
  if(!c)fail('Cupom inválido ou inativo.');
  if(c.valid_from&&(!Number.isFinite(Date.parse(c.valid_from))||Date.parse(c.valid_from)>now.getTime()))fail('Este cupom ainda não está válido.');
  if(c.valid_until&&(!Number.isFinite(Date.parse(c.valid_until))||Date.parse(c.valid_until)<now.getTime()))fail('Este cupom expirou.');
- // V2 currently records redemption on payment, not reservation. Do not
- // expose limited stock coupons on V3 until a shared atomic hold is ready.
- if(c.max_uses!==null||c.max_uses_per_customer!==null)fail('Este cupom tem limite de usos e ainda precisa de validação no checkout V3.');
+ if(c.max_uses!==null&&await couponUsageCount(db,c.id)>=c.max_uses)fail('Este cupom atingiu o limite de usos disponíveis.');
+ if(customerId&&c.max_uses_per_customer!==null&&await couponUsageCount(db,c.id,customerId)>=c.max_uses_per_customer)fail('Este cupom atingiu o limite de usos por cliente.');
  let restrictions;try{restrictions=JSON.parse(c.restrictions_json||'{}');}catch{fail('Configuração do cupom indisponível.');}
  if(!restrictions||typeof restrictions!=='object'||Array.isArray(restrictions)||Object.keys(restrictions).some(k=>!['productCodes','eventTypes','addonCodes','minScenes','maxScenes'].includes(k)))fail('Configuração do cupom não suportada.');
  if(restrictions.eventTypes?.length&&!eventType)fail('Informe o tipo de evento.');

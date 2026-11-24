@@ -17,7 +17,7 @@ CREATE TABLE v3_supplement_payments (
  updated_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX v3_one_live_supplement_payment ON v3_supplement_payments(supplement_id)
- WHERE status IN ('creating','pending','approved','review','refunded');
+ WHERE status IN ('creating','pending');
 ALTER TABLE v3_order_services ADD COLUMN effective_snapshot_json TEXT;
 ALTER TABLE v3_service_supplements ADD COLUMN applied_at TEXT;
 CREATE TRIGGER v3_supplement_hold_capacity BEFORE INSERT ON v2_checkout_hold_allocations

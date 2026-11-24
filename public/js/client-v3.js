@@ -222,14 +222,14 @@ function renderBasket(){
 function studioArtwork(){const kind=state.creation==='identity'?'identity':state.creation==='retrospective'?'retrospective':'invitation';return '<div class="studio-art studio-art--'+kind+'" aria-hidden="true"><div class="studio-orbit"></div><div class="studio-paper studio-paper-back"></div><div class="studio-paper studio-paper-front"><img src="/images/libri-emblem.png" alt="" width="48" height="48"><span class="studio-paper-line"></span><span class="studio-paper-line studio-paper-line-short"></span></div><div class="studio-paper studio-paper-glass"></div></div>';}
 function panel(title, subtitle, content, buttons, index=0) {
   const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
-  const stageLabel={event:'Sua celebração','event-subtype':'Sua celebração',creation:'Escolha seu serviço',intent:'Seu convite',format:'Formato do convite',scenes:'Duração da história',atelie:'Libri Ateliê','atelie-detail':'Detalhes do pacote',unready:'Retrospectivas',extras:'Personalize seu pedido',review:'Confira suas escolhas',cart:'Sua sacola'}[state.step]||'';
+  const stageLabel={event:'Sua celebração','event-subtype':'Sua celebração',creation:'Escolha seu serviço',intent:'Seu convite',format:'Formato do convite',scenes:'Duração da história',atelie:'Libri Ateliê','atelie-detail':'Detalhes do pacote',unready:'Retrospectivas',extras:'Personalize seu pedido',review:'Confira suas escolhas',cart:'Carrinho'}[state.step]||'';
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
-    (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
+    (fixed||state.step==='cart'?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
     (fixed?'<div class="v3-stage-heading">':'')+
     (stageLabel?'<span class="v97-stage-label">'+clean(stageLabel)+'</span>':'')+'<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
     (fixed?studioArtwork()+'</div><div class="v3-stage-body">':'')+
     content + (fixed?'</div>':'') + (buttons || '') +
-    (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
+    (fixed||state.step==='cart'?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
   root.setAttribute('aria-busy','false');renderBasket();
   if(root.dataset.studioStep!==state.step){root.dataset.studioStep=state.step;const stage=root.querySelector('.v3-panel');if(stage&&!matchMedia('(prefers-reduced-motion: reduce)').matches){stage.animate([{opacity:.78,transform:'translateY(5px)'},{opacity:1,transform:'none'}],{duration:230,easing:'cubic-bezier(.2,.8,.2,1)'});}}
 }
@@ -374,11 +374,11 @@ function availableGroups() {
   });
 }
 function priceBar() {
-  return quote ? '<div class="v3-total"><div><strong>Total até agora</strong><div><small>Calculado pelo catálogo oficial · Pix</small></div></div><b>' + money(quote.totalCents) + '</b></div>' : '';
+  return quote ? '<div class="v3-total"><div><strong>Total até agora</strong><div><small>Total no Pix</small></div></div><b>' + money(quote.totalCents) + '</b></div>' : '';
 }
 function renderExtras(){
  const groups=availableGroups();
- const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Os convidados confirmam pelo formulário e você acompanha as respostas em um painel, sem lotar seu WhatsApp.',moments:'Reúna as fotos feitas pelos convidados durante a festa em um álbum digital. Inclui filtro personalizado.',filter:'Um efeito de fotos com o tema da festa.'};
+ const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Receba as confirmações dos convidados em um painel.',moments:'Fotos dos convidados reunidas em um álbum digital. Inclui filtro.',filter:'Um filtro de fotos com o tema da festa.'};
  const cards=groups.map(g=>{
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
@@ -457,9 +457,9 @@ let extraFlow=null;
 function cartExtrasHtml(item,i){
  const extras=cartExtrasCatalog[item.productCode]||[];if(!extras.length)return '';
  const selected=(item.extras||[]).map(x=>{const extra=extras.find(e=>e.code===x.code);return extra?'<li>'+Number(x.quantity)+' × '+clean(extra.name)+'</li>':'';}).join('');
- return '<div class="v3-package-personalize"><strong>Quer personalizar além do pacote?</strong>'+
- (selected?'<ul class="v3-included">'+selected+'</ul>':'<p class="v3-mini">Seu pacote já está completo. Os extras são opcionais.</p>')+
- '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar adicionais':'Ver opções de personalização')+'</button></div>';
+ return '<div class="v3-package-personalize v105-cart-personalize">'+
+ (selected?'<ul class="v3-included">'+selected+'</ul>':'')+
+ '<button type="button" class="v3-btn v3-btn-text" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar personalização':'+ Personalizar pacote')+'</button></div>';
 }
 function renderExtraQuestion(){
  trackStoreStage('adicionais');
@@ -503,23 +503,27 @@ function renderCart() {
     const product=getProduct(item.productCode);
     const name=priced?.productName||product?.name||ateliePackages.find(p=>'atelie_'+p.code===item.productCode)?.name||'Serviço selecionado';
     const upgrade=priced?.upgradeSuggestion;
-    const suggestion=upgrade?'<div class="v3-notice"><strong>Vale conferir o pacote '+clean(upgrade.name)+'</strong><p class="v3-mini">'+(upgrade.savingsCents?'Economize '+money(upgrade.savingsCents)+' antes dos descontos':'Pelo mesmo valor, aproveite um pacote superior')+'. Os extras não contemplados serão mantidos.</p><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-upgrade-preview" data-value="'+i+'">Ver sugestão</button></div>':'';
-    return '<article class="v3-cart-item"><div class="v3-line"><div><strong>'+clean(name)+'</strong>'+
-      (priced?'<p class="v3-mini">'+clean(priced.variantName||'')+(priced.comboName?' · '+clean(priced.comboName):'')+'</p>':'')+
-      (priced?'<b>'+money(priced.totalCents)+'</b>':'')+'</div>'+
-      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-secondary" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
+    const suggestion=upgrade?'<div class="v105-cart-suggestion"><button type="button" class="v3-btn v3-btn-text" data-action="cart-upgrade-preview" data-value="'+i+'">Conhecer '+clean(upgrade.name)+(upgrade.savingsCents?' · economize '+money(upgrade.savingsCents):' · mesmo valor')+'</button></div>':'';
+    const addons=(priced?.addonCodes||item.addonCodes||[]).map(code=>getAddon(code)?.name||code).filter(Boolean);
+    const variant=priced?.variantName||'';
+    return '<article class="v3-cart-item v105-cart-item"><div class="v105-cart-item-head"><div class="v105-cart-item-copy"><strong>'+clean(name)+'</strong>'+
+      (variant&&variant!==name?'<p class="v3-mini">'+clean(variant)+'</p>':'')+'</div>'+
+      (priced?'<b class="v105-cart-price">'+money(priced.grossCents??priced.totalCents)+'</b>':'')+'</div>'+
+      (addons.length?'<div class="v105-cart-addons"><span>Adicionais incluídos</span><p>'+addons.map(clean).join(' · ')+'</p></div>':'')+
+      '<div class="v3-cart-edit-actions"><button type="button" class="v3-btn v3-btn-text" data-action="cart-edit" data-value="'+i+'">Alterar</button><button type="button" class="v3-btn v3-btn-text" data-action="remove-cart" data-value="'+i+'">Retirar</button></div>'+cartExtrasHtml(item,i)+suggestion+'</article>';
   }).join('');
   const totals=cartQuote?'<div class="v3-lines">'+(cartQuote.discountCents?'<div class="v3-line"><span>Subtotal</span><b>'+money(cartQuote.grossCents)+'</b></div>':'')+
-    (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
-    '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
+    (cartQuote.discountCents?'<div class="v3-line v105-cart-discount"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
+    '</div><div class="v3-total"><div><strong>Total no Pix</strong><small>Valor estimado, antes de escolher a data</small></div><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
-  panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v3-cart-scroll"><div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div></div>',
-    '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
+  panel('Seu pedido','Confira o que você escolheu.',
+    '<div class="v97-cart-layout v105-cart-layout"><div class="v3-cart-scroll"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div></div><aside class="v97-cart-summary">'+totals+notice+cartDateHtml()+'</aside></div>',
+    '<div class="v3-action-row v105-cart-actions">'+
+    (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar para os dados</button>':'')+
+    '<button class="v3-btn v3-btn-text" type="button" data-action="cart-more">'+(items.length?'+ Adicionar outro serviço':'Escolher serviço')+'</button></div>',4);
 }
 function showCartAdded(){
- modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Seu serviço está na sacola. Você pode adicionar outros.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Escolher outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+ modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Você pode conferir seu pedido ou escolher outro serviço.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Adicionar outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver pedido</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 async function openCart(){
   const revision=cartRevision+1;

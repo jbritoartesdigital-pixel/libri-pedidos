@@ -54,3 +54,38 @@
 @media(max-width:300px){.black-libri-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-height:660px){.black-libri-panel{padding-top:13px;padding-bottom:12px}.black-libri-brand-slot{margin-bottom:2px}.black-libri-campaign{font-size:35px;margin-bottom:5px}.black-libri-grid{margin-top:4px;padding-top:3px}.black-libri-balloon{min-height:80px;padding-top:2px}.black-libri-balloon .bulb{width:min(82%,56px)}.black-libri-balloon .string{height:11px}}
 @media(prefers-reduced-motion:reduce){.black-libri-balloon,.black-libri-balloon.chosen::after,.black-libri-result{animation:none}.black-libri-balloon .bulb{transition:none}}
+
+/* V93 | Black Libri Studio. Same real and illustrative experience, different
+   from ordinary checkout, no changes to chance, reservation, or payment. */
+@font-face{font-family:LibriBlackManrope;src:url('/fonts/manrope-variable.ttf') format('truetype');font-weight:200 800;font-display:swap}
+.black-libri-overlay{font-family:LibriBlackManrope,Manrope,system-ui,sans-serif;background:#21171ce0;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px)}
+.black-libri-panel{--ink:#fff4e8;--muted:#e5cbc0;--gold:#dfbd97;--accent:#d1a08c;max-width:500px;max-height:calc(100dvh - max(12px,env(safe-area-inset-top)) - max(12px,env(safe-area-inset-bottom)));border-radius:28px;border:1px solid #b68a7777;background:radial-gradient(ellipse at 92% 4%,#b78a766b,transparent 50%),radial-gradient(ellipse at 5% 88%,#a671673d,transparent 54%),linear-gradient(135deg,#2d1e24,#4e3236 58%,#68473e);box-shadow:0 26px 90px #130d1188,inset 0 1px 0 #f5d7b64a;padding:21px 21px 17px}
+.black-libri-panel::before{inset:7px;border-color:#e3b99432;border-radius:21px}
+.black-libri-panel :is(button,a):focus-visible{outline:3px solid #f9d3a7;outline-offset:3px}
+.black-libri-close{background:#f7dfca12;border-color:#e3b99455;color:#fff3e9}
+.black-libri-brand-slot .black-libri-brand{filter:brightness(0) invert(1);opacity:.85;height:29px;width:138px}
+.black-libri-kicker{color:#e3be9d;letter-spacing:.21em;font-size:10px;font-weight:650;margin:6px auto}
+.black-libri-kicker::before,.black-libri-kicker::after{background:#cba17d}
+.black-libri-campaign{font-size:clamp(42px,11vw,62px);line-height:.98;letter-spacing:-.06em;color:#fff0e0;margin:8px 0 12px;text-shadow:0 2px 25px #e1ad8640}
+.black-libri-campaign em{color:#e2b494}
+.black-libri-heading{font:400 clamp(25px,6vw,34px)/1.1 Georgia,serif;color:#fff4e8;letter-spacing:-.045em;margin:8px 0 6px}
+.black-libri-subtitle{font-size:13px;line-height:1.5;color:#e5cbc0;max-width:32ch}
+.black-libri-grid{border-radius:20px;background:radial-gradient(ellipse at 50% 0,#d0a58526,transparent 75%),#1f121b29;box-shadow:inset 0 0 0 1px #e3b99430,inset 0 1px 0 #ffead21a;gap:6px 5px;padding:11px 9px 9px;margin:14px auto 6px}
+.black-libri-grid::before,.black-libri-grid::after{color:#e1bb94;opacity:.65}
+.black-libri-balloon{min-height:95px;padding:3px 0 2px}
+.black-libri-balloon .bulb{width:min(87%,74px);box-shadow:inset 2px 3px 5px #fff7,inset -7px -9px 12px #2d131e55,0 8px 14px #170d1760;background:radial-gradient(ellipse at 26% 16%,#fff9,transparent 30%),radial-gradient(ellipse at 73% 83%,#3d152959,transparent 62%),linear-gradient(125deg,#fff2,transparent 48%,#fff3 71%,transparent 85%),var(--balloon)}
+.black-libri-balloon .bulb::after{color:#fff9;text-shadow:0 0 9px #fff4}
+.black-libri-balloon .string{border-color:#d7ad8a;opacity:.8}
+.black-libri-balloon .black-libri-number{color:#f5dfce}
+.black-libri-balloon.chosen::after{color:#f9d2a1}
+.black-libri-sound{background:#e9bf9a15;border-color:#e3b99450;color:#f9e7d5;min-height:40px}
+.black-libri-result{border-color:#e3bc9566;border-radius:20px;background:radial-gradient(ellipse at 50% 0,#d7a77d35,transparent 70%),linear-gradient(145deg,#493037,#2d1e24);box-shadow:inset 0 1px 0 #e3bc9533,0 12px 35px #1a101c40}
+.black-libri-result>span{background:linear-gradient(140deg,#f7e4ca,#cca785);border-color:#f1d8b8;color:#5d392d}
+.black-libri-result small,.black-libri-result .black-libri-saved{color:#f0cda7}
+.black-libri-result strong{color:#fff3e5}
+.black-libri-result p,.black-libri-foot{color:#e5cbc0}
+.black-libri-button{background:linear-gradient(120deg,#f0d5b9,#d1a583);border-color:#ebc8a9;color:#3c2725;box-shadow:0 7px 24px #120a1640;border-radius:12px}
+.black-libri-secondary{background:#f9dfc611;border-color:#e3b99466;color:#fff4e8;border-radius:12px}
+@media(max-width:360px){.black-libri-panel{padding-inline:12px}.black-libri-grid{gap:3px;padding-inline:6px}.black-libri-balloon{min-height:85px}.black-libri-balloon .bulb{width:min(88%,64px)}}
+@media(max-height:660px){.black-libri-panel{padding-top:12px;padding-bottom:12px}.black-libri-brand-slot{min-height:25px;margin-bottom:2px}.black-libri-brand-slot .black-libri-brand{height:24px}.black-libri-campaign{font-size:37px;margin:5px 0}.black-libri-heading{font-size:23px;margin-top:5px}.black-libri-grid{margin-top:6px;padding:5px;gap:2px}.black-libri-balloon{min-height:76px}.black-libri-balloon .bulb{width:min(82%,54px)}.black-libri-balloon .string{height:11px}.black-libri-foot{margin-top:6px}}
+@media(prefers-reduced-motion:reduce){.black-libri-balloon,.black-libri-result,.black-libri-balloon.chosen::after{animation:none}}

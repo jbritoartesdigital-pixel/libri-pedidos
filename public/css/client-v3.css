@@ -509,3 +509,49 @@ html[data-v3-theme=dark] .v3-status-line,html[data-v3-theme=dark] .v3-inline-lin
 .v3-cart-transition-copy p{font:400 13px/1.55 Manrope,sans-serif;color:var(--muted);margin:0;text-wrap:balance}
 .v3-cart-transition-line{width:84px;height:2px;display:block;background:var(--outline);border-radius:99px;overflow:hidden;position:relative}.v3-cart-transition-line:after{content:"";position:absolute;width:40%;height:100%;left:0;background:linear-gradient(90deg,transparent,#ad7c74,#d0a68c,transparent);animation:libri-status-sweep 1.35s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){.v3-cart-transition-line:after{animation:none;left:30%}}
+
+/* V93 | Libri Studio storefront: editorial typography, quiet canvas, sculpted choices.
+   Keep the approved one-column viewport and action order; glass stays on choices. */
+:root{--libri-display:Georgia,"Times New Roman",serif;--libri-studio-deep:#3b2529;--libri-studio-warm:#78554d;--libri-studio-gold:#cba58c;--libri-studio-accent:#ad7d6c}
+body{background:radial-gradient(ellipse at 85% 0,#ad7d6c1c,transparent 38rem),var(--bg)}
+html[data-v3-theme=dark] body{background:radial-gradient(ellipse at 85% 0,#ad7d6c18,transparent 36rem),#21171b}
+.v3-header-shell{box-shadow:0 3px 18px #38222713}
+.v3-main,.v3-main:has(.v3-live-basket[hidden]){border-radius:24px;box-shadow:0 16px 45px #432b2914;border-color:var(--outline)}
+.v3-main .v3-title{font-family:var(--libri-display);font-size:clamp(28px,5.9vw,40px);font-weight:400;letter-spacing:-.055em;line-height:1.06;text-wrap:balance}
+.v3-stage-heading .v3-text{font-size:13px;line-height:1.5;max-width:36ch;margin-top:8px}
+body:has(.v3-panel--guided) .v3-main .v3-panel--guided{gap:16px;padding:26px 26px 16px}
+.v3-panel--guided .v3-stage-heading{position:relative;padding:4px 0 16px;border-bottom:1px solid var(--outline)}
+.v3-panel--guided .v3-stage-heading:after{content:"";position:absolute;width:36px;height:2px;border-radius:8px;background:var(--libri-studio-accent);bottom:-1px;left:calc(50% - 18px)}
+.v3-panel--guided :is(.v3-choices-stack,.v3-format-list,.v3-optional-list){gap:11px}
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie,.v3-stage-extras) :is(.v3-choice,.v3-format-card){position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 88% 0,#ce9d8566,transparent 62%),linear-gradient(130deg,#3b2529ee,#78554de8);border:1px solid #ad7d6c80;border-radius:18px;box-shadow:inset 0 1px 0 #f5d8bc47,0 7px 16px #432b2918;transition:background .2s,box-shadow .2s,border-color .2s,transform .2s}
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie,.v3-stage-extras) :is(.v3-choice,.v3-format-card)::before{content:"";position:absolute;z-index:-1;inset:5px;border:1px solid #ffecd117;border-radius:13px;pointer-events:none}
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie,.v3-stage-extras) :is(.v3-choice:hover,.v3-choice.is-selected,.v3-format-card:focus-within){background:radial-gradient(ellipse at 88% 0,#e0b6a074,transparent 70%),linear-gradient(130deg,#4e3035,#875c50);border-color:#d8b5a0;box-shadow:inset 0 1px 0 #fff3de66,0 9px 22px #432b2928}
+.v3-panel--guided .v3-choice-copy strong{letter-spacing:.075em!important;font-weight:700!important}
+.v3-panel--guided .v3-choice-copy small{line-height:1.45}
+.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice{padding:23px 18px;min-height:104px}
+.v3-panel--guided.v3-stage-creation .v3-choice-copy strong{font-size:clamp(16px,4vw,23px)}
+.v3-panel--guided .v3-format-select{padding:22px 16px 10px}
+.v3-panel--guided .v3-example-link{min-height:32px;text-underline-offset:3px}
+.v3-panel--guided .v3-stage-body{scrollbar-width:thin}
+.v3-panel--guided .v3-stage-progress{padding-top:4px}
+.v3-panel--guided .v3-progress-label{letter-spacing:.19em;font-size:10px}
+.v3-main .v3-live-basket{background:#f4e9e1;border-color:#e1cbbd}
+.v3-main .v3-live-basket summary strong{font-variant-numeric:tabular-nums}
+.v3-main .v3-btn-primary,.v3-modal-root .v3-btn-primary{background:linear-gradient(120deg,#78504b,#57363c);border-color:#805650;color:#fff8f1;box-shadow:0 5px 14px #432b2920;border-radius:12px}
+.v3-main .v3-cart-item,.v3-main .v3-checkout-block{border-radius:16px;border-color:var(--outline);box-shadow:0 5px 17px #432b2909}
+.v3-main .v3-cart-item>.v3-line{padding-bottom:8px}
+.v3-main .v3-cart-item>.v3-line strong{font-family:var(--libri-display);font-size:22px;font-weight:400;letter-spacing:-.025em}
+.v3-main .v3-total{background:linear-gradient(128deg,#3b2529,#78554d);border-color:#9b7465;color:#fff6eb;border-radius:16px;padding:17px;box-shadow:0 6px 19px #432b291c}
+.v3-main .v3-total :is(strong,b){color:#fff6eb}
+.v3-main .v3-checkout-block h2{font-family:var(--libri-display);font-size:24px;font-weight:400;letter-spacing:-.04em}
+.v3-modal-root .v3-modal-card{border-radius:23px;box-shadow:0 24px 85px #30202760}
+.v3-modal-root .v3-modal-card h2{font-family:var(--libri-display);font-weight:400;font-size:clamp(27px,6vw,36px);letter-spacing:-.045em;line-height:1.08;text-wrap:balance}
+.v3-modal-root .v3-offer-card{background:radial-gradient(ellipse at 90% 0,#cba58c35,transparent 60%),#fff9f3}
+html[data-v3-theme=dark] .v3-main .v3-live-basket{background:#392b2c;border-color:var(--outline)}
+html[data-v3-theme=dark] .v3-modal-root .v3-offer-card{background:var(--v3-night-panel)}
+html[data-v3-theme=dark] .v3-modal-root .v3-offer-card h2{color:var(--ink)}
+html[data-v3-theme=dark] .v3-main .v3-total{background:linear-gradient(128deg,#3b2529,#67483f)}
+@media(max-width:560px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{padding:16px 12px 10px;gap:11px}.v3-panel--guided .v3-stage-heading{padding-bottom:12px}.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice{padding:17px 12px;min-height:82px}.v3-panel--guided .v3-format-select{padding:15px 11px 5px}.v3-panel--guided .v3-stage-body{padding-inline:2px}}
+@media(max-height:660px){body:has(.v3-panel--guided) .v3-main .v3-panel--guided{gap:7px;padding-top:10px}.v3-panel--guided .v3-stage-heading{padding-bottom:8px}.v3-main .v3-title{font-size:26px}.v3-stage-heading .v3-text{margin-top:4px}.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice{min-height:70px;padding:10px}}
+@media(hover:hover){.v3-panel--guided :is(.v3-choice,.v3-format-card):hover{transform:translateY(-1px)}}
+@media(prefers-reduced-motion:reduce){.v3-panel--guided :is(.v3-choice,.v3-format-card){transition:none;transform:none}}

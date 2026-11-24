@@ -9,7 +9,7 @@ async function ensureStyle() {
   const link=document.createElement('link');
   link.id='blackLibriClientStyles';
   link.rel='stylesheet';
-  link.href='/css/client-v2-black-libri.css?v=20261124-atelier-gift-v3';
+  link.href='/css/client-v2-black-libri.css?v=93-studio';
   await new Promise(resolve=>{
     link.onload=resolve;link.onerror=resolve;
     document.head.appendChild(link);

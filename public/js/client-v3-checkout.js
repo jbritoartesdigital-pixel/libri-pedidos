@@ -127,7 +127,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
         checkingBlack=true;
         let immediate=false,opening=true;
         try{
-          const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=20261124-atelier-gift-v3');
+          const {openBlackLibriBeforePayment}=await import('./client-v2-black-libri.js?v=93-studio');
           let legacyRequestId='';try{legacyRequestId=JSON.parse(localStorage.getItem('libriV2StoreState')||'null')?.clientRequestId||'';}catch{}
           await openBlackLibriBeforePayment({legacyRequestId,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email},clientRequestId:attemptKey,v3Cart:{...cart,paymentMethod:form.paymentMethod,couponCode:form.couponCode},onContinue:claim=>{
             blackChecked=true;blackConflict=false;

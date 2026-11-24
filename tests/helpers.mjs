@@ -1,9 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync, readFileSync } from 'node:fs';
 
-export function database() {
+export function database({beforeApprovedAtelie=false} = {}) {
   const sqlite = new DatabaseSync(':memory:');
-  const migrations = readdirSync('migrations').filter(x => x.endsWith('.sql')).sort();
+  const migrations = readdirSync('migrations').filter(x => x.endsWith('.sql') && (!beforeApprovedAtelie || x !== '0040_atelie_v41_approved_catalog.sql')).sort();
   for (const name of migrations) sqlite.exec(readFileSync(`migrations/${name}`, 'utf8'));
   function prepare(sql) {
     const stmt = sqlite.prepare(sql);

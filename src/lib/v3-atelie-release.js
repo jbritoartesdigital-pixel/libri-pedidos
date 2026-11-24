@@ -1,6 +1,7 @@
 // Libri Ateliê: publicação comercial controlada pela mesma Passkey Admin.
 // Ativar exige preço, carga, revisões, lista V4.1 e termos específicos preenchidos.
 // Não cria outro checkout; registra produtos principais nas tabelas V2 existentes.
+import {ATELIE_V41_APPROVED_CATALOG} from './v3-atelie-v41-commercial-catalog.js';
 const VALID = new Set(['essencia','encanto','universo']);
 const parse = v=>{try{const x=JSON.parse(v||'[]');return Array.isArray(x)?x:[]}catch{return []}};
 export const atelieProductCode = code => VALID.has(code)?'atelie_'+code:null;
@@ -42,7 +43,7 @@ export async function setAtelieSaleStatus(db,code,enabled=false) {
     revisionLimit:row.revision_limit,
     scopeReference:row.scope_reference,
     contractedApplications:[],
-    includedMascotPoses:({essencia:1,encanto:2,universo:3})[code],
+    includedMascotPoses:ATELIE_V41_APPROVED_CATALOG[code].mascotPoses,
     includedIllustratedSubjects:1,
     additionalSubjectsNeedQuote:true,
     requiresChildPhoto:true,

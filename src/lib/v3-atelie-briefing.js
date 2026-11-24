@@ -100,7 +100,7 @@ export function buildAtelieBriefingBlueprint({
     ])
   ];
   return {
-    kind:'atelie',schemaVersion:'atelie-v4.1-subjects',saleReady:true,
+    kind:'atelie',schemaVersion:'atelie-v4.1-subjects',saleReady:false,
     packageCode,sections,
     saveAndResumePlanned:true,
     fileUploadRequiresProtectedCustomerArea:true,

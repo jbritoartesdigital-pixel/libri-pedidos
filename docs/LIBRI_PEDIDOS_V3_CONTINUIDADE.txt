@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 06 | 23/11/2026 (Brasil)
+Versão 07 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -37,7 +37,7 @@ IMPLEMENTADO NO PR #143
 PRÓXIMO PASSO EXATO
 1. Verificar CI da rodada mais recente e testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
 2. Implementar modelo persistente V3 de pedido-pai e itens principais, snapshot de cotação/termos e chave de idempotência. Reutilizar serviço Mercado Pago existente com um único total, confirmação de webhook e reserva de agenda atômica; não criar pedidos filhos cobrados separadamente. Inspecionar migrations, checkout V2, pagamentos, reservas e reconciliação antes de codificar.
-3. Completar Retrospectivas como linha real (catálogo aprovado, limites, direitos, briefing e uploads privados), integrar preço, pontos, prazo e carrinho.
+3. Completar Retrospectivas como linha real (catálogo aprovado, limites, direitos, briefing e recebimento de materiais pelo WhatsApp, SEM R2), integrar preço, pontos, prazo e carrinho.
 4. Briefing modular único pós-pagamento, status por serviço e replanejamento a partir de briefing completo, inclusive múltiplas crianças/personagens.
 5. Reformular Admin integral: pedidos, produção, agenda, pagamentos, filtros, extras, revisão, histórico, etapas por serviço, arquivos e entrega/aprovação.
 6. Funil de abandono e conversão, retenção/privacidade, regressão V2/V3, CI e testes de uso, deploy e verificação.
@@ -77,5 +77,12 @@ RETOMADA V05 — RESERVA E PAGAMENTO INTERNO MULTIPRODUTO
 RETOMADA V06 — CONFIRMAÇÃO DE PAGAMENTO E CONCILIAÇÃO
 - bcc2524 / 04991e6: valida valor integral e método do pagamento V3 confirmado no webhook; libera somente serviços contratados com briefing bloqueado, sem reiniciar progresso e sem autorizar produção. Também libera módulos quando pagamento é aprovado mas agenda precisa de revisão. Preserva V2.
 - 557dfee: testes de confirmação, callback repetido, valor divergente e bloqueio pré-pagamento.
-- ca77dae / 0d15ff1: conciliação interna de tentativa expirada consulta provedor, cancela pendência expirada, consulta novamente para detectar aprovação concorrente e não cria cobrança substituta. Orfandade/ambiguidade permanece bloqueada para revisão. Testes com provedor simulado. CI desta rodada a confirmar.
+- ca77dae / 0d15ff1: conciliação interna de tentativa expirada consulta provedor, cancela pendência expirada, consulta novamente para detectar aprovação concorrente e não cria cobrança substituta. Orfandade/ambiguidade permanece bloqueada para revisão. Testes com provedor simulado. CI 45315137894 concluído com sucesso.
 - Próximo passo: briefing modular efetivo (dados comuns, módulos contratados, uploads privados, regras de completude, replanejamento), recuperação com nova tentativa expressamente confirmada após conciliação e integração pública protegida; completar Retrospectivas, Admin, visual e métricas. Nenhuma rota pública de cobrança conjunta ainda. Nenhum deploy.
+
+RETOMADA V07 — BRIEFING MODULAR E MATERIAIS DA RETROSPECTIVA VIA WHATSAPP
+DECISÃO EXPLÍCITA DA USUÁRIA: fotos da retrospectiva pelo WhatsApp para não consumir R2. Adotar o mesmo canal para vídeos da retrospectiva; texto do briefing permanece no pedido. Não criar upload, bucket, arquivo ou cópia R2 para materiais da retrospectiva. Admin confirma recebimento efetivo, contagem conforme limites contratados e observações. Clique no WhatsApp não confirma recebimento. Prazo mínimo 15 dias após pagamento, briefing completo e materiais recebidos; replanejamento ainda pendente. Demais produtos preservam uploads privados quando aplicáveis.
+- f12804f: migration 0042 cria rascunhos por módulo e metadados de recebimento da retrospectiva, sem mídia no D1/R2.
+- ea14373: helper interno getV3ModularBriefing/saveV3ModuleDraft reúne dados gerais e módulos contratados após pagamento, reaproveita perguntas condicionais V2 e Ateliê, guarda versões dos rascunhos; retrospectiva com limites do snapshot e link WhatsApp configurado; recordV3RetroMaterialReceipt valida contratação, pagamento e limites. Nenhuma produção é iniciada. Não expõe HTTP ainda.
+- 2776f41/0cfe3cd: testes de migration, briefing compartilhado, acesso pós-pagamento, revisão de rascunhos, materiais via WhatsApp sem regra de upload e confirmação apenas no helper administrativo. CI a confirmar.
+- Próximo passo: rotas protegidas da cliente e Admin, uploads privados apenas para Convites/Ateliê, validação final de todos os campos e materiais, entrega/reagendamento pós-briefing. Retrospectiva independente ainda não contratável. Concluir checkout público, promoções, proteção Admin, UX e métricas. Não publicar parcial.

@@ -108,6 +108,7 @@ export function mountAtelieCheckout(root,{item,eventType,onBack}) {
       '<div class="v3-at-terms">'+esc(extra.specificTerms||item.specificTerms)+'</div></details>'+
       '<label class="v3-at-check"><input id="atAgreeGeneral" type="checkbox"> Li e aceito as condições gerais.</label>'+
       '<label class="v3-at-check"><input id="atAgreeSpecific" type="checkbox"> Li e aceito o escopo e as condições do Ateliê.</label>'+
+      '<p class="v3-mini">Prazo mínimo de produção: 15 dias corridos. A previsão da agenda considera o briefing completo sem atrasos; caso os materiais cheguem depois, a data deverá ser reconfirmada antes da produção.</p>'+ 
       '<p class="v3-mini">Após o pagamento confirmado, você preencherá o briefing criativo em seu próprio pedido.</p>'+
       '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" id="atEdit">Editar dados</button>'+
       '<button type="button" class="v3-btn v3-btn-primary" id="atPay">Ir para pagamento</button></div></div>');

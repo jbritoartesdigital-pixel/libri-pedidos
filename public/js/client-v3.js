@@ -199,7 +199,7 @@ function renderBasket(){
  const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
  const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
  const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
- if(!state.cartItems.length&&!staged&&!item){hideBasket();return;}
+ if(!state.cartItems.length&&!live&&!item?.purchaseAvailable){hideBasket();return;}
  basket.hidden=false;
  const rows=state.cartItems.map(x=>'<li><span>'+clean(getProduct(x.productCode)?.name||ateliePackages.find(p=>'atelie_'+p.code===x.productCode)?.name||retrosPackages.find(p=>p.productCode===x.productCode)?.name||'Serviço selecionado')+'</span></li>').join('');
  basketBody.innerHTML='<p class="v3-basket-event">'+clean(labelForEvent())+'</p>'+
@@ -348,7 +348,7 @@ function formatCodes() {
   return codes;
 }
 // Illustrative demonstrations of how each format behaves, not portfolio artwork.
-const formatShort={cinematic_video:'Uma história animada personalizada. Você envia o vídeo pronto pelo WhatsApp.',cinematic_interactive:'História animada + convite para acessar localização, confirmar presença e consultar presentes.',interactive_essential:'Arte da festa com acesso à localização, confirmação de presença e presentes.',interactive_gif:'Arte com detalhes em movimento e atalhos para as informações da festa.',interactive_animated:'Uma abertura animada revela o convite com os atalhos da festa.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
+const formatShort={cinematic_video:'História animada personalizada, enviada pelo WhatsApp.',cinematic_interactive:'História animada com acesso à localização, confirmação de presença e presentes.',interactive_essential:'Arte da festa com acesso à localização, confirmação de presença e presentes.',interactive_gif:'Arte com detalhes em movimento e atalhos para as informações da festa.',interactive_animated:'Uma abertura animada revela o convite com os atalhos da festa.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
 function formatVisual(code){
  const isFilm=SCENE_PRODUCTS.has(code),interactive=code!=='cinematic_video';
  return '<span aria-hidden="true" class="v3-format-demo v3-demo-'+clean(code)+'"><span class="v3-demo-phone"><span class="v3-demo-screen">'+(code==='book'?'<i class="v3-demo-page"></i>':isFilm?'<i class="v3-demo-film"></i><i class="v3-demo-play"></i><i class="v3-demo-progress"></i>':'<i class="v3-demo-art"></i><i class="v3-demo-title"></i><i class="v3-demo-lines"></i>')+(interactive?'<span class="v3-demo-buttons"><i></i><i></i><i></i></span>':'')+(code==='interactive_animated'?'<i class="v3-demo-cover"></i>':'')+'</span></span></span>';
@@ -358,9 +358,9 @@ function renderFormats(){
  const cards=codes.map(code=>{
   const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
   const label=code==='cinematic_video'?'VÍDEO PARA ENVIAR':code==='cinematic_interactive'?'EXPERIÊNCIA INTERATIVA':code==='interactive_essential'?'ARTE PERSONALIZADA':code==='interactive_gif'?'ARTE EM MOVIMENTO':code==='interactive_animated'?'ABERTURA ANIMADA':'CONVITE INTERATIVO';
-  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+cardTitleHtml(code,detail?.title||product.name,'product')+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+cardTitleHtml(code,detail?.title||product.name,'product')+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small></span></button><div class="v107-format-footer">'+(price!=null?'<span class="v3-price"><small>'+(SCENE_PRODUCTS.has(code)?'A partir de':'Total')+'</small> '+money(price)+'</span>':'')+'<button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></div></article>';
  }).join('');
- panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
+ panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list" data-count="'+codes.length+'">'+cards+'</div>',actions(true,'',null),2);
 }
 let customScenes=false;
 function durationVisual(n){return '<span class="v3-duration-visual" aria-hidden="true">'+Array.from({length:n},(_,i)=>'<i style="--scene-index:'+i+'"></i>').join('')+'</span>';}
@@ -393,9 +393,9 @@ function renderExtras(){
   const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents):selected.length?'+ '+money(price):'A partir de '+money(Math.min(...variants.map(a=>Number(a.priceCents))));const actionText=selected.length?(direct?'Retirar':'Alterar'):direct?'Adicionar':'Ver opções';
   return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
  }).join('');
- const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
- panel('Personalize seu convite','Adicionais opcionais para a sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
- '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div>',3);
+ const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis.</strong> O formulário com painel é opcional.</p>':'';
+ panel('Personalize seu convite','Adicionais opcionais para a sua festa.',free+'<div class="v3-optional-list" data-count="'+groups.length+'">'+cards+'</div>',
+ '<div class="v107-extras-footer">'+priceBar()+'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div></div>',3);
 }
 let guidedBusy=false,pendingAdd=false;
 function addConfiguredInvite(){

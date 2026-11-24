@@ -1,7 +1,6 @@
 import {trackStoreStage} from './store-funnel.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 import { mountV3Checkout } from './client-v3-checkout.js';
-import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
 // Libri Pedidos V3: convites integrados à V2; Ateliê libera compra por pacote configurado.
 // O catálogo, os preços e o cálculo de descontos permanecem nas APIs V2.
 // A etapa de pagamento continua exclusivamente no fluxo V2 existente.
@@ -12,7 +11,6 @@ const basketBody=document.getElementById('v3-basket-body');
 const basketTotal=document.getElementById('v3-basket-total');
 if(basket)basket.open=window.matchMedia('(min-width: 900px)').matches;
 const STORE_KEY = 'libriV3Draft';
-const V2_KEY = 'libriV2StoreState';
 const EVENTS = [
   ['birthday', 'Aniversário', 'Uma comemoração cheia de personalidade.'],
   ['15_years', 'Festa de 15 anos', 'Uma celebração para guardar na memória.'],
@@ -408,7 +406,7 @@ function renderReview() {
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
 }
 function cartDeliveryHtml(){
-  if(!cartQuote||cartError||!state.cartItems.length||(state.cartItems.length===1&&cartFamily(state.cartItems[0].productCode)!=='retrospective'&&!(state.cartItems[0].extras||[]).length))return '';
+  if(!cartQuote||cartError||!state.cartItems.length)return '';
   const formatDate=s=>s.split('-').reverse().join('/');
   const options=cartDelivery?.options||[];
   return '<div class="v3-notice"><strong>Quando é a festa?</strong><p>Consulte a agenda para todos os serviços juntos.</p>'+
@@ -433,7 +431,6 @@ function cartExtrasHtml(item,i){
         '<div><button type="button" aria-label="Diminuir '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-minus" data-value="'+i+':'+clean(x.code)+'" '+(!n?'disabled':'')+'>−</button> <strong>'+n+'</strong> <button type="button" aria-label="Aumentar '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-plus" data-value="'+i+':'+clean(x.code)+'" '+(n>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
     }).join('')+'</details>').join('')+'</div>';
 }
-function needsUnifiedCheckout(items){return items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'||(x.extras||[]).length);}
 function renderCart() {
   trackStoreStage('carrinho');
   const items=state.cartItems;
@@ -451,16 +448,14 @@ function renderCart() {
   const totals=cartQuote?'<div class="v3-lines"><div class="v3-line"><span>Subtotal antes dos descontos</span><b>'+money(cartQuote.grossCents)+'</b></div>'+
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
-  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
-    (items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'))?'<div class="v3-notice">Confira os dados, os prazos e as condições da sua contratação no checkout. Nenhuma cobrança foi criada.</div>':
-    items.some(x=>(x.extras||[]).length)?'<div class="v3-notice">Confira os dados e as condições dos seus adicionais no checkout. Nenhuma cobrança foi criada.</div>':items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
+  const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':items.length?'<p class="v3-mini">Confira os dados, os prazos e as condições na contratação. Nenhuma cobrança foi criada.</p>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
     '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length&&cartQuote&&!cartError&&needsUnifiedCheckout(items)?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+
-    (items.length===1&&cartQuote&&!cartError&&!needsUnifiedCheckout(items)?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
+    (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
 async function openCart(){
+  const revision=cartRevision+1;
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
   hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
   root.setAttribute('aria-busy','true');
@@ -469,9 +464,11 @@ async function openCart(){
     try {
       await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));
       const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:state.cartItems});
+      if(revision!==cartRevision||state.step!=='cart')return;
       cartQuote=data.quote;
-    } catch(e){cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
+    } catch(e){if(revision!==cartRevision||state.step!=='cart')return;cartError=e.message||'Não foi possível conferir o carrinho. Revise os serviços selecionados.';}
   }
+  if(revision!==cartRevision||state.step!=='cart')return;
   renderCart();window.scrollTo({top:0,behavior:'auto'});
 }
 function render() {
@@ -483,11 +480,7 @@ function render() {
     case 'unready': renderUnready(); break;
     case 'atelie': renderAtelie(); break;
     case 'atelie-detail': renderAtelieDetail(); break;
-    case 'atelie-checkout': {
-      const item=ateliePackages.find(p=>p.code===state.ateliePackage);
-      hideBasket();mountAtelieCheckout(root,{item,eventType:state.eventType,onBack:()=>go('atelie-detail')});
-      break;
-    }
+    case 'atelie-checkout': openCart().catch(e=>message(e.message));break;
     case 'intent': renderIntent(); break;
     case 'format': renderFormats(); break;
     case 'scenes': renderScenes(); break;
@@ -606,30 +599,6 @@ async function go(target) {
   render();
   window.scrollTo({top:0,behavior:'auto'});
 }
-function handoff() {
-  // Transferir somente os dados que o checkout V2 já compreende.
-  // Ele continua responsável por agenda, termos, pagamento e briefing.
-  const product = currentProduct();
-  if (!product || !currentVariant()) return message('Escolha um modelo disponível antes de continuar.');
-  const order = {
-    step: 3,
-    deepProductSlug: '',
-    event: {type:state.eventType,subtype:'',honoreeName:'',date:''},
-    customer: {name:'',whatsapp:'',email:''},
-    selection: {
-      productSlug: product.slug,productCode: product.code,
-      variantCode:state.variantCode,addonCodes:state.addonCodes,
-      comboCode:quote?.combo?.code || '',couponCode:'',paymentMethod:'pix'
-    },
-    termsAccepted:false
-  };
-  try {
-    localStorage.setItem(V2_KEY,JSON.stringify(order));
-  } catch {
-    return message('Seu navegador não permitiu transferir a seleção. Você pode acessar a loja atual e escolher novamente.');
-  }
-  window.location.assign('/pedido');
-}
 async function handleStoreClick(event) {
   const button=event.target.closest('[data-action]');
   if (!button) return;
@@ -735,27 +704,12 @@ async function handleStoreClick(event) {
       if(quantity)selected.set(code,quantity);else selected.delete(code);
       item.extras=Array.from(selected,([code,quantity])=>({code,quantity}));await openCart();return;
     }
-    if(action==='cart-unified-checkout'){
-      if(!cartQuote||cartError||!needsUnifiedCheckout(state.cartItems))return;
+    if(action==='cart-unified-checkout'||action==='cart-single-checkout'){
+      if(!cartQuote||cartError||!state.cartItems.length)return;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;
       state.step='cart';save();
       hideBasket();mountV3Checkout(root,{items:state.cartItems,eventType:state.eventType,eventDate:cartEventDate,request,onBack:()=>openCart()});
       return;
-    }
-    if(action==='cart-single-checkout'){
-      if(state.cartItems.length!==1||!cartQuote||cartError)return;
-      const item=state.cartItems[0];
-      if((item.extras||[]).length)return message('A contratação desses adicionais ainda está em preparação.');
-      if(cartFamily(item.productCode)==='identity'){
-        const pkg=ateliePackages.find(p=>'atelie_'+p.code===item.productCode&&p.purchaseAvailable&&p.variantCode===item.variantCode);
-        if(!pkg)return message('Pacote indisponível para compra.');
-        state.ateliePackage=pkg.code;await go('atelie-checkout');return;
-      }
-      if(cartFamily(item.productCode)!=='invitation')return;
-      Object.assign(state,{productCode:item.productCode,variantCode:item.variantCode,addonCodes:[...item.addonCodes]});
-      // Retain the explicit combo accepted on the cart; the V2 checkout still revalidates.
-      const result=await request('/api/v2/quote',{eventType:state.eventType,selection:{...item,couponCode:'',paymentMethod:'pix'}});
-      quote=result.quote;
-      handoff();return;
     }
     if(action==='back'){
       const previous={
@@ -812,8 +766,9 @@ async function init({skipRecovery=false}={}) {
     state.step=SCENE_PRODUCTS.has(state.productCode)?'scenes':'format';
   }
   if(!state.eventType)state.step='event';
-  if(state.step==='cart'){await openCart();return;}
+  if(state.step==='cart'||state.step==='atelie-checkout'){await openCart();return;}
   if(state.step==='extras'||state.step==='review'){await go(state.step);return;}
+  if(state.productCode&&state.variantCode&&['format','scenes'].includes(state.step))await refreshQuote();
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(!sessionStorage.getItem('libriV3IntroSeen')&&state.step==='event'&&!reduced){
     intro();

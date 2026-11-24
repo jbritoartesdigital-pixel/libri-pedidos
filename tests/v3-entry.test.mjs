@@ -23,12 +23,13 @@ test('V3 preview is noindex and loads its own assets', () => {
   assert.match(html, /Loja atual/);
 });
 
-test('V3 reads live catalog and quote, and hands off only to established V2 checkout', () => {
+test('V3 reads live catalogue and uses integrated checkout for single and combined carts', () => {
   const js = source('public/js/client-v3.js');
   assert.match(js, /\/api\/v2\/catalog/);
   assert.match(js, /\/api\/v2\/quote/);
-  assert.match(js, /localStorage\.setItem\(V2_KEY/);
-  assert.match(js, /window\.location\.assign\('\/pedido'\)/);
+  assert.match(js, /mountV3Checkout\(root,\{items:state\.cartItems/);
+  assert.doesNotMatch(js, /window\.location\.assign\('\/pedido'\)/);
+  assert.doesNotMatch(js, /mountAtelieCheckout\(/);
   assert.doesNotMatch(js, /\/api\/v2\/checkout\/start/);
   assert.doesNotMatch(js, /fetch\(['"]\/api\/v2\/payments/);
   assert.match(js, /state\.eventType/);

@@ -297,3 +297,19 @@ test('V3 full refund preserves historical gross inflow and records outflow only 
  assert.equal(refund.summary.netCashMovementComplete,false);
  assert.equal((await november()).summary.refundsCents,payment.amount_cents);
 });
+
+test('single invitation and standalone Atelie use one modular order and verified provider charge',async t=>{
+ const {DB,body,env,call}=await setup(),mp=providerMock(t);
+ await setAtelieSaleStatus(DB,'essencia',true);
+ for(const item of [{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}]){
+  const selection={...base,items:[item]};
+  const terms=await getV3CheckoutTerms(DB,selection);
+  const delivery=await previewV3CartDelivery(DB,{...selection,eventDate:body.eventDate});
+  const payload={...body,...selection,clientRequestId:randomToken(),expectedTotalCents:delivery.quote.totalCents,deliveryWindow:delivery.delivery.options[0],termsVersion:terms.general.version,...(terms.services.length?{atelieTermsAccepted:true,atelieTermsVersion:terms.services[0].version}:{})};
+  const response=await call(payload);assert.equal(response.status,200,await response.clone().text());
+  const result=await response.json();assert.equal(result.totalCents,delivery.quote.totalCents);
+  const retry=await (await call(payload)).json();assert.equal(retry.publicToken,result.publicToken);
+ }
+ assert.equal(mp.posts,2);assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_order_checkout_snapshots').get().n,2);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_order_services').get().n,2);
+});

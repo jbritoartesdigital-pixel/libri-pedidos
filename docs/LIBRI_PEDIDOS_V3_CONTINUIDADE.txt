@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 07 | 23/11/2026 (Brasil)
+Versão 08 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -84,5 +84,11 @@ RETOMADA V07 — BRIEFING MODULAR E MATERIAIS DA RETROSPECTIVA VIA WHATSAPP
 DECISÃO EXPLÍCITA DA USUÁRIA: fotos da retrospectiva pelo WhatsApp para não consumir R2. Adotar o mesmo canal para vídeos da retrospectiva; texto do briefing permanece no pedido. Não criar upload, bucket, arquivo ou cópia R2 para materiais da retrospectiva. Admin confirma recebimento efetivo, contagem conforme limites contratados e observações. Clique no WhatsApp não confirma recebimento. Prazo mínimo 15 dias após pagamento, briefing completo e materiais recebidos; replanejamento ainda pendente. Demais produtos preservam uploads privados quando aplicáveis.
 - f12804f: migration 0042 cria rascunhos por módulo e metadados de recebimento da retrospectiva, sem mídia no D1/R2.
 - ea14373: helper interno getV3ModularBriefing/saveV3ModuleDraft reúne dados gerais e módulos contratados após pagamento, reaproveita perguntas condicionais V2 e Ateliê, guarda versões dos rascunhos; retrospectiva com limites do snapshot e link WhatsApp configurado; recordV3RetroMaterialReceipt valida contratação, pagamento e limites. Nenhuma produção é iniciada. Não expõe HTTP ainda.
-- 2776f41/0cfe3cd: testes de migration, briefing compartilhado, acesso pós-pagamento, revisão de rascunhos, materiais via WhatsApp sem regra de upload e confirmação apenas no helper administrativo. CI a confirmar.
+- 2776f41/0cfe3cd: testes de migration, briefing compartilhado, acesso pós-pagamento, revisão de rascunhos, materiais via WhatsApp sem regra de upload e confirmação apenas no helper administrativo. CI 45315400830 concluído com sucesso.
 - Próximo passo: rotas protegidas da cliente e Admin, uploads privados apenas para Convites/Ateliê, validação final de todos os campos e materiais, entrega/reagendamento pós-briefing. Retrospectiva independente ainda não contratável. Concluir checkout público, promoções, proteção Admin, UX e métricas. Não publicar parcial.
+
+RETOMADA V08 — ROTAS DO BRIEFING MODULAR
+- 8545132/2624ced: GET /api/v2/customer-area/:token/v3/briefing e PATCH /api/v2/customer-area/:token/v3/briefing/:module, com token privado, verificação de pagamento, módulo contratado, revisão e JSON limitado. GET /api/admin/v2/orders/:code/v3/briefing e POST .../retro-materials no dispatcher autenticado por Passkey existente. Cliente não confirma recebimento. Sem upload da retrospectiva.
+- 7326be4: bloqueia rotas de briefing antigas para pedidos combinados V3, inclusive submissão e arquivos, até integração modular. V2 individual preservada.
+- 2e3e5ec: testes de acesso HTTP, isolamento de token, rascunhos, bloqueio de serviço não contratado, formulário legado e confirmação Admin sem autenticação. CI a confirmar.
+- Próxima etapa: integração das telas de cliente/Admin, uploads privados específicos para convite e Ateliê, validação de completude, submissão segura e replanejamento após briefing/materiais. Não liberar produção automaticamente. Checkout público e catálogo Retro seguem pendentes. Nenhuma publicação.

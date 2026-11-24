@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { database, day, providerMock } from './helpers.mjs';
 import { createV2ManualOrder, getV2ManualOrderForCustomer, startV2ManualOrderPayment } from '../src/lib/v2-orders-manual.js';
-import { getManualClientAddonOffer, quoteManualClientAddons } from '../src/lib/v2-manual-client-addons.js';
+import { getManualClientAddonOffer, quoteManualClientAddons, getManualClientUpsell } from '../src/lib/v2-manual-client-addons.js';
 import { handlePublicManualOrderV2Api } from '../src/routes/public-manual-order-v2.js';
 
 const env = DB => ({ DB, MERCADO_PAGO_ACCESS_TOKEN:'TEST-token' });
@@ -141,4 +141,14 @@ test('interface do pedido manual solicita prévia e mostra saldo somente na exce
   assert.match(ui,/selectedManualAddonCodes\.length && !manualAddonQuote/);
   assert.match(routes,/addonQuoteMatch/);
   assert.match(ui,/Saldo após a entrada/);
+});
+
+test('modal manual recebe uma oferta positiva, sem escrever no pedido ou iniciar pagamento',async()=>{
+ const DB=database(),{manual}=await manualOrder(DB,50);const o=await getManualClientAddonOffer(DB,manual),u=await getManualClientUpsell(DB,manual,o);
+ assert.ok(u);assert.ok(u.quote.increaseCents>0);assert.equal(u.quote.depositPercent,50);
+ assert.equal((await getV2ManualOrderForCustomer(DB,manual.token)).pricing.totalCents,manual.pricing.totalCents);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
+ assert.equal(await getManualClientUpsell(DB,{...manual,alreadyPaid:true},o),null);
+ const ui=readFileSync('public/js/client-v2-store.js','utf8');assert.match(ui,/if\(maybeManualUpsell\(\(\)=>void revealManualPrize\(\)\)\)return/);
+ assert.match(ui,/manualUpsellAccept/);
 });

@@ -15,7 +15,7 @@ async function ensureStyles(){
  if(document.getElementById('blackLibriClientStyles'))return;
  const link=document.createElement('link');
  link.id='blackLibriClientStyles';link.rel='stylesheet';
- link.href='/css/client-v2-black-libri.css?v=95-studio';
+ link.href='/css/client-v2-black-libri.css?v=97-studio';
  await new Promise(resolve=>{link.onload=resolve;link.onerror=resolve;document.head.appendChild(link);});
 }
 

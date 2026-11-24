@@ -673,7 +673,7 @@ test('unpaid revision closes the previous charge, blocks renewal until customer 
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
 });
 
-import {previewV3ManualOrder,createV3ManualOrder} from '../src/lib/v3-order-revisions.js';
+import {previewV3ManualOrder,createV3ManualOrder,getV3ManualUpsell} from '../src/lib/v3-order-revisions.js';
 test('manual V3 prepares a private order with optional authorized Pix deposit, never invents customer acceptance',async t=>{
  const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
  const input={customer:{name:'Cliente manual',whatsapp:'5561888888888',email:''},event:{type:'birthday',honoreeName:'Teste manual',date:day(65)},items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:50,reason:'Condição especial autorizada'};
@@ -905,4 +905,17 @@ test('supplement net and fees are verified separately by unique reference, not e
  await syncV3SupplementPayment(env,attempt.provider_order_id);
  const p=db.sqlite.prepare('SELECT * FROM v3_supplement_payments').get();assert.equal(p.finance_net_cents,3750);assert.equal(p.finance_fee_cents,250);assert.equal(p.finance_paid_at,'2026-10-05T12:00:00.000Z');
  const {getV3SupplementFinance}=await import('../src/lib/v3-finance-report.js');const f=await getV3SupplementFinance(db,{start:'2026-10-01',endExclusive:'2026-11-01'});assert.equal(f.cashCents,4000);assert.equal(f.verifiedNetCents,3750);assert.equal(f.verifiedFeeCents,250);assert.equal(f.feePendingCount,0);assert.equal(mp.posts,2);
+});
+
+test('manual modular: oferta positiva conserva pedido e entrada, aceite altera o mesmo pedido',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const input={customer:{name:'Cliente oferta manual',whatsapp:'5561888888777',email:''},event:{type:'birthday',honoreeName:'Teste oferta',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:50,reason:'Condição especial autorizada'};
+ const q=await previewV3ManualOrder(db,input);const payload={...input,deliveryWindow:q.options[0],expectedTotalCents:q.totalCents,requestKey:'8'.repeat(36),confirmed:true};
+ const created=await createV3ManualOrder(env,payload),token=created.customerAreaPath.split('/').pop();const brief=await getV3ModularBriefing(db,token);
+ const offer=await getV3ManualUpsell(db,token);assert.ok(offer);assert.ok(offer.increaseCents>0);assert.equal(offer.depositPercent,50);assert.equal(offer.depositCents+offer.balanceCents,offer.totalCents);assert.equal(mp.posts,0);
+ await assert.rejects(acceptV3Revision(db,token,{id:brief.revision.id,confirmed:true,termsAccepted:true,expectedTotalCents:1,upsellKey:offer.key}),/sugestão mudou/);
+ assert.equal((await getV3ModularBriefing(db,token)).revision.totalCents,q.totalCents);
+ await acceptV3Revision(db,token,{id:brief.revision.id,confirmed:true,termsAccepted:true,expectedTotalCents:offer.totalCents,upsellKey:offer.key});
+ assert.equal((await getV3ModularBriefing(db,token)).payment.totalCents,offer.totalCents);
+ assert.equal(await getV3ManualUpsell(db,token),null);assert.equal(mp.posts,0);assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE public_token=?').get(token).n,1);
 });

@@ -9,6 +9,7 @@ import {withV2PaymentLock} from './v2-payment-lock.js';
 import {endUnpaidAttempts} from './v3-admin-payment-policy.js';
 import {v3LineStatements} from './v3-order-records.js';
 import {nowIso} from './http.js';
+import {loadV2Catalog} from './v2-catalog.js';
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 async function load(db,code){
  const row=await db.prepare(`SELECT o.*,p.total_cents,p.payment_method,p.deposit_percent,s.quote_json,s.request_key FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.order_code=?`).bind(code).first();
@@ -76,6 +77,51 @@ export async function createV3Revision(env,code,input={}){
   return pendingV3Revision(db,row.id);
  });
 }
+// A suggestion may only extend a pristine, unpaid manual proposal.
+async function manualUpsell(db,row,r){
+ if(row.source!=='manual_whatsapp'||r.kind!=='manual'||r.status!=='offered'||row.briefing_status!=='locked'||row.archived_at)return null;
+ if(await db.prepare('SELECT 1 FROM v2_payments WHERE order_id=? UNION ALL SELECT 1 FROM v2_checkout_holds WHERE order_id=? UNION ALL SELECT 1 FROM v2_contracts WHERE order_id=?').bind(row.id,row.id,row.id).first())return null;
+ const old=JSON.parse(r.quote_json),data=JSON.parse(r.input_json),terms=JSON.parse(r.terms_json);
+ if(old.blackLibri||old.coupon||old.couponComparison||old.discountCents||!Array.isArray(data.items))return null;
+ const index=data.items.findIndex(i=>!i.productCode.startsWith('atelie_')&&!i.productCode.startsWith('retrospectiva_'));
+ if(index<0)return null;
+ const line=data.items[index],previous=old.items.find(i=>i.family==='convite');
+ if(!previous)return null;
+ const catalogue=await loadV2Catalog(db),owned=new Set(line.addonCodes||[]),groups=new Set(catalogue.addons.filter(a=>owned.has(a.code)).map(a=>a.group));
+ const names={confirmation:'Acompanhe as confirmações de presença em um painel.',save_the_date:'Avise a data aos convidados com antecedência.',reminder:'Relembre os convidados perto da festa.',moments:'Reúna as fotos dos convidados em um álbum digital.'};
+ const candidates=[];
+ const target={cinematic_video:'cinematic_interactive',interactive_essential:'interactive_animated'}[line.productCode];
+ const product=catalogue.products.find(p=>p.code===target),v=product?.variants.find(v=>target==='cinematic_interactive'?Number(v.sceneCount)===Number(previous.commercialSnapshot.variant.sceneCount):true);
+ if(v)candidates.push({key:'upgrade:'+v.code,title:target==='cinematic_interactive'?'Que tal deixar seu vídeo interativo?':'Que tal uma abertura animada?',description:target==='cinematic_interactive'?'A mesma quantidade de cenas, com acesso às informações da festa pelo convite.':'Uma animação especial revela a arte do convite.',line:{...line,productCode:target,variantCode:v.code}});
+ for(const group of ['confirmation','save_the_date','reminder','moments']){
+  if(groups.has(group)||group==='confirmation'&&line.productCode==='cinematic_video'||group==='moments'&&groups.has('filter'))continue;
+  const a=catalogue.addons.filter(a=>a.group===group&&!owned.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
+  if(a)candidates.push({key:'addon:'+a.code,title:'Gostaria de adicionar '+a.name+'?',description:names[group],line:{...line,addonCodes:[...owned,a.code]}});
+ }
+ for(const c of candidates.slice(0,4)){
+  try{
+   const items=data.items.map((item,i)=>i===index?c.line:item);
+   const p=await price(db,row,{items});
+   const q=p.quote;
+   if(q.totalCents<=old.totalCents||q.discountCents||q.couponComparison||JSON.stringify(p.terms)!==JSON.stringify(terms))continue;
+   // Do not silently reprice other services or existing add-ons.
+   const unchanged=q.items.every(n=>{const o=old.items.find(i=>i.family===n.family);return o&&(n.family==='convite'?o.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))&&(c.key.startsWith('upgrade:')||o.productCents===n.productCents):o.totalCents===n.totalCents);});
+   if(!unchanged)continue;
+   const w=data.deliveryWindow,capacity={...p.capacity,...w};
+   await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)continue;
+   const depositCents=row.deposit_percent===50?Math.ceil(q.totalCents/2):q.totalCents;
+   return {key:c.key,title:c.title,description:c.description,increaseCents:q.totalCents-old.totalCents,totalCents:q.totalCents,depositCents,balanceCents:q.totalCents-depositCents,depositPercent:row.deposit_percent,items,pricing:{...q,schemaVersion:3,contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:q.paymentMethod,depositPercent:row.deposit_percent,depositCents,balanceCents:q.totalCents-depositCents}}};
+  }catch{/* Incompatible suggestions are skipped, never block the original. */}
+ }
+ return null;
+}
+export async function getV3ManualUpsell(db,token){
+ const row=await db.prepare("SELECT o.order_code FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.public_token=? AND o.source='manual_whatsapp'").bind(token).first();if(!row)return null;
+ const order=await load(db,row.order_code);await eligible(db,order);
+ const revision=await db.prepare("SELECT * FROM v3_order_revisions WHERE order_id=? AND status='offered' AND kind='manual'").bind(order.id).first();if(!revision)return null;
+ const u=await manualUpsell(db,order,revision);if(!u)return null;
+ const {items,pricing,...publicOffer}=u;return publicOffer;
+}
 export async function acceptV3Revision(db,token,input={}){
  const initial=await db.prepare('SELECT order_code,id FROM v2_orders WHERE public_token=?').bind(token).first();if(!initial)return null;
  return withV2PaymentLock(db,initial.id,async()=>{
@@ -84,7 +130,9 @@ export async function acceptV3Revision(db,token,input={}){
   if(!r)fail('Proposta não encontrada.',404);
   if(r.status==='accepted')return {accepted:true,alreadyAccepted:true};
   if(r.status!=='offered')fail('Esta proposta não está disponível.');
-  const q=JSON.parse(r.quote_json),data=JSON.parse(r.input_json),terms=JSON.parse(r.terms_json);
+  let q=JSON.parse(r.quote_json),data=JSON.parse(r.input_json);const terms=JSON.parse(r.terms_json);
+  if(input.upsellKey){const u=await manualUpsell(db,row,r);if(!u||u.key!==input.upsellKey||u.totalCents!==input.expectedTotalCents)fail('A sugestão mudou. Reabra a proposta original antes de continuar.');q=u.pricing;data={...data,items:u.items};}
+  const quoteJson=JSON.stringify(q);
   if(input.confirmed!==true||input.termsAccepted!==true||input.expectedTotalCents!==q.totalCents)fail('Confira os valores e aceite as condições da proposta.',422);
   if(await db.prepare("SELECT 1 FROM v2_payments WHERE order_id=? AND status NOT IN ('expired','cancelled','rejected')").bind(row.id).first())fail('Existe cobrança a conciliar.');
   const w=data.deliveryWindow,capacity={eventDate:row.event_date,...w,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
@@ -94,11 +142,11 @@ export async function acceptV3Revision(db,token,input={}){
    db.prepare('DELETE FROM v2_order_items WHERE order_id=?').bind(row.id),
    db.prepare('DELETE FROM v3_order_services WHERE order_id=?').bind(row.id),
    ...v3LineStatements(db,q,'?',row.id,at),
-   db.prepare('UPDATE v3_order_checkout_snapshots SET quote_json=?,terms_version=? WHERE order_id=?').bind(r.quote_json,terms.general.version,row.id),
-   db.prepare('UPDATE v2_order_pricing SET subtotal_cents=?,combo_discount_cents=?,coupon_discount_cents=?,total_cents=?,deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=? WHERE order_id=?').bind(q.subtotalCents,q.comboDiscountCents,q.couponDiscountCents,q.totalCents,deposit,q.totalCents-deposit,r.quote_json,at,row.id),
+   db.prepare('UPDATE v3_order_checkout_snapshots SET quote_json=?,terms_version=? WHERE order_id=?').bind(quoteJson,terms.general.version,row.id),
+   db.prepare('UPDATE v2_order_pricing SET subtotal_cents=?,combo_discount_cents=?,coupon_discount_cents=?,total_cents=?,deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=? WHERE order_id=?').bind(q.subtotalCents,q.comboDiscountCents,q.couponDiscountCents,q.totalCents,deposit,q.totalCents-deposit,quoteJson,at,row.id),
    db.prepare("UPDATE v2_orders SET delivery_start=?,delivery_end=?,next_action='Aguardando pagamento',updated_at=? WHERE id=?").bind(w.start,w.end,at,row.id),
    db.prepare("INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json) VALUES(?,?,?,?,?)").bind(row.id,terms.general.version,terms.general.content_hash||null,at,JSON.stringify({revisionId:r.id,services:terms.services.map(s=>({family:s.family,version:s.version,accepted:true}))})),
-   db.prepare("UPDATE v3_order_revisions SET status='accepted',accepted_at=? WHERE id=?").bind(at,r.id),
+   db.prepare("UPDATE v3_order_revisions SET status='accepted',accepted_at=?,quote_json=?,input_json=? WHERE id=?").bind(at,quoteJson,JSON.stringify(data),r.id),
    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_revision_accepted','Cliente aceitou a alteração antes de pagar.',?,?)").bind(row.id,JSON.stringify({revisionId:r.id,totalCents:q.totalCents}),at)
   ]);
   return {accepted:true};

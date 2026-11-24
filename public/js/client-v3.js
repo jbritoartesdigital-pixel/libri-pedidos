@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=96';
+import { mountV3Checkout } from './client-v3-checkout.js?v=99';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -195,7 +195,7 @@ let basketRequestKey='',basketRequestQuote=null,basketRequestSeq=0;
 function hideBasket(){if(basket)basket.hidden=true;basketRequestKey='';basketRequestQuote=null;basketRequestSeq++;}
 function renderBasket(){
  if(!basket||!basketBody||!basketTotal)return;
- if(state.step==='cart'||state.step==='atelie-checkout'){hideBasket();return;}
+ if(state.step==='cart'||state.step==='atelie-checkout'||(['extras','review'].includes(state.step)&&!state.cartItems.some(x=>cartFamily(x.productCode)!=='invitation'))){hideBasket();return;}
  const staged=state.creation==='invitation'&&state.productCode&&['intent','format','scenes','extras','review'].includes(state.step);
  const live=staged&&state.variantCode&&quote&&liveQuoteKey===quoteKey()?quote:null;
  const item=state.creation==='identity'&&['atelie','atelie-detail'].includes(state.step)?ateliePackages.find(p=>p.code===state.ateliePackage):null;
@@ -221,10 +221,11 @@ function renderBasket(){
 }
 function panel(title, subtitle, content, buttons, index=0) {
   const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
+  const stageLabel={event:'Sua celebração','event-subtype':'Sua celebração',creation:'Escolha seu serviço',intent:'Seu convite',format:'Formato do convite',scenes:'Duração da história',atelie:'Libri Ateliê','atelie-detail':'Detalhes do pacote',unready:'Retrospectivas',extras:'Personalize seu pedido',review:'Confira suas escolhas',cart:'Sua sacola'}[state.step]||'';
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
     (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
     (fixed?'<div class="v3-stage-heading">':'')+
-    '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
+    (stageLabel?'<span class="v97-stage-label">'+clean(stageLabel)+'</span>':'')+'<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
     (fixed?'</div><div class="v3-stage-body">':'')+
     content + (fixed?'</div>':'') + (buttons || '') +
     (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
@@ -238,7 +239,7 @@ function actions(back, nextText, nextAction = 'next') {
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
     '" data-action="' + action + '" data-value="' + clean(value) + '" aria-pressed="' + (current===value) + '">' +
-    '<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
+    (action==='creation'?'<span class="v97-card-overline">'+({invitation:'PARA CONVIDAR',identity:'PARA PERSONALIZAR',retrospective:'PARA EMOCIONAR'}[value]||'')+'</span>':'')+'<span class="v3-choice-copy"><strong>'+clean(title)+'</strong>'+(subtitle?'<small>'+clean(subtitle)+'</small>':'')+(price!=null?'<span class="v3-price"><small>'+(action==='guided-addon'?'+ ':action==='product'&&SCENE_PRODUCTS.has(value)?'A partir de ':'Total ')+'</small>'+money(price)+'</span>':'')+'</span></button>';
 }
 function intro() {
   hideBasket();root.innerHTML = '<section class="v3-intro-screen">' +
@@ -262,13 +263,13 @@ function renderEventSubtype(){
 }
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Você pode contratar mais de um serviço.',
+    'Escolha por onde começar. Você pode combinar serviços no mesmo pedido.',
     '<div class="v3-choices-stack">' +
-    choice('invitation','Convite digital','Um convite personalizado para enviar aos convidados pelo celular.',state.creation,'creation') +
+    choice('invitation','Convite digital','Convites em vídeo ou interativos, feitos no tema da sua festa.',state.creation,'creation') +
     choice('identity','Identidade visual',
-      'Artes da festa com o nome, as cores e o tema combinando em cada detalhe.',state.creation,'creation') +
+      'Nome, cores e artes personalizadas para deixar tudo combinando.',state.creation,'creation') +
     choice('retrospective','Retrospectiva',
-      'Transforme fotos e vídeos especiais em uma homenagem para exibir na festa.',state.creation,'creation') +
+      'Um vídeo com suas fotos e lembranças, para emocionar na festa.',state.creation,'creation') +
     '</div>',
     actions(true,'',null),1);
 }
@@ -329,7 +330,7 @@ function formatCodes() {
   return codes;
 }
 // Illustrative demonstrations of how each format behaves, not portfolio artwork.
-const formatShort={cinematic_video:'Uma história animada personalizada. Envie o vídeo pronto pelo WhatsApp.',cinematic_interactive:'A mesma história animada, em um convite que o convidado abre pelo celular. No final, ele pode acessar a localização, confirmar presença e consultar presentes, sem procurar informações nas mensagens.',interactive_essential:'Uma arte personalizada com os dados da festa. O convidado abre pelo celular e pode acessar localização, confirmação de presença e presentes.',interactive_gif:'A arte do convite ganha movimento em pequenos detalhes. Os convidados acessam as informações da festa pelo próprio convite.',interactive_animated:'Uma abertura animada revela a arte personalizada da festa. Depois, o convidado acessa as informações e os atalhos do convite.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
+const formatShort={cinematic_video:'Uma história animada personalizada. Você envia o vídeo pronto pelo WhatsApp.',cinematic_interactive:'História animada + convite para acessar localização, confirmar presença e consultar presentes.',interactive_essential:'Arte da festa com acesso à localização, confirmação de presença e presentes.',interactive_gif:'Arte com detalhes em movimento e atalhos para as informações da festa.',interactive_animated:'Uma abertura animada revela o convite com os atalhos da festa.',book:'Um convite de casamento em páginas que o convidado folheia pelo celular.',infinite:'Um convite em que o convidado desliza a tela para descobrir os detalhes da festa.'};
 function formatVisual(code){
  const isFilm=SCENE_PRODUCTS.has(code),interactive=code!=='cinematic_video';
  return '<span aria-hidden="true" class="v3-format-demo v3-demo-'+clean(code)+'"><span class="v3-demo-phone"><span class="v3-demo-screen">'+(code==='book'?'<i class="v3-demo-page"></i>':isFilm?'<i class="v3-demo-film"></i><i class="v3-demo-play"></i><i class="v3-demo-progress"></i>':'<i class="v3-demo-art"></i><i class="v3-demo-title"></i><i class="v3-demo-lines"></i>')+(interactive?'<span class="v3-demo-buttons"><i></i><i></i><i></i></span>':'')+(code==='interactive_animated'?'<i class="v3-demo-cover"></i>':'')+'</span></span></span>';
@@ -338,7 +339,8 @@ function renderFormats(){
  const codes=formatCodes().filter(code=>getProduct(code));
  const cards=codes.map(code=>{
   const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
-  return '<article class="v3-format-card"><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+  const label=code==='cinematic_video'?'VÍDEO PARA ENVIAR':code==='cinematic_interactive'?'EXPERIÊNCIA INTERATIVA':code==='interactive_essential'?'ARTE PERSONALIZADA':code==='interactive_gif'?'ARTE EM MOVIMENTO':code==='interactive_animated'?'ABERTURA ANIMADA':'CONVITE INTERATIVO';
+  return '<article class="v3-format-card" data-format="'+clean(code)+'"><span class="v97-card-overline">'+label+'</span><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'"><span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
  }).join('');
  panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
 }
@@ -351,7 +353,7 @@ function renderScenes() {
  const preset=(n,title,description)=>{const v=options.find(x=>Number(x.sceneCount)===n);return v?'<button type="button" class="v3-choice v3-duration-card" data-action="variant" data-value="'+clean(v.code)+'" data-scenes="'+n+'"><span class="v3-choice-copy"><strong>'+title+'</strong><small>'+n+' cenas · '+description+'</small><span class="v3-price">Total '+money(v.priceCents)+'</span></span></button>':'';};
  const extra=customScenes?'<div class="v3-custom-scenes"><label for="v3-scene-select">Quantidade de cenas</label><select class="v3-at-input" id="v3-scene-select"><option value="">Escolha a quantidade</option>'+options.map(v=>'<option value="'+clean(v.code)+'" '+(state.variantCode===v.code?'selected':'')+'>'+Number(v.sceneCount)+(Number(v.sceneCount)===1?' cena':' cenas')+' · Total '+money(v.priceCents)+'</option>').join('')+'</select><button type="button" class="v3-btn v3-btn-primary" data-action="custom-scenes-confirm">Escolher esta duração</button></div>':'';
  panel('Qual tamanho de história você quer?','A abertura já está incluída. Os valores são do convite completo.',
- '<div class="v3-choices-stack">'+preset(3,'Curtinho e encantador','Mais direto')+preset(6,'Uma história completa','Mais momentos e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-choice-copy"><strong>Quero escolher</strong><small>Defina a quantidade de cenas.</small></span></button>'+extra+'</div>',actions(true,'',null),3);
+ '<div class="v3-choices-stack">'+preset(3,'Curtinho','Uma história curta e direta')+preset(6,'Completo','Mais momentos, cenas e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-choice-copy"><strong>Personalizado</strong><small>Escolha quantas cenas seu convite terá.</small></span></button>'+extra+'</div>',actions(true,'',null),3);
 }
 function availableGroups() {
   return ADDON_GROUPS.filter(item => {
@@ -370,14 +372,19 @@ function renderExtras(){
  const cards=groups.map(g=>{
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
-  const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents)+(selected.length?' · Retirar':' · Adicionar'):selected.length?'+ '+money(price)+' · Alterar':'Ver opções';
-  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action">'+text+'</span></button>';
+  const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents):selected.length?'+ '+money(price):'A partir de '+money(Math.min(...variants.map(a=>Number(a.priceCents))));const actionText=selected.length?(direct?'Retirar':'Alterar'):direct?'Adicionar':'Ver opções';
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
  }).join('');
  const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
- panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
- '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+ panel('Quer acrescentar algo ao seu convite?','Escolha apenas o que faz sentido para sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
+ '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div>',3);
 }
-let guidedBusy=false;
+let guidedBusy=false,pendingAdd=false;
+function addConfiguredInvite(){
+ if(!currentVariant()||!quote||liveQuoteKey!==quoteKey()){pendingAdd=false;return message('Confira a configuração do convite.');}
+ pendingAdd=false;
+ if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))showCartAdded();
+}
 async function advanceGuided(group,code){
  if(guidedBusy)return;
  guidedBusy=true;
@@ -385,13 +392,14 @@ async function advanceGuided(group,code){
  const groups=availableGroups(),index=groups.findIndex(g=>g[0]===group);
  if(index<0)return;
  if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
+ const scrollPosition=root.querySelector('.v3-stage-body')?.scrollTop||0;
  const before=[...state.addonCodes],dismissed=[...state.dismissed];
  state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
  if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);state.dismissed=state.dismissed.filter(x=>x!=='addon:'+group);}
  else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
  try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
  state.offerFinished=false;
- state.addonQuestion=0;render();root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
+ state.addonQuestion=0;render();const body=root.querySelector('.v3-stage-body');if(body)body.scrollTop=scrollPosition;root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
  }finally{guidedBusy=false;}
 }
 function linesHtml() {
@@ -424,8 +432,7 @@ function openOfferModal(){
   modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 function cartDateHtml(){
-  if(!cartQuote||cartError||!state.cartItems.length)return '';
-  return '<div class="v3-cart-date"><label for="v3CartEventDate">Data da festa</label><input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input"><small>Confira o prazo na próxima etapa.</small></div>';
+  return ''; // A data é informada uma única vez, na contratação.
 }
 let cartExtrasCatalog=Object.create(null);
 const EXTRA_INTENTS={
@@ -497,7 +504,7 @@ function renderCart() {
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDateHtml(),
+    '<div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
@@ -542,6 +549,7 @@ function render() {
   }
 }
 function modalClose() {
+  pendingAdd=false;
   if(modalRoot.querySelector('.v3-offer-card')&&offer&&!state.offerFinished){
     state.dismissed.push(offer.id);state.offerFinished=true;offer=null;save();
   }
@@ -715,7 +723,7 @@ async function handleStoreClick(event) {
     if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
     if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);await go('review');return;}
+    if(action==='guided-finish'){if(guidedBusy||pendingAdd)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);if(!quote||liveQuoteKey!==quoteKey())await refreshQuote();offer=await determineOffer();if(offer&&!state.offerFinished){pendingAdd=true;openOfferModal();}else addConfiguredInvite();return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){
@@ -732,7 +740,7 @@ async function handleStoreClick(event) {
       modalClose();await go('extras');return;
     }
     if(action==='dismiss-offer'){
-      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;modalClose();render();return;
+      if(offer)state.dismissed.push(offer.id);state.offerFinished=true;offer=null;const add=pendingAdd;modalClose();if(add)addConfiguredInvite();else render();return;
     }
     if(action==='accept-offer'){
       if(!offer)return;
@@ -744,11 +752,10 @@ async function handleStoreClick(event) {
         if(item.group==='moments')state.addonCodes=state.addonCodes.filter(code=>code!=='custom_filter');
         state.addonCodes.push(item.code);
       }
-      state.offerFinished=true;offer=null;modalClose();await go('review');return;
+      state.offerFinished=true;offer=null;const add=pendingAdd;modalClose();if(add){await refreshQuote();addConfiguredInvite();}else await go('review');return;
     }
     if(action==='add-invitation'){
-      if(!currentVariant()||!quote||liveQuoteKey!==quoteKey())return message('Confira a configuração do convite.');
-      if(putCart({productCode:state.productCode,variantCode:state.variantCode,addonCodes:[...state.addonCodes],comboCode:quote.combo?.code||''}))showCartAdded();return;
+      addConfiguredInvite();return;
     }
     if(action==='added-more'){modalClose();await go('creation');return;} if(action==='added-view'){modalClose();await openCart();return;} if(action==='open-cart'){await openCart();return;}
     if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}

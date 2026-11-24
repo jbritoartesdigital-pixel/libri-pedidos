@@ -32,8 +32,8 @@ test('admin oferece prévia independente sem cobrar nem reservar',()=>{
 });
 test('client HTML aponta para o novo módulo em cache separado',()=>{
   const entry=readFileSync(new URL('../public/js/client-v2.js',import.meta.url),'utf8');
-  assert.match(shell,/\/js\/client-v2\.js\?v=20261124-atelier-gift-v3/);
-  assert.match(entry,/client-v2-store\.js\?v=20261124-atelier-gift-v3/);
+  assert.match(shell,/\/js\/client-v2\.js\?v=20261124-v99/);
+  assert.match(entry,/client-v2-store\.js\?v=20261124-v99/);
   assert.match(store,/black-libri-demo\.js\?v=20261124-atelier-gift-v3/);
 });
 
@@ -71,7 +71,7 @@ test('Atelier gift mantém quatro colunas e o sorteio original',()=>{
 test('real and demo share the new visual edition and maintain a single reveal',()=>{
  const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
- for(const source of [live,demo]){assert.match(source,/client-v2-black-libri\.css\?v=95-studio/);assert.match(source,/UMA SURPRESA DA LIBRI/);assert.match(source,/#c9a46e/);assert.match(source,/650/);}
+ for(const source of [live,demo]){assert.match(source,/client-v2-black-libri\.css\?v=97-studio/);assert.match(source,/UMA SURPRESA DA LIBRI/);assert.match(source,/#c9a46e/);assert.match(source,/650/);}
  assert.match(css,/prefers-reduced-motion:reduce/);assert.match(css,/libri-reveal/);assert.match(css,/data:image/);
  assert.match(live,/if\(active\|\|claim\)return/);
 });

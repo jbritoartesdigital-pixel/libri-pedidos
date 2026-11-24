@@ -52,7 +52,7 @@ export function renderV3Uploads(m,busy=false){
 }
 export async function startV3CustomerArea(root,{token,initial,api}){
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
-  let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null;
+  let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null,upsellSeen=false,acceptedUpsell=null;
   function current(){return area.modules.find(m=>m.module===active);}
   function deliveryHtml(s){
     const d=s.delivery;if(!d?.delivered)return '';
@@ -136,7 +136,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     if(area.cancellation)return '<section class="card"><h3>'+(area.cancellation.status==='completed'?'Pedido cancelado':'Cancelamento em conferência')+'</h3><p>Devoluções confirmadas: '+money(area.cancellation.refundCents)+'</p><p>Não realize novos pagamentos. Entre em contato com a Libri para esclarecimentos.</p></section>';
     if(area.revision){
       const r=area.revision;
-      return '<section class="card"><h3>Confira a proposta revisada</h3><p>'+esc(r.reason)+'</p>'+r.items.map(i=>'<p><strong>'+esc(i.productName+' · '+i.variantName)+'</strong> · '+money(i.totalCents)+'<br>'+i.addons.map(esc).join(', ')+' '+i.extras.map(x=>esc(x.quantity+' × '+x.name)).join(', ')+'</p>').join('')+'<p>Nova previsão: '+day(r.deliveryWindow.start)+' a '+day(r.deliveryWindow.end)+'</p><p><strong>Total: '+money(r.totalCents)+'</strong> · Entrada: '+money(r.depositCents)+'</p>'+(r.blackLibri?'<p>Surpresa preservada: '+esc(r.blackLibri.label)+'</p>':'')+'<details><summary>Condições da contratação</summary><p style="white-space:pre-wrap">'+esc(r.terms.general.body)+'</p>'+r.terms.services.map(t=>'<p style="white-space:pre-wrap">'+esc(t.body)+'</p>').join('')+'</details><label><input type="checkbox" data-revision-terms> Li e aceito as condições e o novo valor.</label><button class="btn primary" data-v3-action="accept-revision">Aceitar proposta</button></section>';
+      return '<section class="card"><h3>Confira a proposta revisada</h3><p>'+esc(r.reason)+'</p>'+r.items.map(i=>'<p><strong>'+esc(i.productName+' · '+i.variantName)+'</strong> · '+money(i.totalCents)+'<br>'+i.addons.map(esc).join(', ')+' '+i.extras.map(x=>esc(x.quantity+' × '+x.name)).join(', ')+'</p>').join('')+'<p>Nova previsão: '+day(r.deliveryWindow.start)+' a '+day(r.deliveryWindow.end)+'</p><p><strong>Total: '+money(acceptedUpsell?.totalCents??r.totalCents)+'</strong> · Entrada: '+money(acceptedUpsell?.depositCents??r.depositCents)+'</p>'+(acceptedUpsell?'<p>Sugestão escolhida · +'+money(acceptedUpsell.increaseCents)+' <button type="button" class="btn btn-ghost" data-v3-action="remove-upsell">Retirar sugestão</button></p>':'')+''+(r.blackLibri?'<p>Surpresa preservada: '+esc(r.blackLibri.label)+'</p>':'')+'<details><summary>Condições da contratação</summary><p style="white-space:pre-wrap">'+esc(r.terms.general.body)+'</p>'+r.terms.services.map(t=>'<p style="white-space:pre-wrap">'+esc(t.body)+'</p>').join('')+'</details><label><input type="checkbox" data-revision-terms> Li e aceito as condições e o novo valor.</label><button class="btn primary" data-v3-action="accept-revision">Aceitar proposta</button></section>';
     }
     const url=payment?.state==='pending'?safePayment(payment.checkoutUrl):null;
     return '<section class="card"><h3>Pagamento</h3><p>'+esc(payment?.state==='urgency_pending'?'Solicitação em análise.':payment?.state==='paid'?'Pagamento confirmado. Atualize o pedido para conferir a liberação.':payment?.state==='expired'?'Cobrança anterior encerrada.':payment?.state==='review'?'Entre em contato com a Libri para revisar a cobrança.':'Confira a situação do pagamento para liberar os dados contratados.')+'</p>'+
@@ -235,10 +235,13 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const supplement=e.target.closest('[data-v3-supplement]');if(supplement&&!busy){const a=supplement.dataset.v3Supplement;await (['pay','renew','verify'].includes(a)?supplementPaymentAction(supplement.dataset.id,a):decideSupplement(supplement.dataset.id,a));return;}
     const prod=e.target.closest('[data-v3-production]');if(prod&&!busy){await productionAction(prod.dataset.family,prod.dataset.v3Production);return;}
     const action=e.target.closest('[data-v3-action]')?.dataset.v3Action;
+    if(action==='remove-upsell'&&!busy){acceptedUpsell=null;notice='Pedido original mantido.';render();return;}
     if(action==='accept-revision'&&!busy&&area.revision){
       if(!root.querySelector('[data-revision-terms]')?.checked){error='Leia e aceite as condições da proposta.';render();return;}
-      const r=area.revision;busy=true;error='';render();
-      try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:r.totalCents})});area=res.briefing;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
+      const r=area.revision;
+      if(!upsellSeen&&area.manualUpsell){upsellSeen=true;const u=area.manualUpsell;const {modal}=await import('./client-v2-core.js');const close=modal(u.title,'<div class="manual-upsell-card"><p>'+esc(u.description)+'</p><div class="manual-upsell-delta"><small>Por apenas mais</small><strong>'+money(u.increaseCents)+'</strong></div><p>Novo total: '+money(u.totalCents)+'</p>'+(u.depositPercent===50?'<p>Entrada: '+money(u.depositCents)+' · Saldo: '+money(u.balanceCents)+'</p>':'')+'<div class="action-row"><button id="v3ManualUpsellSkip" class="btn btn-ghost">Agora não</button><button id="v3ManualUpsellAccept" class="btn btn-primary">Quero adicionar</button></div></div>');document.getElementById('v3ManualUpsellSkip').onclick=()=>{close();root.querySelector('[data-v3-action="accept-revision"]')?.click();};document.getElementById('v3ManualUpsellAccept').onclick=()=>{close();acceptedUpsell=u;render();notice='Sugestão escolhida. Confira o novo valor e aceite a proposta.';render();};return;}
+      busy=true;error='';render();
+      try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:acceptedUpsell?.totalCents??r.totalCents,upsellKey:acceptedUpsell?.key})});area=res.briefing;acceptedUpsell=null;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
       if(!area.revision)await verify();return;
     }
     if(action==='submit')submit();

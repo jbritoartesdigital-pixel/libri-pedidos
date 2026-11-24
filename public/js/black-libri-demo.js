@@ -9,14 +9,14 @@ async function ensureStyle() {
   const link=document.createElement('link');
   link.id='blackLibriClientStyles';
   link.rel='stylesheet';
-  link.href='/css/client-v2-black-libri.css?v=95-studio';
+  link.href='/css/client-v2-black-libri.css?v=97-studio';
   await new Promise(resolve=>{
     link.onload=resolve;link.onerror=resolve;
     document.head.appendChild(link);
   });
 }
 
-export async function openBlackLibriDemo({onContinue=null,continueLabel='Continuar teste do briefing'}={}) {
+export async function openBlackLibriDemo({onContinue=null,continueLabel='Continuar teste do briefing',hasSaveDate=false}={}) {
   await ensureStyle();
   const overlay=document.createElement('div');
   overlay.className='black-libri-overlay';
@@ -24,13 +24,14 @@ export async function openBlackLibriDemo({onContinue=null,continueLabel='Continu
   document.body.style.overflow='hidden';
   document.body.appendChild(overlay);
   let chosen=-1,closed=false,soundOn=true;
+  const gift=hasSaveDate?'Lembrete estático':'Save the Date estático';
   const finish=({continueFlow=false}={})=>{
     if(closed)return;
     closed=true;
     document.body.style.overflow=previousOverflow;
     document.removeEventListener('keydown',onEscape);
     overlay.remove();
-    if(continueFlow && typeof onContinue==='function') onContinue();
+    if(continueFlow && typeof onContinue==='function') onContinue(gift);
   };
   const onEscape=e=>{if(e.key==='Escape')finish();};
   document.addEventListener('keydown',onEscape);
@@ -61,8 +62,8 @@ export async function openBlackLibriDemo({onContinue=null,continueLabel='Continu
             aria-pressed="${soundOn}">${soundOn?'♪ Som ligado':'♪ Som desligado'}</button>`:`
           <div class="black-libri-result" role="status">
             <span aria-hidden="true">🎁</span>
-            <small>SEU PRESENTE</small><strong>Save the Date estático</strong>
-            <p>Prêmio ilustrativo. Nesta demonstração, nada é reservado, cobrado ou salvo.</p>
+            <small>SEU PRESENTE</small><strong>${gift}</strong>
+            <p>Presente de demonstração, não reservado nem cobrado. Na campanha real, o benefício é conferido no pedido.</p>
           </div>
           <button type="button" class="black-libri-button" data-demo-continue>
             ${onContinue?continueLabel==='Concluir simulação'?'Concluir simulação':'Continuar teste do briefing':'Fechar prévia'}

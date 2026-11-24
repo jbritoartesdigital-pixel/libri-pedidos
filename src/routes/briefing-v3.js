@@ -1,5 +1,5 @@
 import {openV3PaidCancellation,refreshV3Cancellation,refundV3CancellationCharge,finalizeV3PaidCancellation} from '../lib/v3-paid-cancellation.js';
-import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder} from '../lib/v3-order-revisions.js';
+import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder,getV3ManualUpsell} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/v3-service-supplements.js';
@@ -11,7 +11,7 @@ import {recoverV3PaidCapacity,getV3AdminBriefing,reviewV3ServiceBriefing} from '
 import {json,fail,readJson} from '../lib/http.js';
 import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
-const customerBrief=async(env,token)=>{const b=await getV3ModularBriefing(env.DB,token);return b?{...b,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}:null;};
+const customerBrief=async(env,token)=>{const b=await getV3ModularBriefing(env.DB,token);return b?{...b,manualUpsell:b.revision?.kind==='manual'?await getV3ManualUpsell(env.DB,token).catch(()=>null):null,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}:null;};
 const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
 async function boundedJson(request){
   const size=Number(request.headers.get('content-length')||0);

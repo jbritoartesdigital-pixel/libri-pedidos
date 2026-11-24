@@ -1,12 +1,13 @@
 // Briefing adaptativo do Ateliê usado na área privada após pagamento.
 // Personagens extras são apenas pedidos de orçamento, não itens cobrados automaticamente.
+import {ATELIE_V41_APPROVED_CATALOG} from './v3-atelie-v41-commercial-catalog.js';
 export function buildAtelieBriefingBlueprint({
   event={}, packageCode='', contractedApplications=[], requiresChildPhoto=false,
   data={}
 }={}) {
   const f=(key,label,type='text',other={})=>({key,label,type,...other});
   const section=(id,title,fields)=>({id,title,fields});
-  const includedPoses=({essencia:1,encanto:2,universo:3})[packageCode]||1;
+  const includedPoses=ATELIE_V41_APPROVED_CATALOG[packageCode]?.mascotPoses||3;
   const childMascot=data.mascotMode==='criança ilustrada';
   const safeApplications=Array.isArray(contractedApplications)
     ?contractedApplications.filter(x=>typeof x==='string'&&x.trim()).slice(0,30):[];
@@ -38,7 +39,7 @@ export function buildAtelieBriefingBlueprint({
       }),
       f('includedPosesInfo','Poses incluídas no pacote: '+includedPoses,'info',{
         required:false,
-        hint:'Essência: 1 · Encanto: 2 · Universo: 3. Poses extras podem ser orçadas à parte.'
+        hint:'Essência: 3 · Encanto: 4 · Universo: 5. São poses da mesma criança ou variações da mesma ilustração temática. Outras podem ser orçadas à parte.'
       }),
       f('additionalSubjects','Quer encomendar outra criança, pet ou ilustração individual fora da composição prevista?','choice',{
         options:['não','quero solicitar orçamento'],required:true,

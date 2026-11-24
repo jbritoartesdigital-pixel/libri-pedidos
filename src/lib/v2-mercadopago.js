@@ -44,7 +44,7 @@ function safeJson(
   return {};
 }
 
-function paymentMethodConfig(
+export function paymentMethodConfig(
   method,
   settings,
 ) {
@@ -214,7 +214,7 @@ function cardOrderDiagnostic(response, data, body) {
   };
 }
 
-async function mpFetch(
+export async function mpFetch(
   env,
   path,
   {
@@ -896,7 +896,7 @@ function orderIsApproved(
   );
 }
 
-function normalizePaymentStatus(
+export function normalizePaymentStatus(
   mpOrder,
 ) {
   if (

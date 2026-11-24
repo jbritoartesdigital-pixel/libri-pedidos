@@ -16,7 +16,7 @@ async function ensureStyle() {
   });
 }
 
-export async function openBlackLibriDemo({onContinue=null}={}) {
+export async function openBlackLibriDemo({onContinue=null,continueLabel='Continuar teste do briefing'}={}) {
   await ensureStyle();
   const overlay=document.createElement('div');
   overlay.className='black-libri-overlay';
@@ -65,7 +65,7 @@ export async function openBlackLibriDemo({onContinue=null}={}) {
             <p>Prêmio ilustrativo. Nesta demonstração, nada é reservado, cobrado ou salvo.</p>
           </div>
           <button type="button" class="black-libri-button" data-demo-continue>
-            ${onContinue?'Continuar teste do briefing':'Fechar prévia'}
+            ${onContinue?continueLabel==='Concluir simulação'?'Concluir simulação':'Continuar teste do briefing':'Fechar prévia'}
           </button>
         `}
         <p class="black-libri-foot">MODO DE TESTE • Sem participação real • Sem pagamento</p>

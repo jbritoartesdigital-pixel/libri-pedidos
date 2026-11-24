@@ -171,6 +171,10 @@ export async function renderCentral(openOrder) {
     item.attentionReason !== 'Festa hoje'
       || item.status === 'ready_for_production');
 
+  const modular=(c.modularOrders||[]);
+  const serviceNames={convite:'Convites',identidade_visual:'Ateliê',retrospectiva:'Retrospectivas'};
+  const active=modular.flatMap(o=>o.services.filter(s=>!['delivered','cancelled'].includes(s.productionStatus)).map(s=>({...s,code:o.code,honoreeName:o.honoreeName})));
+  const soon=active.filter(s=>s.deliveryWindow&&s.deliveryWindow.end<=new Date(new Date(c.today+'T12:00:00Z').getTime()+6*86400000).toISOString().slice(0,10)).sort((a,b)=>a.deliveryWindow.end.localeCompare(b.deliveryWindow.end));
   viewRoot.innerHTML = `
     <nav class="admin-v3-shortcuts" aria-label="Atalhos de operação">
       <a class="admin-v3-shortcut" href="/admin-v2?view=production&service=convites">
@@ -254,6 +258,13 @@ export async function renderCentral(openOrder) {
       <div id="advancedOrderResults" class="list" style="margin-top:12px" aria-live="polite"></div>
     </section>
 
+    <section class="card" style="margin-top:14px">
+      <div class="section-title"><div><span class="eyebrow">Operação integrada</span><h2>Pedidos em andamento</h2></div><span class="status">${modular.length} pedidos</span></div>
+      <div class="kpi-grid">${Object.entries(serviceNames).map(([family,label])=>`<article class="kpi"><span>${label}</span><strong>${active.filter(s=>s.family===family).length}</strong><small>Serviços em andamento</small></article>`).join('')}</div>
+      <div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido integrado em andamento.')}</div>
+      ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}
+      ${soon.length?`<details class="order-optional" style="margin-top:12px"><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:''}
+    </section>
     <section class="card attention-center">
       <div class="section-title">
         <div>

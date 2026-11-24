@@ -178,5 +178,5 @@ test('UI Central inclui controle autorizado, prévia da entrada e histórico',()
   assert.match(server,/admin_deposit_exception_changed/);
   assert.match(server,/adminDepositException/);
   assert.match(adminEntry,/admin-v2-order\.js\?v=20261113-existing-checkout-gift-1/);
-  assert.match(html,/admin-v2\.js\?v=20261124-admin-v3-46/);
+  assert.match(html,/admin-v2\.js\?v=20261124-admin-v3-68/);
 });

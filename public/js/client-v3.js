@@ -211,15 +211,15 @@ function renderBasket(){
 function panel(title, subtitle, content, buttons, index=0) {
   document.getElementById('v3-landing')?.toggleAttribute('hidden',state.step!=='event');
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+'">' + stepBar(index) +
-    '<span class="v3-eyebrow">Libri Convites · seu pedido</span>' +
-    '<h1 class="v3-title">' + title + '</h1><p class="v3-text">' + subtitle + '</p>' +
+    '' +
+    '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
     content + (buttons || '') + '</section>';
   root.setAttribute('aria-busy','false');renderBasket();
 }
 function actions(back, nextText, nextAction = 'next') {
   return '<div class="v3-action-row">' +
     (back ? '<button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>' : '<span></span>') +
-    '<button class="v3-btn v3-btn-primary" type="button" data-action="' + nextAction + '">' + clean(nextText) + '</button></div>';
+    (nextAction?'<button class="v3-btn v3-btn-primary" type="button" data-action="' + nextAction + '">' + clean(nextText) + '</button>':'')+'</div>';
 }
 function choice(value, title, subtitle, current, action, price) {
   return '<button type="button" class="v3-choice ' + (current === value ? 'is-selected' : '') +
@@ -232,25 +232,25 @@ function intro() {
     '<button class="v3-btn v3-btn-text" type="button" data-action="skip-intro">Pular abertura</button></section>';
 }
 function renderEvent() {
-  panel('Qual é o seu evento?', 'Assim mostramos os formatos que fazem mais sentido para a sua comemoração.',
+  panel('Qual é o seu evento?', '',
     '<div class="v3-grid">' + EVENTS.map(item => choice(item[0],item[1],item[2],state.eventType,'event')).join('') + '</div>',
-    actions(false,'Continuar'),0);
+    '',0);
 }
 function renderEventSubtype(){
  const options=EVENT_SUBTYPES[state.eventType]||[];
- panel('Qual é a celebração?','Assim podemos adaptar os formatos e as perguntas ao seu evento.','<div class="v3-choices-stack">'+options.map(x=>choice(x[0],x[1],'',state.eventSubtype,'event-subtype')).join('')+'</div>',actions(true,'Continuar'),0);
+ panel('Qual é a celebração?','','<div class="v3-choices-stack">'+options.map(x=>choice(x[0],x[1],'',state.eventSubtype,'event-subtype')).join('')+'</div>',actions(true,'',null),0);
 }
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Escolha um serviço para começar. Você pode reunir outros no mesmo pedido.',
+    'Você pode contratar mais de um serviço.',
     '<div class="v3-choices-stack">' +
-    choice('invitation','Convites Digitais','Histórias em vídeo ou convites que abrem no celular e ajudam os convidados.',state.creation,'creation') +
-    choice('identity','Identidade Visual para Festas | Libri Ateliê',
-      'Criamos a aparência personalizada da festa: brasão, nome decorado, cores, personagens, elementos e estampas conforme o pacote.',state.creation,'creation') +
+    choice('invitation','Convites Digitais','Convites em vídeo ou interativos.',state.creation,'creation') +
+    choice('identity','Libri Ateliê · Identidade visual',
+      'Brasão, nome, cores e artes combinando.',state.creation,'creation') +
     choice('retrospective','Retrospectiva de fotos e vídeos',
-      'Uma homenagem em vídeo com suas lembranças, músicas e dedicatória. Você escolhe conforme a quantidade de fotos e vídeos.',state.creation,'creation') +
+      'Suas fotos e vídeos em uma homenagem.',state.creation,'creation') +
     '</div>'+cartButton(),
-    actions(true,'Continuar'),1);
+    actions(true,'',null),1);
 }
 function renderUnready() {
   const cards=retrosPackages.map(item=>
@@ -260,7 +260,7 @@ function renderUnready() {
     (item.previewAvailable?'<button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'<p class="v3-mini">Pacote indisponível.</p>')+'</article>'
   ).join('');
   panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
-    '<div class="v3-notice">Envie os materiais organizados pelo WhatsApp após a contratação. Prazo mínimo de 15 dias corridos após pagamento, briefing completo e recebimento dos materiais.</div>'+
+    '<p class="v3-mini">Materiais pelo WhatsApp após contratar. Mínimo de 15 dias após pagamento, briefing e materiais completos.</p>'+
     '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+cartButton(),
     '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
@@ -272,12 +272,10 @@ function renderAtelie() {
       '<span class="v3-price">'+(item.purchaseAvailable?money(item.priceCents):'Consultar detalhes')+'</span></span><span class="v3-choice-check" aria-hidden="true"></span></button>'
   ).join('');
   panel('Sua festa, com tudo combinando',
-    'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
-    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação da identidade visual em PDF. Não inclui projeto ou simulação de decoração.</div>'+
-      '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
-      '<p class="v3-mini" style="margin-top:16px">Não inclui impressão ou fabricação, montagem da festa nem convite em vídeo ou interativo. Peças especiais, personagens elaborados a partir de fotos e alterações grandes precisam de orçamento individual.</p>',
-    '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>'+
-      '<button class="v3-btn v3-btn-primary" type="button" data-action="atelie-detail" '+(!state.ateliePackage?'disabled':'')+'>Conhecer pacote</button></div>',2);
+    'Artes digitais personalizadas para todos os detalhes da festa.',
+    '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
+      '<p class="v3-mini">Artes digitais, sem impressão, montagem ou convite. Prazo mínimo de 15 dias após pagamento e briefing completo.</p>',
+    actions(true,'',null),2);
 }
 function renderAtelieDetail() {
   const item = ateliePackages.find(p=>p.code===state.ateliePackage);
@@ -288,21 +286,20 @@ function renderAtelieDetail() {
   const exclusions=[...(item.excludedCommon||[]),...(item.excludedItems||[])];
   const excluded='<ul class="v3-mini">'+exclusions.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>';
   panel('Pacote '+clean(item.name),clean(item.shortDescription),
-    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual em PDF.</p></div>'+
-    '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
+    '<h2 class="v3-title" style="font-size:20px">O que você recebe</h2>'+includes+
     '<details class="v3-terms-disclosure"><summary>O que não está incluído</summary>'+excluded+'</details>'+
-    '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
+    '<div class="v3-total">'+(item.purchaseAvailable?'<strong>Valor do pacote</strong><b>'+money(item.priceCents)+'</b>':'<strong>Compra ainda não liberada.</strong>')+'</div>'+ 
     '',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
     '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
 }
 function renderIntent() {
   panel('Como imagina seu convite?',
-    'Não precisa conhecer os nomes dos modelos. Escolha o que gostaria que seus convidados recebessem.',
+    '',
     '<div class="v3-choices-stack">' +
-      choice('story','Uma história animada','Uma história personalizada com personagens, cenários, animações e possibilidade de falas, definidas depois no briefing.',state.intent,'intent') +
-      choice('simple','Um convite mais simples','Uma arte no celular, com informações da festa e botões para os convidados usarem.',state.intent,'intent') +
-    '</div>',actions(true,'Ver formatos'),2);
+      choice('story','Uma história animada','Cenas, personagens e animações.',state.intent,'intent') +
+      choice('simple','Um convite mais simples','Uma arte com os detalhes da festa.',state.intent,'intent') +
+    '</div>',actions(true,'',null),2);
 }
 function formatCodes() {
   if (state.intent === 'story') return ['cinematic_video','cinematic_interactive'];
@@ -311,29 +308,30 @@ function formatCodes() {
   if (state.eventType === '15_years' || state.eventType === 'other') codes.push('infinite');
   return codes;
 }
-function renderFormats() {
-  const codes = formatCodes().filter(code => getProduct(code));
-  panel('Escolha o formato', state.intent === 'story'
-    ? 'Em todos os cinematográficos, a história, os cenários e personagens são personalizados.'
-    : 'O convidado recebe a mensagem pelo WhatsApp, toca para abrir e vê o convite na tela do celular.',
-    '<div class="v3-choices-stack">' + codes.map(code => {
-      const product = getProduct(code), detail = PRODUCTS[code];
-      return choice(code,detail?.title || product.name,detail?.description || product.shortDescription,
-        state.productCode,'product',product.variants[0]?.priceCents)+'<button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplos deste formato</button>';
-    }).join('') + '</div>',
-    actions(true,SCENE_PRODUCTS.has(state.productCode) ? 'Escolher cenas' : 'Continuar'),2);
+// Illustrative demonstrations of how each format behaves, not portfolio artwork.
+const formatShort={cinematic_video:'Um vídeo personalizado para assistir e compartilhar.',cinematic_interactive:'O vídeo termina em uma tela com botões clicáveis.',interactive_essential:'Abre no celular com informações e até 3 botões.',interactive_gif:'Detalhes se movimentam continuamente, com até 3 botões.',interactive_animated:'Uma abertura animada revela a arte com até 3 botões.',book:'O convidado folheia as páginas do casamento.',infinite:'Os detalhes aparecem ao deslizar a tela.'};
+function formatVisual(code){
+ const isFilm=SCENE_PRODUCTS.has(code),interactive=code!=='cinematic_video';
+ return '<span aria-hidden="true" class="v3-format-demo v3-demo-'+clean(code)+'"><span class="v3-demo-phone"><span class="v3-demo-screen">'+(code==='book'?'<i class="v3-demo-page"></i>':isFilm?'<i class="v3-demo-film"></i><i class="v3-demo-play"></i><i class="v3-demo-progress"></i>':'<i class="v3-demo-art"></i><i class="v3-demo-title"></i><i class="v3-demo-lines"></i>')+(interactive?'<span class="v3-demo-buttons"><i></i><i></i><i></i></span>':'')+(code==='interactive_animated'?'<i class="v3-demo-cover"></i>':'')+'</span></span></span>';
 }
+function renderFormats(){
+ const codes=formatCodes().filter(code=>getProduct(code));
+ const cards=codes.map(code=>{
+  const product=getProduct(code),detail=PRODUCTS[code],price=product.variants[0]?.priceCents;
+  return '<article class="v3-format-card"><button type="button" class="v3-format-select" data-action="product" data-value="'+clean(code)+'" aria-pressed="'+(state.productCode===code)+'">'+formatVisual(code)+'<span class="v3-choice-copy"><strong>'+clean(detail?.title||product.name)+'</strong><small>'+clean(formatShort[code]||detail?.description||product.shortDescription)+'</small>'+(price!=null?'<span class="v3-price">'+(SCENE_PRODUCTS.has(code)?'A partir de ':'Total ')+money(price)+'</span>':'')+'</span><span class="v3-arrow" aria-hidden="true">›</span></button><button type="button" class="v3-example-link" data-action="show-examples" data-value="'+clean(code)+'">Ver exemplo real</button></article>';
+ }).join('');
+ panel('Como seu convidado vai receber?', 'Toque no formato que prefere.', '<div class="v3-format-list">'+cards+'</div>',actions(true,'',null),2);
+}
+let customScenes=false;
+function durationVisual(n){return '<span class="v3-duration-visual" aria-hidden="true">'+Array.from({length:n},(_,i)=>'<i style="--scene-index:'+i+'"></i>').join('')+'</span>';}
 function renderScenes() {
-  const product = currentProduct();
-  if (!product || product.pricingMode !== 'scene_count') {state.step='extras';render();return;}
-  const options = product.variants.filter(item => Number.isInteger(Number(item.sceneCount))).sort((a,b)=>a.sceneCount-b.sceneCount);
-  panel('Quantas cenas gostaria?', 'Cada cena mostra um momento da história. A abertura já vem incluída. O preço de cada opção é o valor total do convite, não um preço por cena.',
-    '<div class="v3-grid">' + options.map(item => {
-      const label = String(item.sceneCount) + (Number(item.sceneCount)===1 ? ' cena' : ' cenas');
-      const sub = Number(item.sceneCount)===3 ? 'Uma história mais curtinha · sugestão Libri' :
-        Number(item.sceneCount)===6 ? 'Uma história mais completa · sugestão Libri' : '';
-      return choice(item.code,label,sub,state.variantCode,'variant',item.priceCents);
-    }).join('') + '</div>',actions(true,'Continuar'),3);
+ const product=currentProduct();
+ if(!product||product.pricingMode!=='scene_count'){state.step='extras';render();return;}
+ const options=product.variants.filter(v=>Number.isInteger(Number(v.sceneCount))&&Number(v.sceneCount)>0).sort((a,b)=>a.sceneCount-b.sceneCount);
+ const preset=(n,title,description)=>{const v=options.find(x=>Number(x.sceneCount)===n);return v?'<button type="button" class="v3-choice v3-duration-card" data-action="variant" data-value="'+clean(v.code)+'" data-scenes="'+n+'">'+durationVisual(n)+'<span class="v3-choice-copy"><strong>'+title+'</strong><small>'+n+' cenas · '+description+'</small><span class="v3-price">Total '+money(v.priceCents)+'</span></span><span aria-hidden="true" class="v3-arrow">›</span></button>':'';};
+ const extra=customScenes?'<div class="v3-custom-scenes"><label for="v3-scene-select">Quantidade de cenas</label><select class="v3-at-input" id="v3-scene-select"><option value="">Escolha a quantidade</option>'+options.map(v=>'<option value="'+clean(v.code)+'" '+(state.variantCode===v.code?'selected':'')+'>'+Number(v.sceneCount)+(Number(v.sceneCount)===1?' cena':' cenas')+' · Total '+money(v.priceCents)+'</option>').join('')+'</select><button type="button" class="v3-btn v3-btn-primary" data-action="custom-scenes-confirm">Escolher esta duração</button></div>':'';
+ panel('Qual tamanho de história você quer?','A abertura já está incluída. Os valores são do convite completo.',
+ '<div class="v3-choices-stack">'+preset(3,'Curtinho e encantador','Mais direto')+preset(6,'Uma história completa','Mais momentos e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-duration-visual v3-custom-visual" aria-hidden="true">✦</span><span class="v3-choice-copy"><strong>Quero escolher</strong><small>Defina a quantidade de cenas.</small></span><span class="v3-arrow" aria-hidden="true">'+(customScenes?'−':'+')+'</span></button>'+extra+'</div>',actions(true,'',null),3);
 }
 function availableGroups() {
   return ADDON_GROUPS.filter(item => {
@@ -363,16 +361,15 @@ const ADDON_QUESTIONS={
 };
 function renderExtras(){
  const groups=availableGroups();
- if(!groups.length){panel('Seu convite está pronto para conferir','Nenhum adicional disponível para este formato.',priceBar(),actions(true,'Conferir meu pedido'),3);return;}
- const i=Math.max(0,Math.min(groups.length-1,Number(state.addonQuestion)||0));
- state.addonQuestion=i;
- const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
- const variants=(catalog.addons||[]).filter(a=>a.group===group);
- const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · R$ 0,00</strong><p>O convidado escolhe a resposta, abre uma mensagem pronta no WhatsApp e toca em Enviar. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
- const choiceList=group==='confirmation'?choice(group,'Continuar com WhatsApp','Sem custo adicional',selected?null:group,'guided-skip')+choice(group,'Quero acompanhar pelo painel da Libri',selected?'Selecionado: '+selected.name:'Veja as opções de Confirmação Libri',selected?group:null,'guided-options'):choice(group,selected?'Alterar '+g[1]:'Sim, quero ver as opções',selected?selected.name+' · '+money(selected.priceCents):'Confira os valores antes de decidir',selected?group:null,'guided-options')+choice(group,'Agora não','Sem adicionar custo',selected?null:group,'guided-skip');
- panel(ADDON_QUESTIONS[group]||g[1],g[2],
-  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">' +choiceList+'</div></div>'+priceBar(),
-  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+ const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Respostas no formulário e painel da Libri.',moments:'Álbum digital com fotos dos convidados e filtro incluso.',filter:'Um efeito de fotos com o tema da festa.'};
+ const cards=groups.map(g=>{
+  const selected=selectedAddons().filter(a=>a.group===g[0]);
+  const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(selected.length?selected.map(a=>a.name).join(', '):short[g[0]]||g[2])+'</small></span><span class="v3-optional-action">'+(selected.length?'+ '+money(price)+' · Alterar':'Ver opções')+' ›</span></button>';
+ }).join('');
+ const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Se quiser acompanhar pelo painel Libri, escolha a opção abaixo.</p>':'';
+ panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
+ '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
 let guidedBusy=false;
 async function advanceGuided(group,code){
@@ -384,13 +381,11 @@ async function advanceGuided(group,code){
  if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
  const before=[...state.addonCodes],dismissed=[...state.dismissed];
  state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
- if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);}
+ if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);state.dismissed=state.dismissed.filter(x=>x!=='addon:'+group);}
  else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
  try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
  state.offerFinished=false;
- const next=availableGroups().findIndex(g=>ADDON_GROUPS.findIndex(x=>x[0]===g[0])>ADDON_GROUPS.findIndex(x=>x[0]===group));
- if(next<0){state.addonQuestion=0;await go('review');}
- else{state.addonQuestion=next;render();window.scrollTo({top:0,behavior:'auto'});}
+ state.addonQuestion=0;render();root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
  }finally{guidedBusy=false;}
 }
 function linesHtml() {
@@ -500,7 +495,7 @@ function renderCart() {
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':items.length?'<p class="v3-mini">Confira os dados, os prazos e as condições na contratação. Nenhuma cobrança foi criada.</p>':'';
-  panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
+  panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
     '<div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
@@ -680,10 +675,10 @@ async function handleStoreClick(event) {
   try {
     if(action==='skip-intro'){sessionStorage.setItem('libriV3IntroSeen','1');render();return;}
     if(action==='retry'){await init();return;}
-    if(action==='event'){if(state.eventType===value){render();return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.eventSubtype='';state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
-    if(action==='event-subtype'){state.eventSubtype=value;render();return;}
-    if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
-    if(action==='atelie-package'){state.ateliePackage=value;render();return;}
+    if(action==='event'){if(!EVENTS.some(x=>x[0]===value))return;if(state.eventType===value){await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}if(state.eventType!==value&&state.cartItems.length&&!window.confirm('Alterar o tipo de evento? Os serviços serão mantidos no carrinho, mas os valores e as condições precisarão ser conferidos novamente.'))return;state.eventType=value;state.eventSubtype='';state.creation='';state.ateliePackage='';state.intent='';state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';await go(EVENT_SUBTYPES[value]?'event-subtype':'creation');return;}
+    if(action==='event-subtype'){if(!(EVENT_SUBTYPES[state.eventType]||[]).some(x=>x[0]===value))return;state.eventSubtype=value;await go('creation');return;}
+    if(action==='creation'){if(!['invitation','identity','retrospective'].includes(value))return;if(state.creation!==value)state.ateliePackage='';state.creation=value;await go(value==='invitation'?'intent':value==='identity'?'atelie':'unready');return;}
+    if(action==='atelie-package'){if(!ateliePackages.some(p=>p.code===value))return;state.ateliePackage=value;await go('atelie-detail');return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
     if(action==='retro-buy'){
       const item=retrosPackages.find(p=>p.code===value);
@@ -695,22 +690,24 @@ async function handleStoreClick(event) {
       if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
       if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]}))await openCart();return;
     }
-    if(action==='intent'){state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';render();return;}
+    if(action==='intent'){if(!['story','simple'].includes(value))return;if(state.intent!==value){if(state.addonCodes.length&&!confirm('Mudar o estilo? Os adicionais desta seleção serão revistos. O carrinho permanece salvo.'))return;state.intent=value;state.productCode='';state.variantCode='';state.addonCodes=[];state.addonQuestion=0;quote=null;liveQuoteKey='';}await go('format');return;}
     if(action==='product'){
-      const product=getProduct(value);if(!product)return;
-      if(value===state.productCode&&state.variantCode){render();return;}
+      const product=getProduct(value);if(!product||!formatCodes().includes(value))return;
+      if(value===state.productCode&&(SCENE_PRODUCTS.has(value)||currentVariant())){customScenes=false;await go(SCENE_PRODUCTS.has(value)?'scenes':'extras');return;}
+      if(state.addonCodes.length&&!confirm('Mudar o formato? Os adicionais desta seleção serão revistos. O carrinho permanece salvo.'))return;
       state.productCode=value;
       state.variantCode=product.pricingMode==='scene_count'?'':product.variants[0]?.code||'';
       state.addonCodes=[];state.addonQuestion=0;
       state.offerFinished=false;state.dismissed=[];
-      quote=null;liveQuoteKey='';if(state.variantCode)await refreshQuote();render();return;
+      quote=null;liveQuoteKey='';customScenes=false;await go(SCENE_PRODUCTS.has(value)?'scenes':'extras');return;
     }
-    if(action==='variant'){state.variantCode=value;state.offerFinished=false;state.addonQuestion=0;await refreshQuote();render();return;}
+    if(action==='custom-scenes'){customScenes=!customScenes;render();if(customScenes)root.querySelector('#v3-scene-select')?.focus();return;}
+    if(action==='variant'||action==='custom-scenes-confirm'){const code=action==='variant'?value:root.querySelector('#v3-scene-select')?.value;if(state.step!=='scenes'||!currentProduct()?.variants.some(v=>v.code===code)){root.querySelector('#v3-scene-select')?.focus();return;}state.variantCode=code;state.offerFinished=false;state.addonQuestion=0;customScenes=false;await go('extras');return;}
     if(action==='show-examples'){await showExamples(value);return;}
     if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
-    if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
+    if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
+    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

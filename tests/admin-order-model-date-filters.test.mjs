@@ -103,6 +103,6 @@ test('painel mantém filtros recolhidos e oferece data exata, intervalo e cenas'
   assert.match(central,/\['eventDate','advOrderDate'\]/);
   assert.match(central,/item\.sceneCount/);
   assert.match(central,/data-searched-order/);
-  assert.match(entry,/admin-v2-central\.js\?v=20261124-admin-v3-46/);
-  assert.match(shell,/admin-v2\.js\?v=20261124-admin-v3-46/);
+  assert.match(entry,/admin-v2-central\.js\?v=20261124-admin-v3-68/);
+  assert.match(shell,/admin-v2\.js\?v=20261124-admin-v3-68/);
 });

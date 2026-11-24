@@ -57,3 +57,6 @@ V61 CI 45443115366 aprovado. V62 adiciona gate V3 no workflow de publicação, p
 
 ## Aprovação comercial e configuração de lançamento
 24/11: pontos de produção dos oito brindes exclusivos confirmados expressamente pela usuária, sem mudança de probabilidades, cobrança ou vigência. CI V63 45444918447 success. V64 configura release integral, ativa flags somente no código da branch, preserva URLs V2 específicas e privadas, inclui smoke pós-deploy sem cobranças e confere presença dos secrets de pagamento. CI e validação remota pendentes; não declarar publicado.
+
+## V65–V67 — correções após rejeição visual da loja real
+PR #143 mesclado, PR corretivo #144 em branch separada. Duração 3/6/personalizada e navegação direta, extras opcionais concentrados, formatos ilustrados e ficha Admin em abas, sem mexer no backend. V65 falhou legenda Ateliê, V66 falhou valor explícito WhatsApp; V67 corrige e amplia Chromium. CI novo pendente; não declarar experiência aprovada ou completa. Pendem Central, pacotes, checkout e comparação visual original.

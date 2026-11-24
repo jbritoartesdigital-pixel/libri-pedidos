@@ -112,6 +112,21 @@ export async function openV3AdminOrder(code,initial,onChanged){
    (a.canCancelUnpaid?'<label>Motivo do cancelamento <input data-cancel-reason maxlength="500"></label><button class="btn btn-secondary" data-v3-admin="finance-cancel-unpaid">Cancelar pedido não pago</button>':'')+'</section>';
  }
  const openPanels=new Map();
+ let activeTab='summary';
+ const tabs=[['summary','Resumo'],['briefing','Briefing'],['production','Produção e entrega'],['finance','Financeiro'],['history','Histórico']];
+ function selectTab(key){if(!tabs.some(t=>t[0]===key))return;activeTab=key;for(const el of host.querySelectorAll('[data-v3-admin-page]'))el.hidden=el.dataset.v3AdminPage!==key;for(const el of host.querySelectorAll('[data-v3-admin-tab]'))el.setAttribute('aria-pressed',String(el.dataset.v3AdminTab===key));}
+ function organizeTabs(){
+  const summary=host.querySelector('.v3-admin-summary');if(!summary)return;
+  const sections=[...host.children],pages=new Map();
+  const nav=document.createElement('nav');nav.className='v3-admin-tabs';nav.setAttribute('aria-label','Seções do pedido');nav.innerHTML=tabs.map(t=>'<button type="button" data-v3-admin-tab="'+t[0]+'" aria-pressed="false">'+t[1]+'</button>').join('');
+  summary.after(nav);
+  for(const t of tabs){const page=document.createElement('section');page.dataset.v3AdminPage=t[0];page.className='v3-admin-tab-page';page.setAttribute('aria-label',t[1]);host.append(page);pages.set(t[0],page);}
+  const statuses={pending:'Aguardando programação',ready:'Pronto para produzir',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue'};
+  pages.get('summary').innerHTML='<h3>Serviços contratados</h3>'+brief.services.map(s=>'<div class="v3-admin-mini-service"><div><strong>'+esc(names[s.family]||s.family)+'</strong><small>'+esc(s.productName)+'</small><small>'+esc(s.briefingStatus==='locked'?'Aguardando pagamento':s.briefingStatus!=='completed'?'Aguardando briefing':!s.reviewedAt?'Conferir briefing':statuses[s.productionStatus]||s.productionStatus)+'</small></div><button type="button" data-v3-admin-tab="'+(s.briefingStatus==='locked'?'finance':s.briefingStatus!=='completed'||!s.reviewedAt?'briefing':'production')+'">Abrir ›</button></div>').join('');
+  for(const el of sections){if(el===summary)continue;const k=el.dataset.v3Panel||'';if(k.startsWith('briefing-'))pages.get('briefing').append(el);else if(['finance','revision','cancel'].includes(k))pages.get('finance').append(el);else if(el.classList.contains('v3-admin-service'))pages.get('production').append(el);else if(el.tagName==='DETAILS'&&!k)pages.get('history').append(el);else if(el.matches('p.muted'))pages.get('production').append(el);}
+  for(const [key,page] of pages)if(!page.childElementCount)page.innerHTML='<p class="muted">Nenhuma informação nesta seção.</p>';
+  selectTab(activeTab);
+ }
  function render(){
  if(!host.isConnected)return;
  for(const el of host.querySelectorAll('details[data-v3-panel]'))openPanels.set(el.dataset.v3Panel,el.open);
@@ -128,11 +143,11 @@ export async function openV3AdminOrder(code,initial,onChanged){
  (brief.history?.length?'<details class="card"><summary>Histórico geral do pedido</summary>'+brief.history.map(e=>'<p>'+esc(e.created_at)+' · '+(e.family?esc(names[e.family]||e.family)+' · ':'')+esc(e.description||e.action)+(e.note?' · '+esc(e.note):'')+'</p>').join('')+'</details>':'')+
  '<p class="muted">Conferir não libera a produção automaticamente. A agenda será validada por serviço.</p>';
  for(const el of host.querySelectorAll('details[data-v3-panel]'))if(openPanels.has(el.dataset.v3Panel)&&!el.dataset.v3Panel.startsWith('finance')&&!el.dataset.v3Panel.startsWith('revision')&&!el.dataset.v3Panel.startsWith('cancel'))el.open=openPanels.get(el.dataset.v3Panel);
- host.querySelectorAll('button').forEach(b=>b.disabled=busy);
+ organizeTabs();host.querySelectorAll('button').forEach(b=>b.disabled=busy);
  }
  host.addEventListener('change',e=>{if(!e.target.matches('[data-revision-family]')||!revisionEditor)return;const draft=readRevision();revisionEditor.items=draft.items;revisionEditor.couponCode=draft.couponCode;revisionPreview=null;render();});
  host.addEventListener('click',async e=>{
- const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
+ const tab=e.target.closest('[data-v3-admin-tab]');if(tab&&!busy){selectTab(tab.dataset.v3AdminTab);return;}const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null,method='POST';
  if(action.startsWith('paid-capacity-')){const replace=action==='paid-capacity-replace';if(!confirm(replace?'Confirma que a cliente aceitou a nova previsão? Nenhuma cobrança será criada.':'Conferir a capacidade da janela original?'))return;path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/paid-capacity';payload={confirmed:true,...(replace?{deliveryWindow:{start:host.querySelector('[data-capacity-start]').value,end:host.querySelector('[data-capacity-end]').value},note:host.querySelector('[data-capacity-note]').value}:{})};}

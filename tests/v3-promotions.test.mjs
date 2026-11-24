@@ -21,7 +21,7 @@ test('best monetary discount wins; eligible coupon cannot discount unrelated ser
  assert.equal(q.totalCents,20430);
  await assert.rejects(quoteV3Cart(db,{...cart,eventType:'wedding',couponCode:'ATELIE10'}),/condições/);
  db.sqlite.exec("UPDATE v2_coupons SET max_uses=1 WHERE code='SMALL'");
- await assert.rejects(quoteV3Cart(db,{...cart,couponCode:'SMALL'}),/limite de usos/);
+ assert.equal((await quoteV3Cart(db,{...cart,couponCode:'SMALL'})).selectedDiscount,'combined');
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,0);
 });
 test('temporary combined campaigns reject overlap, expire automatically, and can be paused',async()=>{

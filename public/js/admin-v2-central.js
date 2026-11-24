@@ -265,6 +265,11 @@ export async function renderCentral(openOrder) {
       ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}
       ${soon.length?`<details class="order-optional" style="margin-top:12px"><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:''}
     </section>
+    <section class="card" style="margin-top:14px"><div class="section-title"><div><span class="eyebrow">Últimos 30 dias</span><h2>Onde as compras param</h2></div><span class="status">${Number(c.funnel?.total||0)} jornadas</span></div>
+      <p class="muted">Jornadas por aba, não pessoas únicas. Sem atividade por 24h e sem pedido criado = possível abandono. Etapas podem ser puladas ou revisitadas. Não inclui histórico anterior à coleta.</p>
+      <div class="kpi-grid">${[['paid','Com pagamento confirmado'],['order_pending','Pedido sem pagamento'],['inactive','Possível abandono'],['active','Em andamento'],['cancelled','Cancelado sem pagamento']].map(([k,label])=>`<article class="kpi"><span>${label}</span><strong>${Number(c.funnel?.outcomes?.[k]||0)}</strong></article>`).join('')}</div>
+      <details class="order-optional"><summary>Ver etapas alcançadas e última etapa sem atividade</summary><div class="list">${(c.funnel?.stages||[]).map(s=>`<div class="row-card"><strong>${esc(({evento:'Evento',servico:'Serviço',modelo:'Modelo',configuracao:'Configuração',carrinho:'Carrinho',dados:'Dados',agenda:'Agenda',adicionais:'Adicionais',revisao:'Revisão',pagamento:'Pagamento',tentativa:'Tentativa de pagamento'})[s.stage]||s.stage)}</strong><small>${Number(s.reached)} chegaram · ${Number(s.inactive)} inativas nesta etapa</small><div class="metric-bar"><span style="width:${Math.min(100,Math.round(100*s.reached/Math.max(1,c.funnel.total)))}%"></span></div></div>`).join('')}</div></details>
+    </section>
     <section class="card attention-center">
       <div class="section-title">
         <div>

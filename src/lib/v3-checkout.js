@@ -1,3 +1,4 @@
+import {safeLinkStoreOrder} from './v3-store-funnel.js';
 // Server-side orchestration; public route remains disabled until the full
 // storefront, modular briefing, promotions and admin workflows pass validation.
 import {normalizeWhatsapp,randomToken,nowIso} from './http.js';
@@ -57,6 +58,7 @@ export async function startV3Checkout(request,env,body){
     orderCode=await nextOrderCode(env.DB);publicToken=randomToken('ord_');
   }
   const order=await createV3OrderRecords(env.DB,{customerId,orderCode,publicToken,body,contactSnapshot:{name,whatsapp,email}});
+  if(body.storeJourneyId)await safeLinkStoreOrder(env.DB,body.storeJourneyId,order.orderId);
   const payment=await prepareV3Payment(request,env,order.orderId);
   return {...payment,orderCode:order.orderCode,publicToken:order.publicToken,customerAreaPath:'/meu-pedido/'+order.publicToken};
 }

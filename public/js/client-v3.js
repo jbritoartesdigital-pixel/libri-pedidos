@@ -60,6 +60,7 @@ const clean = value => String(value == null ? '' : value)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 let catalog = null, quote = null, offer = null, cartQuote = null, cartError = '', ateliePackages = [], retrosPackages = [];
+let cartDelivery=null,cartDeliveryError='',cartEventDate='',cartDeliveryBusy=false,cartRevision=0;
 let state;
 try {
   state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
@@ -345,6 +346,19 @@ function renderReview() {
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Editar escolhas</button>' +
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
 }
+function cartDeliveryHtml(){
+  if(state.cartItems.length<2||!cartQuote||cartError)return '';
+  const formatDate=s=>s.split('-').reverse().join('/');
+  const options=cartDelivery?.options||[];
+  return '<div class="v3-notice"><strong>Quando é a festa?</strong><p>Consulte a agenda para todos os serviços juntos.</p>'+
+    '<label for="v3CartEventDate" class="v3-mini">Data do evento</label>'+
+    '<input type="date" id="v3CartEventDate" value="'+clean(cartEventDate)+'" class="v3-at-input">'+
+    '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-delivery" '+(cartDeliveryBusy?'disabled':'')+'>'+(cartDeliveryBusy?'Consultando…':'Consultar prazos')+'</button>'+
+    (cartDeliveryError?'<p role="alert">'+clean(cartDeliveryError)+'</p>':'')+
+    (cartDelivery?'<div role="status"><p><strong>Previsão de entrega conjunta</strong></p>'+
+      (options.length?options.map(o=>'<p>'+clean(formatDate(o.start))+' a '+clean(formatDate(o.end))+(o.recommended?' · sugerida':'')+'</p>').join(''):'<p>Sem janela automática para esta data. Será necessário avaliar a disponibilidade antes de pagar.</p>')+
+      '<p class="v3-mini">'+(cartDelivery.provisionalUntilBriefing?'Mínimo de 15 dias corridos após pagamento e briefing completos. ':'')+'Consulta sem reserva de vaga. A data ainda deverá ser confirmada na contratação.</p></div>':'')+'</div>';
+}
 function renderCart() {
   const items=state.cartItems;
   const lines=items.map((item,i)=>{
@@ -363,12 +377,12 @@ function renderCart() {
     items.length>1?'<div class="v3-notice">A contratação conjunta está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
     items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
-    '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice,
+    '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length===1&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
 }
 async function openCart(){
-  state.step='cart';save();cartQuote=null;cartError='';
+  state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
   root.setAttribute('aria-busy','true');
   root.innerHTML='<section class="v3-panel"><p>Conferindo os valores no catálogo oficial…</p></section>';
   if(state.cartItems.length){
@@ -597,6 +611,18 @@ root.addEventListener('click', async event => {
       await openCart();return;
     }
     if(action==='open-cart'){await openCart();return;}
+    if(action==='cart-delivery'){
+      if(cartDeliveryBusy||!cartQuote||state.cartItems.length<2)return;
+      const revision=cartRevision;
+      cartEventDate=root.querySelector('#v3CartEventDate')?.value||'';
+      cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=true;renderCart();
+      try{
+        const result=await request('/api/v3/cart/delivery-options',{eventType:state.eventType,eventDate:cartEventDate,paymentMethod:'pix',items:state.cartItems});
+        if(revision===cartRevision&&state.step==='cart'){cartDelivery=result.delivery;cartQuote=result.quote;}
+      }catch(e){if(revision===cartRevision)cartDeliveryError=e.message||'Não foi possível consultar a agenda.';}
+      finally{if(revision===cartRevision){cartDeliveryBusy=false;if(state.step==='cart')renderCart();}}
+      return;
+    }
     if(action==='cart-more'){await go('creation');return;}
     if(action==='remove-cart'){
       const i=Number(value);

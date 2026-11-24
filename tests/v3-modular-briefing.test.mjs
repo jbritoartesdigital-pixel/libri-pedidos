@@ -779,3 +779,15 @@ test('unified Admin search finds all modular services without duplicate orders',
  assert.equal(central.attention.some(x=>x.code===order.orderCode),false);
  assert.equal(central.newOrders.some(x=>x.code===order.orderCode),false);
 });
+
+test('funnel counts payment only from verified order and deduplicates linked checkout',async t=>{
+ const {db,input}=await setup(),mp=providerMock(t),order=await createV3OrderRecords(db,input),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const {recordStoreStage,linkStoreOrder,getStoreFunnel}=await import('../src/lib/v3-store-funnel.js');
+ const id='c'.repeat(32);await recordStoreStage(db,id,'pagamento');await linkStoreOrder(db,id,order.orderId);await linkStoreOrder(db,id,order.orderId);
+ let funnel=await getStoreFunnel(db);assert.equal(funnel.total,1);assert.equal(funnel.outcomes.order_pending,1);assert.equal(funnel.outcomes.paid,0);
+ const payment=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+ funnel=await getStoreFunnel(db);assert.equal(funnel.outcomes.order_pending,1);
+ mp.approve(payment.providerOrderId);await syncMercadoPagoOrder(env,payment.providerOrderId);
+ funnel=await getStoreFunnel(db);assert.equal(funnel.total,1);assert.equal(funnel.outcomes.paid,1);assert.equal(funnel.outcomes.order_pending,0);
+ assert.equal(funnel.stages.find(x=>x.stage==='pagamento').reached,1);
+});

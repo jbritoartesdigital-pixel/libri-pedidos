@@ -3423,7 +3423,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   assert.ok(html.includes('/js/client-v2.js?v=20261124-v99'));
   assert.ok(entry.includes('client-v2-area.js?v=20261124-v99'));
-  assert.ok(admin.includes('admin-v2-manual.js?v=20261124-admin-v3-81'));
+  assert.ok(admin.includes('admin-v2-manual.js?v=108'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);
   assert.match(area, /const seen = new Set/);

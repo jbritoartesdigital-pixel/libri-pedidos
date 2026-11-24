@@ -378,3 +378,7 @@ V56 — FILTROS, CUSTO D1, RELATÓRIO E RECUPERAÇÃO
 - Revisão da V56: CI V55 45427531167 concluído SUCCESS (inclui Chromium de convite/Ateliê e checkout). Identificada proteção legada que bloquearia a decisão de urgência V3 pelo endpoint antigo; criada rota administrativa própria /v3/urgency, sob autenticação/flag, com retorno da ficha atualizada e teste de autorização/flag/decisão. Testes novos também verificam filtro por status da mesma família. CI final a verificar.
 
 - CI 45428142409: 426 testes passaram, 1 ignorado e 1 falhou (fixture financeira deslocava data do recebimento sem deslocar aplicação). Ajuste explicita recebimento em outubro, aplicação em novembro e estorno em novembro, sem duplicação. Revisão comum de pedido urgente bloqueada para preservar aprovação e preço do encaixe. Validação final em execução; sem deploy.
+
+
+V58 — NAVEGAÇÃO INTEGRAL EM BANCO ISOLADO
+- V57: sintaxe, testes e migrations aprovados no CI 45428493387; navegador ainda em execução na consulta. Expandido Chromium para retrospectiva avulsa, carrinho de três famílias e desconto de 10%, três aceites, área privada bloqueada/liberada, salvar e recuperar rascunho real e abrir ficha Admin de três serviços. Fixture independente usa provedor simulado, nenhuma chamada externa; autenticação simulada exclusivamente no servidor local de teste, não no Worker. CI V58 pendente. Sem deploy.

@@ -40,6 +40,16 @@ export function renderV3Materials(module){
     (wa?'<a class="btn secondary" href="'+esc(wa)+'" target="_blank" rel="noopener noreferrer">Enviar materiais pelo WhatsApp</a>':'<p>Solicite o canal de envio à Libri.</p>')+
     (module.receipt?'<p><strong>Recebimento registrado:</strong> '+esc(module.receipt.photoCount)+' fotos e '+esc(module.receipt.videoCount)+' vídeos. O registro não inicia a produção automaticamente.</p>':'<p>Aguardando conferência dos materiais pela Libri.</p>')+'</section>';
 }
+export function renderV3Uploads(m,busy=false){
+ const files=m.uploads||[],rules=m.schema.uploadRules||[];
+ if(!rules.length&&!files.length)return '';
+ return '<section class="card"><h3>Imagens privadas</h3><p>JPG, PNG, WebP, HEIC ou HEIF, até 15 MB por imagem.</p>'+
+ rules.map(r=>'<div class="field full"><label>'+esc(r.label)+'</label><p>'+esc(r.help||('Até '+r.max+' imagens.'))+'</p>'+
+ (!r.authorized?'<p>Salve a autorização necessária antes do envio.</p>':m.editable?'<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" data-v3-upload="'+esc(r.fieldKey)+'" '+(busy?'disabled':'')+'>':'')+'</div>').join('')+
+ files.map(x=>'<div class="field full"><span>'+esc(x.originalFilename)+'</span>'+
+ (rules.some(r=>r.fieldKey===x.fieldKey&&r.authorized)?'<a href="'+esc(x.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem</a>':'<span>Imagem sem autorização ativa</span>')+
+ (m.editable?'<button type="button" class="btn secondary" data-v3-delete="'+esc(x.id)+'" '+(busy?'disabled':'')+'>Remover</button>':'')+'</div>').join('')+'</section>';
+}
 export async function startV3CustomerArea(root,{token,initial,api}){
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
   let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null;
@@ -65,7 +75,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       (!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</div></section>'+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. Salve as respostas para atualizar as próximas perguntas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
-        (m.editable?'<button type="submit" class="btn primary" '+(busy?'disabled':'')+'>Salvar rascunho</button>':'')+'</form><p class="field-help">O envio definitivo e os arquivos privados serão liberados na próxima etapa. Salvar não inicia a produção.</p></section>'+renderV3Materials(m):summary()+paymentHtml());
+        (m.editable?'<button type="submit" class="btn primary" '+(busy?'disabled':'')+'>Salvar rascunho</button>':'')+'</form><p class="field-help">Salvar ou enviar o briefing não inicia a produção automaticamente.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar briefing definitivo</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
     dirty=false;
   }
@@ -95,6 +105,26 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       return false;
     }
   }
+  async function fileAction({fieldKey,file,id}){
+    if(busy||!current()?.editable)return;
+    if(dirty&&!await save())return;
+    const m=current();busy=true;error='';notice='';render();
+    try{
+      if(file){const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);await api(endpoint+'/'+m.module+'/uploads',{method:'POST',body});}
+      else await api(endpoint+'/'+m.module+'/uploads/'+encodeURIComponent(id),{method:'DELETE'});
+      area=(await api(endpoint)).briefing;notice=file?'Imagem enviada com segurança.':'Imagem removida.';
+    }catch(e){error=e.message;}finally{busy=false;render();}
+  }
+  async function submit(){
+    if(busy||!current()?.editable||active==='shared')return;
+    if(dirty&&!await save())return;
+    if(!window.confirm('Enviar as respostas definitivas deste serviço? Os dados compartilhados ficarão bloqueados para alterações.'))return;
+    const m=current();busy=true;error='';notice='';render();
+    try{
+      const r=await api(endpoint+'/'+m.module+'/submit',{method:'POST',body:JSON.stringify({revision:m.revision,sharedRevision:area.modules.find(x=>x.module==='shared')?.revision||0})});
+      area=r.briefing;notice='Briefing enviado. A Libri vai conferir a produção e os materiais.';
+    }catch(e){error=e.message;}finally{busy=false;render();}
+  }
   async function verify(renew=false){
     if(busy)return;busy=true;error='';render();
     try{
@@ -104,7 +134,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   root.addEventListener('input',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;});
-  root.addEventListener('change',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;});
+  root.addEventListener('change',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;const fieldKey=e.target.dataset.v3Upload;if(fieldKey&&e.target.files?.[0])fileAction({fieldKey,file:e.target.files[0]});});
   root.addEventListener('submit',e=>{if(e.target.id==='v3-module-form'){e.preventDefault();save();}});
   root.addEventListener('click',async e=>{
     const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab;
@@ -112,7 +142,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       if(dirty&&current()?.editable&&!await save())return;
       active=tab;notice='';error='';render();return;
     }
+    const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
+    if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
     const action=e.target.closest('[data-v3-action]')?.dataset.v3Action;
+    if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);
   });

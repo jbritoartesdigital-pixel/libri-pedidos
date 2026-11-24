@@ -54,7 +54,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     subtype:typeof body.eventSubtype==='string'?body.eventSubtype.trim().slice(0,120):'',date:date(body.eventDate)};
   const delivery={start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
   const items=canonicalItems(body.items);
-  if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
+  if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};

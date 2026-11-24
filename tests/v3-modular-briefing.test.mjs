@@ -919,3 +919,20 @@ test('manual modular: oferta positiva conserva pedido e entrada, aceite altera o
  assert.equal((await getV3ModularBriefing(db,token)).payment.totalCents,offer.totalCents);
  assert.equal(await getV3ManualUpsell(db,token),null);assert.equal(mp.posts,0);assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE public_token=?').get(token).n,1);
 });
+
+test('manual V3 accepts an administrator-selected date outside suggested windows and explicit international WhatsApp through payment',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const input={customer:{name:'Cliente internacional',whatsapp:'+44 20 1234 5678',email:''},event:{type:'celebration',subtype:'Chá de bebê',honoreeName:'Chá do bebê',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:100};
+ const q=await previewV3ManualOrder(db,input);
+ const w={start:day(60),end:day(60)};
+ assert.ok(!q.options.some(x=>x.start===w.start&&x.end===w.end));
+ const payload={...input,deliveryWindow:w,expectedTotalCents:q.totalCents,requestKey:'1a'.repeat(18),confirmed:true};
+ const created=await createV3ManualOrder(env,payload),token=created.customerAreaPath.split('/').pop();
+ const o=db.sqlite.prepare('SELECT * FROM v2_orders WHERE public_token=?').get(token);
+ assert.equal(o.delivery_start,w.start);assert.equal(o.delivery_end,w.end);assert.equal(o.event_subtype,'Chá de bebê');
+ assert.equal(db.sqlite.prepare('SELECT whatsapp FROM v2_customers WHERE id=?').get(o.customer_id).whatsapp,'442012345678');
+ const brief=await getV3ModularBriefing(db,token);
+ await acceptV3Revision(db,token,{id:brief.revision.id,confirmed:true,termsAccepted:true,expectedTotalCents:q.totalCents});
+ const payment=await prepareV3Payment(new Request('https://test/manual'),env,o.id);
+ assert.equal(payment.amountDueNowCents,q.totalCents);
+});

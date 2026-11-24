@@ -8,6 +8,7 @@ export async function runV3DeliveryRetention(env,{now=new Date(),limit=20}={}){
  const rows=(await db.prepare(`SELECT s.id,s.order_id,s.family,o.order_code,s.download_until
  FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id
  WHERE s.production_status='delivered' AND s.download_until>? AND s.download_until<=?
+ AND o.archived_at IS NULL AND o.status!='cancelled' AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
  AND (s.external_delivery_channel='drive' OR EXISTS(SELECT 1 FROM v3_service_final_files f WHERE f.service_id=s.id AND f.purged_at IS NULL))
  AND NOT EXISTS(SELECT 1 FROM v3_delivery_notices n WHERE n.service_id=s.id AND n.notice_code=?)
  ORDER BY s.download_until LIMIT ?`).bind(stamp,plus(days),code,limit).all()).results||[];

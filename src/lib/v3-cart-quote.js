@@ -3,6 +3,7 @@
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
+import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
 
 export class V3CartValidationError extends Error {
@@ -45,7 +46,7 @@ function validateItems(items) {
     const comboCode=str(item.comboCode,80);
     if(item.comboCode && !/^[a-z0-9_]{1,80}$/.test(comboCode))
       throw new V3CartValidationError('Combo inválido.','cart_combo_invalid');
-    return {index, family, productCode:code, variantCode:variant, addonCodes:[...new Set(addonCodes)],comboCode};
+    return {index, family, productCode:code, variantCode:variant, addonCodes:[...new Set(addonCodes)],extras:normalizeV3ExtraSelection(item.extras),comboCode};
   });
 }
 
@@ -81,6 +82,10 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
       throw new V3CartValidationError('Produto do carrinho mudou. Atualize a seleção.','cart_product_changed');
     if(!MONEY(quote.totalCents)||quote.totalCents<0||!MONEY(quote.pointsUnits)||quote.pointsUnits<0)
       throw new V3CartValidationError('Cotação inválida.','cart_invalid_quote');
+    const extras=quoteV3Extras(item.family,item.productCode,item.extras);
+    const extrasCents=extras.reduce((n,x)=>n+x.totalCents,0);
+    const extrasPointsUnits=extras.reduce((n,x)=>n+x.totalPointsUnits,0);
+    const snapshot={...quote,v3Extras:extras,extrasCents,extrasPointsUnits,pointsUnits:quote.pointsUnits+extrasPointsUnits,totalCents:quote.totalCents+extrasCents,subtotalCents:quote.subtotalCents+extrasCents};
     quotes.push({
       lineId:'product_'+item.index,
       family:item.family,
@@ -89,15 +94,17 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
       productName:quote.product.name,
       variantName:quote.variant.label,
       addonCodes:quote.addons.map(x=>x.code),
-      grossCents:quote.productCents+quote.addonsCents,
+      productCents:quote.productCents,
+      extras,extrasCents,
+      grossCents:quote.productCents+quote.addonsCents+extrasCents,
       comboCode:quote.combo?.code||'',
       comboName:quote.combo?.name||'',
       discountCents:quote.comboDiscountCents,
-      subtotalCents:quote.subtotalCents,
-      totalCents:quote.totalCents,
-      pointsUnits:quote.pointsUnits,
+      subtotalCents:snapshot.subtotalCents,
+      totalCents:snapshot.totalCents,
+      pointsUnits:snapshot.pointsUnits,
       productionDays:productionDaysForQuote(quote),
-      ...(includeSnapshots?{commercialSnapshot:quote}:{})
+      ...(includeSnapshots?{commercialSnapshot:snapshot}:{})
     });
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);

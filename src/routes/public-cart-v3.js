@@ -40,7 +40,7 @@ export async function handlePublicCartV3Api(request,env,url) {
     return json({ok:true,quote});
   }catch(error){
     // Rejeição comercial esperada. Não inclui dados pessoais nem pagamento.
-    if(error instanceof V3CartValidationError||error?.code==='cart_extra_invalid'||error?.name==='V2CheckoutError'||error?.code==='order_busy')
+    if(error instanceof V3CartValidationError||error?.code==='cart_promotion_invalid'||error?.code==='cart_extra_invalid'||error?.name==='V2CheckoutError'||error?.code==='order_busy')
       return json({ok:false,error:error.message,code:error.code},error.status);
     return fail('Não foi possível cotar esse conjunto de produtos. Atualize a seleção.',422);
   }

@@ -40,6 +40,7 @@ export async function renderStore() {
     data.config;
 
   viewRoot.innerHTML = `
+    <div class="store-simulation-action"><a class="btn btn-primary" href="/loja?simular=1" target="_blank" rel="noopener noreferrer">Simular pedido</a><p class="muted">Teste a loja e a Black sem criar pedidos, cobranças ou reservas.</p></div>
     <div class="store-navigation admin-store-navigation" aria-label="Organização da loja">
       <div class="store-navigation-group">
         <span class="store-navigation-label">Catálogo</span>

@@ -63,7 +63,9 @@ export async function removeV3FinalFile(env,token,family,id,version){
 export async function deliverV3Service(env,token,family,input={}){
  const initial=await access(env.DB,token,family);if(!initial)return null;
  return withV2PaymentLock(env.DB,initial.ctx.order.id,async()=>{
- const {s}=await access(env.DB,token,family);check(s,input.version);
+ const {s,ctx}=await access(env.DB,token,family);check(s,input.version);
+ if(!ctx.finance?.fullyPaid)fail('Registre o saldo integral do pedido antes de liberar a entrega.');
+ if(await env.DB.prepare("SELECT 1 FROM v3_service_supplements a JOIN v3_order_services z ON z.id=a.service_id WHERE z.order_id=? AND (z.family=? OR json_extract(a.offer_json,'$.targetFamily')=?) AND a.status IN ('accepted','payment_pending','review')").bind(s.order_id,family,family).first())fail('Concilie os adicionais contratados antes de liberar a entrega.');
  if(input.confirmed!==true)fail('Confirme a entrega completa.',422);
  const approved=await env.DB.prepare("SELECT id,status FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1").bind(s.id).first();
  if(approved?.status!=='approved')fail('A última prévia precisa estar aprovada.');
@@ -82,6 +84,7 @@ export async function deliverV3Service(env,token,family,input={}){
 }
 export async function downloadV3FinalFile(env,token,family,id,{admin=false}={}){
  const c=await access(env.DB,token,family);if(!c)return httpFail('Pedido não encontrado.',404);
+ if(!admin&&!c.ctx.finance?.fullyPaid)return httpFail('Saldo do pedido em aberto.',403);
  const s=c.s,delivered=s.production_status==='delivered';
  if(!delivered&&!(admin&&s.production_status==='approved'))return httpFail('Arquivo ainda não entregue.',403);
  if(delivered&&(!s.download_until||Date.now()>=Date.parse(s.download_until)))return httpFail('Prazo de download encerrado.',410);

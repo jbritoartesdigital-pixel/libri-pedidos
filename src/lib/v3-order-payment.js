@@ -1,3 +1,4 @@
+import {validV3PaymentPlan,originalV3FinancialState} from './v3-admin-payment-policy.js';
 // INTERNAL ONLY: no HTTP entry point until modular briefing, admin and
 // promotions are compatible. Reuses V2 capacity and provider idempotency.
 import {createCapacityHold,V2CheckoutError} from './v2-checkout.js';
@@ -15,9 +16,9 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
   return withV2PaymentLock(db,orderId,async()=>{
     const row=await db.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.briefing_status,
        o.event_date,o.delivery_start,o.delivery_end,o.archived_at,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
-       p.balance_cents,p.payment_method,s.quote_json
+       p.balance_cents,p.payment_method,s.quote_json,a.deposit_percent AS authorized_percent
        FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
-       JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id
+       JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id LEFT JOIN v3_admin_payment_policies a ON a.order_id=o.id
        WHERE o.id=?`).bind(orderId).first();
     if(!row)fail('Pedido combinado não encontrado.','v3_order_missing');
     const quote=JSON.parse(row.quote_json);
@@ -25,11 +26,11 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
     const sum=key=>lines.reduce((n,x)=>n+Number(x[key]),0);
     if(lines.length<1||lines.length>3||lines.length!==quote.items?.length||sum('points_units')!==quote.pointsUnits||
       sum('total_cents')+quote.cardFeeCents!==quote.totalCents||row.total_cents!==quote.totalCents||
-      row.deposit_cents!==row.total_cents||row.deposit_percent!==100||row.balance_cents!==0||
+      !validV3PaymentPlan(row)||
       row.payment_method!==quote.paymentMethod||!['pix','card'].includes(row.payment_method))
       fail('O pedido precisa de revisão antes do pagamento.','v3_order_inconsistent');
     const existing=(await db.prepare('SELECT provider,provider_order_id,checkout_url,status,amount_cents,method FROM v2_payments WHERE order_id=? ORDER BY id DESC').bind(orderId).all()).results||[];
-    if(existing.some(x=>x.status==='approved'))return {ok:true,alreadyPaid:true,orderCode:row.order_code};
+    if(existing.some(x=>x.status==='approved')){const state=await originalV3FinancialState(db,orderId);if(!state.valid)fail('O histórico financeiro precisa de revisão.','v3_payment_reconciliation_required');return {ok:true,alreadyPaid:true,orderCode:row.order_code,depositPercent:row.deposit_percent,balanceCents:state.remainingCents};}
     if(row.archived_at||!['configuring','awaiting_payment'].includes(row.status)||row.briefing_status!=='locked')
       fail('O pedido não está disponível para cobrança.','v3_payment_unavailable');
     const hold=await db.prepare(`SELECT h.id,h.token,h.status,h.expires_at,
@@ -37,14 +38,14 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
       FROM v2_checkout_holds h WHERE h.order_id=? ORDER BY h.id DESC LIMIT 1`).bind(orderId).first();
     let liveHold=hold?.status==='active'&&hold.expires_at>nowIso()&&hold.points===quote.pointsUnits;
     const holdCount=Number((await db.prepare('SELECT COUNT(*) AS n FROM v2_checkout_holds WHERE order_id=?').bind(orderId).first()).n);
-    if(existing.some(x=>x.provider!=='mercado_pago'||!x.provider_order_id||x.amount_cents!==row.total_cents||x.method!==row.payment_method))
+    if(existing.some(x=>x.provider!=='mercado_pago'||!x.provider_order_id||(!terminalStatuses.has(x.status)&&x.amount_cents!==row.deposit_cents)||x.method!==row.payment_method))
       fail('O histórico financeiro precisa de revisão.','v3_payment_reconciliation_required');
     if(existing.length){
       const pending=existing.filter(x=>x.status==='pending');
       if(pending.length===1&&existing[0]===pending[0]&&existing.slice(1).every(x=>terminalStatuses.has(x.status))&&
         holdCount===existing.length&&liveHold&&pending[0].checkout_url)
         return {ok:true,recovered:true,orderCode:row.order_code,providerOrderId:pending[0].provider_order_id,
-          checkoutUrl:pending[0].checkout_url,totalCents:row.total_cents};
+          checkoutUrl:pending[0].checkout_url,totalCents:row.total_cents,amountDueNowCents:row.deposit_cents,depositPercent:row.deposit_percent,balanceCents:row.balance_cents};
       if(!renew||holdCount!==existing.length)
         fail('A tentativa anterior precisa ser conciliada antes de uma nova cobrança.','v3_payment_reconciliation_required');
       // Only an explicit renewal may create a new hold after ALL previous
@@ -79,9 +80,9 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
     // hold token and payload reuses the existing Mercado Pago idempotency key.
     await db.prepare("UPDATE v2_orders SET status='awaiting_payment',next_action='Aguardando pagamento',updated_at=? WHERE id=? AND status='configuring'").bind(nowIso(),orderId).run();
     const checkout=await createMercadoPagoCheckout(request,env,{orderId,orderCode:row.order_code,publicToken:row.public_token,
-      paymentMethod:row.payment_method,amountDueNowCents:row.total_cents,customerEmail:quote.contactSnapshot?quote.contactSnapshot.email:row.email});
+      paymentMethod:row.payment_method,amountDueNowCents:row.deposit_cents,customerEmail:quote.contactSnapshot?quote.contactSnapshot.email:row.email});
     return {ok:true,recovered:!!liveHold,orderCode:row.order_code,providerOrderId:checkout.providerOrderId,
-      checkoutUrl:checkout.checkoutUrl,totalCents:row.total_cents};
+      checkoutUrl:checkout.checkoutUrl,totalCents:row.total_cents,amountDueNowCents:row.deposit_cents,depositPercent:row.deposit_percent,balanceCents:row.balance_cents};
   });
 }
 
@@ -94,6 +95,8 @@ export async function reconcileV3Payment(env,orderId){
     const order=await db.prepare(`SELECT o.status FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
       WHERE o.id=?`).bind(orderId).first();
     if(!order)fail('Pedido combinado não encontrado.','v3_order_missing');
+    const state=await originalV3FinancialState(db,orderId);
+    if(state?.valid)return {ok:true,alreadyPaid:true,canRetry:false,balanceCents:state.remainingCents};
     const rows=(await db.prepare(`SELECT provider_order_id,status,provider,checkout_url,amount_cents,method FROM v2_payments
       WHERE order_id=? ORDER BY id DESC`).bind(orderId).all()).results||[];
     const hold=await db.prepare('SELECT status,expires_at FROM v2_checkout_holds WHERE order_id=? ORDER BY id DESC LIMIT 1').bind(orderId).first();

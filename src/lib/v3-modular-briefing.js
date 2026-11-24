@@ -1,3 +1,4 @@
+import {originalV3FinancialState} from './v3-admin-payment-policy.js';
 // Internal modular briefing model. Public routes, authenticated Admin receipt
 // action, invite/Ateliê private upload integration and final submission follow.
 // Retrospectiva never creates R2 objects; only receipt metadata is persisted.
@@ -98,9 +99,8 @@ export async function contextV3Briefing(db,token){
     JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.public_token=?`).bind(token).first();
   if(!order)return null;
   const services=(await db.prepare('SELECT * FROM v3_order_services WHERE order_id=? ORDER BY id').bind(order.id).all()).results.map(s=>({...s,snapshot:parse(s.effective_snapshot_json||s.commercial_snapshot_json)}));
-  const paid=order.deposit_percent===100&&order.balance_cents===0&&!!await db.prepare(`SELECT 1 AS paid FROM v2_payments
-    WHERE order_id=? AND provider='mercado_pago' AND status='approved' AND payment_type!='refund'
-      AND amount_cents=? AND method=? LIMIT 1`).bind(order.id,order.total_cents,order.payment_method).first();
+  const finance=await originalV3FinancialState(db,order.id);
+  const paid=finance?.depositConfirmed===true;
   const locked=!paid||order.briefing_status==='locked'||['configuring','awaiting_payment','cancelled'].includes(order.status);
   const drafts=Object.create(null),revisions=Object.create(null);
   if(!locked){
@@ -108,16 +108,16 @@ export async function contextV3Briefing(db,token){
       drafts[r.module]=parse(r.data_json);revisions[r.module]=r.revision;
     }
   }
-  return {order,services,locked,drafts,revisions};
+  return {order,services,locked,drafts,revisions,finance};
 }
 export async function getV3ModularBriefing(db,token){
   const ctx=await contextV3Briefing(db,token);
   if(!ctx)return null;
-  const {order,services,locked,drafts,revisions}=ctx;
+  const {order,services,locked,drafts,revisions,finance}=ctx;
   const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
     variantName:s.snapshot.variant?.label||'',submittedAt:s.briefing_submitted_at,complementNote:s.complement_note,reviewedAt:s.reviewed_at,deliveryWindow:s.delivery_start?{start:s.delivery_start,end:s.delivery_end}:null,scheduledAt:s.scheduled_at,dependsOnIdentity:s.depends_on_identity===null?null:Boolean(s.depends_on_identity),totalCents:s.effective_snapshot_json?s.snapshot.totalCents:s.total_cents,originalTotalCents:s.total_cents,productionDays:s.production_days,
     blackLibri:s.snapshot.blackLibri||null,extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
-  const base={orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method},
+  const base={orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method,depositPercent:order.deposit_percent,depositCents:finance?.row.deposit_cents,receivedCents:finance?.paidCents||0,remainingCents:finance?.remainingCents??order.total_cents,fullyPaid:!!finance?.fullyPaid},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[]};
   for(let i=0;i<services.length;i++){purchased[i].progress=await getV3ServiceProgress(db,services[i]);purchased[i].delivery=await getV3Delivery(db,services[i]);}

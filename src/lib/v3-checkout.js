@@ -68,11 +68,11 @@ export async function recoverV3Checkout(request,env,body,{renew=false}={}){
   // Both credentials are unguessable bearer secrets. Never use an order number,
   // name or WhatsApp lookup as a recovery credential.
   const row=await env.DB.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.archived_at,o.delivery_start,o.delivery_end,
-      p.total_cents,p.payment_method FROM v3_order_checkout_snapshots s JOIN v2_orders o ON o.id=s.order_id
+      p.total_cents,p.payment_method,p.deposit_percent,p.deposit_cents,p.balance_cents FROM v3_order_checkout_snapshots s JOIN v2_orders o ON o.id=s.order_id
       JOIN v2_order_pricing p ON p.order_id=o.id WHERE ${key?'s.request_key':'o.public_token'}=?`).bind(key||token).first();
   if(!row)return {found:false};
   const status=await reconcileV3Payment(env,row.id);
-  const base={found:true,orderCode:row.order_code,customerAreaPath:'/meu-pedido/'+row.public_token,totalCents:row.total_cents,paymentMethod:row.payment_method,
+  const base={found:true,orderCode:row.order_code,customerAreaPath:'/meu-pedido/'+row.public_token,totalCents:row.total_cents,paymentMethod:row.payment_method,depositPercent:row.deposit_percent,amountDueNowCents:row.deposit_cents,balanceCents:status.balanceCents??row.balance_cents,
     deliveryWindow:{start:row.delivery_start,end:row.delivery_end}};
   if(status.alreadyPaid)return {...base,state:'paid',capacityReview:!!status.capacityReview,canRenew:false};
   if(row.archived_at||row.status==='cancelled')return {...base,state:'review',canRenew:false};

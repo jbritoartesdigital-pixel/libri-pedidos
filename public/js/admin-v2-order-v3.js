@@ -26,12 +26,26 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<button class="btn btn-secondary" data-v3-admin="agenda" data-family="'+esc(s.family)+'">Consultar agenda</button>'+
  (a?.options?.length?'<label>Janela de entrega <select data-window="'+esc(s.family)+'">'+a.options.map((o,i)=>'<option value="'+i+'">'+esc(o.start)+' a '+esc(o.end)+'</option>').join('')+'</select></label><button class="btn btn-primary" data-v3-admin="schedule" data-family="'+esc(s.family)+'">Confirmar e liberar serviço</button>':a?'<p>Não há janela disponível. Revise a agenda antes de prometer uma data.</p>':'')+'</div>';
  }
+ function productionHtml(s){
+ const p=s.progress;if(!p)return '';
+ const family=esc(s.family),preview=p.preview;
+ const statuses={ready:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue'};
+ const button=(action,label)=>'<button class="btn btn-secondary" data-v3-admin="'+action+'" data-family="'+family+'">'+label+'</button>';
+ const url='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family+'/preview/'+preview?.id;
+ return '<div class="notice"><h4>Produção · '+esc(statuses[s.productionStatus]||'Aguardando programação')+'</h4><p>Rodadas utilizadas: '+esc(p.revisionsUsed)+' / '+esc(p.revisionsIncluded??'conforme contrato')+'</p>'+
+ (preview?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a> · Ajustes até '+esc(preview.adjustmentDeadline.slice(0,10))+'</p>':'')+
+ (s.productionStatus==='ready'?button('start','Iniciar produção'):'')+
+ (s.productionStatus==='in_production'?'<label>Prévia protegida (até 60 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf" data-preview-file="'+family+'"></label><label><input type="checkbox" data-watermark="'+family+'"> O arquivo já contém marca d’água</label>'+button('publish','Publicar prévia'):'')+
+ (s.productionStatus==='adjustments'?'<p>Solicitação: '+esc(p.events.find(e=>e.action==='adjustments_requested')?.note||'')+'</p><label>Observação da conferência<textarea maxlength="2000" data-production-note="'+family+'"></textarea></label>'+
+ (p.revisionsIncluded!==null&&p.revisionsUsed<p.revisionsIncluded?button('included_revision','Usar rodada incluída'):'')+button('libri_correction','Corrigir erro da Libri sem consumir rodada')+button('extra_quote','Registrar necessidade de orçamento')+button('return_preview','Retornar para aprovação'):'')+
+ '<details><summary>Histórico de produção</summary>'+p.events.map(e=>'<p>'+esc(e.created_at)+' · '+esc(({started:'Produção iniciada',preview_published:'Prévia publicada',approved:'Aprovada pela cliente',adjustments_requested:'Ajustes solicitados',included_revision:'Rodada utilizada',libri_correction:'Correção da Libri',extra_quote:'Orçamento necessário',return_preview:'Retorno à aprovação'})[e.action]||e.action)+(e.note?' · '+esc(e.note):'')+'</p>').join('')+'</details></div>';
+ }
  function render(){
  if(!host.isConnected)return;
  host.innerHTML='<section class="card"><h3>Pedido V3</h3><p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Total: '+money(brief.payment.totalCents)+'</p><p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
  (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
- (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+'</section>').join('')+
+ (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
  (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a></p>').join('')+
@@ -43,7 +57,16 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null;
- if(action==='agenda'||action==='schedule'){
+ if(['start','publish','included_revision','libri_correction','extra_quote','return_preview'].includes(action)){
+   const s=brief.services.find(x=>x.family===family);if(!s?.progress)return;
+   path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family;
+   payload={action,version:s.progress.version,note:host.querySelector('[data-production-note="'+family+'"]')?.value||''};
+   if(action==='publish'){
+     const file=host.querySelector('[data-preview-file="'+family+'"]')?.files?.[0];
+     if(!file||!host.querySelector('[data-watermark="'+family+'"]')?.checked){showToast('Selecione a prévia e confirme a marca d’água.');return;}
+     const form=new FormData();form.append('file',file);form.append('version',String(s.progress.version));form.append('watermarkConfirmed','true');payload=form;path+='/preview';
+   }
+ }else if(action==='agenda'||action==='schedule'){
    const dep=host.querySelector('[data-dependency="'+family+'"]');
    if(dep&&!dep.value){showToast('Informe a dependência da identidade visual.');return;}
    const depends=dep?dep.value==='yes':undefined;
@@ -64,7 +87,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method:'POST',body:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method:'POST',body:payload instanceof FormData?payload:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

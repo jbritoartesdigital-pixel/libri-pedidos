@@ -5,8 +5,34 @@ import { database } from './helpers.mjs';
 import worker from '../src/index.js';
 import { listAteliePackages, updateAtelieDraft } from '../src/lib/v3-atelie-catalog.js';
 import { buildAtelieBriefingBlueprint } from '../src/lib/v3-atelie-briefing.js';
+import {ATELIE_V41_APPROVED_CATALOG,getAtelieV41CatalogDraft} from '../src/lib/v3-atelie-v41-commercial-catalog.js';
 import { loadV2Catalog } from '../src/lib/v2-catalog.js';
 import { calculateCommercialV2Quote } from '../src/lib/v2-commercial-pricing.js';
+
+test('Ateliê V4.1 registra valores antigos e 3/4/5 poses com paleta e tipografia sem abrir venda',async()=>{
+  const db=database();
+  for(const [code,price,poses] of [['essencia',15900,3],['encanto',29900,4],['universo',54900,5]]) {
+    const spec=ATELIE_V41_APPROVED_CATALOG[code];
+    assert.equal(spec.priceCents,price);
+    assert.equal(spec.mascotPoses,poses);
+    assert.ok(spec.includedItems.some(x=>/paleta/i.test(x)));
+    assert.ok(spec.includedItems.some(x=>/tipogr/i.test(x)));
+    assert.ok(spec.includedItems.some(x=>new RegExp(poses+' poses').test(x)));
+    const patch=getAtelieV41CatalogDraft(code);
+    assert.equal(patch.priceCents,price);
+    assert.equal(patch.pointsUnits,null);
+    await updateAtelieDraft(db,code,patch);
+    await updateAtelieDraft(db,code,{scopeApproved:true});
+  }
+  const admin=await listAteliePackages(db,{admin:true});
+  assert.deepEqual(admin.map(x=>x.priceCents),[15900,29900,54900]);
+  assert.ok(admin.every(x=>x.scopeApproved && !x.saleEnabled && x.pointsUnits===null));
+  assert.ok(admin.every(x=>x.releaseMissing.includes('Carga de produção não definida')));
+  const publicRows=await listAteliePackages(db);
+  assert.ok(publicRows.every(x=>x.includedItems.some(i=>/paleta/i.test(i))));
+  assert.ok(publicRows.every(x=>!('priceCents' in x)&&!x.purchaseAvailable));
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);
+});
 
 test('Ateliê starts with exactly three safe packages, no prices and no V2 sale products', async () => {
   const db=database();
@@ -87,6 +113,7 @@ test('Ateliê private drafts and production routes require existing Admin Passke
   for(const [path,method] of [
     ['/api/admin/v2/atelie/packages','GET'],
     ['/api/admin/v2/atelie/packages/essencia','PATCH'],
+    ['/api/admin/v2/atelie/packages/essencia/approved-catalog','POST'],
     ['/api/admin/v2/atelie/orders/LIBRI-2001/production','GET'],
     ['/api/admin/v2/atelie/orders/LIBRI-2001/production','PATCH']
   ]) {

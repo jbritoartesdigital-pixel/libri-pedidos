@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V105: PR #157, CI 45505943872 aprovado; capturas mobile, noturna e desktop revisadas. Gates mantidos.
 # Release V104: PR #155, CI 45501866296 aprovado, migration 0065 de descontos iniciais e ofertas contextuais; backup e gates mantidos.
 # Release V103: PR #154, CI 45499207776 aprovado, capturas mobile e desktop revisadas; contraste corrigido. Gates mantidos.
 # Release V99: PR #153, CI 45495138047 aprovado; identidade Studio, fluxo simplificado e ofertas manuais. Gates mantidos.

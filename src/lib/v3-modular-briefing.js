@@ -197,7 +197,7 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
   if(!Number.isSafeInteger(orderId)||!Number.isSafeInteger(photoCount)||!Number.isSafeInteger(videoCount)||photoCount<0||videoCount<0||photoCount+videoCount===0||
     typeof complete!=='boolean'||typeof note!=='string'||note.length>500)fail('Informe os materiais efetivamente recebidos.');
   return withV2PaymentLock(db,orderId,async()=>{
-    const row=await db.prepare(`SELECT s.commercial_snapshot_json,s.production_status,s.briefing_status AS service_briefing_status,o.status,o.briefing_status,o.public_token
+    const row=await db.prepare(`SELECT COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json) AS commercial_snapshot_json,s.production_status,s.briefing_status AS service_briefing_status,o.status,o.briefing_status,o.public_token
       FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id WHERE s.order_id=? AND s.family='retrospectiva'`).bind(orderId).first();
     if(!row)fail('Retrospectiva não contratada.',404);
     const ctx=await contextV3Briefing(db,row.public_token);

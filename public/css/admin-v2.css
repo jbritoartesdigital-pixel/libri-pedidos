@@ -1989,3 +1989,5 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
  #v3AdminOrder .btn{width:100%;margin-right:0}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
+
+.production-service-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.production-service-line span,.production-service-line small{color:var(--muted);font-size:12px}.production-service-line small{grid-column:1/-1}.production-service-line:last-child{border-bottom:0}@media(max-width:620px){.production-service-line{grid-template-columns:minmax(0,1fr)}}

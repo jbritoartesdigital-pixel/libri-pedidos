@@ -105,6 +105,11 @@ async function checkout(p){
  assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
  assert.equal(await p.locator('[name="email"]').count(),0);
  await p.locator('[name="deliveryWindow"]').first().waitFor();
+ await p.locator('[name="deliveryWindow"]').first().check();assert.equal(await p.locator('[name="deliveryWindow"]:checked').count(),1);
+ await p.locator('#v3-other-delivery summary').click();await p.locator('#v3-other-delivery-date').fill(day(60));
+ await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.locator('.v3-agenda-option:has(input:checked)').waitFor();
+ assert.match(await p.locator('.v3-agenda-option:has(input:checked)').innerText(),new RegExp(day(60).split('-').reverse().join('/')));
+ await p.locator('[name="paymentMethod"]').selectOption('card');await p.locator('#v3-app[aria-busy="false"]').waitFor();assert.match(await p.locator('.v3-agenda-option:has(input:checked)').innerText(),new RegExp(day(60).split('-').reverse().join('/')));
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);
  assert.match(p.url(),/\/loja$/);
 }

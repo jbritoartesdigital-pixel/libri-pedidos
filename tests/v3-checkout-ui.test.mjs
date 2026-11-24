@@ -16,7 +16,7 @@ test('unified checkout renders contact, date, payment choices, server totals and
       throw Error('unexpected request');
     }});
   await new Promise(resolve=>setImmediate(resolve));
-  assert.match(root.innerHTML,/Seu nome/);assert.doesNotMatch(root.innerHTML,/name="email"|data-v3-checkout="agenda"/);assert.match(root.innerHTML,/Sugerida/);
+  assert.match(root.innerHTML,/Seu nome/);assert.doesNotMatch(root.innerHTML,/name="email"|data-v3-checkout="agenda"/);assert.match(root.innerHTML,/Sugerida/);assert.match(root.innerHTML,/Escolher outra data de entrega/);
   assert.match(root.innerHTML,/2027-02-01/);
   assert.match(root.innerHTML,/Pix integral/);
   assert.match(root.innerHTML,/Cartão integral/);

@@ -339,3 +339,19 @@ body{background:radial-gradient(circle at 3% 58%,#f7e8e5 0,transparent 36%),radi
 @media(min-width:900px){.v3-stage-creation .v3-choices-stack{grid-template-columns:repeat(3,minmax(0,1fr))}.v3-stage-intent .v3-choices-stack,.v3-format-list{grid-template-columns:repeat(2,minmax(0,1fr))}.v3-stage-creation .v3-choice,.v3-stage-intent .v3-choice{min-block-size:190px}}
 @media(max-width:560px){.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie{min-block-size:max(360px,calc(100dvh - 180px))}.v3-stage-creation .v3-choice,.v3-stage-intent .v3-choice{min-block-size:116px}.v3-stage-event .v3-choice{min-block-size:78px}.v3-stage-format .v3-format-card{min-block-size:165px}}
 @media(prefers-reduced-motion:reduce){.v3-stage-creation .v3-choice-copy,.v3-stage-intent .v3-choice-copy,.v3-stage-format .v3-choice-copy{animation:none!important;transform:none!important;opacity:1!important}}
+
+/* V77: typography uses the platform's modern sans-serif, without external font requests. */
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.v3-title{font-family:inherit;font-weight:620;font-size:clamp(25px,5.7vw,36px);line-height:1.16;letter-spacing:-.035em}
+.v3-text{font-family:inherit;font-size:14px;line-height:1.55}
+.v3-choice-copy strong,.v3-format-select .v3-choice-copy strong{font-family:inherit;font-weight:650;letter-spacing:.025em}
+.v3-stage-creation .v3-choice-copy strong,.v3-stage-intent .v3-choice-copy strong,.v3-stage-event .v3-choice-copy strong,.v3-stage-event-subtype .v3-choice-copy strong,.v3-stage-scenes .v3-choice-copy strong,.v3-stage-atelie .v3-choice-copy strong,.v3-format-select .v3-choice-copy strong{font-size:clamp(17px,4.5vw,22px);font-weight:650;letter-spacing:.035em}
+.v3-choice-copy small,.v3-format-select .v3-choice-copy small{font-family:inherit;font-weight:400}
+.v3-total b,.v3-package-heading strong,.v3-checkout-block h2,.v3-modal-card h2,.v3-intro-inner h1{font-family:inherit}
+.v3-package-heading strong,.v3-checkout-block h2,.v3-modal-card h2{font-weight:650;letter-spacing:-.015em}
+.v3-delivery-picker{display:grid;gap:8px}
+.v3-delivery-picker .v3-agenda-option{display:flex!important;gap:12px;align-items:center!important;padding:11px 12px;border:1px solid #e1d4cd;border-radius:12px;background:#fffdfa;cursor:pointer;min-height:52px}
+.v3-delivery-picker .v3-agenda-option:has(input:checked){border-color:#905d56;box-shadow:inset 0 0 0 1px #905d56;background:#f5e8e3}
+.v3-delivery-picker .v3-agenda-option span{display:grid;gap:3px;min-width:0}.v3-delivery-picker .v3-agenda-option small{font-size:11px;font-weight:650}
+.v3-delivery-picker details{border-top:1px solid var(--outline);padding-top:6px}.v3-delivery-picker details summary{min-height:44px;display:flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.v3-delivery-more{display:grid;gap:6px;margin-bottom:12px}.v3-delivery-picker details>label{display:block;margin-top:8px}.v3-delivery-picker details>small{display:block;color:var(--muted)}.v3-delivery-picker .v3-mini{margin:2px 0;line-height:1.45}

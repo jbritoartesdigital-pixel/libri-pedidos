@@ -143,7 +143,7 @@ try{
  const liveBlack=await pageFor(390,844);const bp=liveBlack.page;
  await bp.setExtraHTTPHeaders({'x-libri-test-black':'1'});
  await click(bp,'event','birthday');await click(bp,'creation','invitation');await click(bp,'intent','simple');await click(bp,'product','interactive_essential');await click(bp,'guided-finish');
- await bp.locator('#v3-modal [data-action="dismiss-offer"],#v3-modal [data-action="added-view"]').first().waitFor();if(await bp.locator('[data-action="dismiss-offer"]').count())await click(bp,'dismiss-offer');await click(bp,'added-view');
+ await bp.locator('#v3-offer-title').waitFor();assert.match(await bp.locator('#v3-offer-title').innerText(),/confirmações em um painel/);const originalDraft=await bp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).addonCodes);await click(bp,'dismiss-offer');await click(bp,'added-view');assert.deepEqual(await bp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).cartItems[0].addonCodes),originalDraft);
  await click(bp,'cart-unified-checkout');await bp.locator('#v3-app[aria-busy="false"]').waitFor();await bp.locator('#v3c-eventDate').fill(day(65));await bp.locator('[name="deliveryWindow"]').first().waitFor();await bp.locator('#v3-app[aria-busy="false"]').waitFor();
  await bp.locator('#v3c-name').fill('Cliente teste');await bp.locator('#v3c-whatsapp').fill('5561987654321');await bp.locator('#v3c-honoreeName').fill('Festa teste');
  await bp.locator('[data-v3-term]').first().check();await bp.locator('#v3-unified-checkout button[type="submit"]').click();

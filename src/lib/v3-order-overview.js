@@ -24,7 +24,7 @@ export async function listV3Production(db,{status='',q='',when='',service='',art
  if(service&&!family)return [];
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const weekDate=new Date(today+'T12:00:00Z');weekDate.setUTCDate(weekDate.getUTCDate()+6);
- const clauses=["o.archived_at IS NULL","o.status NOT IN ('cancelled','configuring','awaiting_payment')","o.briefing_status!='locked'","((p.deposit_percent=100 AND p.balance_cents=0) OR (p.deposit_percent=50 AND p.payment_method='pix' AND EXISTS(SELECT 1 FROM v3_admin_payment_policies a WHERE a.order_id=o.id AND a.deposit_percent=50)))",
+ const clauses=["NOT EXISTS(SELECT 1 FROM v3_paid_cancellations x WHERE x.order_id=o.id)","o.archived_at IS NULL","o.status NOT IN ('cancelled','configuring','awaiting_payment')","o.briefing_status!='locked'","((p.deposit_percent=100 AND p.balance_cents=0) OR (p.deposit_percent=50 AND p.payment_method='pix' AND EXISTS(SELECT 1 FROM v3_admin_payment_policies a WHERE a.order_id=o.id AND a.deposit_percent=50)))",
  "EXISTS(SELECT 1 FROM v2_payments pay WHERE pay.order_id=o.id AND pay.provider='mercado_pago' AND pay.status='approved' AND pay.payment_type!='refund' AND pay.amount_cents=p.deposit_cents AND pay.method=p.payment_method)"];
  const params=[];
  if(when==='today'){clauses.push('o.event_date=?');params.push(today);}

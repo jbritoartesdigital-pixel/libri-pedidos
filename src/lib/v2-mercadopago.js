@@ -1917,6 +1917,7 @@ async function syncMercadoPagoOrderUnlocked(
     });
   }
 
+  if(isV3PaymentSnapshot(localPayment.pricing_snapshot_json)&&await env.DB.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(localPayment.order_id).first())return {found:true,approved:false,paymentStatus,needsReview:true,orderId:localPayment.order_id};
   if (
     paymentStatus
     === 'approved'

@@ -21,6 +21,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
        JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id LEFT JOIN v3_admin_payment_policies a ON a.order_id=o.id
        WHERE o.id=?`).bind(orderId).first();
     if(!row)fail('Pedido combinado não encontrado.','v3_order_missing');
+    if(await db.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(orderId).first())fail('Pedido em cancelamento.','v3_payment_unavailable');
     if(await db.prepare("SELECT 1 FROM v3_order_revisions WHERE order_id=? AND status='offered'").bind(orderId).first())fail('Aceite a proposta revisada antes de pagar.','v3_revision_required');
     const quote=JSON.parse(row.quote_json);
     const lines=(await db.prepare(`SELECT s.total_cents,s.points_units-COALESCE((SELECT SUM(a.points_units) FROM v3_service_supplements a WHERE a.service_id=s.id AND a.applied_at IS NOT NULL AND COALESCE(json_extract(a.offer_json,'$.kind'),'extras')!='new_service'),0) AS points_units FROM v3_order_services s WHERE s.order_id=? AND s.origin_supplement_id IS NULL`).bind(orderId).all()).results||[];
@@ -96,6 +97,7 @@ export async function reconcileV3Payment(env,orderId){
     const order=await db.prepare(`SELECT o.status FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
       WHERE o.id=?`).bind(orderId).first();
     if(!order)fail('Pedido combinado não encontrado.','v3_order_missing');
+    if(await db.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(orderId).first())return {ok:false,needsReview:true,canRetry:false};
     if(await db.prepare("SELECT 1 FROM v3_order_revisions WHERE order_id=? AND status='offered'").bind(orderId).first())return {ok:true,revisionRequired:true,canRetry:false};
     const state=await originalV3FinancialState(db,orderId);
     if(state?.valid&&state.row.deposit_percent===50){

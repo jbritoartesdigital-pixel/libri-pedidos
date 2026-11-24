@@ -132,6 +132,7 @@ export async function syncV3SupplementPayment(env,providerOrderId){
  const initial=await db.prepare(`SELECT p.*,s.order_id,s.family,o.public_token FROM v3_supplement_payments p JOIN v3_service_supplements a ON a.id=p.supplement_id JOIN v3_order_services s ON s.id=a.service_id JOIN v2_orders o ON o.id=s.order_id WHERE p.provider_order_id=?`).bind(providerOrderId).first();
  if(!initial)return {found:false};
  return withV2PaymentLock(db,initial.order_id,async()=>{
+  if(await db.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(initial.order_id).first())return {found:true,status:'review',needsReview:true};
   const {ctx,s,offer}=await access(db,initial.public_token,initial.family,initial.supplement_id);
   const p=await db.prepare('SELECT * FROM v3_supplement_payments WHERE id=?').bind(initial.id).first();
   let remote=await fetchMercadoPagoOrder(env,providerOrderId);

@@ -70,6 +70,7 @@ export async function recordV3AdminBalance(env,code,input={}){
  const initial=await lookup(env.DB,code);
  return withV2PaymentLock(env.DB,initial.id,async()=>{
   const db=env.DB,row=await lookup(db,code),state=await originalV3FinancialState(db,row.id),at=nowIso(),paidAt=paidDate+'T12:00:00.000Z';
+  if(await db.prepare('SELECT 1 FROM v3_paid_cancellations WHERE order_id=?').bind(row.id).first())fail('Pedido em cancelamento.');
   const prior=await db.prepare('SELECT * FROM v3_admin_pix_receipts WHERE request_key=?').bind(requestKey).first();
   if(prior){if(prior.order_id!==row.id||prior.amount_cents!==amountCents||prior.paid_at!==paidAt||prior.note!==note.trim())fail('Identificador de recebimento já utilizado.');return {alreadyRecorded:true,paymentId:prior.payment_id,remainingCents:state.remainingCents};}
   if(!state.valid||row.deposit_percent!==50||row.archived_at||row.status==='cancelled'||row.payment_method!=='pix'||amountCents!==state.remainingCents)fail('Registre somente o saldo integral aberto, após a entrada confirmada.');

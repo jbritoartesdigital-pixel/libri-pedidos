@@ -861,25 +861,38 @@ function buildSchema(
     ),
   ];
 
-  if (
-    context.order.event_type
-    === 'birthday'
-  ) {
-    eventFields.push(
-      field(
+  if (context.order.event_type === 'birthday') {
+    eventFields.push(field(
+      'joint_celebration',
+      'A festa é de irmãos ou de mais de um aniversariante?',
+      'choice',
+      {
+        required:true,
+        help:'Dois nomes na mesma festa não significam cobrar duas ilustrações. Personagens ilustrados extras são avaliados separadamente.',
+        options:[
+          {value:'no',label:'Não, um aniversariante'},
+          {value:'yes',label:'Sim, duas ou mais pessoas'}
+        ]
+      }
+    ));
+    if(data.joint_celebration==='yes') {
+      eventFields.push(field(
+        'joint_honorees',
+        'Quais são os nomes e idades de cada aniversariante?',
+        'textarea',
+        {
+          required:true,
+          help:'Ex.: Ana, 4 anos; Beatriz, 6 anos. O texto do convite pode incluir todos.'
+        }
+      ));
+    } else {
+      eventFields.push(field(
         'age',
         'Quantos anos o aniversariante vai fazer?',
         'number',
-        {
-          required:
-            true,
-          min:
-            1,
-          max:
-            120,
-        },
-      ),
-    );
+        {required:true,min:1,max:120}
+      ));
+    }
   }
 
   eventFields.push(
@@ -990,6 +1003,30 @@ function buildSchema(
     );
   }
 
+  appearanceFields.push(field(
+    'additional_illustrated_subjects',
+    'Quer ilustrar mais alguma criança, irmão, animal ou personagem?',
+    'choice',
+    {
+      required:false,
+      help:'Incluir nomes na festa não cria cobrança. Um personagem ILUSTRADO a mais precisa de orçamento e aceite, nunca é cobrado automaticamente.',
+      options:[
+        {value:'no',label:'Não, somente o que já está contratado'},
+        {value:'yes',label:'Sim, quero solicitar orçamento'}
+      ]
+    }
+  ));
+  if(data.additional_illustrated_subjects==='yes') {
+    appearanceFields.push(field(
+      'additional_illustrated_subjects_details',
+      'Quem mais você gostaria de ilustrar?',
+      'textarea',
+      {
+        required:true,
+        help:'Ex.: outro irmão, cachorro, papagaio, personagem temático. Diga quantos, quem são e se devem aparecer juntos.'
+      }
+    ));
+  }
   sections.push({
     id:
       'appearance',

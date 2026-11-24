@@ -38,6 +38,10 @@ export function atelieBriefingHtml(briefing) {
     const val=briefing.data?.[field.key]??field.prefill??'';
     const label='<label for="atelie-'+esc(field.key)+'">'+esc(field.label)+(field.required?' *':'')+'</label>';
     const hint=field.hint?'<small class="field-help">'+esc(field.hint)+'</small>':'';
+    if(field.type==='info') {
+      return '<div class="notice info" role="note"><strong>'+esc(field.label)+'</strong>'+
+        (field.hint?'<p class="field-help">'+esc(field.hint)+'</p>':'')+'</div>';
+    }
     if(field.type==='upload') {
       const fileList=(briefing.uploads||[]).filter(x=>x.fieldKey===field.key);
       const limit=Number(briefing.uploadLimits?.[field.key]||0);

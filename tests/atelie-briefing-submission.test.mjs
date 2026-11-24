@@ -47,7 +47,7 @@ function fixture() {
 }
 async function completed(db) {
   let x=await saveAtelieCustomerBriefing(db,TOKEN,{
-    revision:0,currentSection:'style',data:{theme:'Jardim encantado',styleFreedom:'a Libri pode decidir'}
+    revision:0,currentSection:'style',data:{theme:'Jardim encantado',styleFreedom:'a Libri pode decidir',multipleHonorees:'não',mascotMode:'ilustração temática',additionalSubjects:'não'}
   });
   x=await saveAtelieCustomerBriefing(db,TOKEN,{
     revision:x.revision,currentSection:'permissions',data:{exactTexts:'Luna faz 3 anos'}

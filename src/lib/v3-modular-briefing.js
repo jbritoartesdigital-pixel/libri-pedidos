@@ -44,7 +44,12 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
   const service=services.find(s=>s.family===module);
   if(!service)fail('Este serviço não faz parte do pedido.',404);
   if(module==='convite'){
-    return {...inviteSchema,sections:inviteSchema.sections.filter(s=>s.id!=='event')};
+    const sections=inviteSchema.sections.filter(s=>s.id!=='event');
+    const personal=inviteSchema.uploadRules.some(r=>r.fieldKey==='person_photos');
+    if(personal)sections.push(section('private_permission','Autorização de imagens',[
+      field('private_photo_authorization','Você possui autorização da pessoa retratada ou de seu responsável legal para usar as fotos nesta criação?','choice',{required:true,options:['sim','não']})
+    ]));
+    return {...inviteSchema,sections,uploadRules:inviteSchema.uploadRules.map(r=>({...r,authorized:!['person_photos','outfit_photos'].includes(r.fieldKey)||data.private_photo_authorization==='sim'}))};
   }
   if(module==='identidade_visual'){
     const config=service.snapshot.variant?.config?.atelie||{};
@@ -54,7 +59,8 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
       data:{...data,theme:shared.theme_or_style,age:shared.age,multipleHonorees:shared.joint_celebration==='yes'?'sim':'não',honoreesNamesAges:shared.joint_honorees}});
     const sections=atelie.sections.filter(s=>s.id!=='celebracao').map(s=>({...s,fields:s.fields.filter(f=>f.key!=='theme').map(f=>
       f.key==='includedPosesInfo'&&config.includedMascotPoses?{...f,label:'Poses incluídas no pacote: '+config.includedMascotPoses}:f)}));
-    return {sections,uploadRules:[],privateUploadsPendingIntegration:true};
+    const uploadRules=sections.flatMap(s=>s.fields.filter(f=>f.type==='upload').map(f=>({fieldKey:f.key,label:f.label,min:f.key==='childPhotos'?1:0,max:f.key==='childPhotos'?4:6,maxBytes:15*1024*1024,authorized:true})));
+    return {sections:sections.map(s=>({...s,fields:s.fields.filter(f=>f.type!=='upload')})),uploadRules};
   }
   if(module==='retrospectiva'){
     const r=retroSpec(service.snapshot);
@@ -70,7 +76,7 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
   }
   fail('Módulo inválido.');
 }
-async function context(db,token){
+export async function contextV3Briefing(db,token){
   const order=await db.prepare(`SELECT o.*,p.total_cents,p.payment_method,p.deposit_percent,p.balance_cents
     FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
     JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.public_token=?`).bind(token).first();
@@ -89,7 +95,7 @@ async function context(db,token){
   return {order,services,locked,drafts,revisions};
 }
 export async function getV3ModularBriefing(db,token){
-  const ctx=await context(db,token);
+  const ctx=await contextV3Briefing(db,token);
   if(!ctx)return null;
   const {order,services,locked,drafts,revisions}=ctx;
   const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
@@ -102,6 +108,11 @@ export async function getV3ModularBriefing(db,token){
     module,revision:revisions[module]||0,data:drafts[module]||{},editable:['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&
       (module==='shared'||services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status))),schema:buildV3ModuleSchema(order,services,module,drafts)
   }));
+  const uploads=(await db.prepare('SELECT id,family,field_key,original_filename,mime_type,size_bytes FROM v3_service_uploads WHERE order_id=? ORDER BY id').bind(order.id).all()).results||[];
+  for(const m of modules){
+    m.uploads=uploads.filter(u=>u.family===m.module).map(u=>({id:u.id,fieldKey:u.field_key,originalFilename:u.original_filename,mimeType:u.mime_type,sizeBytes:u.size_bytes,
+      contentPath:'/api/v2/customer-area/'+token+'/v3/briefing/'+u.family+'/uploads/'+u.id+'/content'}));
+  }
   const retro=modules.find(m=>m.module==='retrospectiva');
   if(retro){
     const setting=await db.prepare("SELECT value FROM v2_settings WHERE key='libri_whatsapp'").first();
@@ -135,10 +146,10 @@ function normalizeField(f,value){
   return value.trim();
 }
 export async function saveV3ModuleDraft(db,token,module,payload={}){
-  const initial=await context(db,token);
+  const initial=await contextV3Briefing(db,token);
   if(!initial)return null;
   return withV2PaymentLock(db,initial.order.id,async()=>{
-    const ctx=await context(db,token);
+    const ctx=await contextV3Briefing(db,token);
     if(!ctx||ctx.locked)fail('O briefing será liberado após o pagamento.',403);
     if(!['available','in_progress'].includes(ctx.order.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
       fail('O briefing não está disponível para edição.',409);
@@ -173,7 +184,7 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
     const row=await db.prepare(`SELECT s.commercial_snapshot_json,o.status,o.briefing_status,o.public_token
       FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id WHERE s.order_id=? AND s.family='retrospectiva'`).bind(orderId).first();
     if(!row)fail('Retrospectiva não contratada.',404);
-    const ctx=await context(db,row.public_token);
+    const ctx=await contextV3Briefing(db,row.public_token);
     if(!ctx||ctx.locked||!['available','in_progress'].includes(row.briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
       fail('Pedido indisponível para confirmação de materiais.',409);
     const spec=retroSpec(parse(row.commercial_snapshot_json));

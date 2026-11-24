@@ -38,7 +38,7 @@ function canonicalItems(items){
       addonCodes:[...new Set(item.addonCodes??[])].sort(),extras:normalizeV3ExtraSelection(item.extras),comboCode:item.comboCode||''};
   }).sort((a,b)=>a.productCode.localeCompare(b.productCode));
 }
-export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={}}){
+export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={},contactSnapshot=null}){
   // customerId, orderCode and publicToken must come from the trusted checkout
   // orchestrator, never from a public JSON payload.
   if(!Number.isSafeInteger(customerId)||customerId<=0)fail('Cliente inválida.','order_customer_invalid');
@@ -58,7 +58,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
-  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents}));
+  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
   const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod},{includeSnapshots:true,requireSale:true});
@@ -87,7 +87,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const plan=await planV2AllocationForWindow(db,capacity);
   if(!plan.fits)fail('A agenda mudou. Escolha outra janela.','order_capacity_unavailable');
   const stamp=new Date().toISOString();
-  const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,
+  const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,...(contactSnapshot?{contactSnapshot}:{}),
     payment:{method:quote.paymentMethod,depositPercent:100,depositCents:quote.totalCents,balanceCents:0},
     comboDiscountCents:quote.discountCents,couponDiscountCents:0};
   // No existing V2 payment endpoint can reach this internal helper. Until the

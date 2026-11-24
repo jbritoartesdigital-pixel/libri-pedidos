@@ -387,13 +387,14 @@ function priceBar() {
 function renderExtras(){
  const groups=availableGroups();
  const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Receba as confirmações dos convidados em um painel.',moments:'Fotos dos convidados reunidas em um álbum digital. Inclui filtro.',filter:'Um filtro de fotos com o tema da festa.'};
+ const cardNames={confirmation:'Formulário de confirmação',filter:'Filtro personalizado',moments:'Álbum de fotos'};
  const cards=groups.map(g=>{
   const selected=selectedAddons().filter(a=>a.group===g[0]);
   const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
   const variants=catalog.addons.filter(a=>a.group===g[0]);const direct=variants.length===1;const text=direct?'+ '+money(variants[0].priceCents):selected.length?'+ '+money(price):'A partir de '+money(Math.min(...variants.map(a=>Number(a.priceCents))));const actionText=selected.length?(direct?'Retirar':'Alterar'):direct?'Adicionar':'Ver opções';
-  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(cardNames[g[0]]||g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
  }).join('');
- const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis.</strong> O formulário com painel é opcional.</p>':'';
+ const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O formulário com painel é opcional.</p>':'';
  panel('Personalize seu convite','Adicionais opcionais para a sua festa.',free+'<div class="v3-optional-list" data-count="'+groups.length+'">'+cards+'</div>',
  '<div class="v107-extras-footer">'+priceBar()+'<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div></div>',3);
 }

@@ -92,11 +92,15 @@ export async function getV3ModularBriefing(db,token){
   const ctx=await context(db,token);
   if(!ctx)return null;
   const {order,services,locked,drafts,revisions}=ctx;
-  const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productName:s.snapshot.product.name}));
-  const base={orderCode:order.order_code,locked,event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
+  const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
+    variantName:s.snapshot.variant?.label||'',totalCents:s.total_cents,productionDays:s.production_days,
+    extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
+  const base={orderCode:order.order_code,locked,orderStatus:order.status,payment:{totalCents:order.total_cents,method:order.payment_method},
+    deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[]};
   const modules=['shared',...services.map(s=>s.family)].map(module=>({
-    module,revision:revisions[module]||0,data:drafts[module]||{},schema:buildV3ModuleSchema(order,services,module,drafts)
+    module,revision:revisions[module]||0,data:drafts[module]||{},editable:['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&
+      (module==='shared'||services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status))),schema:buildV3ModuleSchema(order,services,module,drafts)
   }));
   const retro=modules.find(m=>m.module==='retrospectiva');
   if(retro){

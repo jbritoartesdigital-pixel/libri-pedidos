@@ -1,11 +1,10 @@
 // Catálogo comercial Libri Ateliê V4.1, revisão 2026-11-23.
-// Preços, direitos e entregáveis definidos em conversa; pontos continuam sem
-// aprovação definitiva. NÃO libera vendas, altera D1 ou cobra extras por si só.
+// Preços, direitos, entregáveis e capacidade aprovados. Não libera vendas por si só.
 export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   essencia: {
     name: 'Essência',
     priceCents:15900,
-    pointsUnits:null,
+    pointsUnits:300,
     revisionLimit:1,
     mascotPoses:3,
     shortDescription:'Identidade visual digital personalizada com brasão, logotipo, monograma, 3 poses da criança ilustrada, elementos, estampa, paleta e tipografia.',
@@ -36,7 +35,7 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   encanto: {
     name:'Encanto',
     priceCents:29900,
-    pointsUnits:null,
+    pointsUnits:500,
     revisionLimit:1,
     mascotPoses:4,
     shortDescription:'Identidade visual ampliada com 4 poses, mais elementos e estampas, paleta, tipografia e 2 artes de papelaria à escolha.',
@@ -68,7 +67,7 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
   universo: {
     name:'Universo',
     priceCents:54900,
-    pointsUnits:null,
+    pointsUnits:800,
     revisionLimit:2,
     mascotPoses:5,
     shortDescription:'Identidade visual mais completa com 5 poses, brasão alternativo, monogramas, mais estampas, elementos e 4 artes de papelaria.',
@@ -126,10 +125,10 @@ export function getAtelieV41CatalogDraft(code) {
     includedItems:[...p.includedItems],
     excludedItems:[...p.excludedItems],
     revisionLimit:p.revisionLimit,
-    pointsUnits:null,
+    pointsUnits:p.pointsUnits,
     scopeReference:'Libri Ateliê V4.1 | Catálogo comercial aprovado em 23/11/2026',
     specificTerms:ATELIE_V41_COMMON_TERMS,
-    // Não aprovar pontos nem ativar venda: produção e briefing tardio pendentes.
+    // A importação não ativa venda: checkout e briefing tardio pendentes.
     scopeApproved:false,
     showcaseVisible:true
   };

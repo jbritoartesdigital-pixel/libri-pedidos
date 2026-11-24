@@ -21,7 +21,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
        WHERE o.id=?`).bind(orderId).first();
     if(!row)fail('Pedido combinado não encontrado.','v3_order_missing');
     const quote=JSON.parse(row.quote_json);
-    const lines=(await db.prepare('SELECT total_cents,points_units FROM v3_order_services WHERE order_id=?').bind(orderId).all()).results||[];
+    const lines=(await db.prepare('SELECT s.total_cents,s.points_units-COALESCE((SELECT SUM(a.points_units) FROM v3_service_supplements a WHERE a.service_id=s.id AND a.applied_at IS NOT NULL),0) AS points_units FROM v3_order_services s WHERE s.order_id=?').bind(orderId).all()).results||[];
     const sum=key=>lines.reduce((n,x)=>n+Number(x[key]),0);
     if(lines.length<1||lines.length>3||lines.length!==quote.items?.length||sum('points_units')!==quote.pointsUnits||
       sum('total_cents')+quote.cardFeeCents!==quote.totalCents||row.total_cents!==quote.totalCents||

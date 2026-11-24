@@ -63,7 +63,7 @@ export async function prepareV3Payment(request,env,orderId){
     // hold token and payload reuses the existing Mercado Pago idempotency key.
     await db.prepare("UPDATE v2_orders SET status='awaiting_payment',next_action='Aguardando pagamento',updated_at=? WHERE id=? AND status='configuring'").bind(nowIso(),orderId).run();
     const checkout=await createMercadoPagoCheckout(request,env,{orderId,orderCode:row.order_code,publicToken:row.public_token,
-      paymentMethod:row.payment_method,amountDueNowCents:row.total_cents,customerEmail:row.email});
+      paymentMethod:row.payment_method,amountDueNowCents:row.total_cents,customerEmail:quote.contactSnapshot?quote.contactSnapshot.email:row.email});
     return {ok:true,recovered:!!liveHold,orderCode:row.order_code,providerOrderId:checkout.providerOrderId,
       checkoutUrl:checkout.checkoutUrl,totalCents:row.total_cents};
   });

@@ -4,7 +4,7 @@ const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof 
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
  const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
- const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='';
+ const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={};
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;
   if(!s)return '';
@@ -17,12 +17,21 @@ export async function openV3AdminOrder(code,initial,onChanged){
   '<label><input type="checkbox" data-retro="complete" '+(r.completeAt?'checked':'')+'> Todos os materiais necessários foram recebidos e conferidos</label>'+
   '<p>'+ (r.completeAt?'Recebimento completo confirmado.':'Recebimento ainda não confirmado como completo.')+'</p><button class="btn btn-secondary" data-v3-admin="receipt">Registrar recebimento</button></section>';
  }
+ function agendaHtml(s){
+ if(s.deliveryWindow)return '<p>Entrega confirmada: '+esc(s.deliveryWindow.start)+' a '+esc(s.deliveryWindow.end)+'</p><p>Serviço programado para produção.</p>';
+ if(!s.reviewedAt||s.productionStatus!=='pending')return '';
+ const a=agenda[s.family],dependent=s.family==='convite'&&brief.services.some(x=>x.family==='identidade_visual');
+ return '<div class="notice"><h4>Programar produção</h4>'+
+ (dependent?'<label>O convite depende da identidade do Ateliê? <select data-dependency="'+esc(s.family)+'"><option value="">Selecione</option><option value="yes" '+(a?.depends===true?'selected':'')+'>Sim</option><option value="no" '+(a?.depends===false?'selected':'')+'>Não</option></select></label>':'')+
+ '<button class="btn btn-secondary" data-v3-admin="agenda" data-family="'+esc(s.family)+'">Consultar agenda</button>'+
+ (a?.options?.length?'<label>Janela de entrega <select data-window="'+esc(s.family)+'">'+a.options.map((o,i)=>'<option value="'+i+'">'+esc(o.start)+' a '+esc(o.end)+'</option>').join('')+'</select></label><button class="btn btn-primary" data-v3-admin="schedule" data-family="'+esc(s.family)+'">Confirmar e liberar serviço</button>':a?'<p>Não há janela disponível. Revise a agenda antes de prometer uma data.</p>':'')+'</div>';
+ }
  function render(){
  if(!host.isConnected)return;
  host.innerHTML='<section class="card"><h3>Pedido V3</h3><p>'+esc(brief.event.honoreeName)+' · '+esc(brief.event.date)+'</p><p>Total: '+money(brief.payment.totalCents)+'</p><p>'+ (brief.locked?'Aguardando confirmação de pagamento':'Pagamento confirmado')+'</p><button class="btn btn-secondary" data-v3-admin="refresh">Atualizar</button></section>'+
  (error?'<p role="alert" class="notice">'+esc(error)+'</p>':'')+
  brief.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+money(s.totalCents)+'</p><p>'+esc(s.briefingStatus==='completed'?'Briefing enviado':s.briefingStatus==='locked'?'Aguardando pagamento':'Aguardando respostas')+' · '+esc(s.reviewedAt?'Conferido pelo Admin':'Conferência pendente')+'</p>'+
- (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+'</section>').join('')+
+ (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card" open><summary><strong>'+esc(names[m.module])+'</strong></summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
  (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a></p>').join('')+
@@ -34,7 +43,19 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null;
- if(action==='receipt'){
+ if(action==='agenda'||action==='schedule'){
+   const dep=host.querySelector('[data-dependency="'+family+'"]');
+   if(dep&&!dep.value){showToast('Informe a dependência da identidade visual.');return;}
+   const depends=dep?dep.value==='yes':undefined;
+   path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/agenda/'+family+'/'+(action==='agenda'?'preview':'schedule');
+   payload={dependsOnIdentity:depends};
+   if(action==='schedule'){
+     const a=agenda[family],o=a?.options[Number(host.querySelector('[data-window="'+family+'"]')?.value)];
+     if(!o||a.depends!==depends){showToast('Consulte novamente a agenda.');return;}
+     if(!confirm('Confirmar esta janela para o serviço? Confira a previsão com a cliente se houve alteração.'))return;
+     payload={...payload,start:o.start,end:o.end,confirmed:true};
+   }
+ }else if(action==='receipt'){
    const get=k=>host.querySelector('[data-retro="'+k+'"]');
    const raw=get('durations').value.trim();
    payload={photoCount:Number(get('photoCount').value),videoCount:Number(get('videoCount').value),videoDurations:raw?raw.split(',').map(x=>Number(x.trim())):[],rawVideoSeconds:Number(get('rawVideoSeconds')?.value||0),complete:get('complete').checked};path+='/retro-materials';
@@ -43,7 +64,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
    payload={action,revision:m.revision,sharedRevision:brief.modules.find(x=>x.module==='shared')?.revision||0,note:host.querySelector('[data-note="'+family+'"]')?.value||''};path+='/'+family+'/review';
  }
  busy=true;error='';host.querySelectorAll('button').forEach(x=>x.disabled=true);
- try{const res=await api(path,payload?{method:'POST',body:JSON.stringify(payload)}:{});brief=res.briefing;if(payload){showToast('Atualizado.');if(onChanged)await onChanged();}}
+ try{const res=await api(path,payload?{method:'POST',body:JSON.stringify(payload)}:{});brief=res.briefing;if(action==='agenda'){agenda[family]={options:res.result.options,depends:payload.dependsOnIdentity};}else if(payload){agenda={};showToast('Atualizado.');if(onChanged)await onChanged();}}
  catch(err){error=err.message;}
  finally{busy=false;render();}
  });

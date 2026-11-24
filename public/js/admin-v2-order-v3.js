@@ -28,7 +28,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  }
  function externalFields(family,kind){
  const key=kind+'-'+family;
- return '<label>Canal de envio <select data-external-channel="'+key+'"><option value="whatsapp">WhatsApp</option><option value="drive">Google Drive</option></select></label><label>Link do Google Drive (somente se escolher Drive)<input type="url" data-external-url="'+key+'" placeholder="https://drive.google.com/file/d/.../view"></label><small>Compartilhe o arquivo com a cliente; confira as permissões do Drive. Nenhum vídeo será armazenado no aplicativo.</small>';
+ return '<label>Canal de envio <select data-external-channel="'+key+'"><option value="whatsapp">WhatsApp</option><option value="drive">Google Drive</option></select></label><label>Link do Google Drive (somente se escolher Drive)<input type="url" data-external-url="'+key+'" placeholder="https://drive.google.com/file/d/.../view"></label><small>Compartilhe o arquivo com a cliente; confira as permissões do Drive e mantenha o link final acessível por 90 dias. Nenhum vídeo será armazenado no aplicativo.</small>';
  }
  function readExternal(family,kind){
  const key=kind+'-'+family,channel=host.querySelector('[data-external-channel="'+key+'"]')?.value;
@@ -205,7 +205,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
      if(!confirm('Remover este arquivo da preparação da entrega?'))return;
      method='DELETE';path+='/files/'+encodeURIComponent(b.dataset.fileId);
    }else{
-     if(!confirm('Confirma que os arquivos finais estão completos e conferidos? A entrega iniciará os prazos de retenção.'))return;
+     if(!confirm(family==='retrospectiva'?'Confirma que enviou o vídeo final pelo WhatsApp ou disponibilizou o link do Drive para a cliente?':'Confirma que os arquivos finais estão completos e conferidos? A entrega iniciará os prazos de retenção.'))return;
      path+='/publish';payload={...payload,confirmed:true,interactiveUrl:host.querySelector('[data-interactive-url="'+family+'"]')?.value.trim()||''};
      if(family==='retrospectiva'){const external=readExternal(family,'final');if(external.channel==='drive'&&!external.url){showToast('Informe o link do Google Drive.');return;}payload.externalChannel=external.channel;payload.externalUrl=external.url;}
    }

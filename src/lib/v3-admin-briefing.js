@@ -1,4 +1,5 @@
 // These helpers are reachable only through the authenticated Admin dispatcher.
+import {getV3Delivery} from './v3-service-delivery.js';
 import {contextV3Briefing,getV3ModularBriefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 const fail=(message,status=422)=>{const e=new Error(message);e.status=status;throw e;};
@@ -10,6 +11,7 @@ export async function getV3AdminBriefing(db,token){
  for(const m of brief.modules){
    for(const u of m.uploads||[])u.contentPath=base+m.module+'/uploads/'+u.id+'/content';
  }
+ if(!brief.locked){const ctx=await contextV3Briefing(db,token);for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});}}
  return brief;
 }
 export async function reviewV3ServiceBriefing(db,token,family,input={}){

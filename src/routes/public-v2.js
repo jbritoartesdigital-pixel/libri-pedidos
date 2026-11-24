@@ -1,3 +1,4 @@
+import {syncV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {
   fail,
   json,
@@ -425,11 +426,8 @@ export async function handlePublicV2Api(
      * Não confiamos no status vindo no webhook.
      * Consultamos a Order diretamente no Mercado Pago.
      */
-    const result =
-      await syncMercadoPagoOrder(
-        env,
-        providerOrderId,
-      );
+    const supplement=await syncV3SupplementPayment(env,providerOrderId);
+    const result=supplement.found?supplement:await syncMercadoPagoOrder(env,providerOrderId);
 
     return json({
       ok: true,

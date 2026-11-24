@@ -1,3 +1,4 @@
+import {externalV3RetroMedia} from './v3-retro-external-media.js';
 import {contextV3Briefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {randomToken,fail as httpFail} from './http.js';
@@ -25,10 +26,12 @@ export async function getV3Delivery(db,s,{admin=false}={}){
  const rows=(await db.prepare('SELECT id,filename,mime_type,size_bytes,purged_at FROM v3_service_final_files WHERE service_id=? ORDER BY id').bind(s.id).all()).results||[];
  return {delivered,deliveredAt:s.delivered_at,downloadUntil:s.download_until,originalsUntil:s.originals_until,downloadAvailable:available,
  interactiveRequired:interactive(s),interactiveUrl:delivered?s.interactive_url:null,
+ externalChannel:delivered?s.external_delivery_channel:null,externalUrl:available?s.external_delivery_url:null,
  files:(admin||delivered?rows:[]).map(r=>({id:r.id,filename:r.filename,mimeType:r.mime_type,sizeBytes:r.size_bytes,available:!r.purged_at&&(available||admin&&!delivered)})),
  warning:available&&Date.parse(s.download_until)-Date.now()<=7*DAY?'Baixe seus arquivos antes do vencimento.':null};
 }
 export async function stageV3FinalFile(request,env,token,family){
+ if(family==='retrospectiva')fail('Entregue a retrospectiva pelo WhatsApp ou Google Drive.',422);
  if(!env.FILES)fail('Armazenamento indisponível.',503);
  const initial=await access(env.DB,token,family);if(!initial)return null;
  if(Number(request.headers.get('content-length')||0)>MAX+100000)fail('Arquivo acima de 80 MB.',413);
@@ -71,15 +74,16 @@ export async function deliverV3Service(env,token,family,input={}){
  if(approved?.status!=='approved')fail('A última prévia precisa estar aprovada.');
  const files=(await env.DB.prepare('SELECT r2_key FROM v3_service_final_files WHERE service_id=? AND purged_at IS NULL').bind(s.id).all()).results||[];
  const url=interactive(s)?link(input.interactiveUrl):null;
- if(!url&&!files.length)fail('Adicione os arquivos finais antes da entrega.',422);
+ const external=family==='retrospectiva'?externalV3RetroMedia({channel:input.externalChannel,url:input.externalUrl}):null;
+ if(!external&&!url&&!files.length)fail('Adicione os arquivos finais antes da entrega.',422);
  if(files.length&&!env.FILES)fail('Armazenamento indisponível.',503);
  for(const f of files){if(!await env.FILES.head(f.r2_key))fail('Um arquivo final está indisponível. Confira antes de entregar.');}
  const now=new Date(),stamp=now.toISOString(),until=n=>new Date(now.getTime()+n*DAY).toISOString();
  await env.DB.batch([
- env.DB.prepare("UPDATE v3_order_services SET production_status='delivered',delivered_at=?,download_until=?,originals_until=?,interactive_url=?,production_version=production_version+1,updated_at=datetime('now') WHERE id=?").bind(stamp,until(90),until(30),url,s.id),
+ env.DB.prepare("UPDATE v3_order_services SET production_status='delivered',delivered_at=?,download_until=?,originals_until=?,interactive_url=?,external_delivery_channel=?,external_delivery_url=?,production_version=production_version+1,updated_at=datetime('now') WHERE id=?").bind(stamp,until(90),until(30),url,external?.channel||null,external?.url||null,s.id),
  env.DB.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,preview_id) VALUES(?,'admin','delivered',?)").bind(s.id,approved.id)
  ]);
- return getV3Delivery(env.DB,{...s,production_status:'delivered',delivered_at:stamp,download_until:until(90),originals_until:until(30),interactive_url:url},{admin:true});
+ return getV3Delivery(env.DB,{...s,production_status:'delivered',delivered_at:stamp,download_until:until(90),originals_until:until(30),interactive_url:url,external_delivery_channel:external?.channel||null,external_delivery_url:external?.url||null},{admin:true});
  });
 }
 export async function downloadV3FinalFile(env,token,family,id,{admin=false}={}){

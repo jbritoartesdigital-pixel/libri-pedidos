@@ -2479,8 +2479,10 @@ export async function listV2Production(
 ) {
   const clauses = [
     'o.archived_at IS NULL',
+    'NOT EXISTS (SELECT 1 FROM v3_order_checkout_snapshots v3 WHERE v3.order_id=o.id)',
   ];
 
+  if(service==='retrospectivas')return [];
   const binds = [];
   // Filtro aditivo: mantém os status, pagamento e a ordenação V2 intactos.
   // Identificação pelo produto principal salvo no pedido, não pelo nome.

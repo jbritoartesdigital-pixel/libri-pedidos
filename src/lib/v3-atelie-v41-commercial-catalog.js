@@ -19,7 +19,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '1 rodada de ajustes'
     ],
     excludedItems:[
@@ -51,7 +50,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '1 rodada de ajustes'
     ],
     excludedItems:[
@@ -83,7 +81,6 @@ export const ATELIE_V41_APPROVED_CATALOG = Object.freeze({
       '1 paleta de cores identificada por códigos',
       '1 seleção tipográfica para a identidade',
       '1 apresentação da identidade em PDF',
-      '1 simulação conceitual digital de decoração',
       '2 rodadas de ajustes'
     ],
     excludedItems:[
@@ -103,7 +100,7 @@ export const ATELIE_V41_COMMON_TERMS = [
   'Mascotinho, brasão, logotipo, monograma e elementos em PNG de alta resolução, com fundo transparente quando adequado.',
   'Estampas e composições em PNG/JPG de alta resolução, de acordo com o uso definido.',
   'Artes de papelaria contratadas em PDF dimensionado para impressão, conforme medidas e textos fornecidos no briefing.',
-  'Apresentação da identidade em PDF e uma simulação conceitual digital de decoração.',
+  'Apresentação da identidade em PDF. Não inclui simulação de decoração.',
   'Paleta com códigos de cores e seleção tipográfica por nomes/referências, sem distribuição de arquivos de fontes licenciadas.',
   'Licença de uso pessoal para a festa e reprodução dos personalizados da própria comemoração; sem revenda, sublicença ou transferência de editáveis.',
   'Cada rodada de revisão permite agrupar ajustes ao conceito aprovado. Correções de erros da Libri não consomem rodada.',

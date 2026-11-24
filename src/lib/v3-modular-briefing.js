@@ -3,7 +3,7 @@
 // Retrospectiva never creates R2 objects; only receipt metadata is persisted.
 import {buildV2BriefingSimulationSchema} from './v2-customer-area.js';
 import {buildAtelieBriefingBlueprint} from './v3-atelie-briefing.js';
-import {listV3Supplements} from './v3-service-supplements.js';
+import {listV3Supplements,getV3SupplementTotals} from './v3-service-supplements.js';
 import {summarizeV3Order} from './v3-order-overview.js';
 import {getV3Delivery} from './v3-service-delivery.js';
 import {getV3ServiceProgress} from './v3-service-production.js';
@@ -136,7 +136,7 @@ export async function getV3ModularBriefing(db,token){
     retro.schema.materials.whatsappUrl=/^\d{10,15}$/.test(phone)?'https://wa.me/'+phone+'?text='+encodeURIComponent(text):null;
     retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,video_durations_json AS videoDurationsJson,raw_video_seconds AS rawVideoSeconds,received_at AS receivedAt,complete_at AS completeAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
   }
-  return {...base,modules,supplements:await listV3Supplements(db,order.id)};
+  return {...base,modules,supplements:await listV3Supplements(db,order.id),financial:await getV3SupplementTotals(db,order.id,order.total_cents)};
 }
 function normalizeField(f,value){
   if(!filled(value))return f.type==='multi_choice'?[]:'';

@@ -72,3 +72,5 @@ V83: catálogo de retrospectivas real disponível no Admin em leitura autenticad
 V84: corrigida ausência de listagem inicial real de Pedidos; paginação e filtros efetivos, não apenas fila modular parcial. Backend busca com parâmetros validados. Verificar CI e capturas antes de declarar concluído.
 
 V86: aprovadas todas as 25 propostas. Fundação de navegação e identidade implementada, Central editorial inicial com dados reais e linha do tempo. Novos testes de busca universal, atalho, drawer e navegação mobile. Ainda pendem inspeção visual, Kanban, histórico, filtros rápidos, gráficos, agenda e funil, além da gestão comercial Retro. Sem deploy. Não declarar entrega integral.
+
+V87: Kanban de consulta por serviço, filtros rápidos da produção e histórico/ação na ficha V3 implementados; aguardam CI, inspeção e validação sem alteração de estado. Pendem financeiro visual, agenda lista/mapa, funil e auditoria geral.

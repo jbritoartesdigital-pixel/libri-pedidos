@@ -48,7 +48,7 @@ function attentionRow(item) {
         <small>
           ${esc(item.customerName)}
           • ${esc(item.attentionReason || item.nextAction || '')}
-        </small>
+        </small><span class="attention-cta">Abrir e resolver <span aria-hidden="true">→</span></span>
       </button>
 
       ${
@@ -191,7 +191,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
       <div class="section-title">
         <div>
           <span class="eyebrow">Prioridade</span>
-          <h2 style="margin:4px 0 0">Minha missão de hoje</h2>
+          <h2 style="margin:4px 0 0">Minha missão de hoje</h2><small class="muted">Hoje precisa da sua atenção</small>
         </div>
         <span class="status">${attentionItems.length}</span>
       </div>

@@ -17,7 +17,7 @@ const allowed=new Set(['/api/v2/catalog','/api/v2/atelie/catalog','/api/v2/quote
 let blocked=0;
 const server=createServer(async(req,res)=>{
  try{
-  const url=new URL(req.url,'http://127.0.0.1');
+  const url=new URL(req.url,'http://127.0.0.1:'+server.address().port);
   if(url.pathname.startsWith('/api/')){
    if(!allowed.has(url.pathname)){blocked++;res.writeHead(403);res.end('Test: no payment or mutation allowed');return;}
    const chunks=[];for await(const c of req)chunks.push(c);
@@ -46,10 +46,12 @@ async function pageFor(width,height){
 const click=(p,a,v)=>p.locator('[data-action="'+a+'"]'+(v?'[data-value="'+v+'"]':'')).first().click();
 async function invite(p){
  await click(p,'event','birthday');await click(p,'next');await click(p,'creation','invitation');await click(p,'next');await click(p,'intent','simple');await click(p,'next');
- await click(p,'product','interactive_essential');await click(p,'next');
+ await click(p,'product','interactive_essential');await p.locator('[data-action="product"][data-value="interactive_essential"][aria-pressed="true"]').waitFor();await click(p,'next');
  await p.locator('[data-action="guided-options"]').first().waitFor();
  await click(p,'guided-options');await p.locator('#v3-modal [data-action="guided-addon"]').first().waitFor();
+ const question=await p.locator('.v3-title').innerText();
  await p.locator('#v3-modal [data-action="guided-addon"]').first().click();
+ await p.waitForFunction(previous=>document.querySelector('.v3-title')?.textContent!==previous,question);
  await p.locator('#v3-modal').waitFor({state:'hidden'});
  // A second question proves the modal click advanced the flow.
  await p.locator('[data-action="guided-back"]').waitFor();await click(p,'guided-finish');

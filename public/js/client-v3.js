@@ -419,17 +419,54 @@ function cartDeliveryHtml(){
       '<p class="v3-mini">'+(cartDelivery.provisionalUntilBriefing?'Mínimo de 15 dias corridos após pagamento e briefing completos. ':'')+'Consulta sem reserva de vaga. A data ainda deverá ser confirmada na contratação.</p></div>':'')+'</div>';
 }
 let cartExtrasCatalog=Object.create(null);
+const EXTRA_INTENTS={
+ Personagens:['Quer personalizar mais alguém ou ter outras poses?','Inclua apenas uma nova criação individual ou uma pose além do pacote. Personagens temáticos já previstos não contam como extras.'],
+ Identidade:['Precisa de mais peças de identidade visual?','O pacote já contém os itens contratados; estas opções ampliam a quantidade.'],
+ Aplicações:['Quer aplicar a identidade em mais peças de papelaria?','Você recebe a arte digital; a impressão não está incluída.'],
+ Materiais:['Tem mais fotos, vídeos ou materiais para organizar?','Os materiais devem respeitar os limites contratados e ser enviados pelo WhatsApp.'],
+ Edição:['Quer dar um toque especial à retrospectiva?','Mostramos apenas recursos ainda não incluídos no seu pacote.'],
+ Ajustes:['Precisa contratar mais uma rodada de ajustes?','As revisões previstas no pacote permanecem incluídas.']
+};
+let extraFlow=null;
 function cartExtrasHtml(item,i){
-  const extras=cartExtrasCatalog[item.productCode]||[];
-  if(!extras.length)return '';
-  const selected=new Map((item.extras||[]).map(x=>[x.code,x.quantity]));
-  const groups=[...new Set(extras.map(x=>x.category))];
-  return '<div class="v3-notice"><strong>Personalize seu pacote</strong><p class="v3-mini">Selecione somente o que precisar além dos itens inclusos.</p>'+
-    groups.map(group=>'<details data-cart-group="'+clean(item.productCode+':'+group)+'" '+(cartOpenDetails.has(item.productCode+':'+group)||extras.some(x=>x.category===group&&selected.has(x.code))?'open':'')+'><summary>'+clean(group)+'</summary>'+extras.filter(x=>x.category===group).map(x=>{
-      const n=selected.get(x.code)||0;
-      return '<div class="v3-line"><div><strong>'+clean(x.name)+'</strong><p class="v3-mini">'+money(x.priceCents)+' por unidade</p></div>'+
-        '<div><button type="button" aria-label="Diminuir '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-minus" data-value="'+i+':'+clean(x.code)+'" '+(!n?'disabled':'')+'>−</button> <strong>'+n+'</strong> <button type="button" aria-label="Aumentar '+clean(x.name)+'" class="v3-btn v3-btn-text" data-action="cart-extra-plus" data-value="'+i+':'+clean(x.code)+'" '+(n>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
-    }).join('')+'</details>').join('')+'</div>';
+ const extras=cartExtrasCatalog[item.productCode]||[];if(!extras.length)return '';
+ const selected=(item.extras||[]).map(x=>{const extra=extras.find(e=>e.code===x.code);return extra?'<li>'+Number(x.quantity)+' × '+clean(extra.name)+'</li>':'';}).join('');
+ return '<div class="v3-package-personalize"><strong>Quer personalizar além do pacote?</strong>'+
+ (selected?'<ul class="v3-included">'+selected+'</ul>':'<p class="v3-mini">Seu pacote já está completo. Os extras são opcionais.</p>')+
+ '<button type="button" class="v3-btn v3-btn-secondary" data-action="cart-extra-start" data-value="'+i+'">'+(selected?'Alterar adicionais':'Ver opções de personalização')+'</button></div>';
+}
+function renderExtraQuestion(){
+ const f=extraFlow;if(!f)return;
+ const item=state.cartItems[f.index];if(!item||item.productCode!==f.productCode){modalClose();return;}
+ const all=cartExtrasCatalog[item.productCode]||[],group=f.groups[f.step],choices=all.filter(x=>x.category===group);
+ const [question,description]=EXTRA_INTENTS[group]||['Quer acrescentar '+group+'?','Confira as opções e os valores.'];
+ const current=f.selection;
+ const controls=choices.map(x=>{
+ const quantity=current.get(x.code)||0;
+ return '<div class="v3-extra-quantity"><div><strong>'+clean(x.name)+'</strong><small>'+money(x.priceCents)+' por unidade</small></div><div class="v3-quantity-actions"><button type="button" class="v3-btn v3-btn-secondary" aria-label="Diminuir '+clean(x.name)+'" data-action="guided-cart-minus" data-value="'+clean(x.code)+'" '+(!quantity?'disabled':'')+'>−</button><b>'+quantity+'</b><button type="button" class="v3-btn v3-btn-secondary" aria-label="Aumentar '+clean(x.name)+'" data-action="guided-cart-plus" data-value="'+clean(x.code)+'" '+(quantity>=x.maxQuantity?'disabled':'')+'>+</button></div></div>';
+ }).join('');
+ const total=all.reduce((n,x)=>n+x.priceCents*(current.get(x.code)||0),0);
+ modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" aria-labelledby="v3-extra-title" tabindex="-1"><span class="v3-eyebrow">Personalização opcional · '+(f.step+1)+' de '+f.groups.length+'</span><h2 id="v3-extra-title">'+clean(question)+'</h2><p>'+clean(description)+'</p>'+
+ (f.expanded?controls:'<div class="v3-choices-stack">'+choice(group,'Sim, quero ver as opções','Confira os valores e quantidades',null,'guided-cart-expand')+choice(group,'Agora não','Sem acrescentar custo',null,'guided-cart-skip')+'</div>')+
+ '<div class="v3-total"><strong>Adicionais selecionados</strong><b>'+money(total)+'</b></div><p class="v3-mini">O total do pedido e os descontos serão recalculados antes de confirmar.</p><div class="v3-action-row">'+(f.step>0?'<button type="button" class="v3-btn v3-btn-text" data-action="guided-cart-back">Voltar</button>':'')+(f.expanded?'<button type="button" class="v3-btn v3-btn-primary" data-action="guided-cart-next">'+(f.step===f.groups.length-1?'Aplicar escolhas':'Continuar')+'</button>':'')+'<button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Cancelar alterações</button></div></div>';
+ modalRoot.hidden=false;
+}
+async function moveExtraFlow({skip=false}={}){
+ const f=extraFlow;if(!f)return;
+ if(skip){const group=f.groups[f.step];for(const x of cartExtrasCatalog[f.productCode]||[])if(x.category===group)f.selection.delete(x.code);}
+ if(f.step<f.groups.length-1){f.step++;f.expanded=(cartExtrasCatalog[f.productCode]||[]).some(x=>x.category===f.groups[f.step]&&f.selection.has(x.code));renderExtraQuestion();return;}
+ const item=state.cartItems[f.index];if(!item||item.productCode!==f.productCode){modalClose();return;}
+ const proposed=Array.from(f.selection,([code,quantity])=>({code,quantity}));
+ const proposedItems=state.cartItems.map((x,i)=>i===f.index?{...x,extras:proposed}:x);
+ // No mutation or persistence before the server validates all selected quantities.
+ const confirmButton=modalRoot.querySelector('[data-action="guided-cart-next"]');if(confirmButton)confirmButton.disabled=true;
+ if(f.busy)return;f.busy=true;
+ try{
+  const data=await request('/api/v3/cart/quote',{eventType:state.eventType,paymentMethod:'pix',items:proposedItems});
+  if(extraFlow!==f)return;
+  if(!window.confirm('Confirmar personalização? Novo total no Pix: '+money(data.quote.totalCents)+'. Nenhuma cobrança será criada agora.')){f.busy=false;renderExtraQuestion();return;}
+  state.cartItems=proposedItems;modalClose();await openCart();
+ }catch(e){f.busy=false;renderExtraQuestion();const msg=document.createElement('p');msg.setAttribute('role','alert');msg.textContent=e.message;modalRoot.querySelector('.v3-modal-card')?.prepend(msg);}
 }
 function renderCart() {
   trackStoreStage('carrinho');
@@ -491,6 +528,7 @@ function render() {
   }
 }
 function modalClose() {
+  extraFlow=null;
   modalRoot.hidden = true;
   modalRoot.innerHTML = '';
 }
@@ -696,13 +734,20 @@ async function handleStoreClick(event) {
       state.cartItems[i]={productCode:suggestion.productCode,variantCode:suggestion.variantCode,addonCodes:[],extras:suggestion.extras};
       await openCart();return;
     }
-    if(action==='cart-extra-plus'||action==='cart-extra-minus'){
-      const [idx,code]=String(value).split(':');const item=state.cartItems[Number(idx)];
-      const extra=(cartExtrasCatalog[item?.productCode]||[]).find(x=>x.code===code);if(!item||!extra)return;
-      const selected=new Map((item.extras||[]).map(x=>[x.code,x.quantity]));
-      const quantity=Math.max(0,Math.min(extra.maxQuantity,(selected.get(code)||0)+(action==='cart-extra-plus'?1:-1)));
-      if(quantity)selected.set(code,quantity);else selected.delete(code);
-      item.extras=Array.from(selected,([code,quantity])=>({code,quantity}));await openCart();return;
+    if(action==='cart-extra-start'){
+      const i=Number(value),item=state.cartItems[i],extras=cartExtrasCatalog[item?.productCode]||[];if(!extras.length)return;
+      extraFlow={index:i,productCode:item.productCode,groups:[...new Set(extras.map(x=>x.category))],step:0,expanded:false,selection:new Map((item.extras||[]).map(x=>[x.code,x.quantity]))};
+      extraFlow.expanded=extras.some(x=>x.category===extraFlow.groups[0]&&extraFlow.selection.has(x.code));renderExtraQuestion();modalRoot.querySelector('[role="dialog"]')?.focus();return;
+    }
+    if(action.startsWith('guided-cart-')){
+      const f=extraFlow;if(!f||f.busy)return;
+      if(action==='guided-cart-expand'){f.expanded=true;renderExtraQuestion();return;}
+      if(action==='guided-cart-back'){f.step=Math.max(0,f.step-1);f.expanded=(cartExtrasCatalog[f.productCode]||[]).some(x=>x.category===f.groups[f.step]&&f.selection.has(x.code));renderExtraQuestion();return;}
+      if(action==='guided-cart-next'||action==='guided-cart-skip'){await moveExtraFlow({skip:action==='guided-cart-skip'});return;}
+      const extra=(cartExtrasCatalog[f.productCode]||[]).find(x=>x.code===value&&x.category===f.groups[f.step]);if(!extra)return;
+      const n=Math.max(0,Math.min(extra.maxQuantity,(f.selection.get(value)||0)+(action==='guided-cart-plus'?1:-1)));
+      if(n)f.selection.set(value,n);else f.selection.delete(value);
+      renderExtraQuestion();return;
     }
     if(action==='cart-unified-checkout'||action==='cart-single-checkout'){
       if(!cartQuote||cartError||!state.cartItems.length)return;

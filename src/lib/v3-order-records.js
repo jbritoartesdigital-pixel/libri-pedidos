@@ -57,7 +57,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const items=canonicalItems(body.items);
   const couponCode=normalizeV3Coupon(body.couponCode);
   const blackLibriClaimId=body.blackLibriClaimId||'';
-  if(!manualDraft&&items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
+  // A single contracted family uses exactly the same modular checkout as a combined cart.
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};

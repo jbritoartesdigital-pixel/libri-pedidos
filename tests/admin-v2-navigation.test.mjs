@@ -39,7 +39,9 @@ test('destinos do localizador existem e todas as abas da Loja têm acesso direto
   const allViews=['central','manual','production','agenda','finance','archived','store','notifications','security'];
   assert.ok(ADMIN_FEATURES.every(x=>allViews.includes(x.view)));
   const tabs=[...store.matchAll(/data-store-tab="([^"]+)"/g)].map(x=>x[1]);
-  assert.equal(new Set(tabs).size,10);
+  assert.equal(new Set(tabs).size,11);
+  assert.ok(tabs.includes('campaigns'));
+  assert.equal(searchAdminFeatures('campanhas combinadas')[0].tab,'campaigns');
   assert.ok(tabs.includes('atelie'), 'Ateliê deve permanecer dentro da Loja');
   assert.ok(ADMIN_FEATURES.filter(x=>x.tab).every(x=>tabs.includes(x.tab)));
   assert.match(store, /searchParams\.set\('storeTab', tab\)/);

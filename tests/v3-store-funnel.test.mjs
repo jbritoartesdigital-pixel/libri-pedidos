@@ -17,3 +17,12 @@ test('anonymous funnel deduplicates stages, records actual last stage and classi
  await purgeStoreFunnel(db,new Date('2027-04-01T12:00:00Z'));
  assert.equal((await getStoreFunnel(db,{now})).total,0);
 });
+
+test('funnel rejects rate-limited and oversized telemetry without touching database',async()=>{
+ const url=new URL('https://test/api/v3/store/stage');
+ const request=body=>new Request(url,{method:'POST',headers:{'content-type':'application/json'},body});
+ const body=JSON.stringify({id:'a'.repeat(32),stage:'evento'});
+ assert.equal((await handleStoreFunnel(request(body),{FUNNEL_RATE_LIMIT:{async limit(){return {success:false}}}},url)).status,429);
+ assert.equal((await handleStoreFunnel(request(body),{ENVIRONMENT:'production'},url)).status,503);
+ assert.equal((await handleStoreFunnel(request('x'.repeat(513)),{},url)).status,413);
+});

@@ -57,8 +57,8 @@ const ADDON_GROUPS = [
   ['save_the_date', 'Save the Date', 'Uma arte extra para avisar a data da festa com antecedência.'],
   ['reminder', 'Lembrete da festa', 'Uma arte para enviar quando a comemoração estiver chegando.'],
   ['confirmation', 'Formulário de confirmação de presença personalizado', 'Os convidados respondem pelo convite e você acompanha tudo em um painel, sem lotar seu WhatsApp.'],
-  ['moments', 'Álbum de fotos', 'Seus convidados registram e compartilham os momentos da festa em um álbum digital. Inclui filtro personalizado.'],
-  ['filter', 'Filtro de fotos personalizado', 'Um efeito com o tema da festa para tirar fotos na câmera Libri.']
+  ['filter', 'Filtro de fotos personalizado', 'Um efeito com o tema da festa para tirar fotos na câmera Libri.'],
+  ['moments', 'Álbum de fotos', 'Seus convidados registram e compartilham os momentos da festa em um álbum digital. Inclui filtro personalizado na câmera Libri.']
 ];
 const INTERACTIVE = new Set([
   'cinematic_interactive', 'interactive_essential', 'interactive_gif',
@@ -594,7 +594,7 @@ function openAddonGroup(group,guided=false) {
   const explanations = {
     save_the_date:'Escolha se prefere uma imagem sem movimento ou uma pequena animação.',
     reminder:'Escolha se prefere uma imagem sem movimento ou uma pequena animação.',
-    moments:'Escolha um plano conforme a quantidade de fotos e o período em que o álbum ficará disponível.',
+    moments:'Escolha um plano conforme a quantidade de fotos e o período em que o álbum ficará disponível. O filtro da câmera Libri está incluído.'+(hasGroup('filter')?' O filtro avulso será substituído pelo filtro incluído no álbum, e o valor será recalculado.':'') ,
     confirmation:'O convidado responde no próprio convite, e você acompanha as confirmações em um painel.',
     filter:'O filtro personalizado já vem incluído no álbum de fotos.'
   };
@@ -625,7 +625,7 @@ async function determineOffer() {
   const eligibleGroups=new Set(available.map(g=>g[0]));
   const comboCandidates=new Map();
   for(const combo of catalog?.combos||[]){
-    if(Number(combo.discountValue||0)<=0)continue;
+    if(!ownedGroups.size||Number(combo.discountValue||0)<=0)continue;
     const missing=(combo.items||[]).filter(item=>item.required!==false&&!(
       item.itemType==='addon_group'&&ownedGroups.has(item.itemCode)||
       item.itemType==='addon'&&state.addonCodes.includes(item.itemCode)||
@@ -681,6 +681,39 @@ async function determineOffer() {
       }catch{/* Continue to eligible add-ons. */}
     }
   }
+
+  const groups = new Set(selectedAddons().map(a=>a.group));
+  const currentCode = state.productCode;
+  const nearCombo = (catalog?.combos || []).filter(c=>Number(c.discountValue||0)>0).map(c=>{
+    const missing = (c.items||[]).filter(item=>item.required!==false && !(
+      item.itemType === 'addon_group' && groups.has(item.itemCode) ||
+      item.itemType === 'addon' && state.addonCodes.includes(item.itemCode) ||
+      item.itemType === 'main_product' && currentCode === item.itemCode));
+    return {combo:c,missing};
+  }).filter(x=>x.missing.length===1);
+  const ranked = available.sort((a,b)=>{
+    const preference = {confirmation:5,filter:4,moments:3,save_the_date:2,reminder:1};
+    const nearA=nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
+    const nearB=nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
+    return (nearB+(preference[b[0]]||0))-(nearA+(preference[a[0]]||0));
+  });
+  for (const group of ranked) {
+    // A oferta sugere a opção mais acessível daquele grupo e calcula o total real.
+    const choices = catalog.addons.filter(a=>a.group===group[0]).sort((a,b)=>a.priceCents-b.priceCents);
+    const addon = choices[0];
+    if (!addon) continue;
+    const nextCodes = state.addonCodes.filter(c=>groupCode(c)!==group[0]).concat(addon.code)
+      .filter(c=>group[0]!=='moments'||c!=='custom_filter');
+    try {
+      const alternative = await priceFor(currentCode,state.variantCode,nextCodes);
+      const combo = Number(alternative.comboDiscountCents||0)>Number(quote.comboDiscountCents||0)?alternative.combo?.name:null;
+      return {
+        id:'addon:'+group[0],kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
+        title:combo ? 'Complete o pacote '+combo : 'Gostaria de acrescentar '+group[1]+'?',
+        description:group[2]+(group[0]==='moments'&&ownedGroups.has('filter')?' O álbum substitui o filtro avulso pelo filtro incluído na câmera Libri; a diferença abaixo já desconta o filtro avulso.':'')+(combo?' Com essa escolha, o desconto do pacote já entra no cálculo.':'')
+      };
+    } catch { /* Ignorar somente uma oferta inválida. */ }
+  }
   if (current === 'interactive_essential' && !state.dismissed.includes('upgrade:interactive_animated')) {
     const product = getProduct('interactive_animated');
     const variant = product?.variants?.[0];
@@ -696,39 +729,6 @@ async function determineOffer() {
         };
       }catch{/* Continue to eligible add-ons. */}
     }
-  }
-  const groups = new Set(selectedAddons().map(a=>a.group));
-  const currentCode = state.productCode;
-  const nearCombo = (catalog?.combos || []).filter(c=>Number(c.discountValue||0)>0).map(c=>{
-    const missing = (c.items||[]).filter(item=>item.required!==false && !(
-      item.itemType === 'addon_group' && groups.has(item.itemCode) ||
-      item.itemType === 'addon' && state.addonCodes.includes(item.itemCode) ||
-      item.itemType === 'main_product' && currentCode === item.itemCode));
-    return {combo:c,missing};
-  }).filter(x=>x.missing.length===1);
-  const ranked = available.sort((a,b)=>{
-    const preference = {moments:5,confirmation:4,save_the_date:3,reminder:2,filter:1};
-    const nearA=nearCombo.some(x=>x.missing[0].itemCode===a[0])?10:0;
-    const nearB=nearCombo.some(x=>x.missing[0].itemCode===b[0])?10:0;
-    return (nearB+(preference[b[0]]||0))-(nearA+(preference[a[0]]||0));
-  });
-  for (const group of ranked) {
-    // A oferta sugere a opção mais acessível daquele grupo e calcula o total real.
-    if(group[0]==='moments'&&ownedGroups.has('filter'))continue; // no implicit removal of a purchased filter
-    const choices = catalog.addons.filter(a=>a.group===group[0]).sort((a,b)=>a.priceCents-b.priceCents);
-    const addon = choices[0];
-    if (!addon) continue;
-    const nextCodes = state.addonCodes.filter(c=>groupCode(c)!==group[0]).concat(addon.code)
-      .filter(c=>group[0]!=='moments'||c!=='custom_filter');
-    try {
-      const alternative = await priceFor(currentCode,state.variantCode,nextCodes);
-      const combo = Number(alternative.comboDiscountCents||0)>Number(quote.comboDiscountCents||0)?alternative.combo?.name:null;
-      return {
-        id:'addon:'+group[0],kind:'addon',addonCode:addon.code,delta:alternative.totalCents-quote.totalCents,
-        title:combo ? 'Complete o pacote '+combo : 'Gostaria de acrescentar '+group[1]+'?',
-        description:group[2]+(combo?' Com essa escolha, o desconto do pacote já entra no cálculo.':'')
-      };
-    } catch { /* Ignorar somente uma oferta inválida. */ }
   }
   return null;
 }

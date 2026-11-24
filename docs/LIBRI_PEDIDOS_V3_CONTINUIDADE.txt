@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 10 | 23/11/2026 (Brasil)
+Versão 11 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -105,5 +105,11 @@ RETOMADA V10 — DEFINIÇÕES ENCERRADAS E CATÁLOGOS ATUALIZADOS
 APROVADO: solicitação de ajustes em até 7 dias corridos após a prévia; arquivos finais disponíveis para download durante 90 dias após entrega; materiais originais mantidos no aplicativo por 30 dias após entrega; histórico comercial e pagamentos mantidos, sem guardar mídia pessoal desnecessária, observadas obrigações legais e privacidade. Avisar antes de vencimento de download. Não aprovar automaticamente por silêncio: manter aguardando aprovação, enviar lembretes e permitir reprogramação. Cada serviço possui aprovação e revisões independentes. Validade contratada dos convites interativos não muda. Retrospectiva continua SEM R2 para materiais recebidos pelo WhatsApp. Rotinas de retenção/avisos ainda precisam ser implementadas e testadas; não excluir dados legados por esta migração.
 - 4b1c797: migration 0043 prepara os cinco pacotes Retro aprovados, limites individuais/acumulados, termos e revisões; retira mockup Ateliê de pacotes aprovados ainda inativos. Sem ativação de venda, sem alterar adicionais V2 nem pedidos históricos.
 - a64dfdb/f7afac0: especificação JS Ateliê sem mockup, catálogo Retro expõe duração e canal WhatsApp, termos internos.
-- c02e24a/67f6ae3: testes da migração e do novo catálogo, preservação dos preços legados. CI desta rodada a confirmar.
+- c02e24a/67f6ae3: testes da migração e do novo catálogo, preservação dos preços legados. CI 45317624482 concluído com sucesso.
 - Não há nova decisão comercial obrigatória pendente no escopo aprovado. Continuar implementação dos adicionais, desconto combinado 5/10 e regras de campanha, catálogo Retro contratável, telas/briefing/uploads e replanejamento por serviço, checkout e Admin completos. Política de retenção necessita implementação segura; não afirmar que está ativa. PR ainda draft, sem deploy.
+
+RETOMADA V11 — ADICIONAIS POR SERVIÇO E QUANTIDADE
+- 4a1373c: catálogo servidor de adicionais Ateliê e Retro com preços/pontos aprovados V09, categorias e limites defensivos de quantidade; Retro esconde narração, legendas e trailer já inclusos. Convites continuam no catálogo V2 existente.
+- 89dcdcf/1615aac/8066411: cotação soma extras e pontos, ignora preços enviados pelo cliente, snapshot e hash preservam quantidades; v2_order_items guarda preço e pontos UNITÁRIOS com quantity para não multiplicar duas vezes. Não habilita checkout.
+- 823c0f0/c813fd8: API GET /api/v3/extras/catalog?productCode=..., categorias expansíveis no carrinho e botões +/-; checkout individual legado bloqueado se novos extras presentes, evitando perda de itens/cobrança inferior. Retrospectiva ainda não ativada.
+- 8b87a70: testes de compatibilidade, limites, preços, pontos e API; CI a confirmar. Testar persistência e UI real na próxima rodada. Ainda faltam quantidades nos materiais Retro (limites por extra), upgrade sugerido, edição e cobrança complementar Admin, catálogo Retro contratável, desconto 5/10 não cumulativo, telas/checkout e demais etapas. Não publicar.

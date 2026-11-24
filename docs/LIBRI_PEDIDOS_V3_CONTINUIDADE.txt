@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 53 | 24/11/2026 (Brasil)
+Versão 54 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -362,3 +362,7 @@ Recuperação posterior confirmou HTML de 20:40 com marcas oficiais e abertura c
 V53 — PRIVACIDADE FUNCIONAL E EXEMPLOS DA GALERIA
 - eae686e: preferências reais de armazenamento e análise opcional, opt-in compartilhado loja V2/V3, recusa sem bloquear compra, revogação interrompe futuras etapas; texto de privacidade/cookies a revisar antes de publicação. Funil descreve amostra de consentimento, não atribui inatividade real. Exemplos por formato/evento usam API ativa da própria Libri, sem portfólio inventado. CI V52 45425322815 falhou porque teste unitário do checkout não tem document; ajustado acesso pelo ownerDocument, preservando comportamento real. Teste Chromium inclui recusa e assertiva de ausência de jornadas. CI final pendente.
 - Fonte visual: Libri_V3_Compra_Guiada_Sem_Briefing.html 20:40 e correções de 20:54 (recuperação parcial, sem transcript completo). Marcas originais já no repositório. Não publicar, não reabrir decisões, não declarar integralmente entregue. Pendências: validação navegador, urgência integrada, área cliente/Admin, conciliação e auditoria de detalhes remanescentes.
+
+
+V54 — REGRESSÃO DO CSS LEGADO E INTERAÇÃO DE AGENDA
+CI V53 45425771151 falhou em teste de folha única no HTML V2, após privacidade. Corrigido import no CSS existente, sem alterar o contrato HTML. Alteração de data no checkout invalida opções e pagamento sem substituir o formulário durante o evento change; precisa de validação no navegador. Revisão adicional de fontes recuperou restrições já confirmadas; acesso não contém a transcrição integral de todas as decisões. Auditoria permanece aberta: urgência +30%, validação de jornadas e área cliente/Admin, conciliação e publicação integral. Sem deploy. CI HEAD a confirmar.

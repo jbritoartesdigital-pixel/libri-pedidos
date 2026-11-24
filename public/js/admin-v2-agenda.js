@@ -19,6 +19,7 @@ const WEEKDAYS = [
   'Sáb',
 ];
 
+const FAMILY_LABELS={convite:'Convite',identidade_visual:'Ateliê',retrospectiva:'Retrospectiva'};
 const STATUS_LABELS = {
   briefing_pending: 'Briefing',
   ready_for_production: 'Novo',
@@ -307,7 +308,7 @@ function calendarDayHtml(
               data-open-order="${esc(event.code)}"
               title="${esc(`Entrega • ${event.customerName} • ${event.productName || ''}`)}"
             >
-              <span class="calendar-event-kind">Entrega</span>
+              <span class="calendar-event-kind">${esc(FAMILY_LABELS[event.serviceFamily]||'Entrega')}</span>
               <strong>${esc(event.customerName)}</strong>
               <small>
                 ${esc(event.honoreeName)}
@@ -392,7 +393,7 @@ function dayEventsHtml(
           >
             <strong>
               ${type === 'delivery'
-                ? `Entrega • ${esc(event.customerName)}`
+                ? `${esc(FAMILY_LABELS[event.serviceFamily]||'Entrega')} • ${esc(event.customerName)}`
                 : `Festa • ${esc(event.honoreeName)}`}
             </strong>
             <small>
@@ -402,13 +403,13 @@ function dayEventsHtml(
                    ${event.deliveryWindow?.start && event.deliveryWindow?.end
                      ? ` • janela ${dateBr(event.deliveryWindow.start)} a ${dateBr(event.deliveryWindow.end)}`
                      : ''}
-                   • ${esc(statusLabel(event.status))}`
+                   • ${esc(event.statusLabel||statusLabel(event.status))}`
                 : `Cliente: ${esc(event.customerName)}
                    ${event.productName ? ` • ${esc(event.productName)}` : ''}
                    ${event.deliveryWindow?.start && event.deliveryWindow?.end
                      ? ` • entrega ${dateBr(event.deliveryWindow.start)} a ${dateBr(event.deliveryWindow.end)}`
                      : ''}
-                   • ${esc(statusLabel(event.status))}`
+                   • ${esc(event.statusLabel||statusLabel(event.status))}`
               }
             </small>
           </button>
@@ -466,6 +467,8 @@ function bindDayEditor(
                   </div>
 
                   ${capacityDetail(day)}
+                  <h4>Distribuição de pontos</h4>
+                  <div class="list">${(day.orders||[]).map(a=>`<button type="button" class="row-card" data-modal-order="${esc(a.code)}" style="text-align:left"><strong>${esc(a.code)} · ${esc(a.honoreeName)}</strong><small>${esc(FAMILY_LABELS[a.serviceFamily]||(a.modular?'Reserva integrada ainda não distribuída':'Pedido legado'))} · ${(a.pointsUnits/100).toFixed(2)} pt${a.provisional?' · Provisório':''}${a.serviceStatus==='delivered'?' · Entregue (reserva mantida)':''}</small></button>`).join('')||empty('Sem alocações neste dia.')}</div>
 
                   <div class="form-grid" style="margin-top:16px">
                     <div class="field">

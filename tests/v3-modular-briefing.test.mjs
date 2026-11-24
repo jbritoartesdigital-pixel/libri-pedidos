@@ -816,3 +816,31 @@ test('finance allocates original multi-service revenue exactly once',async t=>{
  assert.equal(f.breakdown.byProduct.reduce((n,x)=>n+x.receivedGrossCents,0),f.summary.originalCashInCents);
  assert.equal(f.summary.salesCount,1);
 });
+
+test('released future capacity preserves other services and permits dependent scheduling',async t=>{
+ const {db,order}=await paid(t);
+ const family='identidade_visual',token=order.publicToken;
+ const {releaseV3ServiceCapacity,getV3CapacityRelease}=await import('../src/lib/v3-service-agenda.js');
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed',reviewed_at=datetime('now') WHERE order_id=?").run(order.orderId);
+ const preview=await previewV3ServiceAgenda(db,token,family,{});
+ await scheduleV3Service(db,token,family,{...preview.options[0],confirmed:true});
+ const other=()=>db.sqlite.prepare("SELECT day,points_units FROM v2_agenda_allocations WHERE order_id=? AND service_family='convite' ORDER BY day,id").all(order.orderId);
+ const previous=other();
+ const identity=()=>db.sqlite.prepare("SELECT * FROM v3_order_services WHERE order_id=? AND family=?").get(order.orderId,family);
+ await assert.rejects(releaseV3ServiceCapacity(db,token,family,{confirmed:true,expectedUnits:300}),/entregues/);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered',delivered_at=datetime('now') WHERE id=?").run(identity().id);
+ assert.equal((await getV3CapacityRelease(db,identity())).availableUnits,300);
+ await assert.rejects(releaseV3ServiceCapacity(db,token,family,{confirmed:true,expectedUnits:299}),/mudou/);
+ const released=await releaseV3ServiceCapacity(db,token,family,{confirmed:true,expectedUnits:300});
+ assert.equal(released.releasedUnits,300);
+ assert.deepEqual(other(),previous);
+ assert.equal(identity().points_units,300);
+ assert.equal(identity().released_points_units,300);
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v3_service_capacity_releases WHERE service_id=?').get(identity().id).n,300);
+ await assert.rejects(releaseV3ServiceCapacity(db,token,family,{confirmed:true,expectedUnits:300}),/mudou/);
+ const next=await previewV3ServiceAgenda(db,token,'convite',{dependsOnIdentity:true});
+ assert.ok(next.options.length);
+ await scheduleV3Service(db,token,'convite',{...next.options[0],dependsOnIdentity:true,confirmed:true});
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,100);
+ assert.equal(identity().released_points_units,300);
+});

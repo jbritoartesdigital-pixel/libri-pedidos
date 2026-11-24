@@ -708,3 +708,12 @@ html[data-v3-theme=dark] .v3-panel--guided .v3-action-row{background:#392b2c;bor
 @keyframes v99-card-in{from{opacity:.65;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(max-height:660px){.v3-panel--guided.v3-stage-scenes .v3-duration-card{min-height:88px;padding:8px 10px}.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{font-size:25px!important}.v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy small{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes) :is(.v3-choice,.v3-format-card){animation:none}}
+
+/* V99 — hierarchy applies to every main choice, not just duration. */
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-atelie) .v3-choice-copy strong{font-size:clamp(19px,4.8vw,25px)!important;line-height:1.12;letter-spacing:.02em!important;overflow-wrap:anywhere}
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-atelie) .v3-choice-copy small{font-size:12px;line-height:1.35}
+.v3-package-heading strong{font:400 clamp(23px,5.8vw,32px)/1.12 Georgia,serif;letter-spacing:.015em;text-transform:uppercase}
+.v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{font-size:15px!important;line-height:1.15}
+.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-atelie) .v3-choice,.v3-package-card{animation:v99-card-in .27s ease-out both}
+@media(max-width:360px){.v3-panel--guided.v3-stage-event .v3-choice-copy strong{font-size:17px!important}.v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{font-size:14px!important}}
+@media(prefers-reduced-motion:reduce){.v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-atelie) .v3-choice,.v3-package-card{animation:none}}

@@ -55,7 +55,8 @@ export async function v3BlackCandidate(db,claim,line){
      if(!code)fail('Este presente precisa de conferência de produção.','black_libri_gift_review',409);
      const row=await db.prepare('SELECT code,name,points_units,config_json FROM v2_addons WHERE code=?').bind(code).first();
      if(!row||!Number.isSafeInteger(row.points_units)||row.points_units<0)fail('Presente sem capacidade configurada.','black_libri_gift_review',409);
-     gift={code:row.code,name:row.name,priceCents:0,pointsUnits:row.points_units,config:JSON.parse(row.config_json||'{}')};
+     if(row.code==='custom_filter'&&snapshot.addons.some(a=>a.config?.filterIncluded===true))duplicate={code:'custom_filter',creditCents:0};
+     else gift={code:row.code,name:row.name,priceCents:0,pointsUnits:row.points_units,config:JSON.parse(row.config_json||'{}')};
    }
  }
  cents=Math.max(0,Math.min(line.grossCents-100,cents));

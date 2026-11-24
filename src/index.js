@@ -76,6 +76,7 @@ import {
 
 import { runV2Scheduler } from './lib/v2-scheduler.js';
 import { handleAdminAtelieV3Api } from './routes/admin-atelie-v3.js';
+import { handlePublicCartV3Api } from './routes/public-cart-v3.js';
 
 /* ==================================================
    LIBRI CONVITES
@@ -464,6 +465,12 @@ export default {
                 '/admin-v2',
             },
           );
+        }
+
+        // Cotação de carrinho V3 isolada. NUNCA executa pagamento.
+        if(url.pathname.startsWith('/api/v3/')) {
+          const result=await handlePublicCartV3Api(request,env,url);
+          return result || fail('Rota V3 não encontrada.',404);
         }
 
         /* ==================================================

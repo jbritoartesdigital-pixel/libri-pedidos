@@ -745,3 +745,23 @@ test('V3 individual delivery reminders use confirmed service date and resolve af
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE id=?").run(s.id);
  assert.equal((await run()).resolved,1);
 });
+
+test('unified Admin search finds all modular services without duplicate orders',async t=>{
+ const {db,order}=await paid(t);
+ const {searchV2AdminOrders}=await import('../src/lib/v2-admin-search.js');
+ const all=await searchV2AdminOrders(db,{q:order.orderCode});
+ assert.equal(all.length,1);assert.equal(all[0].modular,true);
+ assert.equal(all[0].services.length,2);
+ assert.equal((await searchV2AdminOrders(db,{family:'identidade_visual',product:'atelie_essencia'})).length,1);
+ assert.equal((await searchV2AdminOrders(db,{family:'retrospectiva'})).length,0);
+ assert.equal((await searchV2AdminOrders(db,{family:'convite',product:'atelie_essencia'})).length,0);
+ assert.equal((await searchV2AdminOrders(db,{eventDate:'2000-01-01'})).length,0);
+ const id=db.sqlite.prepare("SELECT id FROM v3_order_services WHERE family='identidade_visual'").get().id;
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='waiting_customer' WHERE id=?").run(id);
+ assert.equal((await searchV2AdminOrders(db,{status:'waiting_customer'}))[0].status,'waiting_customer');
+ const {getV2Central}=await import('../src/lib/v2-admin-core.js');
+ const central=await getV2Central(db);
+ assert.equal(central.modularOrders.length,1);
+ assert.equal(central.attention.some(x=>x.code===order.orderCode),false);
+ assert.equal(central.newOrders.some(x=>x.code===order.orderCode),false);
+});

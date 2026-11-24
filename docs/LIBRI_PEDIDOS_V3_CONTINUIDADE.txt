@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 05 | 23/11/2026 (Brasil)
+Versão 06 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -71,5 +71,11 @@ RETOMADA V05 — RESERVA E PAGAMENTO INTERNO MULTIPRODUTO
 - 51794fd: exporta o motor V2 de reserva de capacidade para reaproveitamento na V3.
 - aeb82e3: prepareV3Payment, helper INTERNO sem rota pública, valida integridade da cotação e pricing, usa lock por pedido, reserva soma dos pontos e chama Mercado Pago uma única vez pelo total integral. Recupera checkout pendente com reserva válida; bloqueia substituição de tentativa expirada até conciliação. Reutiliza idempotência do provedor; ainda precisa de tratamento completo de falhas incertas, expiração e recuperação, webhook/briefing modular, promoções Black Libri e guardas Admin antes da exposição pública.
 - 883e896: bloqueia resumeV2Payment para snapshots V3, impedindo reprecificação pelo fluxo legado.
-- d33c8aa: testes com provedor simulado de reserva real, cobrança integral única, repetição, integridade e expiração. CI da rodada a confirmar. Nenhuma cobrança real, deploy ou mudança no banco de produção.
+- d33c8aa: testes com provedor simulado de reserva real, cobrança integral única, repetição, integridade e expiração. CI 45314861359 concluído com sucesso. Nenhuma cobrança real, deploy ou mudança no banco de produção.
 - Próximo passo: integrar confirmação de pagamento e liberação dos serviços/briefings, conciliar expiração e recuperação segura, construir fluxo público completo e proteger Admin/edição. Retrospectivas, replanejamento pós-briefing, visual e desempenho seguem pendentes.
+
+RETOMADA V06 — CONFIRMAÇÃO DE PAGAMENTO E CONCILIAÇÃO
+- bcc2524 / 04991e6: valida valor integral e método do pagamento V3 confirmado no webhook; libera somente serviços contratados com briefing bloqueado, sem reiniciar progresso e sem autorizar produção. Também libera módulos quando pagamento é aprovado mas agenda precisa de revisão. Preserva V2.
+- 557dfee: testes de confirmação, callback repetido, valor divergente e bloqueio pré-pagamento.
+- ca77dae / 0d15ff1: conciliação interna de tentativa expirada consulta provedor, cancela pendência expirada, consulta novamente para detectar aprovação concorrente e não cria cobrança substituta. Orfandade/ambiguidade permanece bloqueada para revisão. Testes com provedor simulado. CI desta rodada a confirmar.
+- Próximo passo: briefing modular efetivo (dados comuns, módulos contratados, uploads privados, regras de completude, replanejamento), recuperação com nova tentativa expressamente confirmada após conciliação e integração pública protegida; completar Retrospectivas, Admin, visual e métricas. Nenhuma rota pública de cobrança conjunta ainda. Nenhum deploy.

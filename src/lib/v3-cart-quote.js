@@ -3,6 +3,7 @@
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
+import {quoteV3Retrospective} from './v3-retrospective-catalog.js';
 import {suggestV3Upgrade} from './v3-upgrade-suggestion.js';
 import {calculateV3CombinedDiscount} from './v3-combined-discount.js';
 import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
@@ -52,7 +53,7 @@ function validateItems(items) {
   });
 }
 
-export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
+export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSale=false}={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
@@ -72,7 +73,7 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false}={}) {
   for(const item of items) {
     // Cada linha passa pelas MESMAS validações oficiais do catálogo V2.
     // Proíbe tabela/precificação client-side e produtos ainda não ativados.
-    const quote=await calculateCommercialV2Quote(db,{
+    const quote=item.family==='retrospectiva'?await quoteV3Retrospective(db,item,{requireSale}):await calculateCommercialV2Quote(db,{
       productCode:item.productCode,
       variantCode:item.variantCode,
       addonCodes:item.addonCodes,

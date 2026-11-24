@@ -356,7 +356,7 @@ export async function renderFinance(openOrderDetail = null) {
         <section class="card" style="margin:14px 0">
           <div class="section-title">
             <div><h2>Produtos mais vendidos e margem estimada</h2>
-              <small>Vendas iniciadas no período. Recebimentos líquidos incluem pagamentos confirmados desses pedidos até hoje.</small>
+              <small>Contratações originais iniciadas no período. Os complementos V3 são detalhados separadamente abaixo.</small>
             </div>
           </div>
           <div class="finance-performance-grid">
@@ -379,6 +379,11 @@ export async function renderFinance(openOrderDetail = null) {
           </div>
         </section>
 
+        <section class="card" style="margin:14px 0">
+          <div class="section-title"><div><h2>Complementos V3</h2><small>Adicionais, upgrades e novos serviços no mesmo pedido. Taxas e valores líquidos ainda sujeitos à conciliação.</small></div></div>
+          <div class="kpi-grid"><article class="kpi"><span>Confirmados no período</span><strong>${money(finance.supplemental?.paidCents||0)}</strong></article><article class="kpi"><span>A receber</span><strong>${money(finance.supplemental?.pendingCents||0)}</strong></article><article class="kpi"><span>Em revisão</span><strong>${money(finance.supplemental?.reviewCents||0)}</strong></article></div>
+          <div class="list">${['movements','receivables','review'].flatMap(group=>(finance.supplemental?.[group]||[]).map(x=>`<div class="row-card"><strong>${esc(x.orderCode)} · ${esc(x.customerName)}</strong><small>${esc(x.kind==='upgrade'?'Upgrade':x.kind==='new_service'?'Novo serviço':'Adicionais')} · ${esc(x.status==='paid'?'Confirmado':x.status==='review'?'Revisar':'A receber')} · ${money(x.amountCents)}</small><button class="btn btn-secondary btn-small" data-finance-open-order="${esc(x.orderCode)}">Abrir pedido</button></div>`)).join('')||empty('Nenhum complemento neste período ou em aberto.')}</div>
+        </section>
         <div class="section-grid">
           <section class="card">
             <div class="section-title">

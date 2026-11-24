@@ -1,3 +1,4 @@
+import {getV3SupplementFinance,combineV3FinanceSummary} from './v3-finance-report.js';
 import { isV2LegacyImport } from './v2-legacy-order-marker.js';
 import { reconcileV2LegacyPixStatus } from './v2-legacy-payment-reconcile.js';
 
@@ -2326,6 +2327,7 @@ export async function getV2FinanceDashboard(
       ),
     ]);
 
+  const supplemental=await getV3SupplementFinance(db,range);
   let productionCosts = {};
   try {
     const row = await db.prepare(
@@ -2351,7 +2353,8 @@ export async function getV2FinanceDashboard(
   return {
     range,
 
-    summary,
+    summary:combineV3FinanceSummary(summary,supplemental),
+    supplemental,
 
     breakdown: {
       byProduct: enrichedProducts,
@@ -2379,10 +2382,6 @@ export async function getV2FinanceSummary(
   return {
     range,
 
-    summary:
-      await summaryForRange(
-        db,
-        range,
-      ),
+    summary:combineV3FinanceSummary(await summaryForRange(db,range),await getV3SupplementFinance(db,range)),
   };
 }

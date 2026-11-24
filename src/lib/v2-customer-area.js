@@ -1005,11 +1005,11 @@ function buildSchema(
 
   appearanceFields.push(field(
     'additional_illustrated_subjects',
-    'Quer ilustrar mais alguma criança, irmão, animal ou personagem?',
+    'Quer encomendar outra criança, pet ou ilustração individual fora da composição prevista?',
     'choice',
     {
       required:false,
-      help:'Incluir nomes na festa não cria cobrança. Um personagem ILUSTRADO a mais precisa de orçamento e aceite, nunca é cobrado automaticamente.',
+      help:'Figuras do tema já previstas na composição não são adicionais, mesmo quando aparecem junto com a criança. Novas ilustrações individuais fora do escopo precisam de orçamento e aceite, sem cobrança automática.',
       options:[
         {value:'no',label:'Não, somente o que já está contratado'},
         {value:'yes',label:'Sim, quero solicitar orçamento'}
@@ -1023,7 +1023,7 @@ function buildSchema(
       'textarea',
       {
         required:true,
-        help:'Ex.: outro irmão, cachorro, papagaio, personagem temático. Diga quantos, quem são e se devem aparecer juntos.'
+        help:'Ex.: outro irmão, cachorro, papagaio ou uma nova ilustração individual fora da composição temática prevista. Diga quantos e quem são.'
       }
     ));
   }

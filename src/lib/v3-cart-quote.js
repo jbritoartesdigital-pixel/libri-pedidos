@@ -6,6 +6,7 @@ import { productionDaysForQuote } from './v3-production-policy.js';
 import {quoteV3Retrospective} from './v3-retrospective-catalog.js';
 import {suggestV3Upgrade} from './v3-upgrade-suggestion.js';
 import {activeV3CombinedCampaign,quoteV3Coupon,normalizeV3Coupon} from './v3-promotions.js';
+import {getV3BlackClaim,v3BlackCandidate} from './v3-black-libri.js';
 import {calculateV3CombinedDiscount} from './v3-combined-discount.js';
 import {normalizeV3ExtraSelection,quoteV3Extras} from './v3-extras-catalog.js';
 import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
@@ -113,21 +114,27 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
       commercialSnapshot:snapshot
     });
   }
+  const invite=quotes.find(l=>l.family==='convite');
+  const claim=await getV3BlackClaim(db,cart);
+  const black=await v3BlackCandidate(db,claim,invite);
   const campaign=await activeV3CombinedCampaign(db);
   const discount=calculateV3CombinedDiscount(quotes,campaign||undefined);
   const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType,new Date(),customerId);
   const bestExisting=discount.selectedDiscount==='combined'?discount.combinedDiscountCents:quotes.reduce((n,l)=>n+l.discountCents,0);
-  const useCoupon=!!coupon&&coupon.discountCents>bestExisting;
+  const useBlack=!!black&&black.availableDiscountCents>Math.max(bestExisting,coupon?.discountCents||0);
+  const useCoupon=!useBlack&&!!coupon&&coupon.discountCents>bestExisting;
+  if(useBlack){discount.selectedDiscount='black_libri';discount.percent=0;discount.combinedDiscountCents=0;discount.allocations={};}
   if(useCoupon){discount.selectedDiscount='coupon';discount.percent=0;discount.combinedDiscountCents=0;discount.allocations={};}
   for(const line of quotes){
     const originalCombo=line.discountCents;
     const combined=discount.allocations[line.family]||0;
     line.combinedDiscountCents=combined;
-    if(useCoupon||discount.selectedDiscount==='combined'){
+    if(useBlack||useCoupon||discount.selectedDiscount==='combined'){
       line.availableComboCode=line.comboCode;
       line.comboCode='';line.comboName='';
       line.couponDiscountCents=useCoupon?(coupon.allocations[line.family]||0):0;
-      line.discountCents=useCoupon?line.couponDiscountCents:combined;
+      line.blackLibriDiscountCents=useBlack&&line===invite?black.availableDiscountCents:0;
+      line.discountCents=useBlack?line.blackLibriDiscountCents:useCoupon?line.couponDiscountCents:combined;
       line.subtotalCents=line.grossCents-line.discountCents;
       line.totalCents=line.subtotalCents;
       if(line.commercialSnapshot){
@@ -135,12 +142,25 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
         snapshot.originalComboDiscountCents=originalCombo;
         snapshot.combo=null;snapshot.comboDiscountCents=0;
         snapshot.combinedDiscountCents=combined;
-        snapshot.coupon=useCoupon?{id:coupon.id,code:coupon.code}:null;snapshot.couponDiscountCents=line.couponDiscountCents;
+        snapshot.coupon=useCoupon?{id:coupon.id,code:coupon.code}:null;snapshot.couponDiscountCents=line.couponDiscountCents;snapshot.blackLibriDiscountCents=line.blackLibriDiscountCents;
         snapshot.subtotalCents=line.subtotalCents;
         snapshot.baseTotalCents=line.totalCents;snapshot.totalCents=line.totalCents;
         snapshot.payment={...snapshot.payment,depositCents:line.totalCents,balanceCents:0};
       }
     }
+  }
+  if(black){
+    black.creditCents=useBlack?black.availableDiscountCents:0;
+    black.applied=!!black.gift||useBlack;
+    const s=invite.commercialSnapshot;
+    if(black.gift){
+      // A complimentary service remains a real production item, not a monetary discount.
+      if(!s.addons.some(a=>a.code===black.gift.code)){
+        s.addons=[...s.addons,black.gift];invite.addonCodes=[...invite.addonCodes,black.gift.code];
+        invite.pointsUnits+=black.gift.pointsUnits;s.pointsUnits=invite.pointsUnits;
+      }else{black.gift=null;black.applied=false;black.alreadyIncluded=true;}
+    }
+    s.blackLibri=black;s.blackLibriDiscountCents=black.creditCents;
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);
   const baseTotalCents=sum('totalCents');
@@ -165,6 +185,8 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
     combinedDiscountPercent:discount.percent,
     selectedDiscount:discount.selectedDiscount,
     campaign:campaign?{id:campaign.id,name:campaign.name,endsAt:campaign.endsAt}:null,
+    blackLibri:black,
+    blackLibriDiscountCents:black?.creditCents||0,
     coupon:useCoupon?{id:coupon.id,code:coupon.code}:null,
     couponDiscountCents:useCoupon?coupon.discountCents:0,
     couponComparison:coupon?{code:coupon.code,applied:useCoupon,availableDiscountCents:coupon.discountCents}:null,

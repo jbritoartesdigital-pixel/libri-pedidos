@@ -500,3 +500,18 @@ html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-tot
 }
 /* Scrolling is still available when the device uses unusually large text or a
    particularly short viewport; never clip an actionable option. */
+
+/* V107 final size alignment: the same title scale on the adjacent screens,
+   allowing a narrower phone to keep the entire long title visible. */
+@media(max-width:959px) and (min-width:361px) and (min-height:681px){
+ html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-format) .v3-choice-copy strong,
+ html body .v3-main .v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{
+  font-size:clamp(27px,min(7.8cqw,8.5cqh),34px)!important;
+ }
+}
+@media(max-width:360px){
+ html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-format) .v3-choice-copy strong,
+ html body .v3-main .v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{
+  font-size:clamp(22px,7.2cqw,26px)!important;
+ }
+}

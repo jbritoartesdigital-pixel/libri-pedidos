@@ -8,7 +8,7 @@ const modalRoot = document.getElementById('v3-modal');
 const basket=document.getElementById('v3-live-basket');
 const basketBody=document.getElementById('v3-basket-body');
 const basketTotal=document.getElementById('v3-basket-total');
-if(basket)basket.open=window.matchMedia('(min-width: 900px)').matches;
+if(basket)basket.open=false;
 const STORE_KEY = 'libriV3Draft';
 const EVENTS = [
  ['birthday','Aniversário','Infantil ou adulto'],['15_years','15 anos','Uma celebração especial'],['wedding','Casamento','A história do casal'],['celebration','Chá ou celebração','Bebê, revelação, chá de panela e outros'],['other','Outra celebração','Formatura, bodas e mais']
@@ -208,8 +208,9 @@ function panel(title, subtitle, content, buttons, index=0) {
   const fixed=['event','event-subtype','creation','intent','format','scenes','atelie','unready','atelie-detail','extras','review'].includes(state.step);
   root.innerHTML = '<section class="v3-panel v3-stage-'+clean(state.step)+(fixed?' v3-panel--guided':'')+'">' +
     (fixed?'':'<div class="v3-stage-progress">'+stepBar(index)+'</div>') +
-    (fixed?'<div class="v3-stage-body">':'')+
+    (fixed?'<div class="v3-stage-heading">':'')+
     '<h1 class="v3-title">' + title + '</h1>'+(subtitle?'<p class="v3-text">'+subtitle+'</p>':'') +
+    (fixed?'</div><div class="v3-stage-body">':'')+
     content + (fixed?'</div>':'') + (buttons || '') +
     (fixed?'<div class="v3-stage-progress">'+stepBar(index)+'</div>':'') + '</section>';
   root.setAttribute('aria-busy','false');renderBasket();
@@ -682,7 +683,7 @@ async function handleStoreClick(event) {
       state.offerFinished=false;state.dismissed=[];
       quote=null;liveQuoteKey='';customScenes=false;await go(SCENE_PRODUCTS.has(value)?'scenes':'extras');return;
     }
-    if(action==='custom-scenes'){customScenes=!customScenes;render();if(customScenes)root.querySelector('#v3-scene-select')?.focus();return;}
+    if(action==='custom-scenes'){customScenes=!customScenes;render();if(customScenes)root.querySelector('#v3-scene-select')?.focus({preventScroll:true});if(customScenes)root.querySelector('.v3-custom-scenes')?.scrollIntoView({block:'nearest',behavior:'auto'});return;}
     if(action==='variant'||action==='custom-scenes-confirm'){const code=action==='variant'?value:root.querySelector('#v3-scene-select')?.value;if(state.step!=='scenes'||!currentProduct()?.variants.some(v=>v.code===code)){root.querySelector('#v3-scene-select')?.focus();return;}state.variantCode=code;state.offerFinished=false;state.addonQuestion=0;customScenes=false;await go('extras');return;}
     if(action==='show-examples'){await showExamples(value);return;}
     if(action==='guided-options'){if(!guidedBusy){const variants=catalog.addons.filter(a=>a.group===value);if(variants.length===1)await advanceGuided(value,hasGroup(value)?null:variants[0].code);else openAddonGroup(value,true);}return;}

@@ -1,3 +1,5 @@
+import {convertHoldToAgenda} from './v2-mercadopago.js';
+import {pendingPaidCapacityReview} from './v2-capacity-review.js';
 import {getV3CapacityRelease} from './v3-service-agenda.js';
 import {v3ServiceWhatsappActions} from './v3-service-reminders.js';
 import {getV3Cancellation} from './v3-paid-cancellation.js';
@@ -51,5 +53,23 @@ export async function reviewV3ServiceBriefing(db,token,family,input={}){
      await db.prepare("UPDATE v3_order_services SET reviewed_at=datetime('now'),updated_at=datetime('now') WHERE id=?").bind(service.id).run();
    }else fail('Ação inválida.');
    return getV3AdminBriefing(db,token);
+ });
+}
+
+// Explicit administrative recovery; no repricing, no new payment, no silent date change.
+export async function recoverV3PaidCapacity(db,token,input={}){
+ const initial=await contextV3Briefing(db,token);if(!initial)return null;
+ return withV2PaymentLock(db,initial.order.id,async()=>{
+ const ctx=await contextV3Briefing(db,token);
+ if(!ctx||ctx.locked||ctx.cancellation||ctx.order.archived_at||!ctx.finance?.depositConfirmed||!await pendingPaidCapacityReview(db,ctx.order.id)||ctx.services.some(s=>s.production_status!=='pending'||s.scheduled_at))fail('Pedido não está disponível para recuperação da agenda.',409);
+ if(input.confirmed!==true)fail('Confirme a recuperação da agenda.',422);
+ const original={start:ctx.order.delivery_start,end:ctx.order.delivery_end};
+ const replacementWindow=input.deliveryWindow||null;
+ const note=typeof input.note==='string'?input.note.trim():'';
+ if(replacementWindow&&(!/^\d{4}-\d{2}-\d{2}$/.test(replacementWindow.start||'')||!/^\d{4}-\d{2}-\d{2}$/.test(replacementWindow.end||'')||note.length<10||note.length>500))fail('Informe uma nova janela e registre o acordo com a cliente (10 a 500 caracteres).',422);
+ const result=await convertHoldToAgenda(db,ctx.order.id,{replacementWindow});
+ if(!result.converted)fail('Não há capacidade válida nesta janela. Confira o prazo mínimo e combine outra previsão com a cliente.',409);
+ await db.batch([db.prepare("UPDATE v2_orders SET next_action='Conferir briefing e programar serviços',updated_at=datetime('now') WHERE id=?").bind(ctx.order.id),db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'delivery_capacity_confirmed','Capacidade V3 confirmada após pagamento.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({original,deliveryWindow:replacementWindow||original,note}))]);
+ return {confirmed:true,deliveryWindow:replacementWindow||original};
  });
 }

@@ -875,3 +875,22 @@ test('V3 notification preferences are visible and bell suppression does not dele
  await updateV2NotificationPreference(db,code,{bellEnabled:true,pushEnabled:false});
  assert.equal((await listV2AdminNotifications(db)).unreadCount,1);
 });
+
+test('late V3 payment preserves production minimum and permits capacity recovery without charging again',async t=>{
+ const {db,input}=await setup(),mp=providerMock(t),order=await createV3OrderRecords(db,input),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const payment=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+ db.sqlite.prepare("UPDATE v2_checkout_holds SET expires_at='2000-01-01T00:00:00Z',status='expired' WHERE order_id=?").run(order.orderId);
+ db.sqlite.prepare('UPDATE v2_orders SET delivery_start=?,delivery_end=? WHERE id=?').run(day(2),day(4),order.orderId);
+ mp.approve(payment.providerOrderId);const sync=await syncMercadoPagoOrder(env,payment.providerOrderId);assert.equal(sync.capacityReview,true);
+ const b=await getV3ModularBriefing(db,order.publicToken);assert.equal(b.locked,false);assert.equal(b.capacityReview,true);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,0);
+ const {recoverV3PaidCapacity}=await import('../src/lib/v3-admin-briefing.js');
+ await assert.rejects(recoverV3PaidCapacity(db,order.publicToken,{confirmed:true}),/capacidade/);
+ const window=input.body.deliveryWindow;
+ await assert.rejects(recoverV3PaidCapacity(db,order.publicToken,{confirmed:true,deliveryWindow:window}),/acordo/);
+ await recoverV3PaidCapacity(db,order.publicToken,{confirmed:true,deliveryWindow:window,note:'Cliente aceitou a nova previsão.'});
+ const after=await getV3ModularBriefing(db,order.publicToken);assert.equal(after.capacityReview,false);assert.equal(after.deliveryWindow.start,window.start);
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,400);
+ assert.equal(mp.posts,1);
+ await assert.rejects(recoverV3PaidCapacity(db,order.publicToken,{confirmed:true}),/disponível/);
+});

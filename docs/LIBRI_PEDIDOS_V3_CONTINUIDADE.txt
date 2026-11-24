@@ -382,3 +382,7 @@ V56 — FILTROS, CUSTO D1, RELATÓRIO E RECUPERAÇÃO
 
 V58 — NAVEGAÇÃO INTEGRAL EM BANCO ISOLADO
 - V57: sintaxe, testes e migrations aprovados no CI 45428493387; navegador ainda em execução na consulta. Expandido Chromium para retrospectiva avulsa, carrinho de três famílias e desconto de 10%, três aceites, área privada bloqueada/liberada, salvar e recuperar rascunho real e abrir ficha Admin de três serviços. Fixture independente usa provedor simulado, nenhuma chamada externa; autenticação simulada exclusivamente no servidor local de teste, não no Worker. CI V58 pendente. Sem deploy.
+
+
+V59 — RECUPERAÇÃO DE CAPACIDADE APÓS PAGAMENTO
+V57 CI 45428493387 aprovado. V58 CI 45428994061 passou backend/migrações e executou as telas ampliadas até a asserção final de API bloqueada (1 chamada de recuperação não permitida no fixture). Corrigido fixture para recuperação real com provedor simulado e log de qualquer rota inesperada. V59: reconversão de reserva V3 valida data e prazo original de produção, inclusive após expiração; revisão explícita na Central/ficha/cliente, nova tentativa sem cobrar, janela alternativa normal apenas com confirmação e registro do acordo. Urgência mantém janela aprovada. Novo teste de pagamento tardio verifica briefing liberado, agenda bloqueada, prazo mínimo, acordo, pontos e uma única cobrança. CI final ainda não validado. Sem deploy.

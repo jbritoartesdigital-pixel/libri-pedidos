@@ -16,6 +16,7 @@ const obj=v=>v&&typeof v==='object'&&!Array.isArray(v);
 const parse=v=>JSON.parse(v||'{}');
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 const section=(id,title,fields)=>({id,title,fields});
+import {pendingPaidCapacityReview} from './v2-capacity-review.js';
 const sharedKeys=new Set(['theme_or_style','joint_celebration','joint_honorees','age','special_info','event_time','venue_name','venue_address']);
 const filled=v=>Array.isArray(v)?v.length>0:v!==null&&v!==undefined&&String(v).trim()!=='';
 function retroSpec(snapshot){
@@ -121,7 +122,8 @@ export async function getV3ModularBriefing(db,token){
     variantName:s.snapshot.variant?.label||'',submittedAt:s.briefing_submitted_at,complementNote:s.complement_note,reviewedAt:s.reviewed_at,deliveryWindow:s.delivery_start?{start:s.delivery_start,end:s.delivery_end}:null,scheduledAt:s.scheduled_at,dependsOnIdentity:s.depends_on_identity===null?null:Boolean(s.depends_on_identity),totalCents:s.effective_snapshot_json?s.snapshot.totalCents:s.total_cents,originalTotalCents:s.total_cents,productionDays:s.production_days,
     blackLibri:s.snapshot.blackLibri||null,extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
   const urgency=await db.prepare('SELECT status,urgency_percent AS percent,decision_note AS note,requested_delivery_start AS start,requested_delivery_end AS end FROM v2_urgency_requests WHERE order_id=?').bind(order.id).first();
-  const base={cancellation,urgency,orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method,depositPercent:order.deposit_percent,depositCents:finance?.row.deposit_cents,receivedCents:finance?.paidCents||0,remainingCents:finance?.remainingCents??order.total_cents,fullyPaid:!!finance?.fullyPaid},
+  const capacityReview=!locked&&await pendingPaidCapacityReview(db,order.id);
+  const base={cancellation,urgency,capacityReview,orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status,capacityReview}),payment:{totalCents:order.total_cents,method:order.payment_method,depositPercent:order.deposit_percent,depositCents:finance?.row.deposit_cents,receivedCents:finance?.paidCents||0,remainingCents:finance?.remainingCents??order.total_cents,fullyPaid:!!finance?.fullyPaid},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
   if(locked)return {...base,modules:[],revision:await pendingV3Revision(db,order.id)};
   for(let i=0;i<services.length;i++){purchased[i].progress=await getV3ServiceProgress(db,services[i]);purchased[i].delivery=await getV3Delivery(db,services[i]);}

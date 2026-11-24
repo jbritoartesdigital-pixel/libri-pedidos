@@ -29,12 +29,12 @@ const fixtureEnv={DB:fixtureDb,LIBRI_V3_CHECKOUT_ENABLED:'true',LIBRI_V3_ADMIN_P
 const items=[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]},{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]},{productCode:'retrospectiva_070',variantCode:'retrospectiva_070_default',addonCodes:[]}];
 const selection={items,eventType:'birthday',eventDate:day(65),paymentMethod:'pix'};
 const terms=await getV3CheckoutTerms(fixtureDb,selection),preview=await previewV3CartDelivery(fixtureDb,selection);
-const originalFetch=globalThis.fetch;let paidFixture,unpaidFixture;
+const originalFetch=globalThis.fetch;let paidFixture,unpaidFixture,mockFetch;
 try{
  const mp=providerMock({mock:{method:(obj,key,fn)=>{obj[key]=fn;}}});
  const make=async(name,phone)=>startV3Checkout(new Request('https://test/api/v3/cart/checkout'),fixtureEnv,{...selection,customer:{name,whatsapp:phone,email:''},honoreeName:name,clientRequestId:randomToken(),termsAccepted:true,termsVersion:terms.general.version,atelieTermsAccepted:true,atelieTermsVersion:terms.services.find(x=>x.family==='identidade_visual').version,retrospectiveTermsAccepted:true,retrospectiveTermsVersion:terms.services.find(x=>x.family==='retrospectiva').version,deliveryWindow:preview.delivery.options[0],expectedTotalCents:preview.quote.totalCents});
  paidFixture=await make('Festa teste integrada','5561999999999');mp.approve(paidFixture.providerOrderId);await syncMercadoPagoOrder(fixtureEnv,paidFixture.providerOrderId);
- unpaidFixture=await make('Festa teste pendente','5561888888888');assert.equal(mp.posts,2);
+ unpaidFixture=await make('Festa teste pendente','5561888888888');assert.equal(mp.posts,2);mockFetch=globalThis.fetch;
 }finally{globalThis.fetch=originalFetch;}
 const readEnv={DB:fixtureDb,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'};
 let blocked=0;
@@ -54,7 +54,8 @@ const server=createServer(async(req,res)=>{
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
    else if(url.pathname==='/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing/shared'&&req.method==='PATCH')result=await handleCustomerBriefingV3Api(request,readEnv,url);
-   else {blocked++;res.writeHead(403);res.end('Test: route not allowed');return;}
+   else if(url.pathname==='/api/v3/cart/recover'&&req.method==='POST'){const body=await request.clone().json();assert.ok([paidFixture,unpaidFixture].some(o=>o.publicToken===body.publicToken));globalThis.fetch=mockFetch;try{result=await handlePublicCartV3Api(request,fixtureEnv,url);}finally{globalThis.fetch=originalFetch;}}
+   else {blocked++;console.error('Unexpected test API',req.method,url.pathname);res.writeHead(403);res.end('Test: route not allowed');return;}
    res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));return;
   }
   const p=url.pathname==='/loja'?'client-v3.html':url.pathname==='/admin-v2'?'admin-v2.html':url.pathname.startsWith('/meu-pedido/')?'client-v2.html':url.pathname.slice(1);

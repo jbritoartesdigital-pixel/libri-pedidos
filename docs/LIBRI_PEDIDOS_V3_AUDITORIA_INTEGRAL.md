@@ -42,3 +42,6 @@ Implementada solicitação de encaixe de convite avulso no checkout V3: valor pr
 Corrigidos filtros cruzados por mesma linha, exclusão de históricos financeiros inválidos das filas de produção, redução de consultas D1 na Central, data de aplicação dos complementos e distinção de devolução a conciliar. Recuperação de encaixe rejeitado verificada sem cobranças e sem reservas antes de permitir nova tentativa. Novas regressões cobrem solicitação de urgência indevida/rejeitada. CI final e navegador pendentes.
 
 CI V55 45427531167 aprovado, incluindo Chromium real (convite avulso e Ateliê). CI 45428142409: 426 aprovados, 1 ignorado, 1 falha na data de aplicação do complemento; fixture ajustada para testar meses distintos. Rota autenticada de urgência e filtros passaram. Revisão comum não pode substituir aprovação de encaixe. Ainda pendem jornada combinada/retrospectiva/Admin/cliente no navegador e conciliação real. Sem publicação.
+
+## V59 — pagamento tardio e capacidade
+Reconstrução V3 usa prazo de produção original e valida janela, em vez de cair no planejador de convite. Revisão aparece na Central e área privada; recuperação administrativa sem cobrança, janela alternativa normal com acordo explícito, sem alterar preço e preservando histórico. Teste de regressão e fixture Chromium ajustados. CI pendente. Sem publicação.

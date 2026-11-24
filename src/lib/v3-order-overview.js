@@ -35,6 +35,7 @@ export async function listV3Production(db,{status='',q='',when='',service='',art
  if(when==='week'){clauses.push('o.event_date BETWEEN ? AND ?');params.push(today,weekDate.toISOString().slice(0,10));}
  if(q.trim()){const like='%'+q.trim().slice(0,120)+'%';clauses.push('(o.order_code LIKE ? OR o.honoree_display_name LIKE ? OR c.name LIKE ? OR c.whatsapp LIKE ? OR EXISTS(SELECT 1 FROM v3_order_services x WHERE x.order_id=o.id AND x.commercial_snapshot_json LIKE ?))');params.push(like,like,like,like,like);}
  const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.event_date,o.status,o.next_action,o.delivery_start AS original_start,o.delivery_end AS original_end,c.name AS customer_name,c.whatsapp,p.total_cents,p.payment_method,
+ (EXISTS(SELECT 1 FROM v2_order_history h WHERE h.order_id=o.id AND h.action_code='payment_capacity_review') AND NOT EXISTS(SELECT 1 FROM v2_agenda_allocations a WHERE a.order_id=o.id)) AS capacity_pending,
  s.family,s.production_status,s.briefing_status,s.reviewed_at,s.delivery_start,s.delivery_end,s.delivered_at,s.points_units,
  json_extract(COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json),'$.product.name') AS product_name
  FROM v3_order_checkout_snapshots snap JOIN v2_orders o ON o.id=snap.order_id JOIN v2_customers c ON c.id=o.customer_id
@@ -42,10 +43,10 @@ export async function listV3Production(db,{status='',q='',when='',service='',art
  WHERE ${clauses.join(' AND ')} ORDER BY o.event_date,o.id,s.id`).bind(...params).all()).results||[];
  const orders=new Map();
  for(const r of rows){
-  if(!orders.has(r.id))orders.set(r.id,{id:r.id,code:r.order_code,honoreeName:r.honoree_display_name,eventDate:r.event_date,customerName:r.customer_name,whatsapp:r.whatsapp,totalCents:r.total_cents,paymentMethod:r.payment_method,parentStatus:r.status,services:[]});
+  if(!orders.has(r.id))orders.set(r.id,{id:r.id,code:r.order_code,honoreeName:r.honoree_display_name,eventDate:r.event_date,customerName:r.customer_name,whatsapp:r.whatsapp,totalCents:r.total_cents,paymentMethod:r.payment_method,parentStatus:r.status,capacityReview:!!r.capacity_pending,services:[]});
   orders.get(r.id).services.push({family:r.family,productName:r.product_name,productionStatus:r.production_status,statusLabel:V3_SERVICE_LABELS[r.production_status]||'Em acompanhamento',briefingStatus:r.briefing_status,reviewedAt:r.reviewed_at,deliveryWindow:r.delivery_start?{start:r.delivery_start,end:r.delivery_end}:null,deliveredAt:r.delivered_at,pointsUnits:r.points_units});
  }
- return [...orders.values()].map(o=>({...o,aggregate:summarizeV3Order(o.services,{orderStatus:o.parentStatus})})).filter(o=>{
+ return [...orders.values()].map(o=>({...o,aggregate:summarizeV3Order(o.services,{orderStatus:o.parentStatus,capacityReview:o.capacityReview})})).filter(o=>{
   const matches=family?o.services.filter(s=>s.family===family):o.services;
   if(!matches.length)return false;
   if(when==='new'&&!matches.some(s=>s.productionStatus==='ready'))return false;
@@ -64,10 +65,11 @@ export async function getV3OrderHistory(db,orderId){
 }
 
 export async function getV3CentralQueues(db,production){
- const newOrders=production.filter(o=>o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+(s.productionStatus==='ready'?'Iniciar produção':s.briefingStatus==='completed'?(s.reviewedAt?'Confirmar agenda':'Conferir briefing'):'Aguardar briefing')).join(' · ')}));
+ const newOrders=production.filter(o=>!o.capacityReview&&o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+(s.productionStatus==='ready'?'Iniciar produção':s.briefingStatus==='completed'?(s.reviewedAt?'Confirmar agenda':'Conferir briefing'):'Aguardar briefing')).join(' · ')}));
  const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.status,o.briefing_status,c.name AS customer_name,p.payment_method,p.total_cents,p.deposit_cents,p.balance_cents,p.deposit_percent,
   (SELECT deposit_percent FROM v3_admin_payment_policies WHERE order_id=o.id) AS authorized_percent,
   (SELECT COUNT(*) FROM v2_checkout_holds h WHERE h.order_id=o.id AND h.status IN ('active','converted')) AS live_holds,
+  (EXISTS(SELECT 1 FROM v2_order_history h WHERE h.order_id=o.id AND h.action_code='payment_capacity_review') AND NOT EXISTS(SELECT 1 FROM v2_agenda_allocations a WHERE a.order_id=o.id)) AS capacity_pending,
   (SELECT status FROM v3_paid_cancellations WHERE order_id=o.id) AS cancellation,
   EXISTS(SELECT 1 FROM v3_order_revisions WHERE order_id=o.id AND status='offered') AS revision,
   EXISTS(SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=o.id AND a.status='review') AS supplement_review
@@ -87,7 +89,7 @@ export async function getV3CentralQueues(db,production){
   if(!f.valid&&f.payments.some(p=>['approved','refunded'].includes(p.status))){add('capacity_review','Financeiro em conferência','Verificar pagamentos antes de liberar produção');continue;}
   if(!f.depositConfirmed&&(f.payments.some(p=>p.provider!=='mercado_pago'||!p.provider_order_id)||r.live_holds&&!f.payments.length)){add('capacity_review','Tentativa em conferência','Verificar a tentativa anterior antes de gerar nova cobrança');continue;}
   if(!f.depositConfirmed){pendingPayments.push({...base,status:'awaiting_payment',dueCents:r.deposit_cents,statusLabel:r.status==='configuring'?'Pedido ainda não enviado ao pagamento':'Aguardando pagamento'});continue;}
-  if(r.status==='capacity_review'||r.briefing_status==='locked')add('capacity_review','Agenda em revisão','Confirmar capacidade e liberação do briefing');
+  if(r.capacity_pending||r.status==='capacity_review'||r.briefing_status==='locked')add('capacity_review','Agenda em revisão','Confirmar capacidade e liberação do briefing');
   if(r.supplement_review)add('capacity_review','Complemento em conferência','Verificar cobrança complementar');
   if(f.remainingCents>0)pendingPayments.push({...base,status:'balance_pending',dueCents:f.remainingCents,statusLabel:'Saldo Pix pendente'});
  }

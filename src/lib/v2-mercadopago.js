@@ -11,7 +11,7 @@ import {
 import {
   commitV2CouponUse,
 } from './v2-commercial-pricing.js';
-import { planV2AllocationForWindow } from './v2-agenda.js';
+import { planV2AllocationForWindow,validateV2DeliveryWindow,validateV2UrgencyWindow } from './v2-agenda.js';
 import { createV2AdminNotification } from './v2-notifications.js';
 import { withV2PaymentLock } from './v2-payment-lock.js';
 import { openPaidCapacityReview } from './v2-capacity-review.js';
@@ -1282,6 +1282,7 @@ async function reconcileMercadoPagoFinance(
 export async function convertHoldToAgenda(
   db,
   orderId,
+  {replacementWindow=null}={},
 ) {
   const existing =
     await db
@@ -1305,6 +1306,7 @@ export async function convertHoldToAgenda(
     )
     > 0
   ) {
+    if(replacementWindow)return {converted:false,reason:'already_allocated'};
     await db
       .prepare(
         `
@@ -1343,6 +1345,7 @@ export async function convertHoldToAgenda(
           SELECT
             o.delivery_start,
             o.delivery_end,
+            o.event_date,o.urgency_enabled,
             p.pricing_snapshot_json
           FROM v2_orders o
           INNER JOIN v2_order_pricing p
@@ -1382,6 +1385,13 @@ export async function convertHoldToAgenda(
     snapshot = {};
   }
 
+  const modular=snapshot.schemaVersion===3;
+  const productionDays=modular?Number(snapshot.productionDays):0;
+  if(modular){
+    if(!Number.isInteger(productionDays)||productionDays<0||!Array.isArray(snapshot.items)||snapshot.items.some(i=>i.family!=='convite')&&productionDays<15)return {converted:false,reason:'invalid_production_days'};
+    if(replacementWindow){if(order.urgency_enabled||snapshot.urgency?.requested)return {converted:false,reason:'urgent_window_requires_review'};order.delivery_start=replacementWindow.start;order.delivery_end=replacementWindow.end;}
+    try{if(snapshot.urgency?.requested){if(!order.urgency_enabled)throw Error('urgency');validateV2UrgencyWindow(order.delivery_start,order.delivery_end,order.event_date);}else await validateV2DeliveryWindow(db,{eventDate:order.event_date,start:order.delivery_start,end:order.delivery_end,productionDays});}catch{return {converted:false,reason:'delivery_window_expired'};}
+  }else if(replacementWindow)return {converted:false,reason:'legacy_window'};
   const snapshotPointsUnits =
     Number(
       snapshot.pointsUnits
@@ -1435,10 +1445,11 @@ export async function convertHoldToAgenda(
 
   const holdStillReserved =
     Boolean(
-      hold
+      !replacementWindow&&hold
       && hold.status === 'active'
       && hold.expires_at > nowIso()
-      && rows.length,
+      && rows.length
+      && (!modular||rows.reduce((n,r)=>n+Number(r.points_units),0)===snapshotPointsUnits),
     );
 
   if (!holdStillReserved) {
@@ -1479,7 +1490,7 @@ export async function convertHoldToAgenda(
           end:
             order.delivery_end,
 
-          pointsUnits,
+          pointsUnits,productionDays,
         },
       );
 
@@ -1671,6 +1682,7 @@ export async function convertHoldToAgenda(
     );
   }
 
+  if(replacementWindow){statements.push(db.prepare(`UPDATE v2_orders SET delivery_start=?,delivery_end=?,updated_at=? WHERE id=? AND (SELECT COALESCE(SUM(points_units),0) FROM v2_agenda_allocations WHERE order_id=?)=?`).bind(order.delivery_start,order.delivery_end,nowIso(),orderId,orderId,snapshotPointsUnits));}
   const conversion =
     await db.batch(
       statements,

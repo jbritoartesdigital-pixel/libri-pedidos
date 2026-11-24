@@ -146,7 +146,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function render(){
     const m=current();
-    root.innerHTML='<section class="card"><h1>Meu pedido · '+esc(area.orderCode)+'</h1><p>Escolha o serviço que deseja acompanhar.</p><div class="grid two"><button type="button" class="btn secondary" data-v3-tab="summary">Resumo</button>'+
+    root.innerHTML=(area.capacityReview?'<section class="card"><h3>Pagamento recebido, agenda em conferência</h3><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+'<section class="card"><h1>Meu pedido · '+esc(area.orderCode)+'</h1><p>Escolha o serviço que deseja acompanhar.</p><div class="grid two"><button type="button" class="btn secondary" data-v3-tab="summary">Resumo</button>'+
       (!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</div></section>'+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. Salve as respostas para atualizar as próximas perguntas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+

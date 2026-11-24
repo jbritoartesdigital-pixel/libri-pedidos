@@ -7,7 +7,7 @@ import {stageV3FinalFile,removeV3FinalFile,deliverV3Service,downloadV3FinalFile}
 import {changeV3Production,publishV3ServicePreview,publishV3ExternalPreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
 import {previewV3ServiceAgenda,scheduleV3Service,releaseV3ServiceCapacity} from '../lib/v3-service-agenda.js';
-import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
+import {recoverV3PaidCapacity,getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
 import {json,fail,readJson} from '../lib/http.js';
 import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
@@ -88,6 +88,9 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+ const capacity=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/paid-capacity$/);
+ if(capacity){if(request.method!=='POST')return fail('Método não permitido.',405);if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Operação administrativa V3 indisponível.',503);try{const row=await env.DB.prepare('SELECT public_token FROM v2_orders WHERE order_code=?').bind(capacity[1]).first();if(!row)return fail('Pedido não encontrado.',404);const result=await recoverV3PaidCapacity(env.DB,row.public_token,await boundedJson(request));return result?json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)}):fail('Pedido V3 não encontrado.',404);}catch(e){return errorResponse(e);}}
+
  const urgency=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/urgency$/);
  if(urgency){
   if(request.method!=='POST')return fail('Método não permitido.',405);

@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 35 | 23/11/2026 (Brasil)
+Versão 36 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -269,3 +269,10 @@ V34 CONTINUAÇÃO — PEDIDO MANUAL V3
 RETOMADA V35 — CANCELAMENTO DE PEDIDOS PAGOS E ESTORNOS INTEGRAIS
 - CI V34 45408775817 aprovado. 1fdae37: migration 0058 (59 migrações), suspensão operacional com registro próprio e inventário de cobranças originais e complementares; bloqueio de briefing, produção, entrega e cobranças durante conferência, reserva da agenda mantida. Conferência remota de referência/valor/status, fechamento de pendências, devolução integral Mercado Pago somente por autorização explícita por cobrança e chave de idempotência persistida, confirmação GET; registro de Pix direto já devolvido com comprovante. API oficial https://www.mercadopago.com.br/developers/pt/reference/online-payments/checkout-pro/refund-order/post; reembolso integral body vazio, parcial/contestação permanecem em revisão. Encerramento apenas após todas as cobranças comprovadamente devolvidas/terminais, capacidade futura liberada, histórico e arquivos preservados, cupom/brinde já utilizados não voltam automaticamente. Rotas Admin e interface cliente/Admin, testes simulados de estorno integral e bloqueio de parcial. CI a confirmar. Não realizou estorno real, flag desativada, PR #143 draft.
 - Pendências: relatório financeiro de devoluções deve conservar entradas históricas e separar devolução confirmada sem dupla contagem; política e fluxo parcial/contestação, reabertura de revisão sem devolução, tentativa remota desconhecida, prova Pix e acesso Admin aos arquivos após suspensão, auditoria dos webhooks e prazos/estoque. Próximo: concluir conciliação financeira e avançar entrega, avisos, Admin e indicadores. Sem publicação parcial.
+
+
+RETOMADA V36 — DEVOLUÇÕES NO FINANCEIRO CENTRAL (PARCIAL)
+- V35 HEAD 382f5e35: CI 45409586814 concluído com sucesso. PR #143 aberto, draft, não mesclado.
+- edd9300/710444b: relatório de devoluções V3 separado por data de confirmação, sem lançamentos artificiais V2; preserva recebimentos históricos de cobranças originais comprovadamente devolvidas e complementos aplicados após cancelamento. Não declara taxas líquidas conciliadas quando há devolução Mercado Pago, datas ausentes ou conferência pendente. 22504fa: painel Admin de devoluções e histórico. f1ab362: teste de recebimento em outubro e devolução em novembro, antes/depois do encerramento e consulta repetida. d2b9686: exclusão de pedidos suspensos/cancelados da fila de cobrança e edição de recebimentos históricos bloqueada na UI.
+- Estado CI observado nesta consulta: [{"sha":"f1ab362","runs":["45410281733: completed/success"]},{"sha":"d2b9686","runs":[]}]. Conferir HEAD e conclusão real antes de declarar aprovação. Nenhum estorno real, nenhuma flag ativada, nenhum deploy.
+- Pendências: validar CI e incluir teste de complemento estornado, taxas e datas reais de liquidação, cobrança tardia sem paid_at, margem por produto e breakdown multiproduto, filtros de devoluções, reabertura sem devolução, parcial/contestação. Depois concluir arquivos grandes de retrospectiva e avisos, central Admin, indicadores e regressão integral/browser/mobile antes da publicação. Não alterar decisões comerciais.

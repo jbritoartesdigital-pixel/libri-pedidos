@@ -211,15 +211,14 @@ function renderCreation() {
 }
 function renderUnready() {
   const cards=retrosPackages.map(item=>
-    '<div class="v3-line"><strong>'+clean(item.name)+'</strong>'+
-    '<p>Até '+Number(item.maxPhotos)+' fotos e '+Number(item.maxVideos)+' vídeos'+
-    (item.captionsIncluded?', com legendas':'')+'.</p>'+
-    '<p class="v3-mini">Prazo mínimo: '+Number(item.minimumProductionDays)+' dias corridos após briefing completo.</p></div>'
+    '<div class="v3-notice"><strong>'+clean(item.name)+'</strong>'+
+    '<p>Até '+Number(item.maxPhotos)+' fotos e '+Number(item.maxVideos)+' vídeos. Até '+Number(item.maxVideoSeconds)+' s por vídeo e '+Number(item.maxTotalVideoSeconds)/60+' minutos no conjunto.</p>'+
+    '<details><summary>Ver o que está incluído</summary><ul>'+item.included.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul></details>'+
+    (item.previewAvailable?'<p><b>'+money(item.previewPriceCents)+'</b></p><button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'<p>Pacote indisponível.</p>')+'</div>'
   ).join('');
-  panel('Retrospectivas','Transformamos fotos, vídeos, músicas e lembranças em uma homenagem audiovisual personalizada.',
-    '<div class="v3-notice"><strong>Pacotes identificados no catálogo:</strong> ainda sem contratação direta. Não há cobrança automática.</div>'+
-    '<div class="v3-lines">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+
-    '<p class="v3-mini">Os valores e limites definitivos serão confirmados no fechamento comercial, antes da ativação do checkout e do envio de materiais.</p>',
+  panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
+    '<div class="v3-notice">Envie os materiais organizados pelo WhatsApp após a contratação. Prazo mínimo de 15 dias corridos após pagamento, briefing completo e recebimento dos materiais.</div>'+
+    '<div class="v3-lines">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>'+cartButton(),
     '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
 }
 function renderAtelie() {
@@ -231,7 +230,7 @@ function renderAtelie() {
   ).join('');
   panel('Sua festa, com tudo combinando',
     'A identidade visual é o conjunto de artes que dá a mesma aparência ao brasão, ao nome decorado, às estampas e aos detalhes da festa. Não é um convite digital.',
-    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação visual e uma simulação de decoração para imaginar como a identidade ficaria na festa. A simulação não é a decoração executada.</div>'+
+    '<div class="v3-notice"><strong>Todos os pacotes:</strong> uma apresentação da identidade visual em PDF. Não inclui projeto ou simulação de decoração.</div>'+
       '<div class="v3-choices-stack">'+(cards||'<p>Pacotes em preparação. Nenhuma contratação está disponível.</p>')+'</div>'+
       '<p class="v3-mini" style="margin-top:16px">Não inclui impressão ou fabricação, montagem da festa nem convite em vídeo ou interativo. Peças especiais, personagens elaborados a partir de fotos e alterações grandes precisam de orçamento individual.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Voltar</button>'+
@@ -246,11 +245,11 @@ function renderAtelieDetail() {
   const exclusions=[...(item.excludedCommon||[]),...(item.excludedItems||[])];
   const excluded='<ul class="v3-mini">'+exclusions.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>';
   panel('Pacote '+clean(item.name),clean(item.shortDescription),
-    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual e uma simulação conceitual de decoração.</p></div>'+
+    '<div class="v3-notice"><strong>Já previsto em todos os pacotes:</strong><p>Apresentação da identidade visual em PDF.</p></div>'+
     '<h2 class="v3-title" style="font-size:23px">O que você recebe</h2>'+includes+
     '<h2 class="v3-title" style="font-size:23px;margin-top:22px">O que não está incluído</h2>'+excluded+
     '<div class="v3-notice">'+(item.purchaseAvailable?'<strong>Pacote liberado: '+money(item.priceCents)+'</strong> · Você verá a agenda e o total antes do pagamento.':'<strong>Compra ainda não liberada.</strong> Os valores e condições aguardam aprovação comercial.')+' Fotos de crianças não são autorização de divulgação.</div>'+ 
-    '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso e identificação de simulações conceituais.</p>',
+    '<p class="v3-mini">Exemplos serão exibidos aqui somente com permissão de uso.</p>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-text" type="button" data-action="back">Comparar pacotes</button>'+
     '<button class="v3-btn '+(item.purchaseAvailable?'v3-btn-primary':'v3-btn-secondary')+'" type="button" '+(item.purchaseAvailable?'data-action="atelie-buy"':'disabled')+'>'+(item.purchaseAvailable?'Adicionar ao carrinho':'Contratação em preparação')+'</button></div>',3);
 }
@@ -347,7 +346,7 @@ function renderReview() {
     '<button class="v3-btn v3-btn-primary" type="button" data-action="add-invitation">Adicionar ao carrinho</button></div>',4);
 }
 function cartDeliveryHtml(){
-  if(state.cartItems.length<2||!cartQuote||cartError)return '';
+  if(!cartQuote||cartError||!state.cartItems.length||(state.cartItems.length===1&&cartFamily(state.cartItems[0].productCode)!=='retrospective'&&!(state.cartItems[0].extras||[]).length))return '';
   const formatDate=s=>s.split('-').reverse().join('/');
   const options=cartDelivery?.options||[];
   return '<div class="v3-notice"><strong>Quando é a festa?</strong><p>Consulte a agenda para todos os serviços juntos.</p>'+
@@ -389,12 +388,12 @@ function renderCart() {
     (cartQuote.discountCents?'<div class="v3-line"><span>'+ (cartQuote.combinedDiscountPercent?'Desconto combinado ('+cartQuote.combinedDiscountPercent+'%)':'Desconto do convite') +'</span><b>− '+money(cartQuote.discountCents)+'</b></div>':'')+
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':
-    items.length>1?'<div class="v3-notice">A contratação conjunta está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
+    (items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'))?'<div class="v3-notice">A contratação pela V3 está em preparação. Nenhuma cobrança foi criada. Você pode revisar ou retirar serviços.</div>':
     items.some(x=>(x.extras||[]).length)?'<div class="v3-notice">O pagamento com os novos adicionais está em preparação. Nenhuma cobrança foi criada.</div>':items.length?'<p class="v3-mini">O checkout individual ainda vai confirmar o preço, a agenda e as condições.</p>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · revise os serviços escolhidos.',
     '<div class="v3-lines">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+totals+notice+cartDeliveryHtml(),
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
-    (items.length===1&&cartQuote&&!cartError&&!(items[0].extras||[]).length?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
+    (items.length===1&&cartQuote&&!cartError&&cartFamily(items[0].productCode)!=='retrospective'&&!(items[0].extras||[]).length?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-single-checkout">Continuar para o pagamento</button>':'')+'</div>',4);
 }
 async function openCart(){
   state.step='cart';save();cartQuote=null;cartError='';cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=false;cartRevision++;
@@ -575,6 +574,11 @@ root.addEventListener('click', async event => {
     if(action==='creation'){if(state.creation!==value)state.ateliePackage='';state.creation=value;render();return;}
     if(action==='atelie-package'){state.ateliePackage=value;render();return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
+    if(action==='retro-buy'){
+      const item=retrosPackages.find(p=>p.code===value);
+      if(!item?.previewAvailable)return message('Pacote indisponível.');
+      putCart({productCode:item.productCode,variantCode:item.variantCode,addonCodes:[]});await openCart();return;
+    }
     if(action==='atelie-buy'){
       const item=ateliePackages.find(p=>p.code===state.ateliePackage);
       if(!item?.purchaseAvailable||!item.variantCode)return message('Pacote indisponível para compra.');
@@ -628,7 +632,7 @@ root.addEventListener('click', async event => {
     }
     if(action==='open-cart'){await openCart();return;}
     if(action==='cart-delivery'){
-      if(cartDeliveryBusy||!cartQuote||state.cartItems.length<2)return;
+      if(cartDeliveryBusy||!cartQuote||!state.cartItems.length)return;
       const revision=cartRevision;
       cartEventDate=root.querySelector('#v3CartEventDate')?.value||'';
       cartDelivery=null;cartDeliveryError='';cartDeliveryBusy=true;renderCart();

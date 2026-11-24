@@ -479,3 +479,35 @@ test('supplement expiry releases only verified terminal charge and supports expl
  await syncV3SupplementPayment(env,old.provider_order_id);
  assert.equal(db.sqlite.prepare('SELECT status FROM v3_service_supplements WHERE id=?').get(offer.id).status,'payment_pending');
 });
+
+test('private supplemental payment routes expose separate totals and require explicit confirmation',async t=>{
+ const {db,order,env,token,family,offer,mp}=await preparedSupplement(t);
+ const base='/api/v2/customer-area/'+token+'/v3/';
+ const path='supplements/'+family+'/'+offer.id+'/';
+ const call=(suffix,method='GET',body,settings=env)=>worker.fetch(new Request('https://test'+base+suffix,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),settings,{waitUntil(){}});
+ const b=await (await call('briefing')).json();
+ assert.equal(b.briefing.supplementPaymentsEnabled,true);
+ assert.equal(b.briefing.supplements[0].paymentAvailable,true);
+ assert.equal(b.briefing.financial.pendingSupplementCents,4000);
+ assert.equal(b.briefing.financial.confirmedTotalCents,b.briefing.payment.totalCents);
+ assert.equal((await call(path+'pay','POST',{})).status,422);
+ assert.equal((await call(path+'pay','POST',{confirmed:true},{...env,LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED:'false'})).status,503);
+ assert.equal(mp.posts,1);
+ assert.equal((await call('supplements/convite/'+offer.id+'/pay','POST',{confirmed:true})).status,404);
+ const p=await call(path+'pay','POST',{confirmed:true});assert.equal(p.status,200);
+ const checkout=await p.json();assert.equal(checkout.result.status,'pending');
+ assert.equal(checkout.briefing.supplements[0].canVerify,true);
+ assert.ok(checkout.briefing.supplements[0].payment.checkoutUrl.startsWith('https://www.mercadopago.com.br/'));
+ assert.equal(mp.posts,2);
+ const attempt=db.sqlite.prepare('SELECT provider_order_id FROM v3_supplement_payments').get();
+ mp.approve(attempt.provider_order_id);
+ const response=await call(path+'verify','POST',{});assert.equal(response.status,200);
+ const paid=await response.json();
+ assert.equal(paid.briefing.financial.paidSupplementCents,4000);
+ assert.equal(paid.briefing.financial.pendingSupplementCents,0);
+ assert.equal(paid.briefing.financial.confirmedTotalCents,b.briefing.payment.totalCents+4000);
+ assert.equal(paid.briefing.supplements[0].payment.checkoutUrl,null);
+ assert.equal((await call(path+'verify','POST',{})).status,200);
+ const old=await prepareV3Payment(new Request('https://test/internal-v3'),env,order.orderId);
+ assert.equal(old.alreadyPaid,true);assert.equal(mp.posts,2);
+});

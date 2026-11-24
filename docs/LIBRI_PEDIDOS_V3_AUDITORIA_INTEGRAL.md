@@ -34,3 +34,6 @@ Implementada preferência compartilhada entre loja V2/V3. Sem aceite explícito 
 
 ## V54 — Verificação de regressões
 CI V53 45425771151 falhou em contrato de carregamento da página legada (somente uma folha de estilo), após acrescentar CSS de privacidade. Mantida uma única folha no HTML V2, com import no CSS principal. Corrigida invalidação de agenda no checkout quando muda a data: remove janelas anteriores e bloqueia pagamento sem renderizar todo formulário e perder o clique/foco. A recuperação adicional das conversas confirmou escopo integral, preservação V2, preços finais Ateliê e fluxo sem checklist. Ainda não é transcrição integral nem comprovação visual. Não liberar enquanto CI/browser e urgência estiverem pendentes.
+
+## V55 — urgência
+Implementada solicitação de encaixe de convite avulso no checkout V3: valor projetado pelo servidor, taxa oficial padrão 30%, aceite explícito, pedido bloqueado sem cobrança, decisão administrativa, recuperação após aprovação, reserva revalidada e agenda de produção preservada. Ateliê e retrospectiva continuam sem atalhos de urgência (prazo mínimo protegido); combinação sem capacidade regular exige revisão humana, não gera cobrança. Novo teste cobre tentativa sem cobrança, idempotência, aprovação e criação simulada de uma única cobrança. CI e UI ainda precisam validação; sem publicação.

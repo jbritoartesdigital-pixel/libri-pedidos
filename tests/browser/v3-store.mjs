@@ -66,8 +66,10 @@ async function checkout(p){
  await p.locator('#v3-unified-checkout').waitFor();
  assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));
  await p.locator('#v3-app[aria-busy="false"]').waitFor();
- await p.locator('[data-v3-checkout="agenda"]').scrollIntoViewIfNeeded();
- await p.locator('[data-v3-checkout="agenda"]').click();
+ await p.screenshot({path:'artifacts/v3-browser/checkout-before-agenda-'+p.viewportSize().width+'.png',fullPage:true});
+ // Exercise the real keyboard-accessible control; do not force a synthetic click.
+ await p.locator('[data-v3-checkout="agenda"]').focus();
+ await p.keyboard.press('Enter');
  await p.locator('[name="deliveryWindow"]').first().waitFor();
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);
  assert.match(p.url(),/\/loja$/);

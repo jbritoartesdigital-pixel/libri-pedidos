@@ -30,6 +30,7 @@ export async function mountV3PaymentRecovery(root,{request,onMissing,credential}
   if(!body.clientRequestId&&!body.publicToken)return false;
   let state=null,busy=false,error='';
   const descriptions={
+    urgency_pending:'Solicitação de encaixe enviada. Aguarde a decisão da Libri; ainda não existe cobrança.',
     paid:'Pagamento confirmado. Acesse seu pedido para acompanhar os serviços.',
     pending:'A cobrança anterior está disponível. Continue pelo mesmo link, sem gerar outra cobrança.',
     expired:'A cobrança anterior foi encerrada pelo Mercado Pago. Você poderá gerar uma nova somente se a agenda original continuar disponível.',

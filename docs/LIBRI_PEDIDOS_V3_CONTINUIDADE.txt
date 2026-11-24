@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 54 | 24/11/2026 (Brasil)
+Versão 55 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -366,3 +366,7 @@ V53 — PRIVACIDADE FUNCIONAL E EXEMPLOS DA GALERIA
 
 V54 — REGRESSÃO DO CSS LEGADO E INTERAÇÃO DE AGENDA
 CI V53 45425771151 falhou em teste de folha única no HTML V2, após privacidade. Corrigido import no CSS existente, sem alterar o contrato HTML. Alteração de data no checkout invalida opções e pagamento sem substituir o formulário durante o evento change; precisa de validação no navegador. Revisão adicional de fontes recuperou restrições já confirmadas; acesso não contém a transcrição integral de todas as decisões. Auditoria permanece aberta: urgência +30%, validação de jornadas e área cliente/Admin, conciliação e publicação integral. Sem deploy. CI HEAD a confirmar.
+
+
+V55 — ENCAIXE URGENTE V3
+- 45061cf: pedido avulso de convite sem janela normal, cotação do adicional pela configuração oficial (30% padrão), sem cobrança ou reserva antes da decisão. Pedido e aprovação usam as tabelas existentes e a mesma área privada, com revisão administrativa, notificação e recuperação explícita; valida capacidade na aprovação e antes do pagamento. Preserva 15 dias de Ateliê e retrospectiva: não habilita urgência em combinação que contenha esses serviços. Agenda da produção mantém a reserva aprovada para convite urgente, sem criar pontos novos. Interface cliente/admin integrada. Testes de regressão novos; CI ainda não confirmado. CI V54 45426245210 aprovou backend e migrations, falhou na estabilidade do clique Chromium de agenda. Teste agora registra tela e exercita controle real pelo teclado; interação por toque ainda precisa validação. Sem deploy. Pendências: CI, jornadas de browser, área cliente/admin, conciliação, decisão sobre estimativas de prêmios antes da ativação.

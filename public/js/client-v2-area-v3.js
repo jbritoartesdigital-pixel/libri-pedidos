@@ -131,13 +131,15 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function paymentHtml(){
     if(!area.locked)return '';
+    if(area.orderStatus==='awaiting_urgency_decision'&&payment?.state!=='not_started'&&payment?.state!=='pending')return '<section class="card"><h3>Encaixe em análise</h3><p>Aguarde a confirmação da Libri. Nenhuma cobrança foi criada.</p><button type="button" class="btn secondary" data-v3-action="payment">Atualizar situação</button></section>';
+    if(area.orderStatus==='cancelled'&&area.urgency?.status==='rejected')return '<section class="card"><h3>Encaixe não aprovado</h3><p>'+esc(area.urgency.note||'Não há capacidade para esta data.')+'</p><p>Nenhuma cobrança foi criada.</p></section>';
     if(area.cancellation)return '<section class="card"><h3>'+(area.cancellation.status==='completed'?'Pedido cancelado':'Cancelamento em conferência')+'</h3><p>Devoluções confirmadas: '+money(area.cancellation.refundCents)+'</p><p>Não realize novos pagamentos. Entre em contato com a Libri para esclarecimentos.</p></section>';
     if(area.revision){
       const r=area.revision;
       return '<section class="card"><h3>Confira a proposta revisada</h3><p>'+esc(r.reason)+'</p>'+r.items.map(i=>'<p><strong>'+esc(i.productName+' · '+i.variantName)+'</strong> · '+money(i.totalCents)+'<br>'+i.addons.map(esc).join(', ')+' '+i.extras.map(x=>esc(x.quantity+' × '+x.name)).join(', ')+'</p>').join('')+'<p>Nova previsão: '+day(r.deliveryWindow.start)+' a '+day(r.deliveryWindow.end)+'</p><p><strong>Total: '+money(r.totalCents)+'</strong> · Entrada: '+money(r.depositCents)+'</p>'+(r.blackLibri?'<p>Surpresa preservada: '+esc(r.blackLibri.label)+'</p>':'')+'<details><summary>Condições da contratação</summary><p style="white-space:pre-wrap">'+esc(r.terms.general.body)+'</p>'+r.terms.services.map(t=>'<p style="white-space:pre-wrap">'+esc(t.body)+'</p>').join('')+'</details><label><input type="checkbox" data-revision-terms> Li e aceito as condições e o novo valor.</label><button class="btn primary" data-v3-action="accept-revision">Aceitar proposta</button></section>';
     }
     const url=payment?.state==='pending'?safePayment(payment.checkoutUrl):null;
-    return '<section class="card"><h3>Pagamento</h3><p>'+esc(payment?.state==='paid'?'Pagamento confirmado. Atualize o pedido para conferir a liberação.':payment?.state==='expired'?'Cobrança anterior encerrada.':payment?.state==='review'?'Entre em contato com a Libri para revisar a cobrança.':'Confira a situação do pagamento para liberar os dados contratados.')+'</p>'+
+    return '<section class="card"><h3>Pagamento</h3><p>'+esc(payment?.state==='urgency_pending'?'Solicitação em análise.':payment?.state==='paid'?'Pagamento confirmado. Atualize o pedido para conferir a liberação.':payment?.state==='expired'?'Cobrança anterior encerrada.':payment?.state==='review'?'Entre em contato com a Libri para revisar a cobrança.':'Confira a situação do pagamento para liberar os dados contratados.')+'</p>'+
       (url?'<a href="'+esc(url)+'" class="btn primary">Continuar pagamento</a>':'')+
       (payment?.canRenew?'<button type="button" class="btn primary" data-v3-action="renew">Gerar nova cobrança</button>':'')+
       '<button type="button" class="btn secondary" data-v3-action="payment">Verificar pagamento</button></section>';

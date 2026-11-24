@@ -100,6 +100,7 @@ jobs:
           ln -s /tmp/libri-browser-deps/node_modules/playwright node_modules/playwright
           ln -s /tmp/libri-browser-deps/node_modules/pngjs node_modules/pngjs
 
+      # Legacy fixture distinguishes the V3 detection endpoint from legacy detail.
       - name: Barrar deploy se o teste Android ou diagnóstico falhar
         run: node tests/etapa2-browser.mjs
 

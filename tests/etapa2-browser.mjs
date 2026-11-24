@@ -123,6 +123,8 @@ function mockServer(reference, { couponOffline = false, sceneLinks = false, conf
         });
         return;
       }
+      // Legacy fixture must answer the real V3 detection contract (404 for V2).
+      if(url.pathname==='/api/admin/v2/orders/LIBRI-100001/v3/briefing' && req.method==='GET')return json(404,{error:'Pedido V3 não encontrado.'});
       if(url.pathname==='/api/admin/v2/orders/LIBRI-100001' && req.method==='GET') {
         return json(200,{detail:{
           order:{code:'LIBRI-100001',honoreeName:'Criança Exemplo',
@@ -846,7 +848,7 @@ try{
 }catch(e){
   audit.result='failure';
   audit.errors.push(String(e?.message||e).slice(0,2000));
-  console.error('✗ Etapa 2 bloqueada:',String(e?.message||e));
+  console.error('✗ Etapa 2 bloqueada:',String(e?.stack||e?.message||e));
   process.exitCode=1;
 }finally{
   await browser?.close();

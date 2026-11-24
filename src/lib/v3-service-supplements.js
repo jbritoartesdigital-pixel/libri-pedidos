@@ -18,8 +18,7 @@ async function existingQuantities(db,s){
  const quantities=new Map();
  for(const x of s.snapshot.v3Extras||[])quantities.set(x.code,(quantities.get(x.code)||0)+x.quantity);
  for(const x of s.snapshot.addons||[])quantities.set(x.code,1);
- // Paid supplements will update the effective scope in a later milestone.
- // Until then there is no paid transition and the original snapshot is immutable.
+ // Effective scope includes paid supplements; original snapshot remains immutable.
  return quantities;
 }
 export async function supplementCatalog(db,s){
@@ -60,8 +59,17 @@ async function quote(db,ctx,s,input){
 }
 const view=r=>({id:r.id,family:r.family,status:r.status,items:parse(r.offer_json).items,subtotalCents:r.subtotal_cents,cardFeeCents:r.card_fee_cents,totalCents:r.total_cents,pointsUnits:r.points_units,paymentMethod:r.payment_method,note:r.note,createdAt:r.created_at,decidedAt:r.decided_at,paymentAvailable:false});
 export async function listV3Supplements(db,orderId){
- const rows=(await db.prepare('SELECT a.*,s.family FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=? ORDER BY a.id DESC').bind(orderId).all()).results||[];
- return rows.map(view);
+ const rows=(await db.prepare('SELECT a.*,s.family,s.production_status,s.production_version,s.scheduled_at,s.delivery_end,COALESCE(s.effective_snapshot_json,s.commercial_snapshot_json) AS current_snapshot,p.status AS attempt_status,p.checkout_url,p.expires_at,p.paid_at FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id LEFT JOIN v3_supplement_payments p ON p.id=(SELECT MAX(id) FROM v3_supplement_payments WHERE supplement_id=a.id) WHERE s.order_id=? ORDER BY a.id DESC').bind(orderId).all()).results||[];
+ return rows.map(r=>{
+  const fresh=r.production_version===r.base_production_version&&r.current_snapshot===r.base_snapshot_json;
+  const eligible=fresh&&!!r.scheduled_at&&!!r.delivery_end&&(r.production_status==='ready'||r.production_status==='adjustments'&&parse(r.offer_json).items.every(x=>x.code.endsWith('_revision')));
+  const live=r.attempt_status==='pending'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
+  const retry=r.attempt_status==='creating'&&Date.parse(r.expires_at)>Date.now()&&r.status==='payment_pending';
+  const renew=['expired','cancelled','rejected'].includes(r.attempt_status)&&r.status==='accepted';
+  let url=null;
+  if(live){try{const u=new URL(r.checkout_url);if(u.protocol==='https:'&&!u.username&&!u.password&&/(^|\.)mercadopago\.com(\.br)?$/.test(u.hostname))url=u.href;}catch{}}
+  return {...view(r),paymentAvailable:eligible&&r.status==='accepted'&&!r.attempt_status,canRetry:eligible&&retry,canRenew:eligible&&renew,canVerify:r.status==='payment_pending'&&r.attempt_status==='pending',payment:{status:r.attempt_status||'not_started',checkoutUrl:url,expiresAt:r.expires_at,paidAt:r.paid_at},appliedAt:r.applied_at};
+ });
 }
 export async function previewV3Supplement(db,token,family,input){
  const a=await access(db,token,family);if(!a)return null;
@@ -110,4 +118,11 @@ export async function decideV3Supplement(db,token,family,id,input={},actor='cust
  ]);
  return view({...r,status:next,decided_at:stamp,family});
  });
+}
+
+export async function getV3SupplementTotals(db,orderId,originalCents){
+ const rows=(await db.prepare(`SELECT a.total_cents,a.status,a.applied_at FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=?`).bind(orderId).all()).results||[];
+ const sum=pred=>rows.filter(pred).reduce((n,r)=>n+r.total_cents,0);
+ const paidCents=sum(r=>r.status==='paid'),pendingCents=sum(r=>['accepted','payment_pending'].includes(r.status)),reviewCents=sum(r=>r.status==='review');
+ return {originalCents,paidSupplementCents:paidCents,pendingSupplementCents:pendingCents,reviewSupplementCents:reviewCents,confirmedTotalCents:originalCents+paidCents};
 }

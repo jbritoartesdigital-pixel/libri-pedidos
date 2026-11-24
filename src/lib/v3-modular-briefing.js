@@ -95,7 +95,7 @@ export async function contextV3Briefing(db,token){
     FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
     JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.public_token=?`).bind(token).first();
   if(!order)return null;
-  const services=(await db.prepare('SELECT * FROM v3_order_services WHERE order_id=? ORDER BY id').bind(order.id).all()).results.map(s=>({...s,snapshot:parse(s.commercial_snapshot_json)}));
+  const services=(await db.prepare('SELECT * FROM v3_order_services WHERE order_id=? ORDER BY id').bind(order.id).all()).results.map(s=>({...s,snapshot:parse(s.effective_snapshot_json||s.commercial_snapshot_json)}));
   const paid=order.deposit_percent===100&&order.balance_cents===0&&!!await db.prepare(`SELECT 1 AS paid FROM v2_payments
     WHERE order_id=? AND provider='mercado_pago' AND status='approved' AND payment_type!='refund'
       AND amount_cents=? AND method=? LIMIT 1`).bind(order.id,order.total_cents,order.payment_method).first();

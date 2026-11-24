@@ -71,9 +71,8 @@ export async function runV2Scheduler(env) {
       pushEligible: true, dedupeKey: `urgency-requested:${order.id}` });
   }
   result.abandonedOrders = await cleanupAbandonedUnpaidV2Orders(env);
-  if(env.LIBRI_V3_CHECKOUT_ENABLED==='true'){
-    try{result.v3Retention=await runV3DeliveryRetention(env);}catch(error){console.error('V3 retention failed',error.message);result.v3Retention={failed:true};}
-  }
+  // Retention must continue for delivered orders even if new sales are paused.
+  try{result.v3Retention=await runV3DeliveryRetention(env);}catch(error){console.error('V3 retention failed',error.message);result.v3Retention={failed:true};}
   result.notifications = await runV2NotificationScheduler(env);
   return result;
 }

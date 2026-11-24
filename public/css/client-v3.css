@@ -190,3 +190,6 @@ details summary{cursor:pointer;font-weight:600;color:var(--wine);padding:6px 0}
  .v3-total b{font-size:23px}
  .v3-footer{align-items:flex-start;flex-wrap:wrap;padding:10px 0 22px}
 }
+
+/* A single guided question at a time. Reduced motion remains respected. */
+.v3-guided-question{animation:v3question .26s ease-out}.v3-guided-question .v3-choice{min-height:76px}.v3-guided-question .v3-notice p{margin:6px 0 0}@keyframes v3question{from{opacity:.5;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}

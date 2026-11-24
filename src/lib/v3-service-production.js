@@ -40,6 +40,7 @@ export async function changeV3Production(db,token,family,input={},actor='admin')
  const initial=await current(db,token,family);if(!initial)return null;
  return withV2PaymentLock(db,initial.ctx.order.id,async()=>{
  const {s,preview}=await current(db,token,family);checkVersion(s,input);
+ if(await db.prepare("SELECT 1 FROM v3_service_supplements WHERE service_id=? AND status IN ('payment_pending','review')").bind(s.id).first())fail('Concilie o adicional pendente antes de alterar a produção.');
  const action=input.action;let statements=[];
  if(actor==='admin'&&action==='start'){
    if(s.production_status!=='ready'||!s.scheduled_at||!s.reviewed_at||s.briefing_status!=='completed')fail('Confirme o briefing e a agenda antes de iniciar.');

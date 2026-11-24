@@ -327,3 +327,11 @@ html body .v3-stage-cart .v3-stage-progress{flex:none;margin:0;padding:2px 0 0}
  html body .v3-stage-cart .v105-cart-actions{align-self:flex-end;width:min(100%,410px)}
  html body .v3-stage-cart .v105-cart-item-copy>strong{font-size:25px}
 }
+
+/* V106: explicit two-line editorial titles, not dependent on viewport wrapping. */
+html body .v3-panel--guided .v3-choice-copy strong:has(.v106-title-line){max-width:100%;width:100%;text-align:center}
+.v106-title-line{display:block;white-space:normal;overflow-wrap:normal;text-wrap:balance}
+html body .v3-panel--guided.v3-stage-intent .v3-choice{min-height:132px;padding:16px 12px}
+html body .v3-panel--guided.v3-stage-format .v3-format-card{padding-block:16px 12px}
+@media(max-height:660px){html body .v3-panel--guided.v3-stage-intent .v3-choice{min-height:112px;padding:12px}}
+@media(min-width:960px) and (min-height:690px){html body .v3-panel--guided.v3-stage-intent .v3-choice{min-height:160px;padding:22px}}

@@ -375,6 +375,11 @@ export async function getManualClientUpsell(db,manual,offer){
     const addon=offer.available.filter(a=>a.group===group&&!ownedCodes.has(a.code)).sort((a,b)=>a.priceCents-b.priceCents)[0];
     if(addon)candidates.push({title:'Gostaria de adicionar '+addon.name+'?',description:descriptions[group],addonCodes:[addon.code],productCode:original.code,variantCode:current.code});
   }
+  // A confirmation form is the most useful first suggestion for interactive invitations.
+  if(original.code!=='cinematic_video'){
+    const confirmation=candidates.findIndex(c=>c.addonCodes.some(code=>offer.available.some(a=>a.code===code&&a.group==='confirmation')));
+    if(confirmation>0)candidates.unshift(candidates.splice(confirmation,1)[0]);
+  }
   for(const candidate of candidates.slice(0,4)){
     try{
       const q=await quoteManualClientAddons(db,manual,candidate.addonCodes,candidate);

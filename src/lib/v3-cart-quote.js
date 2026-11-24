@@ -3,6 +3,7 @@
 // de pagamento único, reserva de capacidade e briefings de múltiplos serviços.
 import { calculateCommercialV2Quote } from './v2-commercial-pricing.js';
 import { productionDaysForQuote } from './v3-production-policy.js';
+import { priceWithCardProcessingFee } from './v2-payment-pricing.js';
 
 export class V3CartValidationError extends Error {
   constructor(message, code='invalid_cart') {
@@ -37,10 +38,14 @@ function validateItems(items) {
     if(!Array.isArray(addonCodes)||addonCodes.length>30||addonCodes.some(x=>typeof x!=='string'||x.length>80))
       throw new V3CartValidationError('Adicionais inválidos.','cart_addons_invalid');
     // Nenhum adicional é inferido ou colocado no pedido pelo servidor.
-    // Cupom e combos globais ainda NÃO possuem autorização para múltiplos itens.
-    if(item.couponCode||item.comboCode)
+    // Apenas um combo explícito na linha de convite pode usar as regras V2.
+    // Cupons e combos globais continuam bloqueados.
+    if(item.couponCode || (item.comboCode && family!=='convite'))
       throw new V3CartValidationError('Descontos combinados ainda não estão disponíveis para carrinhos com vários serviços.','cart_promotion_pending');
-    return {index, family, productCode:code, variantCode:variant, addonCodes:[...new Set(addonCodes)]};
+    const comboCode=str(item.comboCode,80);
+    if(item.comboCode && !/^[a-z0-9_]{1,80}$/.test(comboCode))
+      throw new V3CartValidationError('Combo inválido.','cart_combo_invalid');
+    return {index, family, productCode:code, variantCode:variant, addonCodes:[...new Set(addonCodes)],comboCode};
   });
 }
 
@@ -48,6 +53,8 @@ export async function quoteV3Cart(db, cart={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
+  if(cart.couponCode||cart.comboCode)
+    throw new V3CartValidationError('Descontos combinados ainda não estão disponíveis para carrinhos com vários serviços.','cart_promotion_pending');
   // Não cobrar a mesma retrospectiva como produto principal e adicional de convite.
   if(items.some(item=>item.family==='retrospectiva') &&
     items.some(item=>item.addonCodes.some(code=>/^retro_(070|100|150|200|250)$/.test(code))))
@@ -67,8 +74,8 @@ export async function quoteV3Cart(db, cart={}) {
       variantCode:item.variantCode,
       addonCodes:item.addonCodes,
       couponCode:'',
-      comboCode:'',
-      paymentMethod
+      comboCode:item.comboCode,
+      paymentMethod:'pix'
     },{eventType});
     if(quote.product.code!==item.productCode)
       throw new V3CartValidationError('Produto do carrinho mudou. Atualize a seleção.','cart_product_changed');
@@ -82,6 +89,10 @@ export async function quoteV3Cart(db, cart={}) {
       productName:quote.product.name,
       variantName:quote.variant.label,
       addonCodes:quote.addons.map(x=>x.code),
+      grossCents:quote.productCents+quote.addonsCents,
+      comboCode:quote.combo?.code||'',
+      comboName:quote.combo?.name||'',
+      discountCents:quote.comboDiscountCents,
       subtotalCents:quote.subtotalCents,
       totalCents:quote.totalCents,
       pointsUnits:quote.pointsUnits,
@@ -89,6 +100,8 @@ export async function quoteV3Cart(db, cart={}) {
     });
   }
   const sum=key=>quotes.reduce((n,x)=>n+x[key],0);
+  const baseTotalCents=sum('totalCents');
+  const pricing=priceWithCardProcessingFee(baseTotalCents,paymentMethod);
   // A cotação é informativa: nunca vira ordem de pagamento com base nesse total.
   return {
     status:'preview_only',
@@ -97,9 +110,12 @@ export async function quoteV3Cart(db, cart={}) {
     paymentMethod,
     items:quotes,
     subtotalCents:sum('subtotalCents'),
-    totalCents:sum('totalCents'),
+    grossCents:sum('grossCents'),
+    baseTotalCents,
+    totalCents:pricing.totalCents,
+    cardFeeCents:pricing.cardFeeCents,
     pointsUnits:sum('pointsUnits'),
-    discountCents:0,
+    discountCents:sum('discountCents'),
     pricedOnServer:true
   };
 }

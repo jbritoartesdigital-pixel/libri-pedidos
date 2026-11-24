@@ -1,3 +1,4 @@
+import {externalV3RetroMedia} from './v3-retro-external-media.js';
 import {contextV3Briefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {randomToken,fail as httpFail} from './http.js';
@@ -22,10 +23,10 @@ async function current(db,token,family){
  return {ctx,s,preview};
 }
 export async function getV3ServiceProgress(db,s){
- const p=await db.prepare('SELECT id,version,mime_type,status,published_at,adjustment_deadline,approved_at,purged_at FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1').bind(s.id).first();
+ const p=await db.prepare('SELECT id,version,mime_type,status,published_at,adjustment_deadline,approved_at,purged_at,external_channel,external_url FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1').bind(s.id).first();
  const events=(await db.prepare('SELECT action,actor,note,preview_id,created_at FROM v3_service_production_events WHERE service_id=? ORDER BY id DESC LIMIT 50').bind(s.id).all()).results||[];
  return {version:s.production_version,revisionsUsed:s.revisions_used,revisionsIncluded:v3RevisionLimit(s),
- preview:p?{available:!p.purged_at&&(!s.originals_until||Date.now()<Date.parse(s.originals_until)),id:p.id,version:p.version,mimeType:p.mime_type,status:p.status,publishedAt:p.published_at,adjustmentDeadline:p.adjustment_deadline,approvedAt:p.approved_at}:null,events};
+ preview:p?{available:!p.purged_at&&(!s.originals_until||Date.now()<Date.parse(s.originals_until)),id:p.id,version:p.version,mimeType:p.external_channel?null:p.mime_type,externalChannel:p.external_channel,externalUrl:!p.purged_at&&(!s.originals_until||Date.now()<Date.parse(s.originals_until))?p.external_url:null,status:p.status,publishedAt:p.published_at,adjustmentDeadline:p.adjustment_deadline,approvedAt:p.approved_at}:null,events};
 }
 function event(db,s,actor,action,note='',previewId=null){
  return db.prepare('INSERT INTO v3_service_production_events(service_id,actor,action,note,preview_id) VALUES(?,?,?,?,?)').bind(s.id,actor,action,note,previewId);
@@ -79,6 +80,7 @@ export async function changeV3Production(db,token,family,input={},actor='admin')
  });
 }
 export async function publishV3ServicePreview(request,env,token,family){
+ if(family==='retrospectiva')fail('Envie a prévia pelo WhatsApp ou Google Drive.',422);
  if(!env.FILES)fail('Armazenamento indisponível.',503);
  const initial=await current(env.DB,token,family);if(!initial)return null;
  if(Number(request.headers.get('content-length')||0)>MAX+100000)fail('A prévia deve ter até 60 MB.',413);
@@ -102,9 +104,31 @@ export async function publishV3ServicePreview(request,env,token,family){
    return getV3ServiceProgress(env.DB,(await current(env.DB,token,family)).s);
  });
 }
+// An external preview has no R2 object. The marker and size are internal
+// compatibility fields for the original NOT NULL preview schema, never media.
+export async function publishV3ExternalPreview(env,token,family,input={}){
+ if(family!=='retrospectiva')fail('Canal externo exclusivo para retrospectivas.',422);
+ if(input.confirmed!==true||input.watermarkConfirmed!==true)fail('Confirme o envio da prévia com marca d’água.',422);
+ const media=externalV3RetroMedia(input);
+ const initial=await current(env.DB,token,family);if(!initial)return null;
+ return withV2PaymentLock(env.DB,initial.ctx.order.id,async()=>{
+  const {s,preview}=await current(env.DB,token,family);checkVersion(s,input);
+  if(s.production_status!=='in_production')fail('Inicie a produção antes de registrar a prévia.');
+  if(await env.DB.prepare("SELECT 1 FROM v3_service_supplements WHERE service_id=? AND status IN ('payment_pending','review')").bind(s.id).first())fail('Concilie o adicional antes de publicar a prévia.');
+  const v=(preview?.version||0)+1,key='external:'+randomToken(),published=new Date();
+  await env.DB.batch([
+   env.DB.prepare("UPDATE v3_service_previews SET status='replaced' WHERE service_id=? AND status IN ('active','adjustments')").bind(s.id),
+   env.DB.prepare("INSERT INTO v3_service_previews(service_id,version,r2_key,mime_type,size_bytes,published_at,adjustment_deadline,external_channel,external_url) VALUES(?,?,?,'application/x-libri-external',1,?,?,?,?)").bind(s.id,v,key,published.toISOString(),new Date(published.getTime()+7*86400000).toISOString(),media.channel,media.url),
+   change(env.DB,s,'waiting_customer'),
+   env.DB.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,preview_id) SELECT ?,'admin','preview_published',id FROM v3_service_previews WHERE service_id=? AND version=?").bind(s.id,s.id,v)
+  ]);
+  return getV3ServiceProgress(env.DB,(await current(env.DB,token,family)).s);
+ });
+}
 export async function streamV3ServicePreview(env,token,family,id,request){
  const c=await current(env.DB,token,family);if(!c||c.preview?.id!==id||c.preview.status==='replaced')return httpFail('Prévia não encontrada.',404);
  if(c.preview.purged_at||c.s.originals_until&&Date.now()>=Date.parse(c.s.originals_until))return httpFail('Prazo de armazenamento encerrado.',410);
+ if(c.preview.external_channel)return httpFail('Esta prévia foi disponibilizada por canal externo.',404);
  if(!env.FILES)return httpFail('Armazenamento indisponível.',503);
  const p=c.preview;
  // R2 range reads permit video playback and avoid loading the whole file.

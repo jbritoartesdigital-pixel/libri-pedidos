@@ -2,6 +2,7 @@
 // Parent, pricing, service snapshots, terms and idempotency are written together.
 // Payment creation, capacity hold and customer-area routing must be integrated
 // before calling this from any HTTP route. No Mercado Pago calls here.
+import {normalizeV3Coupon} from './v3-promotions.js';
 import {normalizeV3ExtraSelection} from './v3-extras-catalog.js';
 import {quoteV3Cart,V3CartValidationError} from './v3-cart-quote.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
@@ -47,21 +48,22 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const requestKey=required(body?.clientRequestId,120,'Tentativa');
   if(!/^[a-zA-Z0-9_-]{12,120}$/.test(requestKey))fail('Tentativa inválida.','order_request_invalid');
   if(body.termsAccepted!==true)fail('Aceite as condições do pedido.','terms_required');
-  if(body.couponCode||body.comboCode)fail('Descontos conjuntos ainda não estão configurados.','cart_promotion_pending');
+  if(body.comboCode)fail('Descontos conjuntos ainda não estão configurados.','cart_promotion_pending');
   if(!['pix','card'].includes(body.paymentMethod))fail('Escolha Pix ou cartão.','order_payment_invalid');
   if(!Number.isSafeInteger(body.expectedTotalCents)||body.expectedTotalCents<=0)fail('Confira o total do pedido.','order_total_invalid');
   const event={type:required(body.eventType,80,'Tipo de evento'),honoree:required(body.honoreeName,180,'Homenageado'),
     subtype:typeof body.eventSubtype==='string'?body.eventSubtype.trim().slice(0,120):'',date:date(body.eventDate)};
   const delivery={start:date(body.deliveryWindow?.start),end:date(body.deliveryWindow?.end)};
   const items=canonicalItems(body.items);
+  const couponCode=normalizeV3Coupon(body.couponCode);
   if(items.length===1&&!/^retrospectiva_(070|100|150|200|250)$/.test(items[0].productCode)&&!(/^atelie_(essencia|encanto|universo)$/.test(items[0].productCode)&&items[0].extras.length))fail('Use o fluxo individual vigente para este serviço.','order_multi_required');
   const accepted={version:required(body.termsVersion,40,'Versão dos termos'),
     atelie:body.atelieTermsAccepted===true?required(body.atelieTermsVersion,100,'Termos Ateliê'):'',
     retrospective:body.retrospectiveTermsAccepted===true?required(body.retrospectiveTermsVersion,100,'Termos Retrospectiva'):''};
-  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
+  const requestHash=await hash(JSON.stringify({customerId,event,delivery,items,accepted,...(couponCode?{couponCode}:{}),paymentMethod:body.paymentMethod,expectedTotalCents:body.expectedTotalCents,...(contactSnapshot?{contactSnapshot}:{})}));
   const prior=await existingOrder(db,requestKey,requestHash);
   if(prior)return prior;
-  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod},{includeSnapshots:true,requireSale:true});
+  const quote=await quoteV3Cart(db,{items,eventType:event.type,paymentMethod:body.paymentMethod,couponCode},{includeSnapshots:true,requireSale:true});
   if(quote.totalCents!==body.expectedTotalCents)fail('O total mudou. Revise o carrinho antes de confirmar.','order_total_changed');
   const terms=await db.prepare('SELECT version,body,content_hash FROM v2_terms_versions WHERE active=1 ORDER BY published_at DESC LIMIT 1').first();
   if(!terms||terms.version!==accepted.version)fail('As condições foram atualizadas. Confira novamente.','terms_changed');
@@ -89,7 +91,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const stamp=new Date().toISOString();
   const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,...(contactSnapshot?{contactSnapshot}:{}),
     payment:{method:quote.paymentMethod,depositPercent:100,depositCents:quote.totalCents,balanceCents:0},
-    comboDiscountCents:quote.discountCents,couponDiscountCents:0};
+    comboDiscountCents:quote.discountCents-quote.couponDiscountCents,couponDiscountCents:quote.couponDiscountCents};
   // No existing V2 payment endpoint can reach this internal helper. Until the
   // shared orchestrator is finished, the order is only a configuring record.
   const idSql='(SELECT id FROM v2_orders WHERE order_code=?)';
@@ -102,8 +104,8 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
       VALUES(${idSql},?,?,?,?,?)`).bind(orderCode,requestKey,requestHash,JSON.stringify(pricing),terms.version,stamp),
     db.prepare(`INSERT INTO v2_order_pricing(order_id,subtotal_cents,combo_discount_cents,coupon_discount_cents,urgency_percent,
       urgency_amount_cents,total_cents,payment_method,deposit_percent,deposit_cents,balance_cents,currency,pricing_snapshot_json,updated_at)
-      VALUES(${idSql},?,?,0,0,0,?,?,100,?,0,'BRL',?,?)`)
-      .bind(orderCode,quote.subtotalCents,quote.discountCents,quote.totalCents,quote.paymentMethod,quote.totalCents,JSON.stringify(pricing),stamp),
+      VALUES(${idSql},?,?,?,0,0,?,?,100,?,0,'BRL',?,?)`)
+      .bind(orderCode,quote.subtotalCents,quote.discountCents-quote.couponDiscountCents,quote.couponDiscountCents,quote.totalCents,quote.paymentMethod,quote.totalCents,JSON.stringify(pricing),stamp),
     db.prepare(`INSERT INTO v2_briefings(order_id,schema_version,data_json,completion_percent,updated_at)
       VALUES(${idSql},'3.0','{}',0,?)`).bind(orderCode,stamp),
     db.prepare(`INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json)

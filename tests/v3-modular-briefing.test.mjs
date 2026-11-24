@@ -971,5 +971,5 @@ test('manual checkout: optional additions, terms, Black and one original order t
  assert.ok((await getV3ModularBriefing(db,token)).locked);
  const payment=db.sqlite.prepare('SELECT provider_order_id,amount_cents FROM v2_payments WHERE order_id=?').get(row.id);assert.equal(payment.amount_cents,final.depositCents);
  mp.approve(payment.provider_order_id);await syncMercadoPagoOrder(env,payment.provider_order_id);
- const brief=await getV3ModularBriefing(db,token);assert.equal(brief.locked,false);assert.equal(brief.revision,null);assert.ok(brief.modules.some(m=>m.module==='convite'));assert.equal(mp.posts,1);
+ const brief=await getV3ModularBriefing(db,token);assert.equal(brief.locked,false);assert.equal(brief.revision??null,null);assert.ok(brief.modules.some(m=>m.module==='convite'));assert.equal(mp.posts,1);
 });

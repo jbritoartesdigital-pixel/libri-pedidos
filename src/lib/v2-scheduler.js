@@ -1,4 +1,4 @@
-import {runV3ApprovalReminders} from './v3-service-reminders.js';
+import {runV3ApprovalReminders,runV3DeliveryDeadlineReminders} from './v3-service-reminders.js';
 import {reconcileV3Supplements} from './v3-supplement-payment.js';
 import {runV3DeliveryRetention} from './v3-delivery-retention.js';
 import { nowIso } from './http.js';
@@ -77,6 +77,7 @@ export async function runV2Scheduler(env) {
   // Retention must continue for delivered orders even if new sales are paused.
   try{result.v3Retention=await runV3DeliveryRetention(env);}catch(error){console.error('V3 retention failed',error.message);result.v3Retention={failed:true};}
   try{result.v3ApprovalReminders=await runV3ApprovalReminders(env);}catch(error){console.error('V3 approval reminders failed',error.message);result.v3ApprovalReminders={failed:true};}
+  try{result.v3DeliveryDeadlines=await runV3DeliveryDeadlineReminders(env);}catch(error){console.error('V3 delivery deadlines failed',error.message);result.v3DeliveryDeadlines={failed:true};}
   result.notifications = await runV2NotificationScheduler(env);
   return result;
 }

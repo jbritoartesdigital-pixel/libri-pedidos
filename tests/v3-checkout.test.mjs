@@ -144,3 +144,51 @@ test('coupon chosen at checkout is snapshotted and redeemed only once on approva
  assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,1);
  assert.equal(DB.sqlite.prepare('SELECT discount_cents FROM v2_coupon_uses').get().discount_cents,1490);
 });
+
+import {couponUsageCount,reserveCheckoutCoupon,bindCheckoutCouponProvider,releaseCheckoutCouponAfterTerminal} from '../src/lib/shared-coupon-reservations.js';
+test('limited coupon reserves one slot across checkout attempts, releases only verified terminal payment',async t=>{
+ const {DB,body,env,call}=await setup(),mp=providerMock(t);
+ DB.sqlite.exec("INSERT INTO v2_coupons(code,discount_type,discount_value,max_uses) VALUES('ONLYONE','percent',10,1)");
+ const id=DB.sqlite.prepare("SELECT id FROM v2_coupons WHERE code='ONLYONE'").get().id;
+ const payload={...body,couponCode:'ONLYONE',expectedTotalCents:13410};
+ const first=await call(payload);assert.equal(first.status,200);
+ const result=await first.json();
+ assert.equal(await couponUsageCount(DB,id),1);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,0);
+ assert.equal((await call({...payload,clientRequestId:randomToken(),customer:{...body.customer,whatsapp:'5561888888888'}})).status,422);
+ assert.equal(mp.posts,1);
+ assert.equal((await call(payload)).status,200);
+ assert.equal(mp.posts,1);
+ DB.sqlite.exec("UPDATE v2_checkout_holds SET expires_at='2000-01-01T00:00:00Z'");
+ // A date in the past is not proof the previous charge is terminal.
+ assert.equal(await couponUsageCount(DB,id),1);
+ await releaseCheckoutCouponAfterTerminal(DB,DB.sqlite.prepare('SELECT id FROM v2_orders').get().id,result.providerOrderId);
+ assert.equal(await couponUsageCount(DB,id),1);
+ const recovered=await call({clientRequestId:body.clientRequestId},env,'recover');
+ assert.equal((await recovered.json()).state,'expired');
+ assert.equal(await couponUsageCount(DB,id),0);
+ const renewed=await call({clientRequestId:body.clientRequestId},env,'renew');
+ assert.equal(renewed.status,200);
+ assert.equal(await couponUsageCount(DB,id),1);
+ assert.equal(mp.posts,2);
+ mp.approve('ORD2');
+ await call({clientRequestId:body.clientRequestId},env,'recover');
+ assert.equal(await couponUsageCount(DB,id),1);
+ assert.equal(DB.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_coupon_uses').get().n,1);
+});
+test('shared ledger atomically rejects concurrent checkout for a per-customer limit',async t=>{
+ const {DB,body,env,call}=await setup();
+ const mp=providerMock(t);
+ DB.sqlite.exec("INSERT INTO v2_coupons(code,discount_type,discount_value,max_uses_per_customer) VALUES('ONCE','percent',10,1)");
+ const first=await call({...body,couponCode:'ONCE',expectedTotalCents:13410});
+ assert.equal(first.status,200);
+ const second=await call({...body,clientRequestId:randomToken(),couponCode:'ONCE',expectedTotalCents:13410});
+ assert.equal(second.status,422);
+ assert.equal(mp.posts,1);
+ const row=DB.sqlite.prepare('SELECT * FROM v3_coupon_reservations').get();
+ assert.equal(await couponUsageCount(DB,row.coupon_id,row.customer_id),1);
+ // Bypass quote checks to prove the database limit is enforced independently.
+ DB.sqlite.prepare("INSERT INTO v2_orders(order_code,public_token,customer_id,event_type,honoree_display_name,event_date) VALUES('LIBRI-99999','ord_direct',?,'birthday','Teste',?)").run(row.customer_id,body.eventDate);
+ const other=DB.sqlite.prepare("SELECT id FROM v2_orders WHERE order_code='LIBRI-99999'").get().id;
+ assert.throws(()=>DB.sqlite.prepare('INSERT INTO v3_coupon_reservations(order_id,coupon_id,customer_id,hold_token) VALUES(?,?,?,?)').run(other,row.coupon_id,row.customer_id,'hold_direct'),/coupon_reservation_limit/);
+});

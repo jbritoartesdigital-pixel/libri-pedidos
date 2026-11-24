@@ -12,7 +12,7 @@ export class V3CartValidationError extends Error {
 }
 const FAMILY_BY_CODE = code => {
   if (code.startsWith('atelie_')) return 'identidade_visual';
-  if (code.startsWith('retrospectiva_')) return 'retrospectiva';
+  if (code==='retrospectiva'||code.startsWith('retrospectiva_')) return 'retrospectiva';
   return 'convite';
 };
 const MONEY = Number.isSafeInteger;

@@ -1,5 +1,6 @@
 import { fail, json, readJson } from '../lib/http.js';
 import { listAteliePackages, updateAtelieDraft } from '../lib/v3-atelie-catalog.js';
+import { getAtelieV41CatalogDraft } from '../lib/v3-atelie-v41-commercial-catalog.js';
 import { setAtelieSaleStatus } from '../lib/v3-atelie-release.js';
 import { getAtelieArtProgress, updateAtelieArtProgress } from '../lib/v3-atelie-art-production.js';
 import { getAtelieAdminBriefing } from '../lib/v3-atelie-customer-briefing.js';
@@ -12,6 +13,20 @@ export async function handleAdminAtelieV3Api(request, env, url) {
   if (path==='/api/admin/v2/atelie/packages' && request.method==='GET') {
     return json({ok:true,packages:await listAteliePackages(env.DB,{admin:true}),
       salesStatus:'blocked_pending_catalog_v4_1_checkout_and_capacity'});
+  }
+  // Importação deliberada e autenticada: escopo e preço aprovados, pontos
+  // zerados até medição da capacidade. Não ativa venda nem altera pedidos.
+  const approvedMatch=path.match(/^\/api\/admin\/v2\/atelie\/packages\/(essencia|encanto|universo)\/approved-catalog$/);
+  if(approvedMatch && request.method==='POST') {
+    try {
+      const code=approvedMatch[1];
+      const draft=getAtelieV41CatalogDraft(code);
+      await updateAtelieDraft(env.DB,code,{...draft,scopeApproved:false});
+      const saved=await updateAtelieDraft(env.DB,code,{scopeApproved:true});
+      return json({ok:true,package:saved,notice:'Catálogo V4.1 aprovado salvo, sem pontos definidos e sem vendas liberadas.'});
+    } catch(e) {
+      return fail(e.message||'Não foi possível importar o catálogo aprovado.',422);
+    }
   }
   const saleMatch=path.match(/^\/api\/admin\/v2\/atelie\/packages\/(essencia|encanto|universo)\/sales$/);
   if(saleMatch && request.method==='POST'){

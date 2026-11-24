@@ -1,0 +1,46 @@
+LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
+Versão 01 | 23/11/2026 (Brasil)
+ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
+
+REPOSITÓRIO E ESTADO
+https://github.com/jbritoartesdigital-pixel/libri-pedidos
+PR #143: https://github.com/jbritoartesdigital-pixel/libri-pedidos/pull/143
+Branch: feature/libri-v3-refatoracao-integral-20261123
+Base: main. PR aberto, rascunho, não mesclado. Não publicar uma V3 parcial.
+Head no início da retomada: 498152c6b26bc7f5189fe355d85b2bed7ef61a94.
+Commits desta retomada:
+4330b695bcec1d27cf468466cea20b983c603bbe: cotação com combo explícito na linha convite e acréscimo de cartão calculado sobre o conjunto.
+852dd3e74e6b86923af7fbff147babe621c30a1d: carrinho persistente na interface, adicionar/substituir/retirar serviços, cotação no servidor, checkout individual preservado.
+b32b78d593708bd57362766a2ac29a26cd9b95cf: testes dos combos, taxa agregada e descontos rejeitados.
+CI desse commit: execução 45312771660, em andamento na última consulta.
+https://github.com/jbritoartesdigital-pixel/libri-pedidos/actions/runs/45312771660
+Não afirmar sucesso de testes sem verificar a conclusão e o SHA efetivamente testado.
+
+REGRAS E VISÃO
+- Uma única loja, banco, agenda, checkout, Admin; Convites Digitais, Libri Ateliê e Retrospectivas.
+- Compra guiada começa pelo tipo de evento; perguntas condicionais, explicações claras, escolhas explícitas, valor total em reais e não por cena.
+- Não apagar dados, pedidos, pagamentos, cupons, regras ou histórico V2. Pix público integral, cartão integral; 50% somente exceção autorizada no Admin. Não duplicar cobrança, pedido, alocação de agenda ou uso de cupom.
+- Ateliê e Retrospectivas: mínimo 15 dias corridos após briefing completo; capacidade compartilhada em pontos e entrega inteligente.
+- Ateliê: Essência, Encanto, Universo. Monograma, assinatura comemorativa e mascotinho (quando desejado) fazem parte das decisões discutidas. Mascotinho é ilustração da criança; possibilidade de substituir por elemento temático equivalente; personagens adicionais personalizados são extras, não personagem temático genérico. Quantidades e valores precisam ser reconciliados com catálogo oficial e decisões finais, sem publicar preço provisório. A descrição antiga do PR cita 159/299/549 e 3/4/5 poses, mas histórico também registra valores provisórios e 1/2/3 poses; não considerar essa descrição uma aprovação comercial suficiente.
+- Não deixar botão de aplicação manual de configuração como solução final. Aplicar por migração ou processo técnico idempotente somente com valores/escopo aprovados.
+- Manter arquivos privados; fotos de crianças não são autorização de divulgação.
+- Usuária quer app completo, bonito e funcional, sem homologação separada obrigatória, porém validar regressões/CI antes da publicação.
+- Atualizar este TXT a cada etapa relevante; usar na próxima conversa e verificar GitHub antes de qualquer edição. Não misturar projetos.
+
+IMPLEMENTADO NO PR #143
+- API POST /api/v3/cart/quote: cotação de até uma linha por família, usando catálogo real; rejeita duplicidades e cobrança de retrospectiva simultaneamente como adicional e produto principal. canCheckout=false.
+- API GET /api/v3/retrospectivas/catalog: cinco pacotes preparados com limites e mínimo 15 dias, sem venda direta.
+- Novo carrinho na interface V3: persiste identificadores (sem dados pessoais nem preço como autoridade), permite juntar convite e Ateliê quando ativo, trocar ou remover serviços. Cotação Pix pelo backend; combo existente do convite preservado quando explícito e válido. Cartão é calculado uma única vez no servidor sobre o total.
+- Apenas um produto pode continuar pelo checkout individual já existente; carrinho com vários serviços NÃO encaminha para V2 nem gera cobrança. Retrospectiva ainda não contratável diretamente.
+- Não houve alteração na main nem no banco de produção nesta retomada.
+
+PRÓXIMO PASSO EXATO
+1. Verificar conclusão CI do último SHA e corrigir falhas; testar UI (incluindo voltar, recarregar, trocar/remover itens e impedir pagamento parcial por engano).
+2. Implementar modelo persistente V3 de pedido-pai e itens principais, snapshot de cotação/termos e chave de idempotência. Reutilizar serviço Mercado Pago existente com um único total, confirmação de webhook e reserva de agenda atômica; não criar pedidos filhos cobrados separadamente. Inspecionar migrations, checkout V2, pagamentos, reservas e reconciliação antes de codificar.
+3. Completar Retrospectivas como linha real (catálogo aprovado, limites, direitos, briefing e uploads privados), integrar preço, pontos, prazo e carrinho.
+4. Briefing modular único pós-pagamento, status por serviço e replanejamento a partir de briefing completo, inclusive múltiplas crianças/personagens.
+5. Reformular Admin integral: pedidos, produção, agenda, pagamentos, filtros, extras, revisão, histórico, etapas por serviço, arquivos e entrega/aprovação.
+6. Funil de abandono e conversão, retenção/privacidade, regressão V2/V3, CI e testes de uso, deploy e verificação.
+7. Atualizar este documento com commits e resultado real dos testes antes de encerrar nova etapa.
+
+IMPORTANTE: esta versão documenta avanço parcial. Não afirmar que a compra conjunta, retrospectivas, Admin integral ou publicação estão concluídos.

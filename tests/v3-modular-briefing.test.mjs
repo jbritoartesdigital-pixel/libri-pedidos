@@ -19,7 +19,7 @@ async function setup(){
   const body={items,eventType:'birthday',eventDate,honoreeName:'Teste',paymentMethod:'pix',clientRequestId:'v3_test_request_0001',
     termsAccepted:true,termsVersion,atelieTermsAccepted:true,atelieTermsVersion,
     expectedTotalCents:preview.quote.totalCents,deliveryWindow:preview.delivery.options[0]};
-  const input={customerId,orderCode:'LIBRI-9000',publicToken:'ord_'+crypto.randomUUID(),body};
+  const input={customerId,orderCode:'LIBRI-9000',publicToken:'ord_'+crypto.randomUUID().replace(/-/g,'')+'abcd',body};
   return {db,input};
 }
 import {prepareV3Payment,reconcileV3Payment} from '../src/lib/v3-order-payment.js';
@@ -86,4 +86,29 @@ test('receipt confirmation rejects noncontracted service and excess materials; s
   assert.equal(retro.receipt.videoCount,2);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_briefing_uploads').get().n,0);
   assert.equal(db.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.orderId).status,'briefing_pending');
+});
+
+import worker from '../src/index.js';
+test('V3 customer routes isolate order tokens, require payment, and block legacy briefing writes',async t=>{
+  const {db,order}=await paid(t);
+  const env={DB:db},ctx={waitUntil(){}};
+  const api='/api/v2/customer-area/'+order.publicToken;
+  const call=(path,method='GET',body)=>worker.fetch(new Request('https://test'+path,{
+    method,headers:body?{'content-type':'application/json'}:{},...(body?{body:JSON.stringify(body)}:{})
+  }),env,ctx);
+  const get=await call(api+'/v3/briefing');
+  assert.equal(get.status,200);
+  assert.equal(get.headers.get('cache-control'),'no-store');
+  assert.equal((await get.json()).briefing.modules.length,3);
+  const saved=await call(api+'/v3/briefing/shared','PATCH',{revision:0,data:{theme_or_style:'Jardim'}});
+  assert.equal(saved.status,200);
+  const wrong=await call('/api/v2/customer-area/ord_'+ 'f'.repeat(36)+'/v3/briefing');
+  assert.equal(wrong.status,404);
+  const forbidden=await call(api+'/v3/briefing/retrospectiva','PATCH',{revision:0,data:{}});
+  assert.equal(forbidden.status,409);
+  const legacy=await call(api+'/briefing/submit','POST',{});
+  assert.equal(legacy.status,409);
+  const admin=await call('/api/admin/v2/orders/'+order.orderCode+'/v3/briefing/retro-materials','POST',{photoCount:1,videoCount:0});
+  assert.equal(admin.status,401);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_retro_material_receipts').get().n,0);
 });

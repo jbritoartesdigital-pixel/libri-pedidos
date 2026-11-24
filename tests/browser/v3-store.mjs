@@ -91,5 +91,6 @@ try{
  await checkout(p);await desktop.context.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_store_journeys').get().n,0);
  console.log('Chromium: single invite, paid extra modal, cart, date, standalone Atelie, read-only checkout, mobile overflow, no payment.');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));db.sqlite.close();}

@@ -36,7 +36,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   }
   function render(){
     const termRows=terms?[{family:'general',...terms.general},...terms.services]:[];
-    document.getElementById('v3-landing')?.setAttribute('hidden','');
+    root.ownerDocument?.getElementById('v3-landing')?.setAttribute('hidden','');
     root.innerHTML='<section class="v3-panel"><span class="v3-eyebrow">Libri · contratação</span><h1 class="v3-title">Finalizar seu pedido</h1><p class="v3-text">Um pagamento, acompanhamento individual dos serviços.</p>'+
       (!enabled?'<div class="v3-notice">Prévia do novo checkout. O pagamento ainda não está liberado.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+

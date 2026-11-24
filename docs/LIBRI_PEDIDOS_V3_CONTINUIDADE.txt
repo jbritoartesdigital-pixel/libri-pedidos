@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 52 | 24/11/2026 (Brasil)
+Versão 53 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -357,3 +357,8 @@ AUDITORIA INTEGRAL — V50/V51
 
 V52 — FONTES VISUAIS MAIS RECENTES, NÃO O PRIMEIRO PROTÓTIPO
 Recuperação posterior confirmou HTML de 20:40 com marcas oficiais e abertura cinematográfica escura; imagem PNG wordmark e emblema extraídos diretamente do arquivo da biblioteca, sem inventar marca. Aplicados no código real, paleta do protótipo posterior, estrutura do resumo e escolhas de subtipo (chá de panela/bebê/revelação, formatura e bodas; mantém enum V2 e salva eventSubtype no checkout). Reforça R$ total e mensagem pronta/toque Enviar. CI V51 45424092816 passou backend/migrations e falhou em estabilidade do clique de agenda no navegador. Ajuste do teste de espera/scroll; CI final ainda não confirmado. Não confundir recuperação parcial de conversas com leitura completa. Privacidade/cookies, exemplos e urgência permanecem bloqueadores. Sem publicação.
+
+
+V53 — PRIVACIDADE FUNCIONAL E EXEMPLOS DA GALERIA
+- eae686e: preferências reais de armazenamento e análise opcional, opt-in compartilhado loja V2/V3, recusa sem bloquear compra, revogação interrompe futuras etapas; texto de privacidade/cookies a revisar antes de publicação. Funil descreve amostra de consentimento, não atribui inatividade real. Exemplos por formato/evento usam API ativa da própria Libri, sem portfólio inventado. CI V52 45425322815 falhou porque teste unitário do checkout não tem document; ajustado acesso pelo ownerDocument, preservando comportamento real. Teste Chromium inclui recusa e assertiva de ausência de jornadas. CI final pendente.
+- Fonte visual: Libri_V3_Compra_Guiada_Sem_Briefing.html 20:40 e correções de 20:54 (recuperação parcial, sem transcript completo). Marcas originais já no repositório. Não publicar, não reabrir decisões, não declarar integralmente entregue. Pendências: validação navegador, urgência integrada, área cliente/Admin, conciliação e auditoria de detalhes remanescentes.

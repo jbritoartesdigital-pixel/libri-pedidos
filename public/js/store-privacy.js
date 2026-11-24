@@ -1,7 +1,7 @@
 // Shared, first-party store privacy preference. No marketing cookies or tracking SDKs.
 const KEY='libriPrivacyV1';
 let sessionChoice=null;
-function preference(){try{const value=localStorage.getItem(KEY);if(['allow','deny'].includes(value))return value;}catch{}return sessionChoice;}
+function preference(){if(sessionChoice!==null)return sessionChoice;try{const value=localStorage.getItem(KEY);if(['allow','deny'].includes(value))return value;}catch{}return sessionChoice;}
 export function analyticsAllowed(){return preference()==='allow';}
 function setPreference(value){
  if(!['allow','deny'].includes(value))return;

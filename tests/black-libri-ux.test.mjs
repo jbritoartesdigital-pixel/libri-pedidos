@@ -71,7 +71,7 @@ test('Atelier gift mantém quatro colunas e o sorteio original',()=>{
 test('real and demo share the new visual edition and maintain a single reveal',()=>{
  const live=readFileSync(new URL('../public/js/client-v2-black-libri.js',import.meta.url),'utf8');
  const css=readFileSync(new URL('../public/css/client-v2-black-libri.css',import.meta.url),'utf8');
- for(const source of [live,demo]){assert.match(source,/client-v2-black-libri\.css\?v=93-studio/);assert.match(source,/UMA SURPRESA DA LIBRI/);assert.match(source,/#c9a46e/);assert.match(source,/650/);}
+ for(const source of [live,demo]){assert.match(source,/client-v2-black-libri\.css\?v=95-studio/);assert.match(source,/UMA SURPRESA DA LIBRI/);assert.match(source,/#c9a46e/);assert.match(source,/650/);}
  assert.match(css,/prefers-reduced-motion:reduce/);assert.match(css,/libri-reveal/);assert.match(css,/data:image/);
  assert.match(live,/if\(active\|\|claim\)return/);
 });

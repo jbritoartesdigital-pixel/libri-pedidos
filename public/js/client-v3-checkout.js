@@ -17,7 +17,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   const blackSelection=()=>blackClaim?{blackLibriClaimId:blackClaim.id,clientRequestId:attemptKey,customer:{name:form.name,whatsapp:form.whatsapp,email:form.email}}:{};
   function readForm(){
     const couponDetails=root.querySelector('#v3-coupon-details');if(couponDetails)couponOpen=couponDetails.open;
-    for(const k of ['name','whatsapp','email','honoreeName','eventDate','paymentMethod','couponCode']){
+    for(const k of ['name','whatsapp','honoreeName','eventDate','paymentMethod','couponCode']){
       const el=root.querySelector('[name="'+k+'"]');if(el)form[k]=el.value;
     }
     const checked=root.querySelector('[name="deliveryWindow"]:checked');
@@ -44,10 +44,10 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       (!enabled&&!busy&&terms?'<div class="v3-notice">Pagamento indisponível no momento.</div>':'')+
       (error?'<div class="v3-notice" role="alert">'+esc(error)+'</div>':'')+
       '<form id="v3-unified-checkout"><fieldset '+(busy||attempt?'disabled':'')+' style="border:0;padding:0;margin:0;min-width:0">'+
-      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+field('email','E-mail (opcional)','email',false,240)+'</div>'+
-      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName','Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
-      '<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="agenda">Consultar agenda</button>'+
-      (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label style="display:block;padding:8px 0"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · sugerida':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
+      '<section class="v3-checkout-block"><h2>1. Seus dados</h2><div class="v3-checkout-fields">'+field('name','Seu nome','text',true,160)+field('whatsapp','WhatsApp','tel',true,30)+'</div>'+
+      '</section><section class="v3-checkout-block"><h2>2. Sua comemoração</h2>'+field('honoreeName',eventType==='birthday'?'Nome da criança ou aniversariante':'Nome do homenageado ou evento')+field('eventDate','Data do evento','date')+
+      (busy&&form.eventDate?'<p class="v3-agenda-loading" role="status">Consultando datas disponíveis…</p>':'')+
+      (options.length?'<div class="v3-notice" data-v3-delivery-options><strong>Escolha a previsão de entrega</strong>'+options.map((o,i)=>'<label class="v3-agenda-option"><input type="radio" name="deliveryWindow" value="'+i+'" '+(form.deliveryWindow?.start===o.start&&form.deliveryWindow?.end===o.end?'checked':'')+' required> '+esc(day(o.start)+' a '+day(o.end))+(o.recommended?' · Sugerida':o.earliest?' · Primeira disponível':'')+'</label>').join('')+'<p class="v3-mini">A previsão depende de pagamento, briefing e materiais completos. A reserva só ocorre ao contratar.</p></div>':'')+
       (urgentQuote?'<div class="v3-notice" data-v3-delivery-options><strong>Precisa de um encaixe?</strong><p>Não há janela normal para esta data. A Libri pode avaliar um encaixe com adicional de '+urgentQuote.urgencyPercent+'% ('+money(urgentQuote.urgencyAmountCents)+'). Nenhuma cobrança ou reserva será criada antes da aprovação.</p><label><input type="checkbox" name="urgencyAccepted" '+(urgentAccepted?'checked':'')+'> Solicitar análise pelo total de '+money(urgentQuote.totalCents)+'</label></div>':'')+
       '</section><section class="v3-checkout-block"><h2>3. Pagamento</h2><label for="v3c-payment">Forma de pagamento</label><select class="v3-at-input" id="v3c-payment" name="paymentMethod"><option value="pix" '+(form.paymentMethod==='pix'?'selected':'')+'>Pix integral</option><option value="card" '+(form.paymentMethod==='card'?'selected':'')+'>Cartão integral</option></select>'+'<details id="v3-coupon-details" class="v3-coupon-disclosure" '+(couponOpen||form.couponCode?'open':'')+'><summary>Tenho um cupom</summary>'+field('couponCode','Código do cupom','text',false,80)+'<button type="button" class="v3-btn v3-btn-secondary" data-v3-checkout="coupon">Aplicar</button></details>'+summary()+
       '</section><section class="v3-checkout-block"><h2>4. Condições da contratação</h2>'+termRows.map(t=>'<div class="v3-term-row"><details><summary>'+esc(labels[t.family]||'Condições gerais')+' · ler condições</summary><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(t.body)+'</p></details><label><input type="checkbox" data-v3-term value="'+esc(t.family)+'" '+(accepted.has(t.family)?'checked':'')+' required> Li e aceito estas condições.</label></div>').join('')+
@@ -67,10 +67,12 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       terms=next;enabled=t.checkoutEnabled===true;
       if(agenda||hadUrgency){
         trackStoreStage('agenda');
-        options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
+        const previousWindow=form.deliveryWindow;options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;
         if(!form.eventDate)throw Error('Informe a data do evento.');
         const result=await request('/api/v3/cart/delivery-options',{...selection,eventDate:form.eventDate});
         quote=result.quote;options=result.delivery.options||[];urgentQuote=result.urgencyQuote||null;
+        if(previousWindow&&options.some(o=>o.start===previousWindow.start&&o.end===previousWindow.end))form.deliveryWindow=previousWindow;
+        if(options.length||urgentQuote)trackStoreStage('pagamento');
         if(!options.length&&!urgentQuote)error='Não há uma janela automática para esta data. Consulte a Libri antes de contratar.';
       }
     }catch(e){error=e.message;quote=null;}finally{busy=false;render();}
@@ -131,19 +133,19 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
   function handleClick(e){
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
     if(action==='back'&&!busy&&!attempt){detach();onBack();}
-    if(action==='agenda')refresh({agenda:true});
+
     if(action==='coupon')refresh();
     if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
   }
   function handleChange(e){
     if(busy||attempt)return;
     if(e.target.name==='whatsapp'&&!blackClaim)blackChecked=false;
-    if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;root.querySelector('[data-v3-delivery-options]')?.remove();const submit=root.querySelector('#v3-unified-checkout button[type="submit"]');if(submit)submit.disabled=true;}
+    if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
     if(e.target.name==='urgencyAccepted'){readForm();render();return;}
     if(e.target.name==='deliveryWindow')trackStoreStage('pagamento');
     if(e.target.hasAttribute('data-v3-term'))trackStoreStage('revisao');
-    if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh();}
+    if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh({agenda:!!form.eventDate});}
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}
-  render();refresh();
+  render();refresh({agenda:!!form.eventDate});
 }

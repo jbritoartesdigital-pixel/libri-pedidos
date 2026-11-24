@@ -538,6 +538,7 @@ export async function validateV2DeliveryWindow(
     start,
     end,
     productionDays = 0,
+    includeEarliest = false,
   },
 ) {
   const eventDay =
@@ -813,6 +814,7 @@ export async function findV2DeliveryOptions(
   // Keep the closest viable window highlighted, but present all choices
   // in calendar order so earlier deliveries remain easy to choose.
   const recommendedCandidate = selected[0];
+  if(includeEarliest){const earliest=candidates.slice().sort((a,b)=>a.start-b.start||a.end-b.end)[0];if(earliest&&!selected.some(x=>x.start===earliest.start&&x.end===earliest.end)){if(selected.length>1)selected.pop();selected.push(earliest);}}
 
   const options =
     selected

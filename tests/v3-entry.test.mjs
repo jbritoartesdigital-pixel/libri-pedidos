@@ -40,7 +40,7 @@ test('V3 reads live catalogue and uses integrated checkout for single and combin
 test('V3 provides the free WhatsApp confirmation and avoids duplicating Moments filter', () => {
   const js = source('public/js/client-v3.js');
   assert.match(js, /R\$ 0,00/);
-  assert.match(js, /Confirmação Libri/);
+  assert.match(js, /Formulário de confirmação de presença personalizado/);
   assert.match(js, /hasGroup\('moments'\)/);
   assert.match(js, /c!=='custom_filter'/);
 });

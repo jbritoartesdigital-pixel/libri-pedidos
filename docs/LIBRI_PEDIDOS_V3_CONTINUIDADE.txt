@@ -443,3 +443,7 @@ V70 CI 45455361202 success. Retirados links públicos de versão anterior (rodap
 
 V72 — REGRESSÃO DO ATALHO DE SIMULAÇÃO
 V71 CI 45456201178 falhou apenas por asserção que exigia o atalho removido da Central. V72 inverte essa asserção para proteger a ausência do atalho, mantendo os testes de isolamento da simulação legada e proteção contra cobranças. PR #145, CI novo pendente; publicação ainda não iniciada.
+
+
+V73 (etapa 1) — REFINAMENTO DA LOJA APÓS V72 PUBLICADA
+V72 produção 45458142573 success. Cards centralizados em maiúsculas, paleta suave (rosé, champanhe, lavanda como proposta), entrada curta com reduced-motion, explicações para leigos, benefícios concretos, formulário e álbum em português, adicionais de opção única sem modal. Retirado e-mail do checkout público; nome, WhatsApp, homenageado e data obrigatórios. Consulta de agenda automática, recomendada no topo seguida da primeira disponível. Preços, capacidade, contratos preservados. Próxima parte: recuperar surpresa e funil. CI pendente.

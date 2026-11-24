@@ -105,12 +105,17 @@ async function checkout(p){
  assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
  assert.equal(await p.locator('[name="email"]').count(),0);
  await p.locator('[name="deliveryWindow"]').first().waitFor();
+ await p.locator('[name="deliveryWindow"]').first().check();assert.equal(await p.locator('[name="deliveryWindow"]:checked').count(),1);
+ await p.locator('#v3-other-delivery summary').click();await p.locator('#v3-other-delivery-date').fill(day(60));
+ await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.locator('.v3-agenda-option:has(input:checked)').waitFor();
+ assert.match(await p.locator('.v3-agenda-option:has(input:checked)').innerText(),new RegExp(day(60).split('-').reverse().join('/')));
+ await p.locator('[name="paymentMethod"]').selectOption('card');await p.locator('#v3-app[aria-busy="false"]').waitFor();assert.match(await p.locator('.v3-agenda-option:has(input:checked)').innerText(),new RegExp(day(60).split('-').reverse().join('/')));
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);
  assert.match(p.url(),/\/loja$/);
 }
 try{
  const durations=await pageFor(390,844);const dp=durations.page;
- await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('.v3-demo-cinematic_video').waitFor();await dp.locator('.v3-demo-cinematic_interactive').waitFor();await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
+ await click(dp,'event','birthday');await dp.locator('.v3-stage-creation .v3-choice').first().waitFor();assert.equal(await dp.locator('.v3-stage-creation .v3-choice-icon,.v3-stage-creation .v3-choice-check').count(),0);const cardHeights=await dp.locator('.v3-stage-creation .v3-choice').evaluateAll(els=>els.map(e=>e.getBoundingClientRect().height));assert.ok(Math.max(...cardHeights)-Math.min(...cardHeights)<=1);assert.equal(await dp.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await dp.screenshot({path:'artifacts/v3-browser/glass-services-mobile.png',fullPage:true});await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();await dp.locator('[data-action="product"][data-value="cinematic_interactive"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon').count(),0);assert.equal(await dp.locator('.v3-example-link').count(),2);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});
  const short=await dp.locator('[data-scenes="3"]').getAttribute('data-value');await dp.locator('[data-scenes="3"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),short);
  await click(dp,'guided-back');const long=await dp.locator('[data-scenes="6"]').getAttribute('data-value');await dp.locator('[data-scenes="6"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),long);

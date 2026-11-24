@@ -791,3 +791,14 @@ test('funnel counts payment only from verified order and deduplicates linked che
  funnel=await getStoreFunnel(db);assert.equal(funnel.total,1);assert.equal(funnel.outcomes.paid,1);assert.equal(funnel.outcomes.order_pending,0);
  assert.equal(funnel.stages.find(x=>x.stage==='pagamento').reached,1);
 });
+
+test('finance allocates original multi-service revenue exactly once',async t=>{
+ const {db,order}=await paid(t);
+ const {getV2FinanceDashboard,allocateFinanceCents}=await import('../src/lib/v2-finance.js');
+ assert.deepEqual(allocateFinanceCents(101,[1,1,1]),[34,34,33]);
+ const f=await getV2FinanceDashboard(db,{preset:'year'});
+ assert.equal(f.breakdown.byProduct.length,2);
+ assert.equal(f.breakdown.byProduct.reduce((n,x)=>n+x.salesCents,0),f.summary.originalSalesCents);
+ assert.equal(f.breakdown.byProduct.reduce((n,x)=>n+x.receivedGrossCents,0),f.summary.originalCashInCents);
+ assert.equal(f.summary.salesCount,1);
+});

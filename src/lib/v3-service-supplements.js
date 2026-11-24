@@ -83,7 +83,7 @@ export async function createV3Supplement(db,token,family,input={}){
  if(await db.prepare("SELECT 1 FROM v3_service_supplements WHERE service_id=? AND status IN ('offered','accepted','payment_pending','review')").bind(s.id).first())fail('Já existe uma proposta complementar aberta neste serviço.');
  const stamp=new Date().toISOString();
  await db.batch([
- db.prepare('INSERT INTO v3_service_supplements(service_id,request_key,selection_json,offer_json,base_production_version,base_snapshot_json,subtotal_cents,card_fee_cents,total_cents,points_units,payment_method,note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(s.id,input.requestKey,canonical,JSON.stringify(q),s.production_version,s.commercial_snapshot_json,q.subtotalCents,q.cardFeeCents,q.totalCents,q.pointsUnits,q.paymentMethod,input.note.trim(),stamp,stamp),
+ db.prepare('INSERT INTO v3_service_supplements(service_id,request_key,selection_json,offer_json,base_production_version,base_snapshot_json,subtotal_cents,card_fee_cents,total_cents,points_units,payment_method,note,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(s.id,input.requestKey,canonical,JSON.stringify(q),s.production_version,s.effective_snapshot_json||s.commercial_snapshot_json,q.subtotalCents,q.cardFeeCents,q.totalCents,q.pointsUnits,q.paymentMethod,input.note.trim(),stamp,stamp),
  db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_supplement_offered','Proposta complementar enviada.',?,?)").bind(ctx.order.id,JSON.stringify({family,totalCents:q.totalCents}),stamp)
  ]);
  return view(await db.prepare('SELECT a.*,s.family FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE request_key=?').bind(input.requestKey).first());
@@ -101,7 +101,7 @@ export async function decideV3Supplement(db,token,family,id,input={},actor='cust
  if(!(r.status==='offered'||actor==='admin'&&r.status==='accepted'))fail('A proposta já foi decidida.');
  if(next==='accepted'){
    if(input.confirmed!==true||input.expectedTotalCents!==r.total_cents)fail('Confirme o valor e o escopo da proposta.',422);
-   if(!eligible(s)||s.production_version!==r.base_production_version||s.commercial_snapshot_json!==r.base_snapshot_json)fail('A produção mudou. Solicite uma nova proposta.');
+   if(!eligible(s)||s.production_version!==r.base_production_version||(s.effective_snapshot_json||s.commercial_snapshot_json)!==r.base_snapshot_json)fail('A produção mudou. Solicite uma nova proposta.');
  }
  const stamp=new Date().toISOString();
  await db.batch([

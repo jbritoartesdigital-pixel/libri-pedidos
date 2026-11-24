@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import {database} from './helpers.mjs';
 import {quoteV3Cart} from '../src/lib/v3-cart-quote.js';
+import {priceWithCardProcessingFee} from '../src/lib/v2-payment-pricing.js';
 import {updateAtelieDraft} from '../src/lib/v3-atelie-catalog.js';
 import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
 
@@ -48,7 +49,7 @@ test('V3 combina convite com Ateliê ativado SEM duplicar produto, pagamento ou 
 test('V3 não permite linha duplicada, preços enviados pelo cliente ou promoções não implementadas',async()=>{
   const db=database();
   await assert.rejects(quoteV3Cart(db,{...base,items:[invitation,invitation]}),/no máximo um produto/);
-  await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,comboCode:'X'}]}),/Descontos combinados/);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,couponCode:'X'}]}),/Descontos combinados/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[]}),/1 a 3 produtos/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,addonCodes:'foo'}]}),/Adicionais inválidos/);
   await assert.rejects(quoteV3Cart(db,{...base,items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}]}));
@@ -69,4 +70,28 @@ test('API V3 é pública somente para cotação e não afeta rotas V2',async()=>
   assert.equal(unknown.status,404);
   const v2=await worker.fetch(new Request('https://test/api/v2/catalog'),env,ctx);
   assert.equal(v2.status,200);
+});
+
+test('V3 applies explicit eligible invite combo once and calculates card fee on aggregate',async()=>{
+  const db=database();
+  await enableAtelie(db);
+  db.sqlite.exec("INSERT INTO v2_combos(code,name,discount_type,discount_value,active) VALUES ('cart_test','Combo teste','fixed',100,1)");
+  const items=[{...invitation,comboCode:'cart_test'},
+    {productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}];
+  const cart=await quoteV3Cart(db,{...base,items,paymentMethod:'card'});
+  assert.equal(cart.grossCents,19400);
+  assert.equal(cart.discountCents,100);
+  assert.equal(cart.items[0].comboCode,'cart_test');
+  assert.equal(cart.items[1].discountCents,0);
+  assert.equal(cart.baseTotalCents,19300);
+  assert.equal(cart.totalCents,priceWithCardProcessingFee(19300,'card').totalCents);
+  assert.equal(cart.cardFeeCents,cart.totalCents-19300);
+  assert.equal(cart.canCheckout,false);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_payments').get().n,0);
+});
+test('V3 rejects cart-wide discounts, ineligible combos and Ateliê combos',async()=>{
+  const db=database();
+  await assert.rejects(quoteV3Cart(db,{...base,items:[invitation],couponCode:'TEST'}),/Descontos combinados/);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[{...invitation,comboCode:'missing_combo'}]}),/Combo não encontrado/);
+  await assert.rejects(quoteV3Cart(db,{...base,items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[],comboCode:'cart_test'}]}),/Descontos combinados/);
 });

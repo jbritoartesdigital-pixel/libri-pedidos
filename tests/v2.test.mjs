@@ -1689,7 +1689,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(entry, /admin-v2-order\.js\?v=20261113-existing-checkout-gift-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261124-admin-v3-83/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
     amountCents: checkout.payment.amountDueNowCents,
@@ -3205,7 +3205,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(entry.includes('admin-v2-order.js?v=20261113-existing-checkout-gift-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261124-admin-v3-83'));
   assert.ok(publicShell.includes('client-v2.js?v=20261124-atelier-gift-v3'));
 });
 

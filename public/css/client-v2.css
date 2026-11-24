@@ -2104,3 +2104,66 @@ a {
 .manual-upsell-card{animation:manual-upsell-in .32s ease-out both}
 @keyframes manual-upsell-in{from{opacity:.7;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.manual-upsell-card{animation:none}}
+
+/* V109: private customer area uses the same editorial palette as the V107
+   storefront. Scoped to V3; the historical V2 checkout remains untouched. */
+@font-face{font-family:LibriManrope;src:url('/fonts/manrope-variable.ttf') format('truetype');font-weight:200 800;font-style:normal;font-display:swap}
+body:is(.libri-manual-body,.libri-v3-area-body){--private-bg:#f7f1ed;--private-surface:#fffdfa;--private-ink:#37282b;--private-muted:#77656a;--private-line:#e5d6ce;--private-rose:#754942;--private-accent:#ad7d6c;--private-sans:LibriManrope,sans-serif;--private-serif:Georgia,"Times New Roman",serif;background:radial-gradient(ellipse at 80% 0,#ad7d6c1f,transparent 40rem),var(--private-bg);color:var(--private-ink);font-family:var(--private-sans)}
+body:is(.libri-manual-body,.libri-v3-area-body) .ambient{display:none}
+body:is(.libri-manual-body,.libri-v3-area-body) .site-header{width:min(760px,calc(100% - 32px));min-height:56px;padding:8px 0;border-bottom:1px solid var(--private-line);box-sizing:border-box}
+body:is(.libri-manual-body,.libri-v3-area-body) .brand-mark{background:var(--private-rose);box-shadow:none;border-radius:9px;width:34px;height:34px}
+body:is(.libri-manual-body,.libri-v3-area-body) .brand-copy strong{font:700 14px/1.2 var(--private-sans);color:var(--private-ink)}
+body:is(.libri-manual-body,.libri-v3-area-body) .brand-copy small{font:500 11px/1.2 var(--private-sans);color:var(--private-muted)}
+body.libri-manual-body{height:100dvh;overflow:hidden;display:flex;flex-direction:column;overscroll-behavior:none}
+#app.libri-manual-checkout{width:min(680px,100%);margin:0 auto;flex:1 1 0;min-height:0;display:flex;overflow:hidden;box-sizing:border-box}
+.libri-manual-checkout .manual-shell{width:100%;height:100%;display:flex;flex-direction:column;gap:8px;min-height:0;padding:14px 16px 8px;box-sizing:border-box;overflow:hidden}
+.libri-manual-checkout .manual-heading{flex:none}
+.libri-manual-checkout .manual-heading small{font:700 10px/1.3 var(--private-sans);letter-spacing:.12em;color:var(--private-rose)}
+.libri-manual-checkout h1{font:400 clamp(29px,7.5vw,38px)/1.1 var(--private-serif);letter-spacing:-.035em;margin:7px 0 6px;text-wrap:balance;color:var(--private-ink)}
+.libri-manual-checkout .manual-heading p{font:400 13px/1.45 var(--private-sans);color:var(--private-muted);margin:0}
+.libri-manual-checkout .manual-scroll{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:8px;padding:2px 0 5px;scrollbar-width:thin}
+.libri-manual-checkout :is(.manual-event,.manual-cart-item,.manual-extra,.manual-terms,.manual-total){background:rgba(255,253,250,.82);border:1px solid var(--private-line);border-radius:16px;box-shadow:0 6px 24px #432a3010;backdrop-filter:blur(18px);padding:12px;min-width:0}
+.libri-manual-checkout .manual-event{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;font:400 12px/1.3 var(--private-sans)}
+.libri-manual-checkout .manual-event>strong{font:400 21px/1.15 var(--private-serif);width:100%}
+.libri-manual-checkout .manual-event>span{color:var(--private-muted)}
+.libri-manual-checkout :is(.manual-cart-item,.manual-extra){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;flex:none}
+.libri-manual-checkout .manual-cart-item h3{font:400 22px/1.12 var(--private-serif);margin:0;letter-spacing:-.015em}
+.libri-manual-checkout .manual-extra h3{font:400 19px/1.12 var(--private-serif);margin:0;letter-spacing:-.015em}
+.libri-manual-checkout :is(.manual-cart-item,.manual-extra) p{font:400 12px/1.35 var(--private-sans);margin:4px 0 0;color:var(--private-muted)}
+.libri-manual-checkout .manual-cart-item>strong{font:750 17px/1.3 var(--private-sans);color:var(--private-rose);white-space:nowrap}
+.libri-manual-checkout .manual-included{grid-column:1/-1;border-top:1px solid var(--private-line);padding-top:8px;font:700 11px/1.3 var(--private-sans)}
+.libri-manual-checkout :is(.manual-small-btn,.manual-extra select,.manual-extra input[type=number]){font:700 12px/1.3 var(--private-sans);color:var(--private-rose);background:var(--private-surface);border:1px solid var(--private-line);border-radius:10px;min-height:40px;padding:7px 10px;max-width:min(37vw,180px);box-sizing:border-box}
+.libri-manual-checkout .manual-extra select{font-weight:500}
+.libri-manual-checkout .manual-extra input[type=number]{width:75px}
+.libri-manual-checkout .manual-quantity-label{display:block;font-size:10px;color:var(--private-muted)}
+.libri-manual-checkout .manual-text-btn{border:0;background:none;color:var(--private-rose);font:700 12px/1.4 var(--private-sans);min-height:36px;cursor:pointer}
+.libri-manual-checkout .manual-terms{font:600 13px/1.4 var(--private-sans);flex:none}
+.libri-manual-checkout .manual-terms summary{cursor:pointer}
+.libri-manual-checkout .manual-terms>div{font:400 12px/1.5 var(--private-sans);white-space:pre-wrap;margin-top:12px}
+.libri-manual-checkout .manual-terms-check{display:flex;align-items:flex-start;gap:9px;font:500 13px/1.4 var(--private-sans);padding:5px 2px;flex:none}
+.libri-manual-checkout input[type=checkbox]{accent-color:var(--private-rose);width:18px;height:18px;flex:none;margin:0}
+.libri-manual-checkout .manual-footer{flex:none;display:grid;gap:6px}
+.libri-manual-checkout .manual-total{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px}
+.libri-manual-checkout .manual-total strong{font:750 13px/1.3 var(--private-sans)}
+.libri-manual-checkout .manual-total small{display:block;font:400 11px/1.3 var(--private-sans);color:var(--private-muted);margin-top:3px}
+.libri-manual-checkout .manual-total b{font:750 24px/1.15 var(--private-sans);white-space:nowrap;color:var(--private-rose)}
+.libri-manual-checkout .manual-payment-split{display:flex;justify-content:space-between;gap:8px;font:500 12px/1.4 var(--private-sans);color:var(--private-muted)}
+.libri-manual-checkout .manual-primary{min-height:48px;border:0;border-radius:14px;background:var(--private-rose);color:white;font:700 14px/1.3 var(--private-sans);cursor:pointer;width:100%}
+.libri-manual-checkout button:disabled{opacity:.55;cursor:not-allowed}
+.libri-manual-checkout .manual-progress{display:flex;gap:5px;justify-content:center;flex:none}
+.libri-manual-checkout .manual-progress span{width:32px;height:3px;background:var(--private-line);border-radius:99px}
+.libri-manual-checkout .manual-progress span:is(.active,.done){background:var(--private-accent)}
+.libri-manual-checkout .manual-error{font:600 12px/1.4 var(--private-sans);color:#943b42;border:1px solid #d8b1ae;padding:9px;border-radius:10px;margin:0}
+#app.libri-v3-area{width:min(760px,calc(100% - 32px));margin:12px auto 32px;display:grid;gap:10px;font-family:var(--private-sans);color:var(--private-ink)}
+.libri-v3-area>.card,.libri-v3-area .card{background:rgba(255,253,250,.86);border:1px solid var(--private-line);border-radius:16px;padding:16px;box-shadow:0 6px 24px #432a3010;min-width:0}
+.libri-v3-area :is(h1,h2,h3,h4){font-family:var(--private-serif);font-weight:400;letter-spacing:-.025em;color:var(--private-ink);margin:0 0 8px;overflow-wrap:break-word}
+.libri-v3-area h1{font-size:clamp(28px,6.5vw,38px);line-height:1.12}
+.libri-v3-area h2{font-size:26px}.libri-v3-area h3{font-size:22px}.libri-v3-area h4{font-size:20px}
+.libri-v3-area p{font:400 13px/1.5 var(--private-sans);margin:5px 0 9px;color:var(--private-muted)}
+.libri-v3-area .btn{font:700 13px/1.3 var(--private-sans);min-height:44px;padding:10px 14px;border-radius:12px}
+.libri-v3-area .btn.primary{background:var(--private-rose);color:#fff}
+.libri-v3-area .btn.secondary{background:var(--private-surface);color:var(--private-rose);border:1px solid var(--private-line)}
+.libri-v3-area .grid.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(145px,100%),1fr));gap:7px}
+.libri-v3-area input[type=checkbox],.libri-v3-area input[type=radio]{accent-color:var(--private-rose)}
+@media(max-width:360px){.libri-manual-checkout .manual-shell{padding-inline:10px}.libri-manual-checkout .manual-extra h3{font-size:17px}.libri-manual-checkout .manual-total b{font-size:21px}}
+@media(max-height:650px){.libri-manual-checkout .manual-shell{padding-top:8px;gap:5px}.libri-manual-checkout .manual-heading h1{font-size:26px}.libri-manual-checkout .manual-extra{padding:9px}.libri-manual-checkout .manual-total{padding:8px}}

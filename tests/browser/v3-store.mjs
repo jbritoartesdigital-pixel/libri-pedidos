@@ -86,9 +86,9 @@ async function invite(p,fromCreation=false){
  await click(p,'guided-options');await p.locator('#v3-modal [data-action="guided-addon"]').first().waitFor();
  const question=await p.locator('.v3-title').innerText();
  await p.locator('#v3-modal [data-action="guided-addon"]').first().click();
- await p.waitForFunction(previous=>document.querySelector('.v3-title')?.textContent!==previous,question);
  await p.locator('#v3-modal').waitFor({state:'hidden'});
- // A second question proves the modal click advanced the flow.
+ await p.locator('.v3-optional-card.is-selected').waitFor();assert.equal(await p.locator('.v3-title').innerText(),question);
+ // Optional additions stay on one screen; no sequential upsell.
  await p.locator('[data-action="guided-back"]').waitFor();await click(p,'guided-finish');
  await p.locator('[data-action="add-invitation"]').waitFor();await click(p,'add-invitation');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();

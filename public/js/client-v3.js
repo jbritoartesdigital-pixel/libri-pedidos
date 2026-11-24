@@ -362,16 +362,15 @@ const ADDON_QUESTIONS={
 };
 function renderExtras(){
  const groups=availableGroups();
- if(!groups.length){panel('Seu convite está pronto para conferir','Nenhum adicional disponível para este formato.',priceBar(),actions(true,'Conferir meu pedido'),3);return;}
- const i=Math.max(0,Math.min(groups.length-1,Number(state.addonQuestion)||0));
- state.addonQuestion=i;
- const g=groups[i],group=g[0],selected=selectedAddons().find(a=>a.group===group);
- const variants=(catalog.addons||[]).filter(a=>a.group===group);
- const free=group==='confirmation'?'<div class="v3-notice"><strong>WhatsApp · R$ 0,00</strong><p>O convidado escolhe a resposta, abre uma mensagem pronta no WhatsApp e toca em Enviar. Você recebe as respostas na conversa, sem painel de convidados.</p></div>':'';
- const choiceList=group==='confirmation'?choice(group,'Continuar com WhatsApp','Sem custo adicional',selected?null:group,'guided-skip')+choice(group,'Quero acompanhar pelo painel da Libri',selected?'Selecionado: '+selected.name:'Veja as opções de Confirmação Libri',selected?group:null,'guided-options'):choice(group,selected?'Alterar '+g[1]:'Sim, quero ver as opções',selected?selected.name+' · '+money(selected.priceCents):'Confira os valores antes de decidir',selected?group:null,'guided-options')+choice(group,'Agora não','Sem adicionar custo',selected?null:group,'guided-skip');
- panel(ADDON_QUESTIONS[group]||g[1],g[2],
-  '<div class="v3-guided-question"><span class="v3-eyebrow">Personalize seu convite · '+(i+1)+' de '+groups.length+'</span>'+free+'<div class="v3-choices-stack">' +choiceList+'</div></div>'+priceBar(),
-  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-secondary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
+ const short={save_the_date:'Avise a data com antecedência.',reminder:'Lembre seus convidados perto da festa.',confirmation:'Respostas no formulário e painel da Libri.',moments:'Álbum digital com fotos dos convidados e filtro incluso.',filter:'Um efeito de fotos com o tema da festa.'};
+ const cards=groups.map(g=>{
+  const selected=selectedAddons().filter(a=>a.group===g[0]);
+  const price=selected.reduce((n,a)=>n+Number(a.priceCents),0);
+  return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(selected.length?selected.map(a=>a.name).join(', '):short[g[0]]||g[2])+'</small></span><span class="v3-optional-action">'+(selected.length?'+ '+money(price)+' · Alterar':'Ver opções')+' ›</span></button>';
+ }).join('');
+ const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis.</strong> O convidado toca em Enviar. Se quiser acompanhar pelo painel Libri, escolha a opção abaixo.</p>':'';
+ panel('Quer acrescentar algo ao seu convite?','Tudo aqui é opcional. Pode seguir sem adicionar nada.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
+ '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Conferir meu pedido</button></div>',3);
 }
 let guidedBusy=false;
 async function advanceGuided(group,code){
@@ -383,13 +382,11 @@ async function advanceGuided(group,code){
  if(code){const a=getAddon(code);if(!a||a.group!==group)return;}
  const before=[...state.addonCodes],dismissed=[...state.dismissed];
  state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!==group);
- if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);}
+ if(code){if(group==='moments')state.addonCodes=state.addonCodes.filter(c=>groupCode(c)!=='filter');state.addonCodes.push(code);state.dismissed=state.dismissed.filter(x=>x!=='addon:'+group);}
  else if(!state.dismissed.includes('addon:'+group))state.dismissed.push('addon:'+group);
  try{await refreshQuote();}catch(e){state.addonCodes=before;state.dismissed=dismissed;throw e;}
  state.offerFinished=false;
- const next=availableGroups().findIndex(g=>ADDON_GROUPS.findIndex(x=>x[0]===g[0])>ADDON_GROUPS.findIndex(x=>x[0]===group));
- if(next<0){state.addonQuestion=0;await go('review');}
- else{state.addonQuestion=next;render();window.scrollTo({top:0,behavior:'auto'});}
+ state.addonQuestion=0;render();root.querySelector('[data-action="guided-options"][data-value="'+group+'"]')?.focus({preventScroll:true});
  }finally{guidedBusy=false;}
 }
 function linesHtml() {
@@ -710,8 +707,8 @@ async function handleStoreClick(event) {
     if(action==='show-examples'){await showExamples(value);return;}
     if(action==='guided-options'){if(!guidedBusy)openAddonGroup(value,true);return;}
     if(action==='guided-addon'||action==='guided-skip'){modalClose();button.disabled=true;try{await advanceGuided(action==='guided-addon'?groupCode(value):value,action==='guided-addon'?value:null);}finally{button.disabled=false;}return;}
-    if(action==='guided-back'){if(guidedBusy)return;if(Number(state.addonQuestion)>0){state.addonQuestion--;render();}else await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
-    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;await go('review');return;}
+    if(action==='guided-back'){if(guidedBusy)return;state.addonQuestion=0;await go(SCENE_PRODUCTS.has(state.productCode)?'scenes':'format');return;}
+    if(action==='guided-finish'){if(guidedBusy)return;state.addonQuestion=0;for(const g of availableGroups())if(!hasGroup(g[0])&&!state.dismissed.includes('addon:'+g[0]))state.dismissed.push('addon:'+g[0]);await go('review');return;}
     if(action==='addon-group'){openAddonGroup(value);return;}
     if(action==='close-modal'){modalClose();return;}
     if(action==='remove-addon'){

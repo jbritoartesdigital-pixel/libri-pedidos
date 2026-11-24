@@ -571,3 +571,5 @@ html[data-v3-theme=dark] .v3-main .v3-total{background:linear-gradient(128deg,#3
 .v3-modal-root .v3-offer-card{animation:v94-offer-nudge .55s ease-out}
 @keyframes v94-offer-nudge{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-3px)}40%,80%{transform:translateX(3px)}}
 @media(prefers-reduced-motion:reduce){.v3-modal-root .v3-offer-card,.v3-panel--status:not(.v3-panel--error) :is(.v3-status-line,.v3-cart-transition-line),.v3-inline-loading .v3-inline-line{animation:none}}
+
+.v3-simulation-banner{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 9px;padding:7px 12px;text-align:center;font:600 11px/1.4 Manrope,sans-serif;background:#f0d7c9;color:#44262a;border-bottom:1px solid #ad7d6c}.v3-simulation-banner a{color:#44262a;text-decoration:underline}.v3-simulation-banner strong{letter-spacing:.06em}.v3-simulation-banner a:focus-visible{outline:2px solid currentColor}

@@ -120,7 +120,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
       price:q.variant.priceCents,points:q.variant.pointsUnits,config:{productCode:q.product.code,productSlug:q.product.slug,variantCode:q.variant.code,
         sceneCount:q.variant.sceneCount,...q.variant.config,serviceFamily:line.family}},
       ...q.addons.map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,config:{...a.config,serviceFamily:line.family}})),
-      ...(q.v3Extras||[]).map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.totalPointsUnits,quantity:a.quantity,config:{v3Extra:true,unitPointsUnits:a.pointsUnits,serviceFamily:line.family}}))];
+      ...(q.v3Extras||[]).map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,quantity:a.quantity,config:{v3Extra:true,unitPointsUnits:a.pointsUnits,serviceFamily:line.family}}))];
     for(const item of records){
       statements.push(db.prepare(`INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
         VALUES(${idSql},?,?,?,?,?,?,?,?)`).bind(orderCode,item.type,item.code,item.name,item.quantity||1,item.price,item.points,JSON.stringify(item.config),stamp));

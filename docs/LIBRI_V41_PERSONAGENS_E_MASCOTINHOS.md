@@ -15,10 +15,11 @@ Um sujeito ilustrado principal pode ser **mascotinho da criança** (desenhado co
 
 ## 2. Quando pedir orçamento de personagem adicional
 - Segunda criança ilustrada, irmão/irmã ilustrado(a), cão, gato, papagaio ou outro animal ilustrado com identidade própria;
-- outro personagem independente (humano, fictício ou temático) criado como arte individual;
+- nova ilustração individual sob encomenda fora da composição temática prevista e do escopo contratado;
 - poses extras acima do limite contratado precisam de adicional específico, diferente do adicional por sujeito.
 - Roupa, fantasia e caracterização temática do MESMO personagem principal não contam automaticamente como outro sujeito; complexidades fora do pacote podem exigir avaliação individual previamente explicada.
-- Exemplo: Tiana caracterizada como figura temática = uma personagem; Tiana + figura temática separada = duas personagens.
+- Exemplo da Tiana e Kurama na prancha: Kurama original já prevista como elemento da composição temática NÃO é adicional, mesmo que Tiana também apareça; Tiana caracterizada como Kurama não gera uma segunda personagem por causa da fantasia. Cobrar apenas se houver nova ilustração individual encomendada fora do escopo aprovado. A quantidade de figuras visíveis na cena não equivale à quantidade de adicionais cobrados.
+- Personagens temáticos já incluídos no conceito da festa não devem ser reclassificados como extras no briefing; evitar cobrar por reaproveitamento ou composição de elementos já planejados.
 - Não dar preço automático a figuras adicionais sem catálogo, custos e aceite. Enviar proposta no MESMO pedido, com preço, descrição e prazo, antes de criar ou cobrar.
 - Franquias e personagens de terceiros podem exigir autorização/licença; não prometer cessão de direitos de propriedade intelectual não pertencentes à Libri.
 

@@ -1,3 +1,4 @@
+import {trackStoreStage} from './store-funnel.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js';
 import { mountV3Checkout } from './client-v3-checkout.js';
 import { mountAtelieCheckout } from './client-v3-atelie-checkout.js';
@@ -375,6 +376,7 @@ function cartExtrasHtml(item,i){
 }
 function needsUnifiedCheckout(items){return items.length>1||items.some(x=>cartFamily(x.productCode)==='retrospective'||(x.extras||[]).length);}
 function renderCart() {
+  trackStoreStage('carrinho');
   const items=state.cartItems;
   const lines=items.map((item,i)=>{
     const priced=cartQuote?.items?.find(x=>x.productCode===item.productCode&&x.variantCode===item.variantCode);
@@ -413,6 +415,7 @@ async function openCart(){
   renderCart();window.scrollTo({top:0,behavior:'auto'});
 }
 function render() {
+  trackStoreStage(({event:'evento',creation:'servico',unready:'servico',atelie:'modelo','atelie-detail':'configuracao','atelie-checkout':'dados',intent:'modelo',format:'modelo',scenes:'configuracao',extras:'adicionais',review:'revisao',cart:'carrinho'})[state.step]||'evento');
   save();
   switch(state.step) {
     case 'event': renderEvent(); break;

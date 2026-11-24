@@ -5,7 +5,7 @@
 import {normalizeV3Coupon} from './v3-promotions.js';
 import {normalizeV3ExtraSelection} from './v3-extras-catalog.js';
 import {quoteV3Cart,V3CartValidationError} from './v3-cart-quote.js';
-import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
+import {validateV2DeliveryWindow,planV2AllocationForWindow,validateV3ManualDeliveryWindow} from './v2-agenda.js';
 import {assertV3UrgencyAvailable} from './v3-cart-delivery.js';
 
 const fail=(message,code)=>{throw new V3CartValidationError(message,code);};
@@ -89,14 +89,14 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     }
   }
   const capacity={eventDate:event.date,...delivery,pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
-  if(!urgencyRequest){await validateV2DeliveryWindow(db,capacity);
+  if(!urgencyRequest){if(manualDraft?.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);
   const plan=await planV2AllocationForWindow(db,capacity);
   if(!plan.fits)fail('A agenda mudou. Escolha outra janela.','order_capacity_unavailable');}
   const stamp=new Date().toISOString();
   const percent=manualDraft?.depositPercent||100;
   if(![50,100].includes(percent)||percent===50&&body.paymentMethod!=='pix')fail('Entrada inválida.','order_payment_invalid');
   const deposit=percent===50?Math.ceil(quote.totalCents/2):quote.totalCents;
-  const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,...(contactSnapshot?{contactSnapshot}:{}),
+  const pricing={...quote,schemaVersion:3,productionDays:quote.productionDays,...(manualDraft?.flexibleDelivery===true?{manualFlexibleDelivery:true}:{}),...(contactSnapshot?{contactSnapshot}:{}),
     payment:{method:quote.paymentMethod,depositPercent:percent,depositCents:deposit,balanceCents:quote.totalCents-deposit},
     comboDiscountCents:quote.discountCents-quote.couponDiscountCents,couponDiscountCents:quote.couponDiscountCents};
   // No existing V2 payment endpoint can reach this internal helper. Until the
@@ -123,7 +123,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   if(urgencyRequest){statements.push(db.prepare(`INSERT INTO v2_urgency_requests(order_id,status,urgency_percent,requested_at) VALUES(${idSql},'pending',?,?)`).bind(orderCode,quote.urgencyPercent,stamp),db.prepare(`INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(${idSql},'urgency_requested','Solicitação de encaixe V3, sem cobrança.',?,?)`).bind(orderCode,JSON.stringify(quote.urgency),stamp));}
   if(manualDraft){
     const serviceTerms=quote.items.flatMap(l=>{const t=l.commercialSnapshot.variant.config?.atelie||l.commercialSnapshot.variant.config?.retrospective;return t?[{family:l.family,version:t.termsVersion,body:t.specificTerms}]:[];});
-    statements.push(db.prepare(`INSERT INTO v3_order_revisions(order_id,request_key,kind,input_json,quote_json,terms_json,reason,created_at) VALUES(${idSql},?,'manual',?,?,?,?,?)`).bind(orderCode,requestKey,JSON.stringify({items,deliveryWindow:delivery,depositPercent:percent,manualFingerprint:manualDraft.fingerprint}),JSON.stringify(pricing),JSON.stringify({general:terms,services:serviceTerms}),manualDraft.reason,stamp));
+    statements.push(db.prepare(`INSERT INTO v3_order_revisions(order_id,request_key,kind,input_json,quote_json,terms_json,reason,created_at) VALUES(${idSql},?,'manual',?,?,?,?,?)`).bind(orderCode,requestKey,JSON.stringify({items,deliveryWindow:delivery,depositPercent:percent,manualFingerprint:manualDraft.fingerprint,...(manualDraft.flexibleDelivery===true?{flexibleDelivery:true}:{})}),JSON.stringify(pricing),JSON.stringify({general:terms,services:serviceTerms}),manualDraft.reason,stamp));
     if(percent===50)statements.push(db.prepare(`INSERT INTO v3_admin_payment_policies(order_id,deposit_percent,reason,updated_at) VALUES(${idSql},50,?,?)`).bind(orderCode,manualDraft.reason,stamp));
     statements.push(db.prepare(`UPDATE v2_orders SET next_action='Aguardando aceite da contratação' WHERE id=${idSql}`).bind(orderCode));
   }

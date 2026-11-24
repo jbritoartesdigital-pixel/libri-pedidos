@@ -384,6 +384,7 @@ async function summaryForRange(
               SUM(
                 CASE
                   WHEN pr.payment_method = 'pix'
+                    AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
                     AND o.status NOT IN (
                       'cancelled',
                       'finalized'
@@ -560,6 +561,7 @@ async function summaryForRange(
             ON pr.order_id = o.id
           WHERE
             pr.payment_method = 'pix'
+            AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
             AND o.status NOT IN (
               'cancelled',
               'finalized'
@@ -1132,6 +1134,8 @@ async function movementsForRange(
         `
           SELECT
             p.id,
+            p.status AS receipt_status,
+            EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=p.order_id) AS cancellation_record,
             p.provider,
             p.provider_order_id,
             p.provider_payment_id,
@@ -1309,7 +1313,7 @@ async function movementsForRange(
           editable:
             row.provider
             === 'direct_pix'
-            && !isRefund,
+            && !isRefund && row.receipt_status==='approved' && !row.cancellation_record,
         };
       },
     );
@@ -1390,6 +1394,7 @@ async function openReceivables(
             ON pr.order_id = o.id
           WHERE
             pr.payment_method = 'pix'
+            AND NOT EXISTS(SELECT 1 FROM v3_paid_cancellations cc WHERE cc.order_id=o.id)
             AND o.status NOT IN (
               'cancelled',
               'finalized'

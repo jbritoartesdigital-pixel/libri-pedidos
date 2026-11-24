@@ -54,12 +54,25 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
   let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null;
   function current(){return area.modules.find(m=>m.module===active);}
+  function productionHtml(s){
+    const p=s.progress;if(!p)return '';
+    const preview=p.preview,family=esc(s.family);
+    const url='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/production/'+family+'/preview/'+preview?.id;
+    const button=(action,label)=>'<button class="btn primary" type="button" data-v3-production="'+action+'" data-family="'+family+'" '+(busy?'disabled':'')+'>'+label+'</button>';
+    return '<div class="card"><h4>'+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</h4>'+
+      (preview?'<p><a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a></p>':'')+
+      (p.revisionsIncluded!==null?'<p>Rodadas de ajustes utilizadas: '+esc(p.revisionsUsed)+' de '+esc(p.revisionsIncluded)+'</p>':'')+
+      (s.productionStatus==='waiting_customer'&&preview?.status==='active'?'<p>Solicite ajustes até '+day(preview.adjustmentDeadline.slice(0,10))+'. A falta de resposta não aprova automaticamente a prévia.</p>'+button('approve','Aprovar prévia')+
+      (Date.now()<=Date.parse(preview.adjustmentDeadline)?'<label for="v3-adjust-'+family+'">O que deseja ajustar?</label><textarea id="v3-adjust-'+family+'" class="textarea" maxlength="2000" data-adjust-note="'+family+'"></textarea>'+button('request_adjustments','Solicitar ajustes'):'<p>Prazo de ajustes encerrado. Fale com a Libri se precisar de ajuda.</p>'):'')+
+      (s.productionStatus==='adjustments'?'<p>Solicitação registrada. A Libri irá conferir os ajustes e informar se estão dentro do escopo contratado.</p>':'')+
+      (s.productionStatus==='approved'?'<p>Prévia aprovada. Aguardando os arquivos finais.</p>':'')+'</div>';
+  }
   function summary(){
     return '<section class="card"><h2>Seu pedido</h2><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p><p><strong>Total contratado:</strong> '+money(area.payment.totalCents)+'</p>'+
       '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></section>'+
       area.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><p>'+esc(briefingLabels[s.briefingStatus]||'Em acompanhamento')+' · '+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
         (s.deliveryWindow?'<p><strong>Entrega prevista:</strong> '+day(s.deliveryWindow.start)+' a '+day(s.deliveryWindow.end)+'</p>':'<p>Prazo individual aguardando conferência.</p>')+(s.complementNote?'<p><strong>Complemento solicitado:</strong> '+esc(s.complementNote)+'</p>':'')+'<p>'+money(s.totalCents)+'</p>'+s.extras.map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+
-        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+'</section>').join('');
+        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+'</section>').join('');
   }
   function paymentHtml(){
     if(!area.locked)return '';
@@ -125,6 +138,19 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       area=r.briefing;notice='Briefing enviado. A Libri vai conferir a produção e os materiais.';
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
+  async function productionAction(family,action){
+    if(busy)return;
+    const s=area.services.find(x=>x.family===family),p=s?.progress;
+    if(!p?.preview)return;
+    const note=root.querySelector('[data-adjust-note="'+family+'"]')?.value.trim()||'';
+    if(action==='request_adjustments'&&note.length<5){error='Descreva os ajustes que deseja solicitar.';render();return;}
+    if(action==='approve'&&!window.confirm('Aprovar esta versão da prévia? A Libri poderá preparar os arquivos finais.'))return;
+    busy=true;error='';notice='';render();
+    try{
+      const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/production/'+family,{method:'POST',body:JSON.stringify({action,version:p.version,previewId:p.preview.id,confirmed:action==='approve',note})});
+      area=res.briefing;notice=action==='approve'?'Prévia aprovada!':'Solicitação de ajustes enviada.';
+    }catch(e){error=e.message;}finally{busy=false;render();}
+  }
   async function verify(renew=false){
     if(busy)return;busy=true;error='';render();
     try{
@@ -144,6 +170,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
     if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
+    const prod=e.target.closest('[data-v3-production]');if(prod&&!busy){await productionAction(prod.dataset.family,prod.dataset.v3Production);return;}
     const action=e.target.closest('[data-v3-action]')?.dataset.v3Action;
     if(action==='submit')submit();
     if(action==='payment')verify();

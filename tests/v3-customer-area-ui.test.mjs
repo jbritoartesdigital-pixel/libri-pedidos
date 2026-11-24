@@ -17,10 +17,16 @@ test('retrospective materials show purchased limits and safe WhatsApp link but n
   assert.doesNotMatch(html,/type="file"/);
   assert.doesNotMatch(renderV3Materials({schema:{materials:{whatsappUrl:'javascript:alert(1)'}}}),/javascript:/);
 });
-test('V3 private area shows only purchased services and shared fields',async()=>{
-  const root={innerHTML:'',setAttribute(){},addEventListener(){}};
+test('V3 private area shows only purchased services and shared fields',async(t)=>{
+  const rootClasses=new Set(), bodyClasses=new Set();
+  const previousDocument=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{body:{classList:{add:(name)=>bodyClasses.add(name)}}}});
+  t.after(()=>{if(previousDocument)Object.defineProperty(globalThis,'document',previousDocument);else delete globalThis.document;});
+  const root={innerHTML:'',classList:{add:(name)=>rootClasses.add(name)},setAttribute(){},addEventListener(){}};
   const initial={orderCode:'LIBRI-TEST',locked:false,orderStatus:'briefing_pending',event:{honoreeName:'Ana',date:'2027-02-01'},payment:{totalCents:14900},deliveryWindow:{start:'2027-01-05',end:'2027-01-07',provisional:true},services:[{family:'retrospectiva',productName:'Memórias',variantName:'Memórias',briefingStatus:'available',productionStatus:'pending',totalCents:14900,extras:[]}],modules:[{module:'shared'},{module:'retrospectiva'}]};
   await startV3CustomerArea(root,{token:'ord_test',initial,api:async()=>{throw Error('unexpected API request');}});
+  assert.ok(rootClasses.has('libri-v3-area'));
+  assert.ok(bodyClasses.has('libri-v3-area-body'));
   assert.match(root.innerHTML,/Dados da comemoração/);
   assert.match(root.innerHTML,/Retrospectiva/);
   assert.doesNotMatch(root.innerHTML,/data-v3-tab="convite"/);

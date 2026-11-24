@@ -26,14 +26,22 @@ export async function openV3AdminOrder(code,initial,onChanged){
  '<button class="btn btn-secondary" data-v3-admin="agenda" data-family="'+esc(s.family)+'">Consultar agenda</button>'+
  (a?.options?.length?'<label>Janela de entrega <select data-window="'+esc(s.family)+'">'+a.options.map((o,i)=>'<option value="'+i+'">'+esc(o.start)+' a '+esc(o.end)+'</option>').join('')+'</select></label><button class="btn btn-primary" data-v3-admin="schedule" data-family="'+esc(s.family)+'">Confirmar e liberar serviço</button>':a?'<p>Não há janela disponível. Revise a agenda antes de prometer uma data.</p>':'')+'</div>';
  }
+ function externalFields(family,kind){
+ const key=kind+'-'+family;
+ return '<label>Canal de envio <select data-external-channel="'+key+'"><option value="whatsapp">WhatsApp</option><option value="drive">Google Drive</option></select></label><label>Link do Google Drive (somente se escolher Drive)<input type="url" data-external-url="'+key+'" placeholder="https://drive.google.com/file/d/.../view"></label><small>Compartilhe o arquivo com a cliente; confira as permissões do Drive. Nenhum vídeo será armazenado no aplicativo.</small>';
+ }
+ function readExternal(family,kind){
+ const key=kind+'-'+family,channel=host.querySelector('[data-external-channel="'+key+'"]')?.value;
+ return {channel,url:channel==='drive'?host.querySelector('[data-external-url="'+key+'"]')?.value.trim():''};
+ }
  function deliveryHtml(s){
  const d=s.delivery;if(!d||!['approved','delivered'].includes(s.productionStatus))return '';
  const family=esc(s.family),base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/delivery/'+family;
  const files=d.files.map(f=>'<p>'+esc(f.filename)+' · '+esc(Math.ceil(f.sizeBytes/1024))+' KB '+(f.available?'<a href="'+esc(base+'/files/'+f.id)+'">Baixar</a>':'Expirado')+
  (!d.delivered?'<button class="btn btn-secondary" data-v3-admin="remove-final" data-family="'+family+'" data-file-id="'+esc(f.id)+'">Remover</button>':'')+'</p>').join('');
  return '<div class="notice"><h4>Entrega final</h4>'+files+(d.delivered?
- '<p>Entregue em '+esc(d.deliveredAt.slice(0,10))+' · Download até '+esc(d.downloadUntil.slice(0,10))+'</p><p>Originais disponíveis até '+esc(d.originalsUntil.slice(0,10))+'</p>'+(d.warning?'<p>'+esc(d.warning)+'</p>':'')+(d.interactiveUrl?'<a href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir convite interativo</a>':''):
- '<label>Arquivo final sem marca d’água (até 80 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf,.zip" data-final-file="'+family+'"></label><button class="btn btn-secondary" data-v3-admin="stage-final" data-family="'+family+'">Adicionar arquivo</button>'+
+ '<p>Entregue em '+esc(d.deliveredAt.slice(0,10))+' · Download até '+esc(d.downloadUntil.slice(0,10))+'</p><p>Originais disponíveis até '+esc(d.originalsUntil.slice(0,10))+'</p>'+(d.warning?'<p>'+esc(d.warning)+'</p>':'')+(d.externalChannel==='whatsapp'?'<p>Entrega registrada pelo WhatsApp.</p>':d.externalChannel==='drive'?'<p>Entrega pelo Google Drive.</p>'+(d.externalUrl?'<a href="'+esc(d.externalUrl)+'" target="_blank" rel="noopener noreferrer">Abrir arquivo no Drive</a>':'<p>Link expirado no aplicativo.</p>'):'')+(d.interactiveUrl?'<a href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir convite interativo</a>':''):
+ (s.family==='retrospectiva'?externalFields(family,'final'):'<label>Arquivo final sem marca d’água (até 80 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf,.zip" data-final-file="'+family+'"></label><button class="btn btn-secondary" data-v3-admin="stage-final" data-family="'+family+'">Adicionar arquivo</button>')+
  (d.interactiveRequired?'<label>Link publicado do convite <input type="url" data-interactive-url="'+family+'" placeholder="https://...libriconvites.com.br/..."></label><p>A validade do convite interativo não muda com o prazo de download.</p>':'')+
  '<button class="btn btn-primary" data-v3-admin="deliver" data-family="'+family+'">Confirmar entrega definitiva</button>')+'</div>';
  }
@@ -44,9 +52,9 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const button=(action,label)=>'<button class="btn btn-secondary" data-v3-admin="'+action+'" data-family="'+family+'">'+label+'</button>';
  const url='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family+'/preview/'+preview?.id;
  return '<div class="notice"><h4>Produção · '+esc(statuses[s.productionStatus]||'Aguardando programação')+'</h4><p>Rodadas utilizadas: '+esc(p.revisionsUsed)+' / '+esc(p.revisionsIncluded??'conforme contrato')+'</p>'+
- (preview&&preview.available!==false?'<p><a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a> · Ajustes até '+esc(preview.adjustmentDeadline.slice(0,10))+'</p>':'')+
+ (preview&&preview.available!==false?'<p>'+(preview.externalChannel==='whatsapp'?'Prévia '+esc(preview.version)+' enviada pelo WhatsApp':preview.externalChannel==='drive'?(preview.externalUrl?'<a href="'+esc(preview.externalUrl)+'" target="_blank" rel="noopener noreferrer">Ver prévia no Drive</a>':'Prévia no Drive'):'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a>')+' · Ajustes até '+esc(preview.adjustmentDeadline.slice(0,10))+'</p>':'')+
  (s.productionStatus==='ready'?button('start','Iniciar produção'):'')+
- (s.productionStatus==='in_production'?'<label>Prévia protegida (até 60 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf" data-preview-file="'+family+'"></label><label><input type="checkbox" data-watermark="'+family+'"> O arquivo já contém marca d’água</label>'+button('publish','Publicar prévia'):'')+
+ (s.productionStatus==='in_production'?(s.family==='retrospectiva'?externalFields(family,'preview'):'<label>Prévia protegida (até 60 MB)<input type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,application/pdf" data-preview-file="'+family+'"></label>')+'<label><input type="checkbox" data-watermark="'+family+'"> O arquivo já contém marca d’água</label>'+button('publish',s.family==='retrospectiva'?'Registrar envio da prévia':'Publicar prévia'):'')+
  (s.productionStatus==='adjustments'?'<p>Solicitação: '+esc(p.events.find(e=>e.action==='adjustments_requested')?.note||'')+'</p><label>Observação da conferência<textarea maxlength="2000" data-production-note="'+family+'"></textarea></label>'+
  (p.revisionsIncluded!==null&&p.revisionsUsed<p.revisionsIncluded?button('included_revision','Usar rodada incluída'):'')+button('libri_correction','Corrigir erro da Libri sem consumir rodada')+button('extra_quote','Registrar necessidade de orçamento')+button('return_preview','Retornar para aprovação'):'')+
  '<details><summary>Histórico de produção</summary>'+p.events.map(e=>'<p>'+esc(e.created_at)+' · '+esc(({started:'Produção iniciada',preview_published:'Prévia publicada',approved:'Aprovada pela cliente',adjustments_requested:'Ajustes solicitados',included_revision:'Rodada utilizada',libri_correction:'Correção da Libri',extra_quote:'Orçamento necessário',return_preview:'Retorno à aprovação'})[e.action]||e.action)+(e.note?' · '+esc(e.note):'')+'</p>').join('')+'</details></div>';
@@ -199,12 +207,18 @@ export async function openV3AdminOrder(code,initial,onChanged){
    }else{
      if(!confirm('Confirma que os arquivos finais estão completos e conferidos? A entrega iniciará os prazos de retenção.'))return;
      path+='/publish';payload={...payload,confirmed:true,interactiveUrl:host.querySelector('[data-interactive-url="'+family+'"]')?.value.trim()||''};
+     if(family==='retrospectiva'){const external=readExternal(family,'final');if(external.channel==='drive'&&!external.url){showToast('Informe o link do Google Drive.');return;}payload.externalChannel=external.channel;payload.externalUrl=external.url;}
    }
  }else if(['start','publish','included_revision','libri_correction','extra_quote','return_preview'].includes(action)){
    const s=brief.services.find(x=>x.family===family);if(!s?.progress)return;
    path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/production/'+family;
    payload={action,version:s.progress.version,note:host.querySelector('[data-production-note="'+family+'"]')?.value||''};
-   if(action==='publish'){
+   if(action==='publish'&&family==='retrospectiva'){
+     const external=readExternal(family,'preview');
+     if(!host.querySelector('[data-watermark="'+family+'"]')?.checked||external.channel==='drive'&&!external.url){showToast('Confira o canal, o link e a marca d’água.');return;}
+     if(!confirm('Confirma que a prévia com marca d’água foi disponibilizada à cliente pelo canal selecionado?'))return;
+     payload={...external,version:s.progress.version,confirmed:true,watermarkConfirmed:true};path+='/preview';
+   }else if(action==='publish'){
      const file=host.querySelector('[data-preview-file="'+family+'"]')?.files?.[0];
      if(!file||!host.querySelector('[data-watermark="'+family+'"]')?.checked){showToast('Selecione a prévia e confirme a marca d’água.');return;}
      const form=new FormData();form.append('file',file);form.append('version',String(s.progress.version));form.append('watermarkConfirmed','true');payload=form;path+='/preview';

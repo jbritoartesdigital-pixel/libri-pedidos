@@ -486,3 +486,5 @@ CHECKPOINT V82 — organização das telas operacionais. CI V81 45472634262 falh
 
 
 CHECKPOINT V83 — catálogo e acessos: Retrospectivas tem aba própria na Loja com os cinco pacotes reais, preço, pontos, limites, condições e estado de venda por GET autenticado. Somente leitura por enquanto: alteração/pausa comercial exige compatibilizar o gate activateApprovedV3Catalog, que atualmente reativa pacotes pausados e bloqueia valores diferentes dos aprovados. Não criar controle de edição falso. Corrigida nomenclatura desatualizada no Ateliê; imports com cache atualizado; testes de navegação e catálogo ampliados. CI pendente; ainda falta validar todas as ações e telas, especialmente financeiro e manual. Não publicar até confirmar gates.
+
+V83 follow-up: CI V82 45473356701 falhou em asserções antigas de cache e validação de abas da Loja que incluía as novas abas de Financeiro. Ajustes preservam testes de links de cenas e abertura de pedidos. Fixture Chromium ampliada com GETs administrativos reais e isolados de produção, financeiro, agenda, catálogo e manual. Nenhuma escrita administrativa liberada. Próximo: confirmar novo CI, verificar falhas reais e capturas.

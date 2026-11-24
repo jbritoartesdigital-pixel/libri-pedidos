@@ -3230,8 +3230,8 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261113-existing-checkout-gift-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261124-admin-v3-83"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261124-admin-v3-82"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {

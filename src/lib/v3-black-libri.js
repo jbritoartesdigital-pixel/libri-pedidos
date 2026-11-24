@@ -26,15 +26,18 @@ function key(body){
 export function eligibleBlackV3(body){
  return Array.isArray(body?.items)&&body.items.some(i=>typeof i.productCode==='string'&&!/^(atelie_|retrospectiva)/.test(i.productCode));
 }
-export async function blackV3Ready(env,body){
- if(env.LIBRI_V3_CHECKOUT_ENABLED!=='true'||env.LIBRI_V3_BLACK_LIBRI_ENABLED!=='true'||!eligibleBlackV3(body)||!await blackLibriOperational(env))return false;
- // Do not silently change existing prize probabilities to work around missing
- // production definitions. Every enabled gift needs a verified workload.
+export async function blackV3Readiness(env){
+ if(env.LIBRI_V3_CHECKOUT_ENABLED!=='true')return {ready:false,reason:'checkout_disabled'};
+ if(env.LIBRI_V3_BLACK_LIBRI_ENABLED!=='true')return {ready:false,reason:'flag_disabled'};
+ if(!await blackLibriOperational(env))return {ready:false,reason:'campaign_inactive'};
  const gifts=(await env.DB.prepare("SELECT code,label FROM v2_black_libri_prizes WHERE enabled=1 AND kind='gift'").all()).results||[];
- for(const gift of gifts){
-   if(!await giftDefinition(env.DB,gift.code,gift.label))return false;
- }
- return true;
+ const missing=[];
+ for(const gift of gifts){if(!await giftDefinition(env.DB,gift.code,gift.label))missing.push(gift.code);}
+ if(missing.length)return {ready:false,reason:'missing_gift_workload',missing};
+ return {ready:true,reason:'ready'};
+}
+export async function blackV3Ready(env,body){
+ return eligibleBlackV3(body)&&(await blackV3Readiness(env)).ready;
 }
 const view=c=>c?{id:c.id,code:c.prize_code,label:c.label,kind:c.kind,value:c.value,description:c.description,status:c.status,expiresAt:c.expires_at}:null;
 export async function getV3BlackClaim(db,body){

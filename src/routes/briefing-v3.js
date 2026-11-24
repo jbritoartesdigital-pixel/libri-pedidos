@@ -1,4 +1,5 @@
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
+import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
 import {json,fail,readJson} from '../lib/http.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
 const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
@@ -41,15 +42,23 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
-  const match=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/briefing(?:\/(retro-materials))?$/);
+  const match=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/briefing(?:\/(retro-materials)|(\/(?:convite|identidade_visual|retrospectiva)\/review)|(\/(?:convite|identidade_visual)\/uploads\/\d+\/content))?$/);
   if(!match)return null;
   try{
     const row=await env.DB.prepare(`SELECT o.id,o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?`).bind(match[1]).first();
-    if(!row)return fail('Pedido combinado não encontrado.',404);
-    if(request.method==='GET'&&!match[2])return json({ok:true,briefing:await getV3ModularBriefing(env.DB,row.public_token)});
+    if(!row)return fail('Pedido V3 não encontrado.',404);
+    if(request.method==='GET'&&!match[2]&&!match[3]&&!match[4])return json({ok:true,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
     if(request.method==='POST'&&match[2]){
       const receipt=await recordV3RetroMaterialReceipt(env.DB,row.id,await boundedJson(request));
-      return json({ok:true,receipt,briefing:await getV3ModularBriefing(env.DB,row.public_token)});
+      return json({ok:true,receipt,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+    }
+    if(request.method==='POST'&&match[3]){
+      const family=match[3].split('/')[1];
+      return json({ok:true,briefing:await reviewV3ServiceBriefing(env.DB,row.public_token,family,await boundedJson(request))});
+    }
+    if(request.method==='GET'&&match[4]){
+      const [,family,,id]=match[4].split('/');
+      return await getV3ServiceImage(env,row.public_token,family,Number(id));
     }
     return fail('Método não permitido.',405);
   }catch(e){return errorResponse(e);}

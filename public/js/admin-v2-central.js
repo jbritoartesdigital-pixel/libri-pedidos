@@ -261,7 +261,7 @@ export async function renderCentral(openOrder) {
     </section>
 
     <div class="section-grid" id="central-schedule-grid">
-      <section class="card">
+      <section class="card" id="central-parties-today">
         <div class="section-title">
           <h2>Festas de hoje</h2>
           <span class="status">${c.partiesToday.length}</span>
@@ -509,7 +509,7 @@ export async function renderCentral(openOrder) {
   move('#central-new','orders');move('#central-payments','orders');move('#central-ongoing','orders');
   move('#central-schedule-grid','agenda');move('#central-workload','agenda');move('#central-capacity','agenda');
   move('.monthly-goal-card','numbers');move('#central-finance-kpis','numbers');move('.central-analytics','numbers');move('.central-shortcut-fold','numbers');
-  move('.attention-center','today');
+  move('.attention-center','today');move('#central-parties-today','today');
   function showSection(id){if(!panels[id])return;for(const [k,el] of Object.entries(panels))el.hidden=k!==id;for(const b of nav.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.centralSection===id));}
   nav.addEventListener('click',e=>{const b=e.target.closest('[data-central-section]');if(b)showSection(b.dataset.centralSection);});
   for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});

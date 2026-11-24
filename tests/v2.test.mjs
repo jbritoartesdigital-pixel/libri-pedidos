@@ -2771,7 +2771,7 @@ test('Production UI exposes completed filter and clears contradictory active-onl
   assert.match(production, /status === 'finalized'/);
   assert.match(production, /\['new', 'in_production'\]\.includes\(period\.value\)/);
   assert.match(production, /Os que já foram arquivados continuam na seção Arquivados/);
-  assert.match(boot, /admin-v2-production\.js\?v=20261124-admin-v3-68/);
+  assert.match(boot, /admin-v2-production\.js\?v=20261124-admin-v3-46/);
 });
 
 test('Central includes tomorrow in chronological upcoming parties without rewriting orders', async t => {
@@ -2826,7 +2826,7 @@ test('Central merges overlapping delivery/production lists and folds repeated wi
   assert.match(central, /\.filter\(item => !workloadCodes\.has\(item\.code\)\)/);
   assert.match(central, /Outras entregas \(\$\{otherDeliveries\.length\}\)/);
   assert.match(central, /<details class="card order-optional" id="central-new" open>\s*<summary>Novos pedidos/);
-  assert.match(central, /<details class="card order-optional" style="margin-top:14px">\s*<summary>Ver capacidade diária/);
+  assert.match(central, /<details class="card order-optional" id="central-capacity" style="margin-top:14px">\s*<summary>Ver capacidade diária/);
   assert.ok(central.includes('Festas de hoje') && central.includes('Próximas festas'),
     'today keeps its congratulations card and future dates share one upcoming card');
   assert.doesNotMatch(central, /<h2>Festas de amanhã<\/h2>/);

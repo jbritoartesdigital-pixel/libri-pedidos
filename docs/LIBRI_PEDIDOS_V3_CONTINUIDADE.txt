@@ -411,3 +411,7 @@ Aprovação expressa da usuária (24/11): pontos de brindes exclusivos Black def
 
 
 PUBLICAÇÃO V64 — primeira execução 45446135238 interrompida ANTES de qualquer acesso Cloudflare/D1, após testes unitários aprovados. Fixture Android V2 devolvia 501 para a sondagem /v3/briefing, embora o Worker real devolva 404 para pedidos legados, causando timeout de #orderSummary. Corrigida a simulação para reproduzir o contrato real, preservados testes e gates de release; nova publicação integral disparada pelo commit de correção. Merge #143 561bfdd. Nenhuma mudança em produção nesta primeira execução. Confirmar resultado do novo deploy e smoke, sem inferir sucesso.
+
+
+V65 — CORREÇÃO DA EXPERIÊNCIA (NOVA BRANCH)
+PR #143 já mesclado; base main 2e18b3d39a655483125da3d392eb8b960863afcf. Não alterar banco, catálogo, preços ou checkout. Feedback de 24/11: experiência longa, admin poluído, card animado não corresponde, duração deveria ser curto 3, longo 6, ou escolher. Esta primeira correção restaura três escolhas, seletor sob demanda com variantes reais, avanço direto para evento/serviço/intenção/formato/duração, textos menores e miniatura animada ilustrativa de cenas (não afirma reproduzir card original). Teste Chromium ajustado e novos cenários 3/6/personalizado. Não é conclusão do redesign: faltam ofertas contextuais, cartão animado exato, admin e revisão visual integral. CI ainda não confirmado. Sem publicação desta correção.

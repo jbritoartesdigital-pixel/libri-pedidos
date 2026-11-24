@@ -80,8 +80,8 @@ async function pageFor(width,height){
 }
 const click=(p,a,v)=>p.locator('[data-action="'+a+'"]'+(v?'[data-value="'+v+'"]':'')).first().click();
 async function invite(p,fromCreation=false){
- if(!fromCreation){await click(p,'event','birthday');await click(p,'next');}await click(p,'creation','invitation');await click(p,'next');await click(p,'intent','simple');await click(p,'next');
- await click(p,'product','interactive_essential');await p.locator('[data-action="product"][data-value="interactive_essential"][aria-pressed="true"]').waitFor();await click(p,'next');
+ if(!fromCreation){await click(p,'event','birthday');}await click(p,'creation','invitation');await click(p,'intent','simple');
+ await click(p,'product','interactive_essential');
  await p.locator('[data-action="guided-options"]').first().waitFor();
  await click(p,'guided-options');await p.locator('#v3-modal [data-action="guided-addon"]').first().waitFor();
  const question=await p.locator('.v3-title').innerText();
@@ -108,6 +108,12 @@ async function checkout(p){
  assert.match(p.url(),/\/loja$/);
 }
 try{
+ const durations=await pageFor(390,844);const dp=durations.page;
+ await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await click(dp,'product','cinematic_video');
+ await dp.locator('[data-scenes="3"]').waitFor();assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});
+ const short=await dp.locator('[data-scenes="3"]').getAttribute('data-value');await dp.locator('[data-scenes="3"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),short);
+ await click(dp,'guided-back');const long=await dp.locator('[data-scenes="6"]').getAttribute('data-value');await dp.locator('[data-scenes="6"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),long);
+ await click(dp,'guided-back');await click(dp,'custom-scenes');const choices=dp.locator('#v3-scene-select option');assert.ok(await choices.count()>3);const custom=await choices.nth(1).getAttribute('value');await dp.locator('#v3-scene-select').selectOption(custom);await click(dp,'custom-scenes-confirm');await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),custom);await durations.context.close();
  const {context,page}=await pageFor(390,844);
  await invite(page);
  await page.screenshot({path:'artifacts/v3-browser/cart-mobile.png',fullPage:true});
@@ -117,14 +123,14 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await context.close();
  const desktop=await pageFor(1280,900);const p=desktop.page;
- await click(p,'event','birthday');await click(p,'next');await click(p,'creation','identity');await click(p,'next');
+ await click(p,'event','birthday');await click(p,'creation','identity');
  await click(p,'atelie-package','essencia');await click(p,'atelie-detail');await click(p,'atelie-buy');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
  await click(p,'cart-extra-start');await p.locator('#v3-modal [data-action="guided-cart-expand"]').waitFor();await click(p,'guided-cart-expand');await click(p,'guided-cart-plus','atelie_pose');await click(p,'guided-cart-next');
  await click(p,'guided-cart-skip');await click(p,'guided-cart-skip');p.once('dialog',d=>d.accept());await click(p,'guided-cart-skip');await p.locator('[data-action="cart-unified-checkout"]').waitFor();await p.getByText('1 × Pose extra',{exact:true}).waitFor();
  await p.screenshot({path:'artifacts/v3-browser/atelie-cart-desktop.png',fullPage:true});
  // Add a retrospective and invitation to the existing Ateliê cart.
- await click(p,'cart-more');await click(p,'creation','retrospective');await click(p,'next');
+ await click(p,'cart-more');await click(p,'creation','retrospective');
  await p.locator('[data-action="retro-buy"]').first().waitFor();await p.locator('[data-action="retro-buy"]').first().click();
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();assert.equal(await p.locator('.v3-cart-item').count(),2);
  await click(p,'cart-more');await invite(p,true);assert.equal(await p.locator('.v3-cart-item').count(),3);
@@ -134,7 +140,7 @@ try{
  await p.screenshot({path:'artifacts/v3-browser/three-services-checkout-desktop.png',fullPage:true});
  await desktop.context.close();
  const standalone=await pageFor(390,844);const rp=standalone.page;
- await click(rp,'event','birthday');await click(rp,'next');await click(rp,'creation','retrospective');await click(rp,'next');
+ await click(rp,'event','birthday');await click(rp,'creation','retrospective');
  await rp.locator('[data-action="retro-buy"]').first().click();await rp.locator('[data-action="cart-unified-checkout"]').waitFor();
  assert.equal(await rp.locator('.v3-cart-item').count(),1);await checkout(rp);
  await rp.screenshot({path:'artifacts/v3-browser/retro-checkout-mobile.png',fullPage:true});await standalone.context.close();

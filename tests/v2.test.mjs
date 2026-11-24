@@ -3345,7 +3345,14 @@ test('top products show real receipts and configurable costs without altering pr
   assert.ok(product);
   assert.equal(product.costConfigured, true);
   assert.equal(product.totalCostCents, 1200);
-  assert.equal(product.estimatedMarginCents, product.receivedNetCents - 1200);
+  assert.equal(product.netComplete,false);
+  assert.equal(product.receivedNetCents,null);
+  assert.equal(product.estimatedMarginCents,null);
+  mp.setFinanceDetails(checkout.payment.providerOrderId,{feeCents:500});
+  await syncMercadoPagoOrder(e,checkout.payment.providerOrderId);
+  const reconciled=(await getV2FinanceDashboard(DB,{preset:'this_month'})).breakdown.byProduct.find(x=>x.productCode==='interactive_essential');
+  assert.equal(reconciled.netComplete,true);
+  assert.equal(reconciled.estimatedMarginCents,reconciled.receivedNetCents-1200);
   assert.equal(product.averageTicketCents, product.salesCents);
   assert.ok((await getV2StoreConfig(e)).settings.growth.monthlyRevenueGoalCents === 200000);
 });

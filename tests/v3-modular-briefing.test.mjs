@@ -844,3 +844,30 @@ test('released future capacity preserves other services and permits dependent sc
  assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,100);
  assert.equal(identity().released_points_units,300);
 });
+
+test('central shows new modular work and distinguishes pending payment from reviewed exceptions',async t=>{
+ const {db,order}=await paid(t);
+ const {getV2Central}=await import('../src/lib/v2-admin-core.js');
+ let c=await getV2Central(db);
+ assert.equal(c.modularQueues.newOrders.filter(x=>x.code===order.orderCode).length,1);
+ assert.equal(c.newOrders.some(x=>x.code===order.orderCode),false);
+ assert.equal(c.modularQueues.pendingPayments.length,0);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=?").run(order.orderId);
+ c=await getV2Central(db);assert.equal(c.modularQueues.newOrders.length,0);
+ db.sqlite.prepare("INSERT INTO v3_paid_cancellations(order_id,status,reason,created_at) VALUES(?,'review','Teste',datetime('now'))").run(order.orderId);
+ c=await getV2Central(db);assert.equal(c.modularQueues.exceptions[0].status,'cancellation_review');
+ assert.equal(c.modularQueues.pendingPayments.length,0);
+});
+test('V3 notification preferences are visible and bell suppression does not delete history',async()=>{
+ const db=database();
+ const {getV2NotificationPreferences,updateV2NotificationPreference,createV2AdminNotification,listV2AdminNotifications}=await import('../src/lib/v2-notifications.js');
+ const code='V3_APPROVAL_REMINDER';
+ assert.ok((await getV2NotificationPreferences(db)).some(p=>p.eventCode===code&&p.bellEnabled&&p.pushEnabled));
+ await updateV2NotificationPreference(db,code,{bellEnabled:false,pushEnabled:true});
+ const result=await createV2AdminNotification({DB:db},{eventCode:code,title:'Prévia',body:'Teste',dedupeKey:'v3-pref-test'});
+ assert.equal(result.created,true);
+ assert.equal((await listV2AdminNotifications(db)).unreadCount,0);
+ assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE event_code=?").get(code).n,1);
+ await updateV2NotificationPreference(db,code,{bellEnabled:true,pushEnabled:false});
+ assert.equal((await listV2AdminNotifications(db)).unreadCount,1);
+});

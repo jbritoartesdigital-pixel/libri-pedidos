@@ -1,7 +1,7 @@
 import {trackStoreStage,setJourneyName} from './store-funnel.js';
 import {mountStorePrivacy} from './store-privacy.js';
 import {pendingV3CheckoutKey,mountV3PaymentRecovery} from './client-v3-payment-recovery.js?v=79';
-import { mountV3Checkout } from './client-v3-checkout.js?v=99';
+import { mountV3Checkout } from './client-v3-checkout.js?v=102';
 // Loja integrada: catálogo, cotações e checkout validados no servidor.
 const root = document.getElementById('v3-app');
 const modalRoot = document.getElementById('v3-modal');
@@ -263,7 +263,7 @@ function renderEventSubtype(){
 }
 function renderCreation() {
   panel('O que gostaria de criar?',
-    'Escolha por onde começar. Você pode combinar serviços no mesmo pedido.',
+    'Escolha um serviço. Você pode combinar mais de um.',
     '<div class="v3-choices-stack">' +
     choice('invitation','Convite digital','Convites em vídeo ou interativos, feitos no tema da sua festa.',state.creation,'creation') +
     choice('identity','Identidade visual',
@@ -360,7 +360,7 @@ function renderScenes() {
  const options=product.variants.filter(v=>Number.isInteger(Number(v.sceneCount))&&Number(v.sceneCount)>0).sort((a,b)=>a.sceneCount-b.sceneCount);
  const preset=(n,title,description)=>{const v=options.find(x=>Number(x.sceneCount)===n);return v?'<button type="button" class="v3-choice v3-duration-card" data-action="variant" data-value="'+clean(v.code)+'" data-scenes="'+n+'"><span class="v3-choice-copy"><strong>'+title+'</strong><small>'+n+' cenas · '+description+'</small><span class="v3-price">Total '+money(v.priceCents)+'</span></span></button>':'';};
  const extra=customScenes?'<div class="v3-custom-scenes"><label for="v3-scene-select">Quantidade de cenas</label><select class="v3-at-input" id="v3-scene-select"><option value="">Escolha a quantidade</option>'+options.map(v=>'<option value="'+clean(v.code)+'" '+(state.variantCode===v.code?'selected':'')+'>'+Number(v.sceneCount)+(Number(v.sceneCount)===1?' cena':' cenas')+' · Total '+money(v.priceCents)+'</option>').join('')+'</select><button type="button" class="v3-btn v3-btn-primary" data-action="custom-scenes-confirm">Escolher esta duração</button></div>':'';
- panel('Qual tamanho de história você quer?','A abertura já está incluída. Os valores são do convite completo.',
+ panel('Qual a duração do convite?','A abertura está incluída. Os valores são totais.',
  '<div class="v3-choices-stack">'+preset(3,'Curtinho','Uma história curta e direta')+preset(6,'Completo','Mais momentos, cenas e detalhes')+'<button type="button" class="v3-choice v3-duration-card" data-action="custom-scenes" aria-expanded="'+customScenes+'"><span class="v3-choice-copy"><strong>Personalizado</strong><small>Escolha quantas cenas seu convite terá.</small></span></button>'+extra+'</div>',actions(true,'',null),3);
 }
 function availableGroups() {
@@ -384,7 +384,7 @@ function renderExtras(){
   return '<button type="button" class="v3-choice v3-optional-card '+(selected.length?'is-selected':'')+'" data-action="guided-options" data-value="'+clean(g[0])+'" aria-pressed="'+Boolean(selected.length)+'"><span class="v3-choice-copy"><strong>'+clean(g[1])+'</strong><small>'+clean(short[g[0]]||g[2])+'</small>'+(selected.length&&!direct?'<small>'+clean(selected.map(a=>a.name).join(', '))+'</small>':'')+'</span><span class="v3-optional-action"><b>'+clean(text)+'</b><span class="v97-extra-cta">'+actionText+'</span></span></button>';
  }).join('');
  const free=INTERACTIVE.has(state.productCode)?'<p class="v3-free-confirmation"><strong>Confirmação pelo WhatsApp: grátis (R$ 0,00).</strong> O convidado toca em Enviar. Para acompanhar as respostas num painel, adicione o formulário personalizado.</p>':'';
- panel('Quer acrescentar algo ao seu convite?','Escolha apenas o que faz sentido para sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
+ panel('Personalize seu convite','Adicionais opcionais para a sua festa.',free+'<div class="v3-optional-list">'+cards+'</div>'+priceBar(),
  '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="guided-back">Voltar</button><button type="button" class="v3-btn v3-btn-primary" data-action="guided-finish">Adicionar ao carrinho</button></div>',3);
 }
 let guidedBusy=false,pendingAdd=false;
@@ -512,12 +512,12 @@ function renderCart() {
     '</div><div class="v3-total"><strong>Total estimado no Pix</strong><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
   panel('Seu carrinho',clean(labelForEvent())+' · confira seu total.',
-    '<div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div>',
+    '<div class="v3-cart-scroll"><div class="v97-cart-layout"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div><aside class="v97-cart-summary"><span class="v97-stage-label">Resumo da contratação</span>'+totals+notice+cartDateHtml()+'</aside></div></div>',
     '<div class="v3-action-row"><button class="v3-btn v3-btn-secondary" type="button" data-action="cart-more">'+(items.length?'Escolher outro serviço':'Escolher serviço')+'</button>'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
 function showCartAdded(){
- modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Deseja escolher outro serviço ou conferir seu pedido?</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Escolher outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+ modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Seu serviço está na sacola. Você pode adicionar outros.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Escolher outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 async function openCart(){
   const revision=cartRevision+1;

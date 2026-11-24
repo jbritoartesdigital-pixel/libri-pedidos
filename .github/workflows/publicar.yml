@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V99: PR #153, CI 45495138047 aprovado; identidade Studio, fluxo simplificado e ofertas manuais. Gates mantidos.
 # Release V96: PR #152, CI 45488796377 aprovado; simulador isolado, refinamento da loja, Black e agenda. Gates mantidos.
 # Release V93 (24/11/2026): linguagem visual do Admin aplicada à loja e Black Libri; preservar gates, campanha e regras comerciais.
 # Release V92 (24/11/2026): transição leve do carrinho e seletor estável no teste legado; gates completos mantidos.

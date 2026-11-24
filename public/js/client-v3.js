@@ -274,16 +274,24 @@ function renderCreation() {
     actions(true,'',null),1);
 }
 function renderUnready() {
-  const cards=retrosPackages.map(item=>
-    '<article class="v3-package-card"><div class="v3-package-heading"><strong>'+clean(item.name)+'</strong>'+(item.previewAvailable?'<b>'+money(item.previewPriceCents)+'</b>':'')+'</div>'+
-    '<div class="v3-package-facts"><span><b>'+Number(item.maxPhotos)+'</b> fotos</span><span><b>'+Number(item.maxVideos)+'</b> vídeos</span></div><p class="v3-mini">Até '+Number(item.maxVideoSeconds)+' s por vídeo · '+Number(item.maxTotalVideoSeconds)/60+' min no conjunto.</p>'+
-    '<details><summary>Ver o que está incluído</summary><ul>'+item.included.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul></details>'+
-    (item.previewAvailable?'<button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'<p class="v3-mini">Pacote indisponível.</p>')+'</article>'
-  ).join('');
-  panel('Retrospectivas','Uma homenagem em vídeo, com suas fotos, músicas e lembranças.',
-    '<p class="v3-mini">Materiais pelo WhatsApp após contratar. Mínimo de 15 dias após pagamento, briefing e materiais completos.</p>'+
-    '<div class="v3-package-grid">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div>',
-    '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="back">Voltar</button></div>',1);
+  const cards=retrosPackages.map(item=>{
+    const price=item.previewAvailable?money(item.previewPriceCents):'Indisponível';
+    const label=Number(item.maxPhotos)+' fotos';
+    const facts='Até '+Number(item.maxVideos)+' vídeos'+(item.captionsIncluded?' · Legendas':'');
+    return '<article class="v101-retro-row"><button type="button" class="v101-retro-select" data-action="retro-details" data-value="'+clean(item.code)+'" aria-label="'+clean(item.name+' · '+facts+' · '+price)+'"><span class="v101-retro-copy"><strong>'+clean(label)+'</strong><small>'+clean(facts)+'</small></span><span class="v101-retro-price">'+clean(price)+'</span></button>'+
+      (item.previewAvailable?'<button type="button" class="v101-retro-add" data-action="retro-buy" data-value="'+clean(item.code)+'" aria-label="'+clean('Adicionar '+label+' ao carrinho')+'">Adicionar</button>':'')+'</article>';
+  }).join('');
+  panel('Escolha sua retrospectiva','Selecione a quantidade de fotos. Toque no pacote para ver todos os detalhes.',
+    '<div class="v101-retro-list">'+(cards||'<p>Os pacotes ainda estão em configuração.</p>')+'</div><p class="v101-retro-note">Envio dos materiais pelo WhatsApp. Prazo mínimo de 15 dias após pagamento, briefing e materiais completos.</p>',
+    actions(true,'',null),1);
+}
+function showRetroDetails(code){
+  const item=retrosPackages.find(p=>p.code===code);if(!item)return;
+  modalClose();
+  modalRoot.innerHTML='<div class="v3-modal-card v101-retro-detail" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v101-retro-title"><span class="v3-eyebrow">Retrospectiva</span><h2 id="v101-retro-title">'+clean(item.name)+'</h2><p>Até '+Number(item.maxPhotos)+' fotos e '+Number(item.maxVideos)+' vídeos. Cada vídeo de até '+Number(item.maxVideoSeconds)+' segundos, com até '+Number(item.maxTotalVideoSeconds)/60+' minutos no conjunto.</p><ul class="v3-included">'+item.included.map(x=>'<li>'+clean(x)+'</li>').join('')+'</ul>'+
+   (item.previewAvailable?'<div class="v101-retro-detail-price"><span>Valor do pacote</span><strong>'+money(item.previewPriceCents)+'</strong></div>':'<p>Pacote indisponível.</p>')+
+   '<div class="v3-action-row"><button type="button" class="v3-btn v3-btn-text" data-action="close-modal">Voltar</button>'+(item.previewAvailable?'<button type="button" class="v3-btn v3-btn-primary" data-action="retro-buy" data-value="'+clean(item.code)+'">Adicionar ao carrinho</button>':'')+'</div></div>';
+  modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 function renderAtelie() {
   const cards = ateliePackages.map(item =>
@@ -696,6 +704,7 @@ async function handleStoreClick(event) {
     if(action==='creation'){if(!['invitation','identity','retrospective'].includes(value))return;if(state.creation!==value)state.ateliePackage='';state.creation=value;await go(value==='invitation'?'intent':value==='identity'?'atelie':'unready');return;}
     if(action==='atelie-package'){if(!ateliePackages.some(p=>p.code===value))return;state.ateliePackage=value;await go('atelie-detail');return;}
     if(action==='atelie-detail'){if(state.ateliePackage)await go('atelie-detail');return;}
+    if(action==='retro-details'){showRetroDetails(value);return;}
     if(action==='retro-buy'){
       const item=retrosPackages.find(p=>p.code===value);
       if(!item?.previewAvailable)return message('Pacote indisponível.');

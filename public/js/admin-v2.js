@@ -44,7 +44,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261123-admin-v3-1';
+} from './admin-v2-config.js?v=20261124-recovery-73';
 
 import {
   refreshBell,

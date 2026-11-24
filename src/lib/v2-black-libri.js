@@ -321,3 +321,13 @@ export async function recoverBlackReservationAdmin(env,body){
  await env.DB.prepare("INSERT INTO v2_black_libri_audit(action_code,target_code,before_json,after_json,created_at) VALUES('reservation_recovery',?,?,?,?)").bind(current.id,JSON.stringify({status:'reserved'}),JSON.stringify({status:'reserved',prizeCode:current.prize_code,identityVerified:true}),stamp).run();
  return {ok:true,recoveryCode:token,label:current.label,expiresAt:current.expires_at};
 }
+
+// A completed/expired participation never draws again, but must not block a new sale.
+export async function v3BlackParticipation(env,customer,requestId){
+ const key=await customerKey(env,customer);
+ const claim=await updateClaimStatus(env.DB,await env.DB.prepare(currentClaimSql).bind(key).first());
+ if(!claim)return {claim:null,closed:false};
+ if(claim.client_request_id===requestId)return {claim,closed:false};
+ if(['expired','redeemed'].includes(claim.status))return {claim:null,closed:true};
+ throw Object.assign(new Error('Já existe uma surpresa registrada para esta participação. Fale com a Libri para recuperar.'),{status:409,code:'black_libri_private_claim'});
+}

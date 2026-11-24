@@ -126,7 +126,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
       // Retain the retry key until confirmed payment; do not create a new
       // attempt merely because the browser returns from the payment provider.
       if(result.alreadyPaid)clearV3CheckoutKey(attemptKey);
-      trackStoreStage('redirecionamento');finishStoreJourney();location.assign(url.href);
+      if(!result.alreadyPaid&&!result.urgencyRequested)trackStoreStage('redirecionamento');finishStoreJourney();location.assign(url.href);
     }catch(e){error=e.message+' Retome a mesma tentativa para evitar duplicidade.';busy=false;render();}
   }
   root.addEventListener('click',handleClick);
@@ -137,7 +137,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     const action=e.target.closest('[data-v3-checkout]')?.dataset.v3Checkout;if(!action)return;
     if(action==='back'&&!busy&&!attempt){detach();onBack();}
 
-    if(action==='coupon')refresh();
+    if(action==='coupon')refresh({agenda:!!form.eventDate});
     if(action==='black-recover')recoverBlack();
     if(action==='retry'&&attemptKey){detach();mountV3PaymentRecovery(root,{request,credential:{clientRequestId:attemptKey},onMissing:()=>{root.addEventListener('click',handleClick);root.addEventListener('change',handleChange);root.addEventListener('submit',handleSubmit);pay();}});}
   }
@@ -147,7 +147,7 @@ export function mountV3Checkout(root,{items,eventType,eventSubtype='',eventDate=
     if(e.target.name==='eventDate'){readForm();options=[];form.deliveryWindow=null;urgentQuote=null;urgentAccepted=false;if(form.eventDate&&e.target.validity.valid)refresh({agenda:true});else render();return;}
     if(e.target.name==='urgencyAccepted'){readForm();render();return;}
     if(e.target.name==='deliveryWindow')trackStoreStage('pagamento');
-    if(e.target.hasAttribute('data-v3-term'))trackStoreStage('revisao');
+    if(e.target.hasAttribute('data-v3-term')){readForm();trackStoreStage(terms&&accepted.has('general')&&terms.services.every(t=>accepted.has(t.family))?'pagamento':'revisao');}
     if(e.target.name==='paymentMethod'||e.target.name==='couponCode'){trackStoreStage('pagamento');refresh({agenda:!!form.eventDate});}
   }
   function handleSubmit(e){if(e.target.id==='v3-unified-checkout'){e.preventDefault();pay();}}

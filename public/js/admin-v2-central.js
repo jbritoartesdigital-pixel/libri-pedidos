@@ -48,7 +48,7 @@ function attentionRow(item) {
         <small>
           ${esc(item.customerName)}
           • ${esc(item.attentionReason || item.nextAction || '')}
-        </small>
+        </small><span class="attention-cta">Abrir e resolver <span aria-hidden="true">→</span></span>
       </button>
 
       ${
@@ -129,10 +129,10 @@ function upcomingPartyRow(item) {
                 `;
 }
 
-export async function renderCentral(openOrder) {
+export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   setViewMeta(
-    'Central',
-    'Visão do dia',
+    ordersOnly?'Pedidos':'Central',
+    ordersOnly?'Acompanhe suas contratações':'Visão do dia',
   );
 
   const data =
@@ -179,18 +179,19 @@ export async function renderCentral(openOrder) {
   const active=modular.flatMap(o=>o.services.filter(s=>!['delivered','cancelled'].includes(s.productionStatus)).map(s=>({...s,code:o.code,honoreeName:o.honoreeName})));
   const soon=active.filter(s=>s.deliveryWindow&&s.deliveryWindow.end<=new Date(new Date(c.today+'T12:00:00Z').getTime()+6*86400000).toISOString().slice(0,10)).sort((a,b)=>a.deliveryWindow.end.localeCompare(b.deliveryWindow.end));
   viewRoot.innerHTML = `
+    ${!ordersOnly?`<section class="admin-hero" aria-label="Resumo executivo"><div class="admin-hero-copy"><span class="hero-kicker">LIBRI / ESTÚDIO EM MOVIMENTO</span><h2>Seu dia, em ordem.</h2><p>${esc(dateBr(c.today))} · Visão da operação</p></div><div class="hero-revenue"><small>Recebido neste mês</small><strong>${money(c.finance.cashCents)}</strong><span>Vendas: ${money(c.finance.salesCents)} · A receber: ${money(c.finance.receivableCents)}</span></div><img class="hero-emblem" src="/images/libri-emblem.png" alt=""></section>`:''}
     <div class="central-quick-summary" aria-label="Resumo operacional">
       <a href="#central-new" class="central-quick-item"><small>Novos pedidos</small><strong>${newOrders.length}</strong><span>Conferir e programar</span></a>
       <a href="#central-payments" class="central-quick-item"><small>Pagamentos pendentes</small><strong>${pendingPayments.length}</strong><span>Entradas e saldos</span></a>
-      <a href="#central-ongoing" class="central-quick-item"><small>Em andamento</small><strong>${modular.length}</strong><span>Pedidos integrados</span></a>
+      <a href="#central-ongoing" class="central-quick-item"><small>Pedidos integrados em andamento</small><strong>${modular.length}</strong><span>Serviços ativos</span></a>
       <a href="#central-deadlines" class="central-quick-item"><small>Prazos próximos</small><strong>${soon.length}</strong><span>Até 7 dias</span></a>
     </div>
-    ${exceptions.length?`<section class="card" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
+    ${exceptions.length?`<section class="card admin-critical-alerts" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
     <section class="card attention-center">
       <div class="section-title">
         <div>
           <span class="eyebrow">Prioridade</span>
-          <h2 style="margin:4px 0 0">Hoje precisa da sua atenção</h2>
+          <h2 style="margin:4px 0 0">Minha missão de hoje</h2><small class="muted">Hoje precisa da sua atenção</small>
         </div>
         <span class="status">${attentionItems.length}</span>
       </div>
@@ -199,13 +200,13 @@ export async function renderCentral(openOrder) {
         ${
           attentionItems.length
             ? attentionItems.map(attentionRow).join('')
-            : empty('Nada pedindo sua atenção agora ✨')
+            : empty('Nenhuma pendência prioritária agora.')
         }
       </div>
     </section>
 
-    <section class="card" id="advancedOrderSearch">
-      <div class="section-title"><h2>Encontrar um pedido</h2></div>
+    <section class="card admin-order-search" id="advancedOrderSearch">
+      <div class="section-title"><h2>${ordersOnly?'Todos os pedidos':'Encontrar um pedido'}</h2></div>
       <div class="field">
         <label for="advOrderQuery">Nome, WhatsApp ou código</label>
         <input class="input" id="advOrderQuery" type="search"
@@ -241,7 +242,7 @@ export async function renderCentral(openOrder) {
           <small class="muted">Ex.: Interativo cinematográfico + 2 cenas.</small>
         </div>
         <div class="field"><label for="advOrderArchived">Arquivados</label><select class="select" id="advOrderArchived">
-          <option value="all">Todos</option><option value="no">Somente ativos</option>
+          <option value="all" ${ordersOnly?'':'selected'}>Todos</option><option value="no" ${ordersOnly?'selected':''}>Somente não arquivados</option>
           <option value="yes">Somente arquivados</option></select></div>
         <div class="field"><label for="advOrderDate">Data exata da festa</label>
           <input class="input" id="advOrderDate" type="date">
@@ -348,7 +349,7 @@ export async function renderCentral(openOrder) {
     <section class="card" id="central-ongoing">
       <div class="section-title"><div><span class="eyebrow">Operação integrada</span><h2>Pedidos em andamento</h2></div><span class="status">${modular.length} pedidos</span></div>
       <div class="kpi-grid central-service-counts">${Object.entries(serviceNames).map(([family,label])=>`<article class="kpi"><span>${label}</span><strong>${active.filter(s=>s.family===family).length}</strong><small>Serviços em andamento</small></article>`).join('')}</div>
-      <details class="order-optional"><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido em andamento.')}</div>
+      <details class="order-optional" ${ordersOnly?'open':''}><summary>Ver pedidos em andamento (${modular.length})</summary><div class="list">${modular.slice(0,12).map(o=>`<button class="row-card" type="button" data-open-order="${esc(o.code)}" style="text-align:left"><strong>${esc(o.code)} • ${esc(o.honoreeName)}</strong><small>${esc(o.customerName)} • ${o.aggregate.deliveredServices}/${o.aggregate.totalServices} entregues</small>${o.services.map(s=>`<small>${esc(s.productName)} · ${esc(s.statusLabel)}${s.deliveryWindow?' · '+dateBr(s.deliveryWindow.end):''}</small>`).join('')}</button>`).join('')||empty('Nenhum pedido em andamento.')}</div>
       ${modular.length>12?'<p><a class="btn btn-secondary" href="/admin-v2?view=production">Ver todos na produção</a></p>':''}</details>
       ${soon.length?`<details class="order-optional" id="central-deadlines" style="margin-top:12px" open><summary>Prazos individuais até os próximos 7 dias, incluindo atrasados (${soon.length})</summary><div class="list">${soon.slice(0,20).map(s=>`<button type="button" class="row-card" data-open-order="${esc(s.code)}"><strong>${esc(s.code)} · ${esc(s.productName)}</strong><small>${dateBr(s.deliveryWindow.end)} · ${esc(s.statusLabel)}</small></button>`).join('')}</div></details>`:'<div id="central-deadlines" class="muted">Nenhum prazo nos próximos 7 dias.</div>'}
     </section>
@@ -386,7 +387,7 @@ export async function renderCentral(openOrder) {
 
     <section class="card monthly-goal-card" aria-label="Meta mensal de faturamento">
       <div class="section-title">
-        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)} 🎯</h2></div>
+        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)}</h2></div>
         <span class="status">${Number(c.finance.monthlyGoal?.progressPercent || 0)}%</span>
       </div>
       <div class="monthly-goal-amounts">
@@ -423,11 +424,13 @@ export async function renderCentral(openOrder) {
       </article>
     </div>
 
-    <details class="card order-optional central-analytics"><summary>Onde as compras param · ${Number(c.funnel?.total||0)} jornadas nos últimos 30 dias</summary>
+    <section class="card central-analytics"><div class="section-title"><div><span class="eyebrow">Loja / últimos 30 dias</span><h2>Onde as compras param</h2></div><span class="status">${Number(c.funnel?.total||0)} jornadas</span></div>
+      <div class="funnel-head"><div><small>Pagamento confirmado</small><strong>${c.funnel?.total?((Number(c.funnel.outcomes?.paid||0)/c.funnel.total)*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'Sem dados'}</strong></div><div><small>Possível abandono</small><strong>${c.funnel?.total?((Number(c.funnel.outcomes?.inactive||0)/c.funnel.total)*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%':'Sem dados'}</strong></div></div>
       <p class="muted">Jornadas por aba que permitiram análise, não pessoas únicas nem todas as compras. Sem nova etapa registrada por 24h e sem pedido criado = possível abandono. Etapas podem ser puladas ou revisitadas.</p>
       <div class="kpi-grid">${[['paid','Com pagamento confirmado'],['order_pending','Pedido sem pagamento'],['inactive','Possível abandono'],['active','Em andamento'],['cancelled','Cancelado sem pagamento']].map(([k,label])=>`<article class="kpi"><span>${label}</span><strong>${Number(c.funnel?.outcomes?.[k]||0)}</strong></article>`).join('')}</div>
-      <details class="order-optional"><summary>Ver etapas alcançadas e última etapa registrada</summary><div class="list">${(c.funnel?.stages||[]).map(s=>`<div class="row-card"><strong>${esc(({evento:'Evento',servico:'Serviço',modelo:'Modelo',configuracao:'Configuração',carrinho:'Carrinho',dados:'Dados',agenda:'Agenda',adicionais:'Adicionais',revisao:'Revisão',pagamento:'Tela de pagamento',tentativa:'Tentativa de pagamento',surpresa:'Surpresa Black Libri',redirecionamento:'Link de pagamento recebido'})[s.stage]||s.stage)}</strong><small>${Number(s.reached)} chegaram · ${Number(s.last||0)} última etapa · ${Number(s.active||0)} em andamento · ${Number(s.inactive)} possíveis abandonos</small><div class="metric-bar"><span style="width:${Math.min(100,Math.round(100*s.reached/Math.max(1,c.funnel.total)))}%"></span></div></div>`).join('')}</div></details>
-    </details>
+      <div class="funnel-stages" aria-label="Alcance por etapa">${(c.funnel?.stages||[]).map(s=>`<div class="row-card"><strong>${esc(({evento:'Evento',servico:'Serviço',modelo:'Modelo',configuracao:'Configuração',carrinho:'Carrinho',dados:'Dados',agenda:'Agenda',adicionais:'Adicionais',revisao:'Revisão',pagamento:'Tela de pagamento',tentativa:'Tentativa de pagamento',surpresa:'Surpresa Black Libri',redirecionamento:'Link de pagamento recebido'})[s.stage]||s.stage)}</strong><small>${Number(s.reached)} chegaram · ${Number(s.last||0)} última etapa · ${Number(s.active||0)} em andamento · ${Number(s.inactive)} possíveis abandonos</small><div class="metric-bar"><span style="width:${Math.min(100,Math.round(100*s.reached/Math.max(1,c.funnel.total)))}%"></span></div></div>`).join('')||empty('Ainda não há etapas registradas.')}</div>
+      <section class="named-journeys"><div class="section-title"><div><h2>Jornadas identificadas</h2><small>Somente quem permitiu a análise com nome. Até 100 jornadas recentes.</small></div></div><div class="list">${(c.funnel?.named||[]).map(x=>`<article class="row-card named-journey"><strong>${esc(x.name)}</strong><small>Última etapa: ${esc(({evento:'Evento',servico:'Serviço',modelo:'Modelo',configuracao:'Configuração',carrinho:'Carrinho',dados:'Dados',agenda:'Agenda',adicionais:'Adicionais',revisao:'Revisão',pagamento:'Pagamento',tentativa:'Tentativa de pagamento',surpresa:'Surpresa Black Libri',redirecionamento:'Link de pagamento'})[x.stage]||x.stage)}</small><span class="status">${esc(({paid:'Pagamento confirmado',order_pending:'Pedido sem pagamento',inactive:'Possível abandono',active:'Em andamento',cancelled:'Cancelado'})[x.outcome]||x.outcome)}</span><small>Último registro: ${esc(dateBr(x.lastSeenAt))}</small></article>`).join('')||empty('Nenhuma jornada identificada no período.')}</div></section>
+    </section>
 <details class="card order-optional central-shortcut-fold"><summary>Atalhos da loja e dos serviços</summary>    <nav class="admin-v3-shortcuts" aria-label="Atalhos de operação">
       <a class="admin-v3-shortcut" href="/admin-v2?view=production&service=convites">
         <strong>Convites Digitais</strong>
@@ -505,10 +508,19 @@ export async function renderCentral(openOrder) {
   move('#central-schedule-grid','agenda');move('#central-workload','agenda');move('#central-capacity','agenda');
   move('.monthly-goal-card','numbers');move('#central-finance-kpis','numbers');move('.central-analytics','numbers');move('.central-shortcut-fold','numbers');
   move('.attention-center','today');move('#central-parties-today','today');
+  if(!ordersOnly){const timeline=[...active.filter(s=>s.deliveryWindow?.end).map(s=>({code:s.code,title:s.honoreeName+' · '+s.productName,day:s.deliveryWindow.end,label:'Entrega',key:s.code+'|'+s.family})),...(c.workload?.orders||[]).map(s=>({code:s.code,title:s.honoreeName,day:s.end,label:'Entrega',key:s.code+'|legacy'})),...(c.partiesUpcoming||[]).map(s=>({code:s.code,title:s.honoreeName,day:s.eventDate,label:'Festa',key:s.code+'|party'}))].filter(x=>x.day).sort((a,b)=>a.day.localeCompare(b.day));const unique=[...new Map(timeline.map(x=>[x.key,x])).values()].slice(0,8);const el=document.createElement('section');el.className='card admin-day-timeline';el.innerHTML='<div class="section-title"><h2>Próximos compromissos</h2></div><div class="timeline-list">'+(unique.map(x=>'<button type="button" class="timeline-item" data-open-order="'+esc(x.code)+'"><span>'+dateBr(x.day)+'</span><div><strong>'+esc(x.title)+'</strong><small>'+esc(x.label)+'</small></div></button>').join('')||empty('Nenhum compromisso previsto.'))+'</div>';panels.today.append(el);}
   function showSection(id){if(!panels[id])return;for(const [k,el] of Object.entries(panels))el.hidden=k!==id;for(const b of nav.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.centralSection===id));}
   nav.addEventListener('click',e=>{const b=e.target.closest('[data-central-section]');if(b)showSection(b.dataset.centralSection);});
   for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});
-  showSection('today');
+  if(ordersOnly){
+    viewRoot.querySelector('.central-quick-summary')?.remove();
+    panels.orders.classList.add('admin-orders-page');
+    for(const id of ['today','agenda','numbers'])panels[id].remove();
+    nav.remove();
+    const exception=viewRoot.querySelector(':scope > .card:not(#advancedOrderSearch)');
+    if(exception)panels.orders.prepend(exception);
+    showSection('orders');
+  }else showSection('today');
 
   const searchButton = document.getElementById('runAdvancedOrderSearch');
   const quickSearch = document.getElementById('advOrderQuery');
@@ -516,13 +528,16 @@ export async function renderCentral(openOrder) {
   const extraFilters = document.getElementById('advancedOrderFilters');
   let searchDebounce;
   let searchRevision = 0;
+  let searchPage = 0;
+  const pageSize=30;
+  const defaultArchived=ordersOnly?'no':'all';
   const filterIds = [
     'advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderDate', 'advOrderFrom', 'advOrderTo',
   ];
   const isFilterActive = () => filterIds.some(id =>
     Boolean(document.getElementById(id)?.value))
-    || document.getElementById('advOrderArchived')?.value !== 'all';
+    || document.getElementById('advOrderArchived')?.value !== defaultArchived;
 
   const refreshFilterIndicator = () => {
     const active = isFilterActive();
@@ -531,14 +546,16 @@ export async function renderCentral(openOrder) {
       ? 'Mostrar mais filtros • ativos' : 'Mostrar mais filtros';
   };
 
-  async function runOrderSearch() {
+  async function runOrderSearch(page=0) {
+    if(!searchResults.isConnected)return;
+    searchPage=Number.isInteger(page)?Math.max(0,page):0;
     const revision = ++searchRevision;
     clearTimeout(searchDebounce);
     const hasQuery = Boolean(quickSearch?.value.trim());
     const hasExtraFilters = isFilterActive();
     refreshFilterIndicator();
     // Do not fetch (or show) every historical order when the name search is blank.
-    if (!hasQuery && !hasExtraFilters) {
+    if (!ordersOnly && !hasQuery && !hasExtraFilters) {
       searchResults.innerHTML = '';
       return;
     }
@@ -549,13 +566,15 @@ export async function renderCentral(openOrder) {
     ];
     const params = new URLSearchParams(values.map(([key,id]) =>
       [key, document.getElementById(id).value.trim()]));
+    if(ordersOnly){params.set('limit',String(pageSize+1));params.set('offset',String(searchPage*pageSize));}
     const results = searchResults;
     searchButton.disabled = true;
     results.innerHTML = '<small>Buscando...</small>';
     try {
       const data = await api('/api/admin/v2/orders/search?' + params);
-      if (revision !== searchRevision) return;
-      results.innerHTML = (data.orders || []).map(item => `
+      if (revision !== searchRevision || !results.isConnected) return;
+      const all=data.orders||[],rows=ordersOnly?all.slice(0,pageSize):all;
+      results.innerHTML = rows.map(item => `
         <button class="row-card" type="button" data-searched-order="${esc(item.code)}"
           style="text-align:left;cursor:pointer">
           <strong>${esc(item.code)} • ${esc(item.honoreeName)}</strong>
@@ -563,9 +582,14 @@ export async function renderCentral(openOrder) {
             • ${item.modular?'Pedido integrado':esc(SEARCH_MODEL_LABELS[item.productCode] || item.productCode || 'Modelo não informado')}
             ${Number(item.sceneCount) > 0
               ? `• ${Number(item.sceneCount)} ${Number(item.sceneCount) === 1 ? 'cena' : 'cenas'}` : ''}
-            • ${esc(item.status)} ${item.archived ? '• Arquivado' : ''}</small>
+            • ${esc(item.statusLabel||({awaiting_payment:'Aguardando pagamento',briefing_pending:'Dados pendentes',ready_for_production:'Pronto para produção',in_production:'Em produção',waiting_customer:'Aguardando cliente',adjustments:'Ajustes',approved:'Aprovado',balance_pending:'Saldo pendente',ready_for_delivery:'Pronto para entrega',finalized:'Finalizado',capacity_review:'Agenda em revisão',cancellation_review:'Cancelamento em revisão',cancelled:'Cancelado'})[item.status]||item.status)} ${item.archived ? '• Arquivado' : ''}</small>
           ${item.modular?(item.services||[]).map(s=>`<small><strong>${esc(s.productName||SEARCH_MODEL_LABELS[s.productCode]||s.productCode)}</strong> · ${esc(s.statusLabel||'Aguardando')} ${s.sceneCount>0?'· '+Number(s.sceneCount)+' cenas':''}</small>`).join(''):''}
         </button>`).join('') || empty('Nenhum pedido encontrado.');
+      if(ordersOnly){
+        const controls=document.createElement('div');controls.className='order-pagination';
+        controls.innerHTML='<small>'+(rows.length?'Mostrando '+(searchPage*pageSize+1)+'–'+(searchPage*pageSize+rows.length):'Nenhum resultado')+'</small><div><button type="button" class="btn btn-ghost" data-order-page="prev" '+(!searchPage?'disabled':'')+'>Anterior</button> <button type="button" class="btn btn-secondary" data-order-page="next" '+(all.length<=pageSize?'disabled':'')+'>Próxima</button></div>';
+        results.append(controls);controls.querySelector('[data-order-page="prev"]').onclick=()=>runOrderSearch(searchPage-1);controls.querySelector('[data-order-page="next"]').onclick=()=>runOrderSearch(searchPage+1);
+      }
       results.querySelectorAll('[data-searched-order]').forEach(button =>
         button.addEventListener('click', () => openOrder(button.dataset.searchedOrder)));
     } catch (error) {
@@ -584,7 +608,7 @@ export async function renderCentral(openOrder) {
     // a newer search or reappears after clearing the field.
     ++searchRevision;
     if (!quickSearch.value.trim()) {
-      if (isFilterActive()) {
+      if (ordersOnly || isFilterActive()) {
         searchDebounce = setTimeout(runOrderSearch, 350);
       } else {
         searchResults.innerHTML = '';
@@ -614,13 +638,15 @@ export async function renderCentral(openOrder) {
   ['advOrderStatus', 'advOrderFamily', 'advOrderProduct', 'advOrderScenes',
     'advOrderArchived', 'advOrderDate', 'advOrderFrom', 'advOrderTo']
     .forEach(id => document.getElementById(id)
-      ?.addEventListener('change', refreshFilterIndicator));
+      ?.addEventListener('change', ()=>{refreshFilterIndicator();if(ordersOnly){++searchRevision;clearTimeout(searchDebounce);searchDebounce=setTimeout(runOrderSearch,200);}}));
   document.getElementById('clearAdvancedOrderSearch')?.addEventListener('click', () => {
     for (const id of filterIds) document.getElementById(id).value = '';
-    document.getElementById('advOrderArchived').value = 'all';
+    document.getElementById('advOrderArchived').value = defaultArchived;
     refreshFilterIndicator();
     void runOrderSearch();
   });
+
+  if(ordersOnly)void runOrderSearch();
 
   viewRoot
     .querySelectorAll('[data-open-order]')

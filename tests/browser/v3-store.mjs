@@ -1,3 +1,4 @@
+import {handleStoreFunnel,getStoreFunnel} from '../../src/lib/v3-store-funnel.js';
 // Real Chromium, actual public JS/CSS and server catalogue, isolated SQLite.
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
@@ -8,6 +9,9 @@ import {pathToFileURL} from 'node:url';
 import {database,day,providerMock} from '../helpers.mjs';
 import {handleCustomerBriefingV3Api,handleAdminBriefingV3Api} from '../../src/routes/briefing-v3.js';
 import {handleAdminV2CoreApi} from '../../src/routes/admin-v2-core.js';
+import {handleAdminStoreConfigV2Api} from '../../src/routes/admin-store-config-v2.js';
+import {handleAdminFinanceV2Api} from '../../src/routes/admin-finance-v2.js';
+import {handleAdminAgendaV2Api} from '../../src/routes/admin-agenda-v2.js';
 import {handleAdminNotificationsV2Api} from '../../src/routes/admin-notifications-v2.js';
 import {getV3CheckoutTerms,startV3Checkout} from '../../src/lib/v3-checkout.js';
 import {previewV3CartDelivery} from '../../src/lib/v3-cart-delivery.js';
@@ -45,11 +49,16 @@ const server=createServer(async(req,res)=>{
    const chunks=[];for await(const c of req)chunks.push(c);
    const request=new Request(url,{method:req.method,headers:req.headers,...(req.method==='GET'?{}:{body:Buffer.concat(chunks)})});
    let result;
-   if(allowed.has(url.pathname))result=await (url.pathname.startsWith('/api/v3/')?handlePublicCartV3Api(request,env,url):handlePublicV2Api(request,env,url));
+   if(url.pathname==='/api/v3/store/stage')result=await handleStoreFunnel(request,readEnv,url);
+   else if(allowed.has(url.pathname))result=await (url.pathname.startsWith('/api/v3/')?handlePublicCartV3Api(request,env,url):handlePublicV2Api(request,env,url));
    else if(url.pathname==='/api/admin/v2/auth/status'&&req.method==='GET')result=Response.json({ok:true,auth:{authenticated:true}});
    // Test-only authentication fixture, never in the Worker. Restrict local
    // administrative access to read-only central, notifications and fixture.
-   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/central')result=await handleAdminV2CoreApi(request,readEnv,url);
+   else if(req.method==='GET'&&['/api/admin/v2/central','/api/admin/v2/production','/api/admin/v2/orders/search'].includes(url.pathname))result=await handleAdminV2CoreApi(request,readEnv,url);
+   else if(req.method==='GET'&&['/api/admin/v2/store-config','/api/admin/v2/store-config/v3/retrospectives'].includes(url.pathname))result=await handleAdminStoreConfigV2Api(request,readEnv,url);
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/finance')result=await handleAdminFinanceV2Api(request,readEnv,url);
+   else if(req.method==='GET'&&['/api/admin/v2/agenda','/api/admin/v2/agenda/cascade'].includes(url.pathname))result=await handleAdminAgendaV2Api(request,readEnv,url);
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/v3/manual/catalog')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/notifications')result=await handleAdminNotificationsV2Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
@@ -68,14 +77,14 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true});
 const errors=[];await mkdir('artifacts/v3-browser',{recursive:true});
-async function pageFor(width,height){
+async function pageFor(width,height,preferredName='',consent='deny'){
  const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});
  // No outgoing requests to production or payment providers.
  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
- await page.goto(origin+'/loja');await page.locator('[data-action="event"]').first().waitFor();assert.equal(await page.locator('a[href*="versao=2"]').count(),0);assert.equal(await page.locator('#v3-live-basket').isVisible(),false);
- await page.locator('.libri-privacy-banner [data-privacy="deny"]').click();
- assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),'deny');
+ await page.goto(origin+'/loja');await page.locator('#v3-welcome-name').waitFor();if(preferredName){await page.locator('#v3-welcome-name').fill(preferredName);await page.locator('#v3-welcome-form button[type="submit"]').click();await page.locator('.v3-title').filter({hasText:preferredName}).waitFor();assert.equal(await page.evaluate(name=>JSON.stringify(localStorage.getItem('libriV3Draft')).includes(name),preferredName),false);}else await page.locator('[data-action="welcome-skip"]').click();await page.locator('[data-action="event"]').first().waitFor();assert.equal(await page.locator('a[href*="versao=2"]').count(),0);assert.equal(await page.locator('#v3-live-basket').isVisible(),false);
+ await page.locator('.libri-privacy-banner [data-privacy="'+consent+'"]').click();
+ assert.equal(await page.evaluate(()=>localStorage.getItem('libriPrivacyV1')),consent);
  return {context,page};
 }
 const click=(p,a,v)=>p.locator('[data-action="'+a+'"]'+(v?'[data-value="'+v+'"]':'')).first().click();
@@ -121,18 +130,20 @@ try{
  assert.equal(await loadPage.locator('.v3-status-line').count(),1);
  assert.equal(await loadPage.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);
  await loadPage.screenshot({path:'artifacts/v3-browser/loading-mobile.png',fullPage:true});
- releaseCatalog();await loadPage.locator('[data-action="event"]').first().waitFor();await loadContext.close();
- const durations=await pageFor(390,844);const dp=durations.page;
- await click(dp,'event','birthday');await click(dp,'creation','invitation');await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon,.v3-arrow').count(),0);assert.equal(await dp.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);await dp.evaluate(()=>document.fonts.ready);assert.equal(await dp.evaluate(()=>[...document.fonts].some(f=>f.family==='Manrope'&&f.status==='loaded')),true,'Manrope precisa carregar o arquivo local');const glass=await dp.evaluate(()=>{const panel=getComputedStyle(document.querySelector('.v3-panel--guided'));const card=getComputedStyle(document.querySelector('.v3-format-card'));return {panelImage:panel.backgroundImage,cardImage:card.backgroundImage,cardBlur:card.backdropFilter}});assert.equal(glass.panelImage,'none','O contêiner deve manter o fundo claro original');assert.match(glass.cardImage,/linear-gradient/);assert.match(glass.cardBlur,/blur\(22px\)/);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
+ releaseCatalog();await loadPage.locator('#v3-welcome-name').waitFor();await loadPage.screenshot({path:'artifacts/v3-browser/welcome-mobile.png',fullPage:true});await loadPage.locator('[data-action="welcome-skip"]').click();await loadPage.locator('[data-action="event"]').first().waitFor();await loadContext.close();
+ const named=await pageFor(390,844,'Tereza consentiu','allow_named');await named.page.waitForFunction(()=>!!sessionStorage.getItem('libriStoreJourneyV1'));await named.page.locator('[data-action="event"][data-value="birthday"]').click();for(let i=0;i<30;i++){if((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'&&x.stage==='servico'))break;await new Promise(r=>setTimeout(r,100));}assert.ok((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'&&x.stage==='servico'));await named.page.locator('#libri-privacy [data-privacy="preferences"]').click();await named.page.locator('.libri-privacy-dialog [data-privacy="deny"]').click();for(let i=0;i<30;i++){if(!(await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'))break;await new Promise(r=>setTimeout(r,100));}assert.equal((await getStoreFunnel(fixtureDb)).named.some(x=>x.name==='Tereza consentiu'),false);await named.context.close();
+ const durations=await pageFor(390,844,'Tereza');const dp=durations.page;
+ await click(dp,'event','birthday');assert.equal(await dp.locator('.v3-title').innerText(),'O que gostaria de criar?');await click(dp,'creation','invitation');assert.match(await dp.locator('.v3-title').innerText(),/Tereza, como imagina seu convite/);await click(dp,'intent','story');await dp.locator('[data-action="product"][data-value="cinematic_video"]').waitFor();assert.equal(await dp.locator('.v3-format-demo,.v3-choice-icon,.v3-arrow').count(),0);assert.equal(await dp.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);await dp.evaluate(()=>document.fonts.ready);assert.equal(await dp.evaluate(()=>[...document.fonts].some(f=>f.family==='Manrope'&&f.status==='loaded')),true,'Manrope precisa carregar o arquivo local');const glass=await dp.evaluate(()=>{const panel=getComputedStyle(document.querySelector('.v3-panel--guided'));const card=getComputedStyle(document.querySelector('.v3-format-card'));return {panelImage:panel.backgroundImage,cardImage:card.backgroundImage,cardBlur:card.backdropFilter}});assert.equal(glass.panelImage,'none','O contêiner deve manter o fundo claro original');assert.match(glass.cardImage,/linear-gradient/);assert.match(glass.cardBlur,/blur\(22px\)/);await dp.screenshot({path:'artifacts/v3-browser/formats-mobile.png',fullPage:true});await click(dp,'product','cinematic_video');
  await dp.locator('[data-scenes="3"]').waitFor();const stageBefore=await dp.locator('.v3-title').innerText();const night=dp.locator('#v3-theme-toggle');await night.click();assert.equal(await dp.locator('html').getAttribute('data-v3-theme'),'dark');assert.equal(await night.getAttribute('aria-pressed'),'true');assert.equal(await dp.locator('.v3-title').innerText(),stageBefore);assert.equal(await dp.evaluate(()=>localStorage.getItem('libriV3Theme')),'dark');assert.equal(await dp.evaluate(()=>getComputedStyle(document.querySelector('.v3-panel--guided')).backgroundColor),'rgb(48, 36, 39)');await dp.screenshot({path:'artifacts/v3-browser/night-mode-mobile.png',fullPage:true});await night.click();assert.equal(await dp.locator('html').getAttribute('data-v3-theme'),'light');assert.equal(await dp.locator('[data-action="variant"]').count(),2);assert.equal(await dp.locator('#v3-scene-select').count(),0);await dp.screenshot({path:'artifacts/v3-browser/duration-mobile.png',fullPage:true});assert.equal(await dp.evaluate(()=>{const m=document.querySelector('.v3-main'),p=document.querySelector('.v3-panel--guided'),b=document.querySelector('#v3-live-basket');const a=m.getBoundingClientRect(),q=b.getBoundingClientRect();return getComputedStyle(m).flexDirection==='column'&&getComputedStyle(p).backgroundImage==='none'&&Math.abs(a.x-q.x)<=2&&Math.abs(a.width-q.width)<=2&&document.scrollingElement.scrollHeight<=innerHeight+1}),true,'Uma única coluna com resumo integrado e viewport travado');
  const short=await dp.locator('[data-scenes="3"]').getAttribute('data-value');await dp.locator('[data-scenes="3"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),short);assert.equal(await dp.evaluate(()=>{const p=document.querySelector('.v3-panel--guided'),c=document.querySelector('.v3-optional-card'),h=document.querySelector('.v3-stage-heading');return getComputedStyle(p).backgroundImage==='none'&&getComputedStyle(c).backdropFilter.includes('blur(22px)')&&getComputedStyle(h).textAlign==='center'&&document.scrollingElement.scrollHeight<=innerHeight+1}),true,'Adicionais com mesma linguagem e título centralizado');await dp.screenshot({path:'artifacts/v3-browser/extras-mobile.png',fullPage:true});
  await click(dp,'guided-back');const long=await dp.locator('[data-scenes="6"]').getAttribute('data-value');await dp.locator('[data-scenes="6"]').click();await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),long);
  await click(dp,'guided-back');await click(dp,'custom-scenes');const choices=dp.locator('#v3-scene-select option');assert.ok(await choices.count()>3);const custom=await choices.nth(1).getAttribute('value');await dp.locator('#v3-scene-select').selectOption(custom);await click(dp,'custom-scenes-confirm');await dp.locator('[data-action="guided-finish"]').waitFor();assert.equal(await dp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).variantCode),custom);await durations.context.close();
- const {context,page}=await pageFor(390,844);
+ const {context,page}=await pageFor(390,844,'Tereza');
  await invite(page);
  await page.screenshot({path:'artifacts/v3-browser/cart-mobile.png',fullPage:true});
  await click(page,'cart-edit','0');await page.locator('[data-action="add-invitation"]').waitFor();await click(page,'add-invitation');await page.locator('[data-action="cart-unified-checkout"]').waitFor();
  await checkout(page);
+ assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza');await page.locator('.v3-instagram-optional summary').click();await page.locator('#v3c-instagram').fill('@tereza.teste');assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('[data-v3-checkout="back"]').click();await page.locator('[data-action="cart-unified-checkout"]').waitFor();await click(page,'cart-unified-checkout');await page.locator('#v3-app[aria-busy="false"]').waitFor();assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('#v3c-name').fill('Tereza da Silva');assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza da Silva');
  await page.screenshot({path:'artifacts/v3-browser/checkout-mobile.png',fullPage:true});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await context.close();
@@ -183,7 +194,10 @@ try{
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await admin.goto(origin+'/admin-v2');
- await admin.locator('.central-section-tabs [data-central-section="today"]').waitFor();
+ await admin.locator('.central-section-tabs [data-central-section="today"]').waitFor();await admin.locator('.admin-hero').waitFor();
+ await admin.locator('#adminRailToggle').click();assert.equal(await admin.locator('html').evaluate(el=>el.classList.contains('admin-rail-compact')),true);await admin.locator('#adminRailToggle').click();
+ await admin.locator('#findAdminFeature').click();await admin.locator('#featureFinderQuery').fill(paidFixture.orderCode);await admin.locator('[data-universal-order="'+paidFixture.orderCode+'"]').waitFor();await admin.locator('[data-universal-order="'+paidFixture.orderCode+'"]').click();await admin.locator('#v3AdminOrder').waitFor();assert.equal(await admin.locator('#modalRoot').evaluate(el=>el.classList.contains('order-drawer-root')),true);await admin.locator('#modalRoot .close-btn').click();
+ await admin.locator('#findAdminFeature').click();await admin.locator('#featureFinderQuery').fill('cupom');await admin.locator('[data-pin-index]').first().click();assert.equal(await admin.locator('#adminPinned [data-pin-open]').count(),1);await admin.locator('#featureFinderClose').click();
  assert.equal(await admin.locator('[data-central-page="today"]').isVisible(),true);
  assert.equal(await admin.locator('#central-parties-today').isVisible(),true);
  assert.equal(await admin.locator('#central-new').isVisible(),false);
@@ -195,6 +209,18 @@ try{
  assert.equal(await admin.locator('.monthly-goal-card').isVisible(),true);
  assert.equal(await admin.locator('#advancedOrderSearch').isVisible(),true);
  await admin.screenshot({path:'artifacts/v3-browser/admin-central-desktop.png',fullPage:true});
+ await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
+ assert.equal(await admin.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(32, 24, 27)');
+ await admin.locator('[data-view="orders"]').click();await admin.locator('#viewTitle').filter({hasText:'Pedidos'}).waitFor();await admin.locator('#advancedOrderSearch').waitFor();await admin.locator('#central-new').waitFor();await admin.locator('[data-searched-order]').first().waitFor();assert.equal(await admin.locator('#advOrderArchived').inputValue(),'no');assert.equal(await admin.locator('#central-parties-today').count(),0);
+ await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-desktop.png',fullPage:true});
+ await admin.reload();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
+ await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.equal(await admin.locator('.nav-primary').evaluate(el=>getComputedStyle(el).position),'fixed');
+ await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-mobile.png',fullPage:true});await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'light');
+ await admin.locator('[data-view="production"]').click();await admin.locator('[data-production-service="retrospectivas"]').click();await admin.locator('#productionList').getByText(/LIBRI-|Nenhum pedido nessa fila/).first().waitFor();assert.equal(await admin.locator('[data-production-service="retrospectivas"]').getAttribute('aria-pressed'),'true');await admin.screenshot({path:'artifacts/v3-browser/admin-production-mobile.png',fullPage:true});await admin.locator('[data-production-layout="board"]').click();await admin.locator('.production-board').waitFor();assert.equal(await admin.locator('.board-lane').count()>=9,true);await admin.screenshot({path:'artifacts/v3-browser/admin-kanban-mobile.png',fullPage:true});await admin.locator('[data-production-layout="list"]').click();
+ await admin.goto(origin+'/admin-v2?view=store&storeTab=retrospectives');await admin.locator('.retro-catalog-card').first().waitFor();assert.equal(await admin.locator('.retro-catalog-card').count(),5);await admin.screenshot({path:'artifacts/v3-browser/admin-retrospectives-mobile.png',fullPage:true});
+ await admin.locator('[data-view="finance"]').click();await admin.locator('[data-finance-page="summary"]').waitFor();await admin.locator('.finance-hero').waitFor();assert.equal(await admin.locator('.finance-compare .financial-bar-row').count(),3);assert.equal(await admin.locator('[data-finance-page="movements"]').isVisible(),false);await admin.locator('[data-finance-tab="movements"]').click();await admin.locator('[data-finance-page="movements"]').waitFor();await admin.locator('[data-finance-tab="supplements"]').click();await admin.locator('[data-finance-page="supplements"]').waitFor();assert.equal(await admin.locator('[data-finance-page="movements"]').isVisible(),false);await admin.screenshot({path:'artifacts/v3-browser/admin-finance-mobile.png',fullPage:true});
+ await admin.locator('[data-view="agenda"]').click();await admin.locator('.agenda-calendar').waitFor();assert.equal(await admin.locator('.agenda-advanced').count(),1);await admin.locator('[data-agenda-mode="capacity"]').click();await admin.locator('.capacity-tile').first().waitFor();assert.equal(await admin.locator('.agenda-calendar').isVisible(),false);await admin.screenshot({path:'artifacts/v3-browser/admin-capacity-mobile.png',fullPage:true});await admin.locator('[data-agenda-mode="list"]').click();await admin.locator('[data-agenda-page="list"]').waitFor();await admin.locator('[data-agenda-mode="week"]').click();await admin.locator('#agendaWeekRows').waitFor();await admin.locator('[data-agenda-mode="calendar"]').click();await admin.screenshot({path:'artifacts/v3-browser/admin-agenda-mobile.png',fullPage:true});
+ await admin.locator('[data-view="manual"]').click();await admin.locator('.admin-manual-integrated').waitFor();assert.equal(await admin.locator('[data-family]').count(),3);await admin.locator('[data-contact="name"]').fill('Cliente teste');await admin.locator('[data-contact="whatsapp"]').fill('61999999999');await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('[data-contact="name"]').inputValue(),'Cliente teste');await admin.screenshot({path:'artifacts/v3-browser/admin-manual-night-mobile.png',fullPage:true});
  await adminContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);

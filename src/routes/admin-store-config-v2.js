@@ -1,3 +1,4 @@
+import {listV3RetrospectivePackages} from '../lib/v3-retrospective-catalog.js';
 import {listV3CombinedCampaigns,createV3CombinedCampaign,pauseV3CombinedCampaign} from '../lib/v3-promotions.js';
 import {
   fail,
@@ -62,6 +63,10 @@ export async function handleAdminStoreConfigV2Api(
     });
   }
 
+  if(path==='/api/admin/v2/store-config/v3/retrospectives'){
+    if(method!=='GET')return fail('Método não permitido.',405);
+    try{return json({ok:true,packages:await listV3RetrospectivePackages(env.DB,{admin:true})});}catch(e){return routeError(e);}
+  }
   if(path==='/api/admin/v2/store-config/v3/campaigns'){
     try{if(method==='GET')return json({ok:true,campaigns:await listV3CombinedCampaigns(env.DB)});if(method==='POST')return json({ok:true,campaigns:await createV3CombinedCampaign(env.DB,await readJson(request))},201);return fail('Método não permitido.',405);}catch(e){return routeError(e);}
   }

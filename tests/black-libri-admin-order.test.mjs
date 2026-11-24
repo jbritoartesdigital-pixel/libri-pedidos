@@ -42,5 +42,5 @@ test('order detail displays award from items with escaped prize labels and versi
   assert.match(ui,/Brinde convertido em crédito/);
   assert.match(ui,/não produzir em duplicidade/);
   assert.match(ui,/\$\{blackLibriPrizeBlock\(detail\)\}/);
-  assert.match(entry,/admin-v2-order\.js\?v=20261113-existing-checkout-gift-1/);
+  assert.match(entry,/admin-v2-order\.js\?v=20261124-admin-v3-83/);
 });

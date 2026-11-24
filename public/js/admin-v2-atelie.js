@@ -28,12 +28,12 @@ export async function renderAtelieStore(panel) {
       '<div><strong>'+activeCount+'</strong><span>À venda</span></div>'+
       '<div><strong>'+readyCount+'</strong><span>Prontos para liberar</span></div>'+
       '<div><strong>'+(packages.length-activeCount-readyCount)+'</strong><span>Em configuração</span></div></div>'+
-      '<div class="notice info">Valores provisórios não são publicados. Cada pacote só entra à venda após a confirmação expressa dos valores e do catálogo oficial V4.1.</div></section>'+
+      '<div class="notice info">Confira o estado de venda de cada pacote. Os valores e entregáveis cadastrados são exibidos abaixo.</div></section>'+
       '<div class="store-navigation-buttons" style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">'+tabs+'</div>'+
       '<section class="card"><h2>Pacote '+esc(p.name)+'</h2><form id="atelieForm"><fieldset '+(p.saleEnabled?'disabled':'')+' style="border:0;padding:0;margin:0">'+
       f('atDesc','Explicação simples para a cliente',textarea('atDesc',p.shortDescription,3))+
       f('atIncluded','Entregáveis exatos: um por linha',textarea('atIncluded',lines(p.includedDraft),6))+
-      '<p class="muted">Catálogo V4.1 oficial aprovado: R$159, R$299 e R$549, com paleta, tipografia e mascotinho em 3, 4 e 5 poses. Carga em pontos ainda pendente.</p>'+
+      '<p class="muted">Catálogo V4.1 oficial aprovado: R$159, R$299 e R$549, com paleta, tipografia e mascotinho em 3, 4 e 5 poses. Carga em pontos exibida abaixo conforme o catálogo cadastrado.</p>'+
       f('atExcluded','O que não está incluído: um por linha',textarea('atExcluded',lines(p.excludedDraft),4))+
       f('atScope','Versão oficial de referência',input('atScope',p.scopeReference,'Ex.: V4.1 aprovada'))+
       '<div class="form-grid">'+

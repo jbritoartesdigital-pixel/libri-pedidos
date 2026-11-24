@@ -43,6 +43,8 @@ export async function startV3Checkout(request,env,body){
   const urgencyRequest=body.urgencyRequested===true;
   const name=clean(body.customer?.name,160),whatsapp=normalizeWhatsapp(body.customer?.whatsapp);
   const email=clean(body.customer?.email,240);
+  const rawInstagram=body.customer?.instagram,instagram=typeof rawInstagram==='string'?rawInstagram.trim().replace(/^@/,''):'';
+  if(rawInstagram!=null&&rawInstagram!==''&&(!instagram||!/^[A-Za-z0-9._]{1,30}$/.test(instagram)))fail('Confira o perfil do Instagram (somente o @), ou deixe em branco.');
   if(!name||whatsapp.length<10||whatsapp.length>15||(body.customer?.email&&(!email||!/^\S+@\S+\.\S+$/.test(email))))fail('Confira seus dados de contato.');
   if(body.termsAccepted!==true)fail('Aceite as condições do pedido.','terms_required');
   // Check a retry against the existing request hash before repricing. Existing
@@ -61,7 +63,7 @@ export async function startV3Checkout(request,env,body){
     customerId=await findOrCreateCustomer(env.DB,{name,whatsapp,email});
     orderCode=await nextOrderCode(env.DB);publicToken=randomToken('ord_');
   }
-  const order=await createV3OrderRecords(env.DB,{customerId,orderCode,publicToken,body,contactSnapshot:{name,whatsapp,email},urgencyRequest});
+  const order=await createV3OrderRecords(env.DB,{customerId,orderCode,publicToken,body,contactSnapshot:{name,whatsapp,email,...(instagram?{instagram}: {})},urgencyRequest});
   if(body.storeJourneyId)await safeLinkStoreOrder(env.DB,body.storeJourneyId,order.orderId);
   if(urgencyRequest){
    if(!order.recovered)try{await createV2AdminNotification(env,{eventCode:'URGENCY_REQUESTED',orderId:order.orderId,title:'Solicitação de encaixe urgente',body:order.orderCode+' · confira a agenda antes de aprovar.',actionUrl:'/admin-v2?order='+encodeURIComponent(order.orderCode),priority:'high',dedupeKey:'v3-urgency:'+order.orderId});}catch{}

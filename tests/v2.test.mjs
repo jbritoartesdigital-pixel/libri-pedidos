@@ -701,7 +701,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1, V2 and disabled V3 staging intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 63);
+  const DB = database(); assert.equal(DB.migrationCount, 64);
+  assert.ok(DB.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v3_store_journey_names'").get());
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',
     'v2_drive_uploaded_previews','v2_drive_sync_settings','v2_drive_sync_attempts',
@@ -1689,7 +1690,7 @@ test('manual Pix receipt is available inside order detail with a bank-confirmed 
   assert.match(ui, /amountCents: cents/);
   assert.match(ui, /paidDate,[\s\S]*?paymentType,[\s\S]*?note/);
   assert.match(ui, /await openOrder\(detail\.order\.code, onChanged\)/);
-  assert.match(entry, /admin-v2-order\.js\?v=20261113-existing-checkout-gift-1/);
+  assert.match(entry, /admin-v2-order\.js\?v=20261124-admin-v3-83/);
   const paid = await createV2FinancePayment(DB, {
     orderCode: checkout.order.code,
     amountCents: checkout.payment.amountDueNowCents,
@@ -2868,8 +2869,8 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /quickSearch\?\.addEventListener\('input'/);
   assert.match(central, /quickSearch\?\.addEventListener\('keydown'/);
   assert.match(central, /setTimeout\(runOrderSearch, 350\)/);
-  assert.match(central, /if \(!hasQuery && !hasExtraFilters\)/);
-  assert.match(central, /if \(revision !== searchRevision\) return/);
+  assert.match(central, /if \(!ordersOnly && !hasQuery && !hasExtraFilters\)/);
+  assert.match(central, /if \(revision !== searchRevision \|\| !results\.isConnected\) return/);
   assert.match(central, /Mostrar mais filtros • ativos/);
   assert.match(central, /\['q','advOrderQuery'\]/);
   assert.match(central, /\['archived','advOrderArchived'\]/);
@@ -3205,7 +3206,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
   assert.match(customer, /Preencher dados/);
   assert.match(customer, /Enviar dados/);
   assert.doesNotMatch(customer, /'Briefing'/);
-  assert.ok(entry.includes('admin-v2-order.js?v=20261113-existing-checkout-gift-1'));
+  assert.ok(entry.includes('admin-v2-order.js?v=20261124-admin-v3-83'));
   assert.ok(publicShell.includes('client-v2.js?v=20261124-atelier-gift-v3'));
 });
 
@@ -3230,8 +3231,8 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(admin, /renderFinance\(open\)/);
   assert.match(css, /\.finance-fee-breakdown/);
   assert.match(css, /\.order-photo-viewer-controls/);
-  assert.ok(admin.includes("./admin-v2-order.js?v=20261113-existing-checkout-gift-1"));
-  assert.ok(admin.includes("./admin-v2-finance.js?v=20261010-void-closed-1"));
+  assert.ok(admin.includes("./admin-v2-order.js?v=20261124-admin-v3-83"));
+  assert.ok(admin.includes("./admin-v2-finance.js?v=20261124-admin-v3-82"));
 });
 
 test('finance separates verified Mercado Pago fee components from undisclosed difference, surviving re-sync', async t => {
@@ -3415,7 +3416,7 @@ test('client upload and draft scripts guard connection recovery and clear user-f
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   assert.ok(html.includes('/js/client-v2.js?v=20261124-atelier-gift-v3'));
   assert.ok(entry.includes('client-v2-area.js?v=20261124-atelier-gift-v3'));
-  assert.ok(admin.includes('admin-v2-manual.js?v=20261027-delivery-chronological-1'));
+  assert.ok(admin.includes('admin-v2-manual.js?v=20261124-admin-v3-81'));
   assert.match(area, /uploadCustomerPhoto/);
   assert.match(area, /localStorage\.setItem/);
   assert.match(area, /const seen = new Set/);

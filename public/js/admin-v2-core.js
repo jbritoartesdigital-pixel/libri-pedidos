@@ -191,6 +191,8 @@ export function modal(
     width = '920px',
   } = {},
 ) {
+  const previousFocus=document.activeElement;
+  modalRoot.classList.toggle('order-drawer-root',/^LIBRI-\d+\b/.test(title));
   modalRoot.innerHTML = `
     <section
       class="modal"
@@ -222,24 +224,17 @@ export function modal(
   const close = () => {
     modalRoot.classList.add('hidden');
     modalRoot.setAttribute('aria-hidden', 'true');
-    modalRoot.innerHTML = '';
+    modalRoot.innerHTML = '';modalRoot.classList.remove('order-drawer-root');
+    if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});
   };
 
   modalRoot
     .querySelector('.close-btn')
     .addEventListener('click', close);
 
-  modalRoot.addEventListener(
-    'click',
-    (event) => {
-      if (event.target === modalRoot) {
-        close();
-      }
-    },
-    {
-      once: true,
-    },
-  );
+  modalRoot.onclick=event=>{if(event.target===modalRoot)close();};
+  modalRoot.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();close();}if(event.key==='Tab'){const items=[...modalRoot.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex="0"]')].filter(el=>el.getClientRects().length);if(!items.length)return;const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};
+  modalRoot.querySelector('.close-btn')?.focus({preventScroll:true});
 
   return close;
 }
@@ -254,9 +249,7 @@ export function setViewMeta(title, eyebrow) {
 
 export function loading(label = 'Carregando...') {
   viewRoot.innerHTML = `
-    <div class="card empty">
-      ${esc(label)}
-    </div>
+    <div class="card admin-loading" role="status"><img src="/images/libri-emblem.png" alt="" width="44" height="44"><strong>${esc(label==='Carregando...'?'Preparando seu painel':label)}</strong><span class="admin-loading-line" aria-hidden="true"></span></div>
   `;
 }
 
@@ -309,20 +302,7 @@ export function bindNav(onChange) {
         button.addEventListener(
           'click',
           () => {
-            state.view =
-              button.dataset.view;
-
-            document
-              .querySelectorAll('[data-view]')
-              .forEach(
-                (entry) =>
-                  entry.classList.toggle(
-                    'active',
-                    entry === button,
-                  ),
-              );
-
-            onChange(state.view);
+            onChange(button.dataset.view);
           },
         );
       },

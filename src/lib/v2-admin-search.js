@@ -45,6 +45,8 @@ export async function searchV2AdminOrders(db, filters = {}) {
   }
   if (status && !/^[a-z_]{2,50}$/.test(status)) throw new Error('Status inválido.');
   if (product && !/^[a-z0-9_-]{2,80}$/.test(product)) throw new Error('Formato inválido.');
+  const limit=filters.limit==null?100:Number(filters.limit),offset=filters.offset==null?0:Number(filters.offset);
+  if(!Number.isSafeInteger(limit)||limit<1||limit>100||!Number.isSafeInteger(offset)||offset<0||offset>1000000)throw new Error('Página de busca inválida.');
   const pattern = '%' + query + '%';
   // One result per order. The effective V3 snapshot is authoritative for
   // upgrades/new services; do not use the first V2 item for modular orders.
@@ -98,8 +100,8 @@ export async function searchV2AdminOrders(db, filters = {}) {
           AND (?!='finalized' OR ?!='' OR ?!='' OR ?>0 OR o.status='finalized'))))
       AND (?='' OR o.event_date=?) AND (?='' OR o.event_date>=?) AND (?='' OR o.event_date<=?)
       AND (?='all' OR (?='yes' AND o.archived_at IS NOT NULL) OR (?='no' AND o.archived_at IS NULL))
-    ORDER BY CASE WHEN ?=1 THEN o.event_date END ASC,o.created_at DESC,o.id DESC LIMIT 100
-  `).bind(query,pattern,pattern,pattern,pattern,family,family,product,product,product,sceneCount,sceneCount,status,status,status,status,status,status,family,product,sceneCount,eventDate,eventDate,from,from,to,to,archived,archived,archived,eventDate||from||to?1:0).all();
+    ORDER BY CASE WHEN ?=1 THEN o.event_date END ASC,o.created_at DESC,o.id DESC LIMIT ? OFFSET ?
+  `).bind(query,pattern,pattern,pattern,pattern,family,family,product,product,product,sceneCount,sceneCount,status,status,status,status,status,status,family,product,sceneCount,eventDate,eventDate,from,from,to,to,archived,archived,archived,eventDate||from||to?1:0,limit,offset).all();
   return (result.results||[]).map(row=>{
     const services=JSON.parse(row.services_json||'[]').map(s=>({...s,statusLabel:V3_SERVICE_LABELS[s.productionStatus]||null}));
     const first=services.find(s=>s.family==='convite')||services[0]||{};

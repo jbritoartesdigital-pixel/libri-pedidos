@@ -60,5 +60,5 @@ test('admin product variants expose copy links only for active scene-count varia
   assert.match(client,/sceneLinkSelection\(product, window\.location\.search\)/);
   assert.match(client,/state\.selection\.variantCode = linkedScenes\.variant\.code/);
   assert.match(client,/state\.step = 2/);
-  assert.match(adminEntry,/admin-v2-store-products\.js\?v=20261026-scene-links-1/);
+  assert.match(adminEntry,/admin-v2-store-products\.js\?v=20261124-admin-v3-82/);
 });

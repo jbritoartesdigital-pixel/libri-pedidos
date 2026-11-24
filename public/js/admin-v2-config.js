@@ -1,3 +1,4 @@
+import {renderRetrospectiveStore} from './admin-v3-retrospective-store.js?v=83';
 import {renderV3Campaigns} from './admin-v2-campaigns-v3.js';
 import {
   api,
@@ -8,7 +9,7 @@ import {
 import {
   renderStoreProducts,
   renderStoreAddons,
-} from './admin-v2-store-products.js?v=20261026-scene-links-1';
+} from './admin-v2-store-products.js?v=20261124-admin-v3-82';
 
 import {
   renderStoreSettings,
@@ -22,7 +23,7 @@ import {
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
 import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261124-recovery-73';
-import { renderAtelieStore } from './admin-v2-atelie.js?v=20261123-admin-v3-1';
+import { renderAtelieStore } from './admin-v2-atelie.js?v=20261124-admin-v3-83';
 
 export async function renderStore() {
   setViewMeta(
@@ -39,12 +40,13 @@ export async function renderStore() {
     data.config;
 
   viewRoot.innerHTML = `
-    <div class="store-navigation" aria-label="Organização da loja">
+    <div class="store-navigation admin-store-navigation" aria-label="Organização da loja">
       <div class="store-navigation-group">
         <span class="store-navigation-label">Catálogo</span>
         <div class="store-navigation-buttons">
-          <button type="button" class="settings-tab active" data-store-tab="products">Produtos</button>
+          <button type="button" class="settings-tab active" data-store-tab="products">Convites e preços</button>
           <button type="button" class="settings-tab" data-store-tab="atelie">Libri Ateliê</button>
+          <button type="button" class="settings-tab" data-store-tab="retrospectives">Retrospectivas</button>
           <button type="button" class="settings-tab" data-store-tab="addons">Adicionais</button>
           <button type="button" class="settings-tab" data-store-tab="combos">Combos</button>
           <button type="button" class="settings-tab" data-store-tab="gallery">Galeria</button>
@@ -55,7 +57,7 @@ export async function renderStore() {
         <div class="store-navigation-buttons">
           <button type="button" class="settings-tab" data-store-tab="coupons">Cupons</button>
           <button type="button" class="settings-tab" data-store-tab="campaigns">Campanhas combinadas</button>
-          <button type="button" class="settings-tab" data-store-tab="black-libri">🎈 Black Libri</button>
+          <button type="button" class="settings-tab" data-store-tab="black-libri">Black Libri</button>
         </div>
       </div>
       <div class="store-navigation-group">
@@ -91,6 +93,7 @@ export async function renderStore() {
             ),
         );
 
+      if(tab==='retrospectives'){void renderRetrospectiveStore(panel);return;}
       if (tab === 'atelie') {
         void renderAtelieStore(panel);
         return;
@@ -186,7 +189,7 @@ export async function renderStore() {
     };
 
   const availableTabs = new Set([
-    'products', 'atelie', 'addons', 'combos', 'gallery',
+    'products', 'atelie', 'retrospectives', 'addons', 'combos', 'gallery',
     'coupons', 'campaigns', 'black-libri', 'settings', 'terms', 'contracts',
   ]);
   document.querySelectorAll('[data-store-tab]').forEach(button =>

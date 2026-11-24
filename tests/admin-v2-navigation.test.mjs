@@ -8,12 +8,13 @@ const admin=readFileSync('public/js/admin-v2.js','utf8');
 const store=readFileSync('public/js/admin-v2-config.js','utf8');
 const css=readFileSync('public/css/admin-v2.css','utf8');
 
-test('Admin oferece seis destinos principais sem duplicar links em Mais', () => {
+test('Admin oferece seis destinos principais e novo pedido separado sem duplicar links', () => {
   const main=html.match(/<div class="nav-primary">([\s\S]*?)<\/div>/)?.[1];
   const secondary=html.match(/<div class="nav-secondary">([\s\S]*?)<\/div>/)?.[1];
   assert.ok(main && secondary);
   assert.deepEqual([...main.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),
-    ['central','manual','production','agenda','finance','store']);
+    ['central','orders','production','agenda','finance','store']);
+  assert.match(html, /data-view="manual" class="nav-btn nav-btn-create"/);
   assert.deepEqual([...secondary.matchAll(/data-view="([^"]+)"/g)].map(m=>m[1]),
     ['archived','notifications','security']);
   for (const id of ['logoutBtn','showAdminDiagnostic','findAdminFeature','notificationBell']) {
@@ -36,16 +37,16 @@ test('localizador encontra funções por sinônimos parciais e acentos', () => {
 });
 
 test('destinos do localizador existem e todas as abas da Loja têm acesso direto', () => {
-  const allViews=['central','manual','production','agenda','finance','archived','store','notifications','security'];
+  const allViews=['central','orders','manual','production','agenda','finance','archived','store','notifications','security'];
   assert.ok(ADMIN_FEATURES.every(x=>allViews.includes(x.view)));
   const tabs=[...store.matchAll(/data-store-tab="([^"]+)"/g)].map(x=>x[1]);
-  assert.equal(new Set(tabs).size,11);
-  assert.ok(tabs.includes('campaigns'));
+  assert.equal(new Set(tabs).size,12);
+  assert.ok(tabs.includes('campaigns'));assert.ok(tabs.includes('retrospectives'));
   assert.equal(searchAdminFeatures('campanhas combinadas')[0].tab,'campaigns');
   assert.ok(tabs.includes('atelie'), 'Ateliê deve permanecer dentro da Loja');
-  assert.ok(ADMIN_FEATURES.filter(x=>x.tab).every(x=>tabs.includes(x.tab)));
+  assert.ok(ADMIN_FEATURES.filter(x=>x.view==='store'&&x.tab).every(x=>tabs.includes(x.tab)));
   assert.match(store, /searchParams\.set\('storeTab', tab\)/);
-  assert.match(admin, /initAdminFeatureFinder\(navigateTo\)/);
+  assert.match(admin, /initAdminFeatureFinder\(navigateTo,\{/);
   assert.match(admin, /searchParams\.set\('storeTab', storeTab\)/);
   assert.match(admin, /openOrder\(/);
 });

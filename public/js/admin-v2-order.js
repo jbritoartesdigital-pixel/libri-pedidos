@@ -12,7 +12,7 @@ import {
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
 import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-existing-checkout-gift-1';
 import { isAtelieOrderDetail, mountAtelieProduction } from './admin-v2-atelie-production.js';
-import { openV3AdminOrder } from './admin-v2-order-v3.js';
+import { openV3AdminOrder } from './admin-v2-order-v3.js?v=90';
 import { mountAtelieCreativeBriefing } from './admin-v2-atelie-briefing.js';
 
 function whatsappBr(value) {

@@ -1,3 +1,4 @@
+import {remainingV3Capacity} from './v3-service-agenda.js';
 import {contextV3Briefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
@@ -47,7 +48,7 @@ async function plan(db,ctx,s,offer){
  if(newService&&q.productionDays>0&&Date.parse(q.deliveryWindow.start+'T12:00:00Z')-Date.parse(now+'T12:00:00Z')<q.productionDays*86400000)fail('Prazo mínimo do novo serviço indisponível. Solicite outra proposta.');
  if(end<=now)fail('A data de entrega precisa de revisão antes de cobrar.');
  const partition=(await db.prepare('SELECT service_family,allocation_type,points_units FROM v2_agenda_allocations WHERE order_id=?').bind(ctx.order.id).all()).results||[];
- if(partition.some(x=>!x.service_family||x.allocation_type!=='confirmed')||ctx.services.some(x=>partition.filter(a=>a.service_family===x.family).reduce((n,a)=>n+a.points_units,0)!==x.points_units))fail('A agenda original precisa estar distribuída por serviço.');
+ if(partition.some(x=>!x.service_family||x.allocation_type!=='confirmed')||ctx.services.some(x=>partition.filter(a=>a.service_family===x.family).reduce((n,a)=>n+a.points_units,0)!==remainingV3Capacity(x)))fail('A agenda original precisa estar distribuída por serviço.');
  const settings=await loadV2Settings(db),capacity=v2IntSetting(settings,'default_sellable_points_per_day_units',400);
  let left=offer.points_units,alloc=[];
  for(let d=workStart>now?workStart:nextDay(now);d<=workEnd&&left;d=nextDay(d)){

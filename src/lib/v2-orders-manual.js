@@ -25,6 +25,7 @@ import {
 
 import { applyManualClientAddons } from './v2-manual-client-addons.js';
 import { prepareManualBlackLibriPayment } from './v2-black-libri-manual.js';
+import { productionDaysForQuote, productionDaysForStoredQuote } from './v3-production-policy.js';
 
 const TOKEN_PATTERN =
   /^ord_[a-f0-9]{36}$/;
@@ -1202,6 +1203,7 @@ export async function previewV2ManualOrder(
 
         pointsUnits:
           quote.pointsUnits,
+        productionDays: quote.productionDays ?? productionDaysForQuote(quote),
 
         limit:
           6,
@@ -1382,6 +1384,13 @@ export async function createV2ManualOrder(
       },
     );
 
+  quote.productionDays = productionDaysForQuote(quote);
+  if (quote.productionDays) {
+    if (urgencyApproved) throw new Error('Ateliê e Retrospectivas exigem um mínimo de 15 dias de produção, sem encaixe urgente automático.');
+    await validateV2DeliveryWindow(env.DB, {eventDate:event.date,
+      start:deliveryWindow.start,end:deliveryWindow.end,
+      productionDays:quote.productionDays});
+  }
   const plan =
     await planV2AllocationForWindow(
       env.DB,
@@ -1394,6 +1403,7 @@ export async function createV2ManualOrder(
 
         pointsUnits:
           quote.pointsUnits,
+        productionDays: quote.productionDays ?? 0,
       },
     );
 
@@ -1407,6 +1417,7 @@ export async function createV2ManualOrder(
 
           pointsUnits:
             quote.pointsUnits,
+          productionDays:quote.productionDays,
 
           limit:
             6,
@@ -1439,6 +1450,7 @@ export async function createV2ManualOrder(
 
         pointsUnits:
           quote.pointsUnits,
+        productionDays: quote.productionDays ?? productionDaysForQuote(quote),
 
         limit:
           6,
@@ -1702,6 +1714,12 @@ export async function startV2ManualOrderPayment(
   const quote =
     manual.pricing
       .snapshot;
+  const productionDays = productionDaysForStoredQuote(quote);
+  if (productionDays) await validateV2DeliveryWindow(env.DB,{
+    eventDate:manual.event?.date || manual.eventDate,
+    start:manual.deliveryWindow.start,end:manual.deliveryWindow.end,
+    productionDays
+  });
 
   const plan =
     await planV2AllocationForWindow(
@@ -1719,6 +1737,7 @@ export async function startV2ManualOrderPayment(
 
         pointsUnits:
           quote.pointsUnits,
+        productionDays: quote.productionDays ?? 0,
       },
     );
 

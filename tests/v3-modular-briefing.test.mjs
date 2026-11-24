@@ -919,3 +919,57 @@ test('manual modular: oferta positiva conserva pedido e entrada, aceite altera o
  assert.equal((await getV3ModularBriefing(db,token)).payment.totalCents,offer.totalCents);
  assert.equal(await getV3ManualUpsell(db,token),null);assert.equal(mp.posts,0);assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders WHERE public_token=?').get(token).n,1);
 });
+
+test('manual V3 accepts an administrator-selected date outside suggested windows and explicit international WhatsApp through payment',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const input={customer:{name:'Cliente internacional',whatsapp:'+44 20 1234 5678',email:''},event:{type:'celebration',subtype:'Chá de bebê',honoreeName:'Chá do bebê',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:100};
+ const q=await previewV3ManualOrder(db,input);
+ const w={start:day(60),end:day(60)};
+ assert.ok(!q.options.some(x=>x.start===w.start&&x.end===w.end));
+ const payload={...input,deliveryWindow:w,expectedTotalCents:q.totalCents,requestKey:'1a'.repeat(18),confirmed:true};
+ const created=await createV3ManualOrder(env,payload),token=created.customerAreaPath.split('/').pop();
+ const o=db.sqlite.prepare('SELECT * FROM v2_orders WHERE public_token=?').get(token);
+ assert.equal(o.delivery_start,w.start);assert.equal(o.delivery_end,w.end);assert.equal(o.event_subtype,'Chá de bebê');
+ assert.equal(db.sqlite.prepare('SELECT whatsapp FROM v2_customers WHERE id=?').get(o.customer_id).whatsapp,'442012345678');
+ const brief=await getV3ModularBriefing(db,token);
+ await acceptV3Revision(db,token,{id:brief.revision.id,confirmed:true,termsAccepted:true,expectedTotalCents:q.totalCents});
+ const payment=await prepareV3Payment(new Request('https://test/manual'),env,o.id);
+ assert.equal(payment.amountDueNowCents,q.totalCents);
+});
+
+test('manual checkout: optional additions, terms, Black and one original order through payment and briefing',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token',LIBRI_V3_CHECKOUT_ENABLED:'true',LIBRI_V3_BLACK_LIBRI_ENABLED:'true'};
+ const {saveBlackLibriCampaign}=await import('../src/lib/v2-black-libri-admin.js');
+ const {getV3ManualCheckout}=await import('../src/lib/v3-order-revisions.js');
+ const {handleCustomerBriefingV3Api}=await import('../src/routes/briefing-v3.js');
+ await saveBlackLibriCampaign(env,{adminEnabled:true,complianceConfirmed:true,authorizationReference:'TESTE-INTERNO',adminNote:'Dados sintéticos',validFrom:'2020-01-01',validUntil:'2030-12-31'});
+ db.sqlite.exec("UPDATE v2_black_libri_prizes SET enabled=CASE WHEN code='save_static' THEN 1 ELSE 0 END");
+ const input={customer:{name:'Cliente manual Black',whatsapp:'+351 912345678',email:''},event:{type:'birthday',honoreeName:'Festa de teste',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:50,reason:'Autorizado pelo atendimento'};
+ const initial=await previewV3ManualOrder(db,input);
+ const created=await createV3ManualOrder(env,{...input,deliveryWindow:initial.options[0],expectedTotalCents:initial.totalCents,requestKey:'2b'.repeat(18),confirmed:true});
+ const token=created.customerAreaPath.split('/').pop(),c=await getV3ManualCheckout(env,token,'catalog');
+ assert.equal(c.orderCode,created.orderCode);assert.equal(c.quote.totalCents,initial.totalCents);assert.equal(c.depositPercent,50);
+ const addon=c.addons.find(x=>x.group==='confirmation');assert.ok(addon);
+ const selection={addonCodes:[addon.code],extras:[]};
+ const {quote}=await getV3ManualCheckout(env,token,'quote',selection);
+ assert.ok(quote.totalCents>initial.totalCents);assert.equal(mp.posts,0);
+ const status=await getV3ManualCheckout(env,token,'status',selection);assert.equal(status.enabled,true);
+ const reveal=await getV3ManualCheckout(env,token,'reveal',{...selection,balloon:0});assert.equal(reveal.claim.code,'save_static');
+ const finalSelection={...selection,blackLibriClaimId:reveal.claim.id};
+ const final=(await getV3ManualCheckout(env,token,'quote',finalSelection)).quote;
+ assert.equal(final.blackLibri.gift.code,'save_static');assert.equal(final.depositCents+final.balanceCents,final.totalCents);
+ const url=new URL('https://test/api/v2/customer-area/'+token+'/v3/manual-checkout/finish');
+ const call=body=>handleCustomerBriefingV3Api(new Request(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),env,url);
+ const body={...finalSelection,id:c.revisionId,termsAccepted:true,confirmed:true,expectedTotalCents:final.totalCents};
+ assert.equal((await call({...body,termsAccepted:false})).status,422);assert.equal(mp.posts,0);
+ const response=await call(body),result=await response.json();assert.equal(response.status,200,JSON.stringify(result));
+ assert.equal(mp.posts,1);
+ const row=db.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE public_token=?').get(token);assert.equal(row.order_code,created.orderCode);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
+ const attached=db.sqlite.prepare('SELECT order_id,status FROM v2_black_libri_claims WHERE id=?').get(reveal.claim.id);assert.equal(attached.order_id,row.id);assert.equal(attached.status,'attached');
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_terms_acceptances WHERE order_id=?').get(row.id).n,1);
+ assert.ok((await getV3ModularBriefing(db,token)).locked);
+ const payment=db.sqlite.prepare('SELECT provider_order_id,amount_cents FROM v2_payments WHERE order_id=?').get(row.id);assert.equal(payment.amount_cents,final.depositCents);
+ mp.approve(payment.provider_order_id);await syncMercadoPagoOrder(env,payment.provider_order_id);
+ const brief=await getV3ModularBriefing(db,token);assert.equal(brief.locked,false);assert.equal(brief.revision??null,null);assert.ok(brief.modules.some(m=>m.module==='convite'));assert.equal(mp.posts,1);
+});

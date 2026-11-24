@@ -970,3 +970,13 @@ export function validateV2UrgencyWindow(start, end, eventDate) {
   }
 }
 
+
+// Manual, authenticated proposals may choose dates outside recommended windows.
+// Preserve actual capacity and the agreed minimum production time of Ateliê/Retros.
+export function validateV3ManualDeliveryWindow({start,end,eventDate,productionDays=0}){
+  validateV2UrgencyWindow(start,end,eventDate);
+  const eventDay=parseIsoDay(eventDate);
+  if(formatIsoDay(eventDay)!==eventDate)throw new Error('Data do evento inválida.');
+  if(productionDays&&parseIsoDay(start)<addDays(currentBrazilDay(),productionDays))throw new Error('Ateliê e Retrospectivas precisam do prazo mínimo de produção.');
+  return {valid:true};
+}

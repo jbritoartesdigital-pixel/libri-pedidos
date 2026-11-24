@@ -5,7 +5,7 @@ import {createCapacityHold,V2CheckoutError} from './v2-checkout.js';
 import {createMercadoPagoCheckout,syncMercadoPagoOrder,cancelMercadoPagoOrder} from './v2-mercadopago.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {loadV2Settings,v2IntSetting} from './v2-catalog.js';
-import {validateV2DeliveryWindow,planV2AllocationForWindow,validateV2UrgencyWindow} from './v2-agenda.js';
+import {validateV2DeliveryWindow,planV2AllocationForWindow,validateV2UrgencyWindow,validateV3ManualDeliveryWindow} from './v2-agenda.js';
 import {nowIso} from './http.js';
 
 const terminalStatuses=new Set(['expired','cancelled','rejected']);
@@ -15,7 +15,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
   const db=env.DB;
   return withV2PaymentLock(db,orderId,async()=>{
     const row=await db.prepare(`SELECT o.id,o.order_code,o.public_token,o.status,o.briefing_status,
-       o.event_date,o.delivery_start,o.delivery_end,o.archived_at,o.urgency_enabled,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
+       o.source,o.event_date,o.delivery_start,o.delivery_end,o.archived_at,o.urgency_enabled,c.email,p.total_cents,p.deposit_cents,p.deposit_percent,
        p.balance_cents,p.payment_method,s.quote_json,a.deposit_percent AS authorized_percent
        FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id
        JOIN v2_order_pricing p ON p.order_id=o.id JOIN v2_customers c ON c.id=o.customer_id LEFT JOIN v3_admin_payment_policies a ON a.order_id=o.id
@@ -69,6 +69,7 @@ export async function prepareV3Payment(request,env,orderId,{renew=false}={}){
       const capacity={eventDate:row.event_date,start:row.delivery_start,end:row.delivery_end,
         pointsUnits:quote.pointsUnits,productionDays:quote.productionDays};
       if(quote.urgency?.requested){const u=await db.prepare("SELECT status,requested_delivery_start,requested_delivery_end,urgency_percent FROM v2_urgency_requests WHERE order_id=?").bind(orderId).first();if(!row.urgency_enabled||u?.status!=='approved'||u.requested_delivery_start!==capacity.start||u.requested_delivery_end!==capacity.end||u.urgency_percent!==quote.urgency.percent||quote.productionDays!==0||quote.items.length!==1||quote.items[0].family!=='convite')fail('O encaixe precisa de aprovação e conferência.','v3_urgency_unapproved');validateV2UrgencyWindow(capacity.start,capacity.end,capacity.eventDate);}
+      else if(row.source==='manual_whatsapp'&&quote.manualFlexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);
       else await validateV2DeliveryWindow(db,capacity);
       const plan=await planV2AllocationForWindow(db,capacity);
       if(!plan.fits)fail('A agenda não tem mais capacidade para o conjunto.','delivery_window_unavailable');

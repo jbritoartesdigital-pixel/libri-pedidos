@@ -26,7 +26,7 @@ import {
 
 import {
   renderManualOrder,
-} from './admin-v2-manual.js?v=20261124-admin-v3-81';
+} from './admin-v2-manual.js?v=108';
 
 import {
   openOrder,
@@ -167,7 +167,7 @@ async function renderCurrent() {
   if(rendering)return;rendering=true;
   const target=state.view;try{
   // Clear view-owned delegated handlers before mounting the next screen.
-  const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;
+  const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;root.oninput=null;
   loading();
 
   const open =
@@ -181,7 +181,7 @@ async function renderCurrent() {
     state.view === 'manual'
   ) {
     try {
-      const {renderV3ManualOrder}=await import('./admin-v3-manual.js?v=81');
+      const {renderV3ManualOrder}=await import('./admin-v3-manual.js?v=108');
       await renderV3ManualOrder(renderManualOrder);
     } catch(error){
       root.innerHTML='<section class="card"><h2>Não foi possível preparar o novo pedido</h2><p>'+esc(error.message)+'</p><button type="button" class="btn btn-secondary" id="manualClassicFallback">Abrir pedido manual clássico</button></section>';

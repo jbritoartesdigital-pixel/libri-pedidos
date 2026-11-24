@@ -1,5 +1,5 @@
 import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261124-atelier-gift-v3';
-import { startV3CustomerArea } from './client-v2-area-v3.js?v=99';
+import { startV3CustomerArea } from './client-v2-area-v3.js?v=109';
 import { atelieBriefingHtml, bindAtelieBriefing } from './client-v2-atelie-briefing.js';
 
 import {

@@ -1,5 +1,5 @@
 import {openV3PaidCancellation,refreshV3Cancellation,refundV3CancellationCharge,finalizeV3PaidCancellation} from '../lib/v3-paid-cancellation.js';
-import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder,getV3ManualUpsell} from '../lib/v3-order-revisions.js';
+import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder,getV3ManualUpsell,getV3ManualCheckout} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
 import {previewV3SupplementCapacity,startV3SupplementPayment,verifyV3SupplementPayment} from '../lib/v3-supplement-payment.js';
 import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/v3-service-supplements.js';
@@ -11,6 +11,7 @@ import {recoverV3PaidCapacity,getV3AdminBriefing,reviewV3ServiceBriefing} from '
 import {json,fail,readJson} from '../lib/http.js';
 import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
+import {recoverV3Checkout} from '../lib/v3-checkout.js';
 const customerBrief=async(env,token)=>{const b=await getV3ModularBriefing(env.DB,token);return b?{...b,manualUpsell:b.revision?.kind==='manual'?await getV3ManualUpsell(env.DB,token).catch(()=>null):null,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}:null;};
 const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
 async function boundedJson(request){
@@ -21,6 +22,24 @@ async function boundedJson(request){
   return body;
 }
 export async function handleCustomerBriefingV3Api(request,env,url){
+ const manualCheckout=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/manual-checkout\/(catalog|quote|status|reveal|preview|finish)$/);
+ if(manualCheckout){
+  const [,token,action]=manualCheckout;
+  if(request.method!==(action==='catalog'?'GET':'POST'))return fail('Método não permitido.',405);
+  try{
+   if(action==='finish'){
+    const input=await boundedJson(request);
+    if(input.termsAccepted!==true||input.confirmed!==true)return fail('Leia e aceite os termos da contratação.',422);
+    const result=await acceptV3Revision(env.DB,token,{...input,manualCheckout:true});
+    if(!result)return fail('Pedido não encontrado.',404);
+    const payment=await recoverV3Checkout(request,env,{publicToken:token},{renew:true});
+    return json({ok:true,payment});
+   }
+   const result=await getV3ManualCheckout(env,token,action,action==='catalog'?{}:await boundedJson(request));
+   return json({ok:true,...result});
+  }catch(e){return errorResponse(e);}
+ }
+
  const revision=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/revision\/accept$/);
  if(revision){
   if(request.method!=='POST')return fail('Método não permitido.',405);

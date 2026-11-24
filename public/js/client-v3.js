@@ -16,7 +16,7 @@ if(simulationMode){document.body.dataset.simulation='true';document.querySelecto
 // nos eventos de análise ou nas solicitações de catálogo/agenda.
 let conversationName='',welcomeAnswered=false;
 try{welcomeAnswered=!simulationMode&&sessionStorage.getItem('libriV3WelcomeSeen')==='1';}catch{}
-function personalTitle(text){return conversationName?clean(conversationName)+', '+text:text.charAt(0).toUpperCase()+text.slice(1);}
+function personalTitle(text){const name=conversationName&&conversationName===conversationName.toLocaleUpperCase('pt-BR')?conversationName.toLocaleLowerCase('pt-BR').replace(/(^|\s)\p{L}/gu,x=>x.toLocaleUpperCase('pt-BR')):conversationName;return name?clean(name)+', '+text:text.charAt(0).toUpperCase()+text.slice(1);}
 function finishWelcome(name=''){conversationName=String(name).replace(/[\u0000-\u001f\u007f]/g,' ').trim().replace(/\s+/g,' ').slice(0,60);welcomeAnswered=true;if(!simulationMode)setJourneyName(conversationName);try{if(!simulationMode)sessionStorage.setItem('libriV3WelcomeSeen','1');}catch{}render();}
 function shouldAskName(){return !welcomeAnswered&&state.step==='event'&&!state.eventType&&!state.cartItems.length;}
 const EVENTS = [
@@ -509,7 +509,7 @@ function renderCart() {
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar contratação</button>':'')+'</div>',4);
 }
 function showCartAdded(){
- modalClose();modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho!</h2><p>Você pode contratar mais um serviço ou conferir o pedido.</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Continuar escolhendo</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+ modalClose();modalRoot.innerHTML='<div class="v3-modal-card v3-added-card" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="v3-added-title"><span class="v3-eyebrow">Seu pedido</span><h2 id="v3-added-title">Adicionado ao carrinho</h2><p>Deseja escolher outro serviço ou conferir seu pedido?</p><div class="v3-action-row"><button type="button" class="v3-btn v3-btn-secondary" data-action="added-more">Escolher outro serviço</button><button type="button" class="v3-btn v3-btn-primary" data-action="added-view">Ver carrinho</button></div></div>';modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
 }
 async function openCart(){
   const revision=cartRevision+1;

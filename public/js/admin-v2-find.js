@@ -17,6 +17,7 @@ export const ADMIN_FEATURES = Object.freeze([
   { title: 'Meta e faturamento', section: 'Financeiro', view: 'finance', detail: 'Indicadores financeiros e vendas' },
   { title: 'Produtos e preços', section: 'Loja', view: 'store', tab: 'products', detail: 'Catálogo, variações por cenas e valores' },
   { title: 'Libri Ateliê', section: 'Loja', view: 'store', tab: 'atelie', keywords: 'identidade visual essencia encanto universo brasao monograma estampas', detail: 'Pacotes, entregáveis, preços, revisões, capacidade e ativação comercial individual.' },
+  { title: 'Pacotes de retrospectiva', section: 'Loja', view: 'store', tab:'retrospectives', detail: 'Valores, fotos, vídeos, pontos e situação dos pacotes próprios' },
   { title: 'Adicionais', section: 'Loja', view: 'store', tab: 'addons', detail: 'Itens opcionais de cada produto' },
   { title: 'Combos', section: 'Loja', view: 'store', tab: 'combos', detail: 'Pacotes e ofertas combinadas' },
   { title: 'Cupons', section: 'Loja', view: 'store', tab: 'coupons', keywords: 'cupom desconto promoção', detail: 'Criar e administrar descontos promocionais' },

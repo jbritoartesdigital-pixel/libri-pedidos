@@ -1,6 +1,6 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 82 | 24/11/2026 (Brasil)
-ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V82 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
+Versão 83 | 24/11/2026 (Brasil)
+ESTADO ATUAL: V80 publicada com sucesso no run 45471175718, main 7bbaede9055d50e5ec7a56a446bf60e72ab34ac8. V83 Admin em branch feature/v81-admin-integrado-20261124, ainda não publicada. Os blocos iniciais abaixo são históricos, não estado atual.
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -483,3 +483,6 @@ Decisão recuperada de 23/11: seis áreas Central, Pedidos, Produção, Agenda, 
 
 
 CHECKPOINT V82 — organização das telas operacionais. CI V81 45472634262 falhou em teste de cache da entrada manual; ajustada asserção para a nova versão, sem retirar testes. Financeiro em seis áreas (resumo, movimentações, a receber, complementos, devoluções, desempenho), links de complementos corrigidos (regex de código), localizador com acessos de trabalho e financeiro; produção com seleção direta de serviço, proteção de consulta após sair da tela; agenda mantém calendário e recolhe antecipação sem itens; catálogo recolhe variantes por formato; ficha separa Alterações do Financeiro e oferece próximo passo por serviço. Sem mudança de regras, cálculos ou endpoints. CI pendente. Próximo: verificar testes, corrigir regressões, revisar capturas e cobertura das rotas e catálogo de retrospectivas. Não tratar como conclusão integral enquanto faltarem verificações.
+
+
+CHECKPOINT V83 — catálogo e acessos: Retrospectivas tem aba própria na Loja com os cinco pacotes reais, preço, pontos, limites, condições e estado de venda por GET autenticado. Somente leitura por enquanto: alteração/pausa comercial exige compatibilizar o gate activateApprovedV3Catalog, que atualmente reativa pacotes pausados e bloqueia valores diferentes dos aprovados. Não criar controle de edição falso. Corrigida nomenclatura desatualizada no Ateliê; imports com cache atualizado; testes de navegação e catálogo ampliados. CI pendente; ainda falta validar todas as ações e telas, especialmente financeiro e manual. Não publicar até confirmar gates.

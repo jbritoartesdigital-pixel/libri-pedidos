@@ -1,0 +1,9 @@
+import {api,esc,money} from './admin-v2-core.js';
+export async function renderRetrospectiveStore(panel){
+ const mount=document.createElement('div');mount.className='retro-catalog-root';panel.replaceChildren(mount);
+ mount.innerHTML='<div class="card admin-loading" role="status">Consultando pacotes…<span class="admin-loading-line" aria-hidden="true"></span></div>';
+ try{
+  const {packages=[]}=await api('/api/admin/v2/store-config/v3/retrospectives');if(!mount.isConnected)return;
+  mount.innerHTML='<section class="card"><div class="section-title"><h2>Pacotes de retrospectiva</h2><span class="status">'+packages.length+' pacotes</span></div><p class="muted">Catálogo próprio, separado dos adicionais de convites. Valores e capacidade vigentes. Alterações comerciais exigem atualização validada do catálogo aprovado.</p><div class="list">'+packages.map(p=>'<article class="row-card retro-catalog-card"><div class="section-title"><h3>'+esc(p.name)+'</h3><span class="status '+(p.purchaseAvailable?'green':'yellow')+'">'+(p.purchaseAvailable?'À venda':'Indisponível')+'</span></div><div class="retro-catalog-facts"><div><small>Preço</small><strong>'+money(p.priceCents)+'</strong></div><div><small>Capacidade</small><strong>'+Number(p.pointsUnits)/100+' pts</strong></div><div><small>Fotos</small><strong>'+Number(p.maxPhotos)+'</strong></div><div><small>Vídeos</small><strong>'+Number(p.maxVideos)+'</strong></div></div><p class="muted">'+Number(p.minimumProductionDays)+' dias de produção · '+Number(p.revisionLimit||0)+' revisão(ões) · Materiais pelo WhatsApp</p><details><summary>Entregáveis e condições</summary><ul>'+p.included.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul><p style="white-space:pre-wrap">'+esc(p.specificTerms||'Não cadastradas')+'</p></details></article>').join('')+'</div></section>';
+ }catch(e){if(mount.isConnected)mount.innerHTML='<div class="card empty">'+esc(e.message)+'</div>';}
+}

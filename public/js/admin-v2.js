@@ -8,7 +8,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-82';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-83';
 
 import {
   ensureAuth,
@@ -29,7 +29,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261113-existing-checkout-gift-1';
+} from './admin-v2-order.js?v=20261124-admin-v3-83';
 
 import {
   renderAgenda,
@@ -45,7 +45,7 @@ import {
 
 import {
   renderStore,
-} from './admin-v2-config.js?v=20261124-admin-v3-82';
+} from './admin-v2-config.js?v=20261124-admin-v3-83';
 
 import {
   refreshBell,

@@ -8,6 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {database,day,providerMock} from '../helpers.mjs';
 import {handleCustomerBriefingV3Api,handleAdminBriefingV3Api} from '../../src/routes/briefing-v3.js';
 import {handleAdminV2CoreApi} from '../../src/routes/admin-v2-core.js';
+import {handleAdminStoreConfigV2Api} from '../../src/routes/admin-store-config-v2.js';
 import {handleAdminNotificationsV2Api} from '../../src/routes/admin-notifications-v2.js';
 import {getV3CheckoutTerms,startV3Checkout} from '../../src/lib/v3-checkout.js';
 import {previewV3CartDelivery} from '../../src/lib/v3-cart-delivery.js';
@@ -49,7 +50,8 @@ const server=createServer(async(req,res)=>{
    else if(url.pathname==='/api/admin/v2/auth/status'&&req.method==='GET')result=Response.json({ok:true,auth:{authenticated:true}});
    // Test-only authentication fixture, never in the Worker. Restrict local
    // administrative access to read-only central, notifications and fixture.
-   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/central')result=await handleAdminV2CoreApi(request,readEnv,url);
+   else if(req.method==='GET'&&['/api/admin/v2/central','/api/admin/v2/production','/api/admin/v2/orders/search'].includes(url.pathname))result=await handleAdminV2CoreApi(request,readEnv,url);
+   else if(req.method==='GET'&&['/api/admin/v2/store-config','/api/admin/v2/store-config/v3/retrospectives'].includes(url.pathname))result=await handleAdminStoreConfigV2Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/notifications')result=await handleAdminNotificationsV2Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
@@ -202,6 +204,8 @@ try{
  await admin.reload();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
  await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-mobile.png',fullPage:true});await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'light');
+ await admin.locator('[data-view="production"]').click();await admin.locator('[data-production-service="retrospectivas"]').click();await admin.locator('#productionList .order-card').first().waitFor();assert.equal(await admin.locator('[data-production-service="retrospectivas"]').getAttribute('aria-pressed'),'true');await admin.screenshot({path:'artifacts/v3-browser/admin-production-mobile.png',fullPage:true});
+ await admin.goto(origin+'/admin-v2?view=store&storeTab=retrospectives');await admin.locator('.retro-catalog-card').first().waitFor();assert.equal(await admin.locator('.retro-catalog-card').count(),5);await admin.screenshot({path:'artifacts/v3-browser/admin-retrospectives-mobile.png',fullPage:true});
  await adminContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);

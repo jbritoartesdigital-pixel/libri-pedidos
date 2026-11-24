@@ -1,12 +1,13 @@
-// Blueprint isolado do briefing Libri Ateliê.
-// Ainda NÃO vinculado a pedidos ou uploads. Ativar somente quando a venda
-// e a autorização dos responsáveis tiverem integração e testes completos.
+// Briefing adaptativo do Ateliê usado na área privada após pagamento.
+// Personagens extras são apenas pedidos de orçamento, não itens cobrados automaticamente.
 export function buildAtelieBriefingBlueprint({
   event={}, packageCode='', contractedApplications=[], requiresChildPhoto=false,
   data={}
 }={}) {
   const f=(key,label,type='text',other={})=>({key,label,type,...other});
   const section=(id,title,fields)=>({id,title,fields});
+  const includedPoses=({essencia:1,encanto:2,universo:3})[packageCode]||1;
+  const childMascot=data.mascotMode==='criança ilustrada';
   const safeApplications=Array.isArray(contractedApplications)
     ?contractedApplications.filter(x=>typeof x==='string'&&x.trim()).slice(0,30):[];
   const sections=[
@@ -18,12 +19,36 @@ export function buildAtelieBriefingBlueprint({
       f('occasion','Qual é a ocasião?','text',
         {prefill:event.type||''}),
       f('eventDate','Data da festa','date',
-        {prefill:event.date||'',required:false})
+        {prefill:event.date||'',required:false}),
+      f('multipleHonorees','A festa é de dois ou mais homenageados?','choice',{
+        options:['não','sim'],required:true,
+        hint:'Irmãos celebrando juntos não significam cobrança automática de personagens extras.'
+      }),
+      ...(data.multipleHonorees==='sim' ? [
+        f('honoreesNamesAges','Nomes e idades de cada homenageado','textarea',{required:true})
+      ] : [])
     ]),
     section('theme','Tema e personagens',[
       f('theme','Qual é o tema?','text',{required:true}),
       f('interpretation','Como você imagina esse tema?','textarea',
         {hint:'Pode descrever com suas palavras, sem termos de design.'}),
+      f('mascotMode','Qual será a ilustração principal da identidade?','choice',{
+        options:['criança ilustrada','ilustração temática'],required:true,
+        hint:'O pacote inclui uma ilustração principal. Se escolher a criança, pediremos fotos privadas no briefing.'
+      }),
+      f('includedPosesInfo','Poses incluídas no pacote: '+includedPoses,'info',{
+        required:false,
+        hint:'Essência: 1 · Encanto: 2 · Universo: 3. Poses extras podem ser orçadas à parte.'
+      }),
+      f('additionalSubjects','Quer acrescentar outras crianças, animais ou personagens ilustrados?','choice',{
+        options:['não','quero solicitar orçamento'],required:true,
+        hint:'Cada personagem adicional é orçado separadamente. Não há cobrança automática nem criação antes da aprovação.'
+      }),
+      ...(data.additionalSubjects==='quero solicitar orçamento' ? [
+        f('additionalSubjectsDetails','Quais personagens extras deseja?','textarea',{
+          required:true,hint:'Ex.: irmão, cachorro, papagaio ou figura temática. Informe nomes e quantidade.'
+        })
+      ] : []),
       f('charactersWanted','Personagens ou figuras que gostaria de ver','textarea',{required:false}),
       f('mustHave','Algo que precisa aparecer?','textarea',{required:false}),
       f('mustAvoid','Algo que não pode aparecer?','textarea',{required:false})
@@ -40,7 +65,7 @@ export function buildAtelieBriefingBlueprint({
     section('references','Inspirações e referências',[
       f('referenceNotes','O que gostou nas imagens de inspiração?','textarea',
         {required:false,allowsReferenceUploads:true}),
-      ...(requiresChildPhoto?[
+      ...(requiresChildPhoto && childMascot?[
         f('childPhotoPermission','Autoriza o uso privado das fotos enviadas para criar as artes contratadas?','choice',
           {options:['sim','não'],required:true}),
         ...(data.childPhotoPermission==='sim'
@@ -75,7 +100,7 @@ export function buildAtelieBriefingBlueprint({
     ])
   ];
   return {
-    kind:'atelie',schemaVersion:'atelie-draft-0.1',saleReady:false,
+    kind:'atelie',schemaVersion:'atelie-v4.1-subjects',saleReady:true,
     packageCode,sections,
     saveAndResumePlanned:true,
     fileUploadRequiresProtectedCustomerArea:true,

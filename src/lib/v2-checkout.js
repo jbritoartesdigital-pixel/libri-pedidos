@@ -868,7 +868,7 @@ async function createOrderRecords(
   return orderId;
 }
 
-async function createCapacityHold(
+export async function createCapacityHold(
   db,
   {
     orderId,

@@ -40,16 +40,17 @@ export function buildAtelieBriefingBlueprint({
         required:false,
         hint:'Essência: 1 · Encanto: 2 · Universo: 3. Poses extras podem ser orçadas à parte.'
       }),
-      f('additionalSubjects','Quer acrescentar outras crianças, animais ou personagens ilustrados?','choice',{
+      f('additionalSubjects','Quer encomendar outra criança, pet ou ilustração individual fora da composição prevista?','choice',{
         options:['não','quero solicitar orçamento'],required:true,
-        hint:'Cada personagem adicional é orçado separadamente. Não há cobrança automática nem criação antes da aprovação.'
+        hint:'Personagens do tema já previstos na composição não são adicionais. Só novas ilustrações individuais fora do escopo são orçadas, sem cobrança automática.'
       }),
       ...(data.additionalSubjects==='quero solicitar orçamento' ? [
         f('additionalSubjectsDetails','Quais personagens extras deseja?','textarea',{
-          required:true,hint:'Ex.: irmão, cachorro, papagaio ou figura temática. Informe nomes e quantidade.'
+          required:true,hint:'Ex.: outro irmão, cachorro, papagaio ou nova ilustração individual fora da composição. Informe nomes e quantidade.'
         })
       ] : []),
-      f('charactersWanted','Personagens ou figuras que gostaria de ver','textarea',{required:false}),
+      f('charactersWanted','Quais personagens do tema ou figuras você gostaria de ver na composição?','textarea',{required:false,
+        hint:'Figuras temáticas já previstas podem aparecer com a criança ilustrada sem virarem automaticamente adicionais.'}),
       f('mustHave','Algo que precisa aparecer?','textarea',{required:false}),
       f('mustAvoid','Algo que não pode aparecer?','textarea',{required:false})
     ]),

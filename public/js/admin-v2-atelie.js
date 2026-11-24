@@ -33,7 +33,7 @@ export async function renderAtelieStore(panel) {
       '<section class="card"><h2>Pacote '+esc(p.name)+'</h2><form id="atelieForm"><fieldset '+(p.saleEnabled?'disabled':'')+' style="border:0;padding:0;margin:0">'+
       f('atDesc','Explicação simples para a cliente',textarea('atDesc',p.shortDescription,3))+
       f('atIncluded','Entregáveis exatos: um por linha',textarea('atIncluded',lines(p.includedDraft),6))+
-      '<p class="muted">Aguardar a versão oficial do catálogo. Não copiar quantidades de uma tabela provisória.</p>'+
+      '<p class="muted">Catálogo V4.1 oficial aprovado: R$159, R$299 e R$549, com paleta, tipografia e mascotinho em 3, 4 e 5 poses. Carga em pontos ainda pendente.</p>'+
       f('atExcluded','O que não está incluído: um por linha',textarea('atExcluded',lines(p.excludedDraft),4))+
       f('atScope','Versão oficial de referência',input('atScope',p.scopeReference,'Ex.: V4.1 aprovada'))+
       '<div class="form-grid">'+
@@ -44,7 +44,8 @@ export async function renderAtelieStore(panel) {
       f('atTerms','Condições específicas para a cliente (entregas, revisões, direitos de uso e exclusões)',textarea('atTerms',p.specificTermsDraft,7))+
       box('atVisible','Exibir o pacote na vitrine V3 (preço apenas quando a venda for liberada).',p.showcaseVisible)+
       box('atApproved','Confirmei escopo, entregáveis, exclusões e rodadas contra o catálogo oficial.',p.scopeApproved)+
-      '<div class="toolbar" style="margin-top:16px"><button class="btn btn-primary" type="submit" id="atSave">Salvar rascunho</button></div>'+
+      '<div class="toolbar" style="margin-top:16px"><button class="btn btn-primary" type="submit" id="atSave">Salvar rascunho</button>'+
+      '<button type="button" class="btn btn-secondary" id="atImportV41">Aplicar catálogo V4.1 aprovado</button></div>'+
       '</fieldset></form>'+
       '<div class="notice '+(p.saleEnabled?'success':'info')+'" style="margin-top:14px">'+
         (p.saleEnabled?'Pacote à venda no checkout existente. Para editar valores ou escopo, pause primeiro.':
@@ -55,6 +56,20 @@ export async function renderAtelieStore(panel) {
         '" id="atelieToggleSale" '+(!p.saleEnabled&&(p.releaseMissing||[]).length?'disabled':'')+'>'+
         (p.saleEnabled?'Pausar vendas deste pacote':'Liberar venda deste pacote')+'</button></div></section>';
     panel.querySelectorAll('[data-atelie-package]').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.ateliePackage;render();}));
+    panel.querySelector('#atImportV41')?.addEventListener('click',async()=>{
+      if(p.saleEnabled)return showToast('Pause as vendas para atualizar o catálogo.');
+      if(!window.confirm('Aplicar valores e entregáveis V4.1 aprovados neste pacote? Os pontos serão limpos e as vendas continuarão desativadas.'))return;
+      const button=panel.querySelector('#atImportV41');
+      button.disabled=true;
+      try{
+        const result=await api('/api/admin/v2/atelie/packages/'+selected+'/approved-catalog',{
+          method:'POST',body:'{}'
+        });
+        packages[packages.findIndex(x=>x.code===selected)]=result.package;
+        showToast('Catálogo aprovado aplicado. Falta validar os pontos para vender.');
+        render();
+      }catch(e){showToast(e.message||'Não foi possível aplicar o catálogo.');button.disabled=false;}
+    });
     panel.querySelector('#atelieToggleSale')?.addEventListener('click',async()=>{
       const enabled=!p.saleEnabled;
       if(!window.confirm(enabled

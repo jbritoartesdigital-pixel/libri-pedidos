@@ -29,7 +29,7 @@ async function lookup(db,code){
 }
 // Verify every known remote attempt, even locally terminal ones. Unknown
 // holds never become proof that a charge was not created.
-async function endUnpaidAttempts(env,row){
+export async function endUnpaidAttempts(env,row){
  const db=env.DB,id=row.id;
  const payments=(await db.prepare("SELECT provider,provider_order_id,status FROM v2_payments WHERE order_id=? ORDER BY id").bind(id).all()).results||[];
  const holds=(await db.prepare('SELECT id,status FROM v2_checkout_holds WHERE order_id=?').bind(id).all()).results||[];
@@ -49,6 +49,7 @@ export async function changeV3AdminDeposit(env,code,input={}){
  return withV2PaymentLock(env.DB,initial.id,async()=>{
   const db=env.DB,row=await lookup(db,code);
   if(row.payment_method!=='pix'||row.archived_at||row.briefing_status!=='locked'||!['configuring','awaiting_payment'].includes(row.status))fail('Somente pedidos Pix ainda não pagos podem mudar a entrada.');
+  if(await db.prepare("SELECT 1 FROM v3_order_revisions WHERE order_id=? AND status='offered'").bind(row.id).first())fail('Aguarde o aceite da proposta revisada antes de mudar a entrada.');
   const count=await endUnpaidAttempts(env,row);
   const at=nowIso(),deposit=depositPercent===50?Math.ceil(row.total_cents/2):row.total_cents;
   await db.batch([
@@ -91,6 +92,7 @@ export async function cancelV3UnpaidOrder(env,code,input={}){
   const at=nowIso();
   await db.batch([
    db.prepare("UPDATE v2_orders SET status='cancelled',next_action='Pedido cancelado',updated_at=? WHERE id=?").bind(at,row.id),
+   db.prepare("UPDATE v3_order_revisions SET status='cancelled' WHERE order_id=? AND status='offered'").bind(row.id),
    db.prepare("UPDATE v3_order_services SET production_status='cancelled',updated_at=? WHERE order_id=?").bind(at,row.id),
    db.prepare("UPDATE v2_checkout_holds SET status='cancelled',updated_at=? WHERE order_id=? AND status='active'").bind(at,row.id),
    db.prepare("UPDATE v2_black_libri_claims SET status='expired',updated_at=? WHERE order_id=? AND status='attached' AND client_request_id LIKE 'v3:%'").bind(at,row.id),

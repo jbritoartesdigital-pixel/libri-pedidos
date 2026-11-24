@@ -46,6 +46,7 @@ export async function startV3Checkout(request,env,body){
   const prior=await env.DB.prepare('SELECT o.id,o.order_code,o.public_token,o.customer_id FROM v3_order_checkout_snapshots s JOIN v2_orders o ON o.id=s.order_id WHERE s.request_key=?').bind(body.clientRequestId).first();
   let customerId,orderCode,publicToken;
   if(prior){
+    if(await env.DB.prepare('SELECT 1 FROM v3_order_revisions WHERE order_id=? LIMIT 1').bind(prior.id).first())fail('O pedido foi revisado. Retome pelo link do pedido.','order_revision_required',409);
     const owner=await env.DB.prepare('SELECT whatsapp FROM v2_customers WHERE id=?').bind(prior.customer_id).first();
     if(owner?.whatsapp!==whatsapp)fail('Esta tentativa pertence a outro pedido.','order_request_conflict',409);
     customerId=Number(prior.customer_id);orderCode=prior.order_code;publicToken=prior.public_token;
@@ -74,6 +75,7 @@ export async function recoverV3Checkout(request,env,body,{renew=false}={}){
   const status=await reconcileV3Payment(env,row.id);
   const base={found:true,orderCode:row.order_code,customerAreaPath:'/meu-pedido/'+row.public_token,totalCents:row.total_cents,paymentMethod:row.payment_method,depositPercent:row.deposit_percent,amountDueNowCents:row.deposit_cents,balanceCents:status.balanceCents??row.balance_cents,
     deliveryWindow:{start:row.delivery_start,end:row.delivery_end}};
+  if(status.revisionRequired)return {...base,state:'review',revisionRequired:true,canRenew:false};
   if(status.alreadyPaid)return {...base,state:'paid',capacityReview:!!status.capacityReview,canRenew:false};
   if(row.archived_at||row.status==='cancelled')return {...base,state:'review',canRenew:false};
   if(status.pending)return {...base,state:'pending',checkoutUrl:status.checkoutUrl,canRenew:false};

@@ -1,7 +1,8 @@
 // Shared stock accounting for V2/V3 Mercado Pago checkouts.
-export async function couponUsageCount(db,couponId,customerId=null){
- const where=customerId==null?'':' AND customer_id=?';
- const args=customerId==null?[couponId,couponId]:[couponId,customerId,couponId,customerId];
+export async function couponUsageCount(db,couponId,customerId=null,excludeOrderId=null){
+ const where=(customerId==null?'':' AND customer_id=?')+(excludeOrderId==null?'':' AND order_id!=?');
+ const params=[couponId,...(customerId==null?[]:[customerId]),...(excludeOrderId==null?[]:[excludeOrderId])];
+ const args=[...params,...params];
  const row=await db.prepare(`SELECT (SELECT COUNT(*) FROM v2_coupon_uses WHERE coupon_id=?${where})+
  (SELECT COUNT(*) FROM v3_coupon_reservations r WHERE coupon_id=?${where}
  AND NOT EXISTS(SELECT 1 FROM v2_coupon_uses u WHERE u.coupon_id=r.coupon_id AND u.order_id=r.order_id)) AS total`).bind(...args).first();

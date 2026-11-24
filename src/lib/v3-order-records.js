@@ -114,22 +114,7 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     db.prepare(`INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at)
       VALUES(${idSql},'order_created','Pedido combinado V3 preparado.',?,?)`).bind(orderCode,JSON.stringify({families:quote.items.map(x=>x.family),totalCents:quote.totalCents}),stamp)
   ];
-  for(const line of quote.items){
-    const q=line.commercialSnapshot;
-    statements.push(db.prepare(`INSERT INTO v3_order_services(order_id,family,product_code,variant_code,gross_cents,discount_cents,total_cents,
-      points_units,production_days,commercial_snapshot_json,created_at,updated_at) VALUES(${idSql},?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(orderCode,line.family,line.productCode,line.variantCode,line.grossCents,line.discountCents,line.totalCents,line.pointsUnits,
-        line.productionDays,JSON.stringify(q),stamp,stamp));
-    const records=[{type:'product',code:q.variant.code,name:q.product.pricingMode==='scene_count'?q.product.name+' • '+q.variant.label:q.product.name,
-      price:q.variant.priceCents,points:q.variant.pointsUnits,config:{productCode:q.product.code,productSlug:q.product.slug,variantCode:q.variant.code,
-        sceneCount:q.variant.sceneCount,...q.variant.config,serviceFamily:line.family}},
-      ...q.addons.map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,config:{...a.config,serviceFamily:line.family}})),
-      ...(q.v3Extras||[]).map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,quantity:a.quantity,config:{v3Extra:true,unitPointsUnits:a.pointsUnits,serviceFamily:line.family}}))];
-    for(const item of records){
-      statements.push(db.prepare(`INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
-        VALUES(${idSql},?,?,?,?,?,?,?,?)`).bind(orderCode,item.type,item.code,item.name,item.quantity||1,item.price,item.points,JSON.stringify(item.config),stamp));
-    }
-  }
+  statements.push(...v3LineStatements(db,quote,idSql,orderCode,stamp));
   try{
     await db.batch(statements);
   }catch(error){
@@ -141,4 +126,26 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
   const created=await existingOrder(db,requestKey,requestHash);
   if(!created)throw new Error('Registro do pedido combinado não encontrado.');
   return {...created,recovered:false};
+}
+
+export function v3LineStatements(db,quote,idSql,orderKey,stamp){
+ const statements=[];
+  for(const line of quote.items){
+    const q=line.commercialSnapshot;
+    statements.push(db.prepare(`INSERT INTO v3_order_services(order_id,family,product_code,variant_code,gross_cents,discount_cents,total_cents,
+      points_units,production_days,commercial_snapshot_json,created_at,updated_at) VALUES(${idSql},?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(orderKey,line.family,line.productCode,line.variantCode,line.grossCents,line.discountCents,line.totalCents,line.pointsUnits,
+        line.productionDays,JSON.stringify(q),stamp,stamp));
+    const records=[{type:'product',code:q.variant.code,name:q.product.pricingMode==='scene_count'?q.product.name+' • '+q.variant.label:q.product.name,
+      price:q.variant.priceCents,points:q.variant.pointsUnits,config:{productCode:q.product.code,productSlug:q.product.slug,variantCode:q.variant.code,
+        sceneCount:q.variant.sceneCount,...q.variant.config,serviceFamily:line.family}},
+      ...q.addons.map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,config:{...a.config,serviceFamily:line.family}})),
+      ...(q.v3Extras||[]).map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,quantity:a.quantity,config:{v3Extra:true,unitPointsUnits:a.pointsUnits,serviceFamily:line.family}}))];
+    for(const item of records){
+      statements.push(db.prepare(`INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
+        VALUES(${idSql},?,?,?,?,?,?,?,?)`).bind(orderKey,item.type,item.code,item.name,item.quantity||1,item.price,item.points,JSON.stringify(item.config),stamp));
+    }
+  }
+
+ return statements;
 }

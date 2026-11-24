@@ -1,3 +1,4 @@
+import {pendingV3Revision} from './v3-order-revisions.js';
 import {originalV3FinancialState} from './v3-admin-payment-policy.js';
 // Internal modular briefing model. Public routes, authenticated Admin receipt
 // action, invite/Ateliê private upload integration and final submission follow.
@@ -119,7 +120,7 @@ export async function getV3ModularBriefing(db,token){
     blackLibri:s.snapshot.blackLibri||null,extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
   const base={orderCode:order.order_code,locked,orderStatus:order.status,aggregate:summarizeV3Order(services,{locked,orderStatus:order.status}),payment:{totalCents:order.total_cents,method:order.payment_method,depositPercent:order.deposit_percent,depositCents:finance?.row.deposit_cents,receivedCents:finance?.paidCents||0,remainingCents:finance?.remainingCents??order.total_cents,fullyPaid:!!finance?.fullyPaid},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
-  if(locked)return {...base,modules:[]};
+  if(locked)return {...base,modules:[],revision:await pendingV3Revision(db,order.id)};
   for(let i=0;i<services.length;i++){purchased[i].progress=await getV3ServiceProgress(db,services[i]);purchased[i].delivery=await getV3Delivery(db,services[i]);}
   const modules=['shared',...services.map(s=>s.family)].map(module=>({
     module,revision:revisions[module]||0,data:drafts[module]||{},editable:['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&

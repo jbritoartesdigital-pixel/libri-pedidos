@@ -55,7 +55,7 @@ function validateItems(items) {
   });
 }
 
-export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSale=false,customerId=null}={}) {
+export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSale=false,customerId=null,attachedBlackClaim=null,excludeCouponOrderId=null}={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
@@ -115,11 +115,11 @@ export async function quoteV3Cart(db, cart={}, {includeSnapshots=false,requireSa
     });
   }
   const invite=quotes.find(l=>l.family==='convite');
-  const claim=await getV3BlackClaim(db,cart);
+  const claim=attachedBlackClaim||await getV3BlackClaim(db,cart);
   const black=await v3BlackCandidate(db,claim,invite);
   const campaign=await activeV3CombinedCampaign(db);
   const discount=calculateV3CombinedDiscount(quotes,campaign||undefined);
-  const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType,new Date(),customerId);
+  const coupon=await quoteV3Coupon(db,couponCode,quotes,eventType,new Date(),customerId,excludeCouponOrderId);
   const bestExisting=discount.selectedDiscount==='combined'?discount.combinedDiscountCents:quotes.reduce((n,l)=>n+l.discountCents,0);
   const useBlack=!!black&&black.availableDiscountCents>Math.max(bestExisting,coupon?.discountCents||0);
   const useCoupon=!useBlack&&!!coupon&&coupon.discountCents>bestExisting;

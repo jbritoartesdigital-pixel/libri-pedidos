@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 03 | 23/11/2026 (Brasil)
+Versão 04 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -57,5 +57,12 @@ RETOMADA V03 — AGENDA DO CARRINHO COMBINADO
 - 9cb85d9: cotação agregada inclui o maior prazo mínimo de produção entre os serviços.
 - 912a4e6 / 3b5da67: previewV3CartDelivery e POST /api/v3/cart/delivery-options consultam a agenda V2 com soma de pontos e validam janela escolhida; não reservam capacidade, não geram ordem ou pagamento.
 - 47c1322: tela do carrinho combinado consulta prazos por data do evento, mostra janelas reais e explicita a previsão sujeita a briefing completo; não altera checkout individual.
-- b9d0230: testes de capacidade somada, prazo mínimo 15 dias, datas inválidas, seleção de janela, ausência de pedidos/pagamentos/reservas. CI a confirmar.
+- b9d0230: testes de capacidade somada, prazo mínimo 15 dias, datas inválidas, seleção de janela, ausência de pedidos/pagamentos/reservas. CI 45313784969 concluído com sucesso.
 - Auditoria de src/lib/v2-checkout.js: startV2Checkout já possui claimCheckoutRequest, createOrderRecords, createCapacityHold, createMercadoPagoCheckout e recuperação de falhas. Atualmente assume quote.product/variant únicos. Reusar essas peças, não criar checkout independente. Próximo passo: modelo de serviços vinculados a v2_orders, snapshot individual de escopo/termos e preços, idempotência ligada ao payload, escrita atômica e adaptação de todos os leitores de produto único (briefing, admin, agenda, reconciliação, reprecificação). Não habilitar cobrança conjunta até os leitores e regras ficarem compatíveis. Agenda pós-briefing continua pendente; consulta atual não é reserva.
+
+RETOMADA V04 — REGISTRO TRANSACIONAL DO PEDIDO MULTIPRODUTO
+- c8ef57b: cotação interna pode carregar snapshot comercial integral por serviço; resposta pública continua sem essa propriedade.
+- 4be4e32: migration 0041 cria v3_order_services e v3_order_checkout_snapshots vinculadas a v2_orders, sem backfill e sem alterar pedidos legados.
+- 7dbb0ba: createV3OrderRecords é helper INTERNO, sem rota HTTP e sem chamada ao Mercado Pago. Valida valor recalculado, termos gerais/específicos vigentes, data e capacidade; grava em batch D1 um pedido configuring, itens, pricing integral 100%, termos, briefing bloqueado, histórico e serviços individuais. Chave de tentativa + hash do payload canônico permite recuperar repetição idêntica e rejeita mudança de escolhas. Não cria reserva nem pagamento. Não está autorizado chamá-lo por rota pública até integração completa.
+- bde8952/a3bc185: testes de migration, pedido pai único, snapshots, repetição, termos, preços adulterados, duplicidade, rollback por falha de escrita e privacidade do preview. CI da etapa ainda a confirmar.
+- Próximo passo exato: integrar helper a orquestrador comum com geração de código/cliente, reserva de agenda real e bloqueio de pagamento; usar createMercadoPagoCheckout com único total e recuperação da mesma tentativa, sem cair em checkout V2 individual. Antes de habilitar rota, revisar resumeV2Payment, webhook, scheduler e Admin/briefing que assumem um produto; impedir cobrança de pedidos configuring e reprecificação/edição V2 destrutiva. Retrospectivas ainda precisam de catálogo contratável, termos, uploads e briefing. Não declarar checkout concluído nem publicar agora.

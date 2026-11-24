@@ -112,3 +112,44 @@ test('V3 customer routes isolate order tokens, require payment, and block legacy
   assert.equal(admin.status,401);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_retro_material_receipts').get().n,0);
 });
+
+test('private V3 images require contracted family and saved authorization; cross-service and wrong token are blocked',async t=>{
+ const {db,order}=await paid(t);
+ const objects=new Map();
+ const FILES={async put(key,stream){objects.set(key,await new Response(stream).arrayBuffer());},async get(key){return objects.has(key)?{body:objects.get(key)}:null;},async delete(key){objects.delete(key);}};
+ const env={DB:db,FILES},ctx={waitUntil(){}};
+ const prefix='/api/v2/customer-area/'+order.publicToken+'/v3/briefing/';
+ const call=(path,method='GET',body)=>worker.fetch(new Request('https://test'+path,{method,...(body?{body}:{})}),env,ctx);
+ const form=field=>{const f=new FormData();f.set('fieldKey',field);f.set('file',new Blob([new Uint8Array([255,216,255,224,0,0,0,0,0,0,0,0,0,0,0,0])],{type:'image/jpeg'}),'foto.jpg');return f;};
+ assert.equal((await call(prefix+'identidade_visual/uploads','POST',form('childPhotos'))).status,403);
+ await saveV3ModuleDraft(db,order.publicToken,'identidade_visual',{revision:0,data:{mascotMode:'criança ilustrada',childPhotoPermission:'sim',guardianAuthorization:'sim'}});
+ const upload=await call(prefix+'identidade_visual/uploads','POST',form('childPhotos'));
+ assert.equal(upload.status,201);
+ const id=(await upload.json()).result.id;
+ assert.equal(objects.size,1);
+ const result=await call(prefix+'identidade_visual/uploads/'+id+'/content');
+ assert.equal(result.status,200);
+ assert.match(result.headers.get('cache-control'),/no-store/);
+ assert.equal((await call(prefix+'convite/uploads/'+id+'/content')).status,404);
+ assert.equal((await call(prefix.replace(order.publicToken,'ord_'+'f'.repeat(36))+'identidade_visual/uploads/'+id+'/content')).status,404);
+ assert.equal((await call(prefix+'identidade_visual/uploads/'+id,'DELETE')).status,200);
+ assert.equal(objects.size,0);
+});
+test('service submission validates required fields and locks shared responses without releasing production',async t=>{
+ const {db,order}=await paid(t);
+ const prefix='/api/v2/customer-area/'+order.publicToken+'/v3/briefing/';
+ const submit=(family,revision,sharedRevision)=>worker.fetch(new Request('https://test'+prefix+family+'/submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({revision,sharedRevision})}),{DB:db},{waitUntil(){}});
+ assert.equal((await submit('identidade_visual',0,0)).status,422);
+ await saveV3ModuleDraft(db,order.publicToken,'shared',{revision:0,data:{theme_or_style:'Jardim',joint_celebration:'no',age:3,event_time:'14:00',venue_name:'Salão',venue_address:'Rua 1'}});
+ await saveV3ModuleDraft(db,order.publicToken,'identidade_visual',{revision:0,data:{mascotMode:'ilustração temática',additionalSubjects:'não',styleFreedom:'a Libri pode decidir',exactTexts:'Ana 3 anos'}});
+ assert.equal((await submit('identidade_visual',1,0)).status,409);
+ const response=await submit('identidade_visual',1,1);
+ assert.equal(response.status,200);
+ const brief=(await response.json()).briefing;
+ assert.equal(brief.services.find(x=>x.family==='identidade_visual').briefingStatus,'completed');
+ assert.equal(brief.services.find(x=>x.family==='identidade_visual').productionStatus,'pending');
+ assert.equal(brief.modules.find(x=>x.module==='shared').editable,false);
+ assert.equal(brief.modules.find(x=>x.module==='convite').editable,true);
+ await assert.rejects(saveV3ModuleDraft(db,order.publicToken,'shared',{revision:1,data:{theme_or_style:'Outro'}}),/compartilhados/);
+ assert.equal((await submit('identidade_visual',1,1)).status,200);
+});

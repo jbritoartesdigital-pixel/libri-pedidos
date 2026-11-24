@@ -1,3 +1,4 @@
+import {handleStoreFunnel} from '../lib/v3-store-funnel.js';
 import {v3BlackStatus} from '../lib/v3-black-libri.js';
 import {fail,json} from '../lib/http.js';
 import {quoteV3Cart,V3CartValidationError} from '../lib/v3-cart-quote.js';
@@ -8,6 +9,7 @@ import {listV3RetrospectivePackages} from '../lib/v3-retrospective-catalog.js';
 
 // V3 própria: etapa segura de cotação, não de pagamento.
 export async function handlePublicCartV3Api(request,env,url) {
+  const telemetry=await handleStoreFunnel(request,env,url);if(telemetry)return telemetry;
   if(url.pathname==='/api/v3/retrospectivas/catalog') {
     if(request.method!=='GET')return fail('Método não permitido.',405);
     return json({ok:true,packages:await listV3RetrospectivePackages(env.DB)});

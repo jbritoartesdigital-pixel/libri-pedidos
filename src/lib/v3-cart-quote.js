@@ -48,6 +48,10 @@ export async function quoteV3Cart(db, cart={}) {
   if(!cart||typeof cart!=='object'||Array.isArray(cart))
     throw new V3CartValidationError('Carrinho inválido.');
   const items=validateItems(cart.items);
+  // Não cobrar a mesma retrospectiva como produto principal e adicional de convite.
+  if(items.some(item=>item.family==='retrospectiva') &&
+    items.some(item=>item.addonCodes.some(code=>/^retro_(070|100|150|200|250)$/.test(code))))
+    throw new V3CartValidationError('Retrospectiva já selecionada como produto principal. Retire o adicional duplicado.','cart_duplicate_retrospective');
   if(cart.paymentMethod && !['pix','card'].includes(cart.paymentMethod))
     throw new V3CartValidationError('Método de pagamento inválido.');
   const eventType=str(cart.eventType,80);

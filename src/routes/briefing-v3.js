@@ -1,6 +1,6 @@
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
 import {json,fail,readJson} from '../lib/http.js';
-import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt} from '../lib/v3-modular-briefing.js';
+import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
 const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
 async function boundedJson(request){
   const size=Number(request.headers.get('content-length')||0);
@@ -19,6 +19,11 @@ export async function handleCustomerBriefingV3Api(request,env,url){
       if(request.method==='DELETE'&&id&&!content){const result=await deleteV3ServiceImage(env,token,family,Number(id));return result?json({ok:true}):fail('Arquivo não encontrado.',404);}
       return fail('Método não permitido.',405);
     }catch(e){return errorResponse(e);}
+  }
+  const submit=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/briefing\/(convite|identidade_visual|retrospectiva)\/submit$/);
+  if(submit){
+    if(request.method!=='POST')return fail('Método não permitido.',405);
+    try{const result=await submitV3ServiceBriefing(env.DB,submit[1],submit[2],await boundedJson(request));return result?json({ok:true,briefing:result}):fail('Pedido não encontrado.',404);}catch(e){return errorResponse(e);}
   }
   const match=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/briefing(?:\/(shared|convite|identidade_visual|retrospectiva))?$/);
   if(!match)return null;

@@ -3643,7 +3643,7 @@ test('final polish surfaces progressive reasons, safer delivery changes, next st
   assert.match(area, /Ver saldo/);
 
   assert.match(central, /Hoje precisa da sua atenção/);
-  assert.match(central, /Simular compra/);
+  assert.doesNotMatch(central, /Simular compra|href="\/pedido\?simular=1"/);
   assert.match(central, /attentionReason/);
   assert.match(central, /WhatsApp/);
 

@@ -1266,7 +1266,8 @@ export async function resumeV2Payment(request, env, token, body = {}) {
           productionDays: productionDaysForStoredQuote(snapshot),
         });
       } catch (error) {
-        if (error.message !== 'Essa janela não é compatível com a data do evento.') {
+        if (error.message !== 'Essa janela não é compatível com a data do evento.'
+          && !error.message.includes('15 dias corridos de produção')) {
           throw error;
         }
         const nextWindow = await findNextV2DeliveryWindow(env.DB, {
@@ -3046,6 +3047,9 @@ export async function requestV2UrgencyReview(
         },
       );
 
+    if (productionDaysForQuote(quote)) throw new V2CheckoutError(
+      'Ateliê e Retrospectivas precisam de pelo menos 15 dias corridos de produção, sem encaixe urgente automático.',
+      {status:409,code:'minimum_production_lead'});
     const delivery =
       await findV2DeliveryOptions(
         env.DB,

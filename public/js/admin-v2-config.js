@@ -1,3 +1,4 @@
+import {renderV3Campaigns} from './admin-v2-campaigns-v3.js';
 import {
   api,
   setViewMeta,
@@ -53,6 +54,7 @@ export async function renderStore() {
         <span class="store-navigation-label">Promoções</span>
         <div class="store-navigation-buttons">
           <button type="button" class="settings-tab" data-store-tab="coupons">Cupons</button>
+          <button type="button" class="settings-tab" data-store-tab="campaigns">Campanhas combinadas</button>
           <button type="button" class="settings-tab" data-store-tab="black-libri">🎈 Black Libri</button>
         </div>
       </div>
@@ -138,6 +140,7 @@ export async function renderStore() {
         return;
       }
 
+      if(tab==='campaigns'){void renderV3Campaigns(panel);return;}
       if (tab === 'black-libri') {
         renderBlackLibri(panel);
         return;
@@ -184,7 +187,7 @@ export async function renderStore() {
 
   const availableTabs = new Set([
     'products', 'atelie', 'addons', 'combos', 'gallery',
-    'coupons', 'black-libri', 'settings', 'terms', 'contracts',
+    'coupons', 'campaigns', 'black-libri', 'settings', 'terms', 'contracts',
   ]);
   document.querySelectorAll('[data-store-tab]').forEach(button =>
     button.addEventListener('click', () => {

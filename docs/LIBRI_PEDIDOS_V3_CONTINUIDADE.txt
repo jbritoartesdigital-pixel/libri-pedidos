@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 39 | 24/11/2026 (Brasil)
+Versão 40 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -295,3 +295,8 @@ RETOMADA V39 — CENTRAL ADMINISTRATIVA E BUSCA MULTIPRODUTO
 - CI HEAD V38 45412943099 concluído com sucesso. a54a93d/3181e26: busca unificada de pedidos V2/V3, uma linha por pedido pai, todos os serviços efetivos no resultado, filtros de família, modelo/pacote, cenas, situação, data/período e arquivados; filtros família/modelo/cenas precisam corresponder ao mesmo serviço. Inclui cinco pacotes Retro e atalho de produção. 4866a69/c799bad: Central apresenta pedidos modulares ativos, contadores por família e prazos individuais dos próximos sete dias ou atrasados, sem duplicá-los nas filas operacionais legadas. Financeiro mensal preservado, sem nova fonte de valores. 4f7d744: testes de busca e ausência de duplicidade.
 - CI inicial 45413221793 falhou em testes de regressão V2 por JSON histórico malformado. da39919 corrige proteção json_valid em todos os campos do catálogo legado. CI final a confirmar; não declarar aprovação antes de verificar HEAD. Nenhuma migração, nenhuma alteração em produção, PR #143 draft.
 - Pendências: testar combinação de estados, pacotes após upgrade, cenas efetivas, casos de agenda em revisão, saldo, cancelamento e arquivo; integrar fila de novos pedidos, gestão administrativa de exceções e visão da agenda com serviços, indicadores e funil; acabamento visual e teste real de navegador. A Central mostra pedidos pagos em andamento pela fila modular existente, não é ainda a central integral de todos os estados. Próximo: confirmar CI, integrar agenda e indicadores e completar exceções financeiras antes de publicar.
+
+
+RETOMADA V40 — AGENDA ADMINISTRATIVA POR SERVIÇO
+- CI HEAD V39 45413499056 concluído com sucesso. c163bd2/e6f9575/a7be06d/4d80bad: calendário apresenta a festa uma vez por pedido, janelas confirmadas individuais de convite/Ateliê/retro, não apresenta a janela pai como outra entrega modular; serviço entregue deixa de aparecer nas entregas pendentes. Detalhe diário mostra pontos, família, reserva original ainda não distribuída e reserva provisória. Total diário continua calculado exclusivamente pelas alocações V2, sem duplicação. A cascata legada não seleciona V3 como destino e bloqueia mutação de origem/destino V3: não misturar alocações nem perder família. Testes adicionados de total 400 unidades, festa única, duas janelas, entrega parcial preservando reserva. Não liberar automaticamente pontos de serviço entregue: falta política segura de liberação/antecipação por serviço que preserve o histórico e o particionamento original, explicitamente pendente. CI inicial 45414033181: [{"status":"completed","conclusion":"success"}]; conferir HEAD final. Nenhuma migration, nenhum deploy; PR #143 draft.
+- Próximo: indicadores e funil de abandono (medir eventos reais, sem inferir abandono de etapa), agenda V3 liberação segura de pontos, exceções financeiras, preferências de notificação, fila de novos pedidos, acabamento e validação integral. Não aprovar/ativar vendas parcialmente.

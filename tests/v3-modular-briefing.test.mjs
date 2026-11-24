@@ -643,3 +643,24 @@ test('unpaid revision closes the previous charge, blocks renewal until customer 
  assert.equal((await getV3ModularBriefing(db,order.publicToken)).locked,false);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
 });
+
+import {previewV3ManualOrder,createV3ManualOrder} from '../src/lib/v3-order-revisions.js';
+test('manual V3 prepares a private order with optional authorized Pix deposit, never invents customer acceptance',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
+ const input={customer:{name:'Cliente manual',whatsapp:'5561888888888',email:''},event:{type:'birthday',honoreeName:'Teste manual',date:day(65)},items:[{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:50,reason:'Condição especial autorizada'};
+ const q=await previewV3ManualOrder(db,input);assert.equal(q.totalCents,15900);assert.equal(q.depositCents,7950);
+ const payload={...input,deliveryWindow:q.options[0],expectedTotalCents:q.totalCents,requestKey:'9'.repeat(36),confirmed:true};
+ const created=await createV3ManualOrder(env,payload),token=created.customerAreaPath.split('/').pop();
+ assert.equal((await createV3ManualOrder(env,payload)).orderCode,created.orderCode);
+ await assert.rejects(createV3ManualOrder(env,{...payload,reason:'Condição diferente'}),/já utilizado/);
+ const o=db.sqlite.prepare('SELECT * FROM v2_orders WHERE public_token=?').get(token);assert.equal(o.source,'manual_whatsapp');
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_terms_acceptances WHERE order_id=?').get(o.id).n,0);
+ assert.equal(mp.posts,0);
+ const brief=await getV3ModularBriefing(db,token);assert.equal(brief.revision.kind,'manual');assert.equal(brief.revision.depositCents,7950);
+ await assert.rejects(prepareV3Payment(new Request('https://test/manual'),env,o.id),/Aceite/);
+ await acceptV3Revision(db,token,{id:brief.revision.id,confirmed:true,termsAccepted:true,expectedTotalCents:q.totalCents});
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_terms_acceptances WHERE order_id=?').get(o.id).n,1);
+ const payment=await prepareV3Payment(new Request('https://test/manual'),env,o.id);
+ assert.equal(payment.amountDueNowCents,7950);mp.approve(payment.providerOrderId);await syncMercadoPagoOrder(env,payment.providerOrderId);
+ assert.equal((await getV3ModularBriefing(db,token)).locked,false);
+});

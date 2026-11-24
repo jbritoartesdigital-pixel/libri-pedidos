@@ -148,12 +148,13 @@ export async function previewV3ManualOrder(db,input){
 export async function createV3ManualOrder(env,input){
  const db=env.DB,x=manualInput(input);
  if(input.confirmed!==true||! /^[a-f0-9]{36}$/.test(input.requestKey||''))fail('Confirme a criação da proposta.',422);
- const old=await db.prepare("SELECT o.id,o.order_code,o.public_token FROM v3_order_revisions r JOIN v2_orders o ON o.id=r.order_id WHERE r.request_key=? AND r.kind='manual'").bind(input.requestKey).first();
- if(old)return {orderCode:old.order_code,customerAreaPath:'/meu-pedido/'+old.public_token,recovered:true};
+ const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify({customer:x.customer,event:x.event,depositPercent:x.depositPercent,reason:x.reason,items:input.items,paymentMethod:input.paymentMethod,couponCode:input.couponCode||'',deliveryWindow:input.deliveryWindow,expectedTotalCents:input.expectedTotalCents})))),b=>b.toString(16).padStart(2,'0')).join('');
+ const old=await db.prepare("SELECT o.id,o.order_code,o.public_token,r.input_json FROM v3_order_revisions r JOIN v2_orders o ON o.id=r.order_id WHERE r.request_key=? AND r.kind='manual'").bind(input.requestKey).first();
+ if(old){if(JSON.parse(old.input_json).manualFingerprint!==fingerprint)fail('Identificador já utilizado em outra proposta.');return {orderCode:old.order_code,customerAreaPath:'/meu-pedido/'+old.public_token,recovered:true};}
  const p=await previewV3ManualOrder(db,input),w=input.deliveryWindow;
  if(p.totalCents!==input.expectedTotalCents||!w||!p.options.some(y=>y.start===w.start&&y.end===w.end))fail('O valor ou a agenda mudou. Calcule novamente.');
  const customerId=await findOrCreateCustomer(db,x.customer),orderCode=await nextOrderCode(db),publicToken=randomToken('ord_');
  const atelie=p.terms.services.find(s=>s.family==='identidade_visual'),retro=p.terms.services.find(s=>s.family==='retrospectiva');
- const result=await createV3OrderRecords(db,{customerId,orderCode,publicToken,contactSnapshot:x.customer,manualDraft:{depositPercent:x.depositPercent,reason:x.reason},body:{clientRequestId:input.requestKey,items:input.items,couponCode:input.couponCode,eventType:x.event.type,eventSubtype:x.event.subtype||'',honoreeName:x.event.honoreeName,eventDate:x.event.date,paymentMethod:input.paymentMethod,deliveryWindow:w,expectedTotalCents:p.totalCents,termsVersion:p.terms.general.version,atelieTermsAccepted:!!atelie,atelieTermsVersion:atelie?.version,retrospectiveTermsAccepted:!!retro,retrospectiveTermsVersion:retro?.version}});
+ const result=await createV3OrderRecords(db,{customerId,orderCode,publicToken,contactSnapshot:x.customer,manualDraft:{depositPercent:x.depositPercent,reason:x.reason,fingerprint},body:{clientRequestId:input.requestKey,items:input.items,couponCode:input.couponCode,eventType:x.event.type,eventSubtype:x.event.subtype||'',honoreeName:x.event.honoreeName,eventDate:x.event.date,paymentMethod:input.paymentMethod,deliveryWindow:w,expectedTotalCents:p.totalCents,termsVersion:p.terms.general.version,atelieTermsAccepted:!!atelie,atelieTermsVersion:atelie?.version,retrospectiveTermsAccepted:!!retro,retrospectiveTermsVersion:retro?.version}});
  return {orderCode:result.orderCode,customerAreaPath:'/meu-pedido/'+result.publicToken,recovered:result.recovered};
 }

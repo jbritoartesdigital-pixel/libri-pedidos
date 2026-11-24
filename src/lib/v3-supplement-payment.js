@@ -1,3 +1,4 @@
+import {reconcileV3SupplementFinance} from './v3-supplement-finance.js';
 import {remainingV3Capacity} from './v3-service-agenda.js';
 import {contextV3Briefing} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
@@ -154,6 +155,7 @@ export async function syncV3SupplementPayment(env,providerOrderId){
     await db.batch([db.prepare("UPDATE v3_supplement_payments SET status='refunded',updated_at=? WHERE id=?").bind(at,p.id),db.prepare("UPDATE v3_service_supplements SET status='review',updated_at=? WHERE id=?").bind(at,offer.id)]);
     return {found:true,status:'refunded',needsReview:true};
    }
+   if(status==='approved'&&p.status==='approved'&&!p.finance_verified_at)try{await reconcileV3SupplementFinance(env,p,offer.total_cents);}catch{}
    return {found:true,status:'approved',alreadyApplied:true};
   }
   if(status==='approved'){
@@ -185,6 +187,7 @@ export async function syncV3SupplementPayment(env,providerOrderId){
     if(s.family==='retrospectiva')statements.push(db.prepare('UPDATE v3_retro_material_receipts SET complete_at=NULL WHERE order_id=?').bind(ctx.order.id));
    }
    try{await db.batch(statements);}catch(e){if(String(e.message).includes('v3_capacity_changed'))return review();throw e;}
+   try{await reconcileV3SupplementFinance(env,p,offer.total_cents);}catch{}
    return {found:true,status:'approved',applied:true};
   }
   if(terminal.includes(status)){
@@ -209,6 +212,8 @@ export async function reconcileV3Supplements(env,{limit=10}={}){
  const rows=(await env.DB.prepare("SELECT provider_order_id FROM v3_supplement_payments WHERE provider_order_id IS NOT NULL AND status='pending' ORDER BY updated_at,id LIMIT ?").bind(limit).all()).results||[];
  const result={synced:0,failed:0};
  for(const row of rows){try{await syncV3SupplementPayment(env,row.provider_order_id);result.synced++;}catch{result.failed++;}}
+ const fees=(await env.DB.prepare("SELECT p.*,a.total_cents FROM v3_supplement_payments p JOIN v3_service_supplements a ON a.id=p.supplement_id WHERE p.status='approved' AND p.paid_at IS NOT NULL AND p.finance_verified_at IS NULL ORDER BY COALESCE(p.finance_attempted_at,''),p.id LIMIT 3").all()).results||[];
+ for(const p of fees){try{await env.DB.prepare("UPDATE v3_supplement_payments SET finance_attempted_at=datetime('now') WHERE id=?").bind(p.id).run();await reconcileV3SupplementFinance(env,p,p.total_cents);}catch{}}
  return result;
 }
 

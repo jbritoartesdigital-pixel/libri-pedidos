@@ -45,3 +45,6 @@ CI V55 45427531167 aprovado, incluindo Chromium real (convite avulso e Ateliê).
 
 ## V59 — pagamento tardio e capacidade
 Reconstrução V3 usa prazo de produção original e valida janela, em vez de cair no planejador de convite. Revisão aparece na Central e área privada; recuperação administrativa sem cobrança, janela alternativa normal com acordo explícito, sem alterar preço e preservando histórico. Teste de regressão e fixture Chromium ajustados. CI pendente. Sem publicação.
+
+## V60 — financeiro
+Complementos conciliados exclusivamente por referência única, valor e detalhe confirmado do provedor; valores desconhecidos continuam a conciliar. Líquido e taxa efetiva (bruto menos líquido), data de aprovação verificada e rotina limitada de recuperação. Estornos ainda requerem evidência; nenhum acesso financeiro real. V59 passou Chromium ampliado. CI V60 pendente.

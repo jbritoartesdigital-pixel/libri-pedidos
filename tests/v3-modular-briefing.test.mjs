@@ -894,3 +894,15 @@ test('late V3 payment preserves production minimum and permits capacity recovery
  assert.equal(mp.posts,1);
  await assert.rejects(recoverV3PaidCapacity(db,order.publicToken,{confirmed:true}),/disponível/);
 });
+
+test('supplement net and fees are verified separately by unique reference, not estimated',async t=>{
+ const {db,env,request,token,family,offer,mp}=await preparedSupplement(t);
+ await startV3SupplementPayment(request,env,token,family,offer.id);
+ const attempt=db.sqlite.prepare('SELECT * FROM v3_supplement_payments').get();mp.approve(attempt.provider_order_id);
+ await syncV3SupplementPayment(env,attempt.provider_order_id);
+ assert.equal(db.sqlite.prepare('SELECT finance_net_cents FROM v3_supplement_payments').get().finance_net_cents,null);
+ mp.setFinanceDetails(attempt.provider_order_id,{feeCents:100,netCents:3750});
+ await syncV3SupplementPayment(env,attempt.provider_order_id);
+ const p=db.sqlite.prepare('SELECT * FROM v3_supplement_payments').get();assert.equal(p.finance_net_cents,3750);assert.equal(p.finance_fee_cents,250);assert.equal(p.finance_paid_at,'2026-10-05T12:00:00.000Z');
+ const {getV3SupplementFinance}=await import('../src/lib/v3-finance-report.js');const f=await getV3SupplementFinance(db,{start:'2026-10-01',endExclusive:'2026-11-01'});assert.equal(f.cashCents,4000);assert.equal(f.verifiedNetCents,3750);assert.equal(f.verifiedFeeCents,250);assert.equal(f.feePendingCount,0);assert.equal(mp.posts,2);
+});

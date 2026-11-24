@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 55 | 24/11/2026 (Brasil)
+Versão 60 | 24/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -386,3 +386,7 @@ V58 — NAVEGAÇÃO INTEGRAL EM BANCO ISOLADO
 
 V59 — RECUPERAÇÃO DE CAPACIDADE APÓS PAGAMENTO
 V57 CI 45428493387 aprovado. V58 CI 45428994061 passou backend/migrações e executou as telas ampliadas até a asserção final de API bloqueada (1 chamada de recuperação não permitida no fixture). Corrigido fixture para recuperação real com provedor simulado e log de qualquer rota inesperada. V59: reconversão de reserva V3 valida data e prazo original de produção, inclusive após expiração; revisão explícita na Central/ficha/cliente, nova tentativa sem cobrar, janela alternativa normal apenas com confirmação e registro do acordo. Urgência mantém janela aprovada. Novo teste de pagamento tardio verifica briefing liberado, agenda bloqueada, prazo mínimo, acordo, pontos e uma única cobrança. CI final ainda não validado. Sem deploy.
+
+
+V60 — CONCILIAÇÃO DE COMPLEMENTOS
+V59 CI 45440536432 aprovou backend, migrations e Chromium ampliado (três serviços, retro avulsa, área privada e Admin, rascunho persistente). V60 adiciona registro independente de líquido/taxa/data comprovados na API Payment, por referência exclusiva SUP e montante exato, sem adivinhar taxa ou escolher cobrança ambígua. Tentativas não conciliadas continuam sinalizadas; rotina limitada a 3 por execução. Relatório soma líquido e taxas comprovados, sem declarar completo quando há devolução incerta. Nova migration 0062 e teste de recuperação de taxa real simulada. CI pendente. Não houve acesso a pagamentos reais, nem deploy.

@@ -1,4 +1,11 @@
-import {api,esc,money,showToast} from './client-v2-core.js';
+import {api,esc,money,showToast as legacyToast} from './client-v2-core.js';
+// V3 has no V2 toast element. Keep errors visible without throwing another exception.
+function showToast(message){
+ if(document.getElementById('toast'))return legacyToast(message);
+ const overlay=document.querySelector('.black-libri-overlay');if(!overlay)return;
+ let alert=overlay.querySelector('.black-libri-error');if(!alert){alert=document.createElement('p');alert.className='black-libri-error';alert.setAttribute('role','alert');overlay.append(alert);}
+ alert.textContent=message;
+}
 
 const palette=['#c88ca4','#edc5d0','#c9a46e','#a56786',
  '#e2bbaf','#d398ae','#af7591','#eed6b3',

@@ -377,3 +377,126 @@ html body .v3-panel--guided.v3-stage-event .v3-choice-copy small{
  html body .v3-panel--guided.v3-stage-event .v3-grid{height:min(100%,560px)}
  html body .v3-panel--guided.v3-stage-event .v3-choice-copy strong{font-size:clamp(20px,5.25cqh,31px)!important}
 }
+
+/* V107 — one editorial type system and measured layout. Match the approved
+   Curtinho (Georgia regular), not the accidentally bolder format titles. */
+:root{--v107-title-size:clamp(26px,7.2vw,34px);--v107-title-weight:400;--v107-title-tracking:-.015em}
+html body .v3-main .v3-panel--guided:is(.v3-stage-event,.v3-stage-event-subtype,.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-choice-copy strong,
+html body .v3-main .v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{
+ font-family:var(--store-serif)!important;font-weight:var(--v107-title-weight)!important;
+ font-size:var(--v107-title-size)!important;line-height:1.08!important;letter-spacing:var(--v107-title-tracking)!important;
+ color:var(--store-ink);text-shadow:none;overflow-wrap:normal;text-wrap:balance;
+}
+html body .v3-main .v3-panel--guided.v3-stage-event .v3-choice-copy strong{
+ font-size:clamp(17px,5.25cqh,29px)!important;
+}
+html body .v3-main .v3-panel--guided.v3-stage-event-subtype .v3-choice-copy strong{font-size:clamp(20px,5.6vw,28px)!important}
+html body .v3-main .v3-panel--guided .v3-choice-copy strong .v106-title-line{
+ font:inherit;letter-spacing:inherit;overflow-wrap:normal;word-break:normal;text-wrap:balance;
+}
+html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-format,.v3-stage-scenes,.v3-stage-atelie) .v3-stage-body{
+ container-type:size;display:flex;flex-direction:column;justify-content:safe center;min-height:0;padding-block:3px;
+}
+html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choices-stack{
+ gap:clamp(7px,2cqh,12px);
+}
+html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choices-stack>.v3-choice{
+ min-height:0;padding:clamp(10px,3cqh,19px) 12px;gap:5px;
+}
+html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice-copy strong{
+ font-size:clamp(25px,min(7.2cqw,8.5cqh),34px)!important;
+}
+html body .v3-main .v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{
+ font-size:clamp(25px,min(7.2cqw,8.5cqh),34px)!important;
+}
+html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes) .v3-choice-copy small{
+ font-size:clamp(11px,3.1cqh,13px);line-height:1.35;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-list{
+ gap:clamp(6px,1.8cqh,12px);
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-card{
+ display:flex;flex-direction:column;align-items:stretch;justify-content:center;
+ min-height:0;padding:clamp(7px,2cqh,16px) 12px;gap:4px;overflow:visible;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v97-card-overline{
+ margin:0;text-align:center;font-size:clamp(8px,2.3cqh,10px);line-height:1.15;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-select{
+ display:block;padding:0;margin:0;min-height:0;width:100%;outline:0;border:0;background:none;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-select:focus-visible{
+ outline:2px solid var(--store-accent);outline-offset:2px;border-radius:8px;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-choice-copy{
+ display:grid;justify-items:center;gap:4px;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-choice-copy strong{
+ font-size:clamp(24px,min(7.2cqw,8.5cqh),34px)!important;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v3-choice-copy small{
+ font:400 clamp(11px,3cqh,13px)/1.3 var(--store-sans);max-width:43ch;
+}
+.v107-format-footer{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:3px;padding-top:5px;border-top:1px solid var(--store-line)}
+html body .v3-main .v3-panel--guided.v3-stage-format .v107-format-footer .v3-price{
+ display:flex;flex-wrap:wrap;align-items:baseline;justify-content:flex-start;gap:3px;
+ background:transparent!important;border:0;padding:0;margin:0;min-width:0;
+ font:750 clamp(14px,4cqw,19px)/1.15 var(--store-sans);letter-spacing:-.025em;
+ color:var(--store-rose)!important;text-shadow:none!important;
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v107-format-footer .v3-price small{
+ font:600 10px/1.2 var(--store-sans);color:var(--store-muted);
+}
+html body .v3-main .v3-panel--guided.v3-stage-format .v107-format-footer .v3-example-link{
+ margin:0;padding:6px 10px;min-height:36px;width:auto;flex:none;font-size:11px;white-space:nowrap;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-stage-body{
+ container-type:size;min-height:0;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-free-confirmation{
+ margin:0 0 5px;padding:5px 8px;font:400 11px/1.3 var(--store-sans);
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list{
+ gap:clamp(5px,1.4cqh,8px);
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card{
+ min-height:0;padding:clamp(6px,1.7cqh,12px) 10px;gap:8px;border-radius:var(--v105-card-radius);
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy{
+ gap:3px;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{
+ font:400 clamp(15px,4.3cqw,19px)/1.15 var(--store-serif)!important;letter-spacing:-.015em!important;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy small{
+ font:400 clamp(10px,2.8cqh,12px)/1.3 var(--store-sans);
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-action{gap:3px}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v97-extra-cta{min-height:30px;padding:5px 9px;font-size:11px}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer{flex:none;display:grid;gap:4px;min-width:0}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-total{
+ margin:0;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;
+}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-total strong{font:700 13px/1.25 var(--store-sans)}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-total small{font:400 10px/1.3 var(--store-sans)}
+html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer .v3-total b{font-size:21px}
+@media(max-height:680px){
+ html body .v3-main .v3-panel--guided .v3-stage-heading{padding-bottom:3px}
+ html body .v3-main .v3-panel--guided .v3-stage-heading .v3-title{font-size:25px!important}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v3-choice-copy strong{font-size:clamp(22px,min(7cqw,8.5cqh),29px)!important}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-card{gap:3px;padding-block:6px}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v107-format-footer{margin-top:0;padding-top:3px}
+ html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card .v3-choice-copy strong{font-size:15px!important}
+}
+@media(min-width:960px) and (min-height:690px){
+ :root{--v107-title-size:clamp(30px,2.65vw,38px)}
+ html body .v3-main .v3-panel--guided:is(.v3-stage-creation,.v3-stage-intent,.v3-stage-scenes,.v3-stage-atelie) .v3-choice-copy strong,
+ html body .v3-main .v3-panel--guided.v3-stage-scenes .v3-duration-card .v3-choice-copy strong{font-size:var(--v107-title-size)!important}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v3-choice-copy strong{font-size:clamp(26px,2.5vw,35px)!important}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+ html body .v3-main .v3-panel--guided.v3-stage-format .v3-format-card{min-height:180px;padding:20px 16px}
+ html body .v3-main .v3-panel--guided.v3-stage-extras .v107-extras-footer{grid-column:2;grid-row:2}
+ html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-card{padding:12px 14px}
+}
+/* Scrolling is still available when the device uses unusually large text or a
+   particularly short viewport; never clip an actionable option. */

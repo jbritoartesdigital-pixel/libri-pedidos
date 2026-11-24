@@ -1,3 +1,4 @@
+import {changeV3Production,publishV3ServicePreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
 import {previewV3ServiceAgenda,scheduleV3Service} from '../lib/v3-service-agenda.js';
 import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
@@ -12,6 +13,15 @@ async function boundedJson(request){
   return body;
 }
 export async function handleCustomerBriefingV3Api(request,env,url){
+  const production=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/production\/(convite|identidade_visual|retrospectiva)(?:\/preview\/(\d+))?$/);
+  if(production){
+    const [,token,family,id]=production;
+    try{
+      if(request.method==='GET'&&id)return await streamV3ServicePreview(env,token,family,Number(id),request);
+      if(request.method==='POST'&&!id){const result=await changeV3Production(env.DB,token,family,await boundedJson(request),'customer');return result?json({ok:true,result,briefing:await getV3ModularBriefing(env.DB,token)}):fail('Pedido não encontrado.',404);}
+      return fail('Método não permitido.',405);
+    }catch(e){return errorResponse(e);}
+  }
   const upload=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/briefing\/(convite|identidade_visual)\/uploads(?:\/(\d+)(\/content)?)?$/);
   if(upload){
     const [,token,family,id,content]=upload;
@@ -43,6 +53,20 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+  const production=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/production\/(convite|identidade_visual|retrospectiva)(?:\/preview(?:\/(\d+))?)?$/);
+  if(production){
+    const [,code,family,id]=production;
+    try{
+      const row=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(code).first();
+      if(!row)return fail('Pedido V3 não encontrado.',404);
+      if(request.method==='GET'&&id)return await streamV3ServicePreview(env,row.public_token,family,Number(id),request);
+      if(request.method==='POST'&&!id){
+        const result=url.pathname.endsWith('/preview')?await publishV3ServicePreview(request,env,row.public_token,family):await changeV3Production(env.DB,row.public_token,family,await boundedJson(request),'admin');
+        return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
+      }
+      return fail('Método não permitido.',405);
+    }catch(e){return errorResponse(e);}
+  }
   const agenda=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/agenda\/(convite|identidade_visual|retrospectiva)\/(preview|schedule)$/);
   if(agenda){
     if(request.method!=='POST')return fail('Método não permitido.',405);

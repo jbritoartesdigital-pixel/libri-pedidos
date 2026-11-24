@@ -356,7 +356,7 @@ export async function renderFinance(openOrderDetail = null) {
         <section class="card" style="margin:14px 0">
           <div class="section-title">
             <div><h2>Produtos mais vendidos e margem estimada</h2>
-              <small>Contratações originais iniciadas no período. Os complementos V3 são detalhados separadamente abaixo.</small>
+              <small>Contratações originais iniciadas no período. Valores do pedido e recebimentos rateados por produto, com centavos preservados. Complementos separados. O líquido considera recebimentos e devoluções conhecidos até hoje, não apenas no mês selecionado.</small>
             </div>
           </div>
           <div class="finance-performance-grid">
@@ -365,10 +365,11 @@ export async function renderFinance(openOrderDetail = null) {
                 <strong>${esc(product.productName)}</strong>
                 <small>${product.salesCount} venda(s) • ticket médio ${money(product.averageTicketCents)}</small>
                 <div>Vendas: <strong>${money(product.salesCents)}</strong></div>
-                <div>Já recebido, líquido: <strong>${money(product.receivedNetCents)}</strong></div>
+                <div>Recebido após devoluções, antes das taxas: <strong>${money(product.receivedGrossCents)}</strong></div>
+                <div>Já recebido, líquido: <strong>${product.netComplete?money(product.receivedNetCents):'A conciliar'}</strong></div>
                 ${product.costConfigured ? `
                   <div>Custo estimado: <strong>${money(product.totalCostCents)}</strong></div>
-                  <div>Margem estimada: <strong>${money(product.estimatedMarginCents)}</strong></div>`
+                  <div>Margem estimada: <strong>${product.netComplete?money(product.estimatedMarginCents):'A conciliar'}</strong></div>`
                 : '<small>Configure o custo na Loja para calcular a margem.</small>'}
               </div>`).join('') || empty('Sem vendas no período.')}
           </div>
@@ -381,7 +382,7 @@ export async function renderFinance(openOrderDetail = null) {
 
         <section class="card" style="margin:14px 0">
           <div class="section-title"><div><h2>Complementos V3</h2><small>Adicionais, upgrades e novos serviços no mesmo pedido. Taxas e valores líquidos ainda sujeitos à conciliação.</small></div></div>
-          <div class="kpi-grid"><article class="kpi"><span>Confirmados no período</span><strong>${money(finance.supplemental?.paidCents||0)}</strong></article><article class="kpi"><span>A receber</span><strong>${money(finance.supplemental?.pendingCents||0)}</strong></article><article class="kpi"><span>Em revisão</span><strong>${money(finance.supplemental?.reviewCents||0)}</strong></article></div>
+          <div class="kpi-grid"><article class="kpi"><span>Contratações aplicadas no período</span><strong>${money(finance.supplemental?.paidCents||0)}</strong></article><article class="kpi"><span>Recebimentos brutos</span><strong>${money(finance.supplemental?.cashCents||0)}</strong></article><article class="kpi"><span>A receber</span><strong>${money(finance.supplemental?.pendingCents||0)}</strong></article><article class="kpi"><span>Em revisão</span><strong>${money(finance.supplemental?.reviewCents||0)}</strong></article></div>
           <div class="list">${['movements','receivables','review'].flatMap(group=>(finance.supplemental?.[group]||[]).map(x=>`<div class="row-card"><strong>${esc(x.orderCode)} · ${esc(x.customerName)}</strong><small>${esc(x.kind==='upgrade'?'Upgrade':x.kind==='new_service'?'Novo serviço':'Adicionais')} · ${esc(x.status==='refunded'?'Recebido e devolvido':x.status==='paid'?'Confirmado':x.status==='review'?'Revisar':'A receber')} · ${money(x.amountCents)}</small><button class="btn btn-secondary btn-small" data-finance-open-order="${esc(x.orderCode)}">Abrir pedido</button></div>`)).join('')||empty('Nenhum complemento neste período ou em aberto.')}</div>
         </section>
         <section class="card" style="margin:14px 0">

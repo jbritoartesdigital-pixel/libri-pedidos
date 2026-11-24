@@ -22,7 +22,7 @@ export async function prepareV3Payment(request,env,orderId){
     const quote=JSON.parse(row.quote_json);
     const lines=(await db.prepare('SELECT total_cents,points_units FROM v3_order_services WHERE order_id=?').bind(orderId).all()).results||[];
     const sum=key=>lines.reduce((n,x)=>n+Number(x[key]),0);
-    if(lines.length<2||lines.length>3||sum('points_units')!==quote.pointsUnits||
+    if(lines.length<1||lines.length>3||lines.length!==quote.items?.length||sum('points_units')!==quote.pointsUnits||
       sum('total_cents')+quote.cardFeeCents!==quote.totalCents||row.total_cents!==quote.totalCents||
       row.deposit_cents!==row.total_cents||row.deposit_percent!==100||row.balance_cents!==0||
       row.payment_method!==quote.paymentMethod||!['pix','card'].includes(row.payment_method))

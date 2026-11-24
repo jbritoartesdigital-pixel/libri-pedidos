@@ -5325,12 +5325,14 @@ export async function startManualOrder(
   let manualAddonQuote = null;
   let manualAddonQuotePending = false;
   let manualQuoteSerial = 0;
-  const originalProductCode = addonOffer.currentProductCode
+  let originalProductCode = addonOffer.currentProductCode
     || order.pricing.snapshot?.product?.code || '';
-  const originalVariantCode = addonOffer.currentVariantCode
+  let originalVariantCode = addonOffer.currentVariantCode
     || order.pricing.snapshot?.variant?.code || '';
   let selectedManualProductCode = originalProductCode;
   let selectedManualVariantCode = originalVariantCode;
+  let manualUpsellSeen=false;
+  const manualUpsell=data.upsell||null;
   const manualProductChanged = () =>
     selectedManualProductCode !== originalProductCode
     || selectedManualVariantCode !== originalVariantCode;
@@ -5407,8 +5409,8 @@ export async function startManualOrder(
             <dd>${promoDiscount>0?'-'+money(promoDiscount):esc(appliedPrize.label)}</dd>
           </div>` : ''}
           <div class="review-line">
-            <dt>${promoPending?'Total após a surpresa':'Total'}</dt>
-            <dd id="manualUpdatedTotal">${promoPending?'A revelar':money(order.pricing.totalCents)}</dd>
+            <dt>${promoPending?'Total antes da surpresa':'Total'}</dt>
+            <dd id="manualUpdatedTotal">${money(order.pricing.totalCents)}</dd>
           </div>
 
           <div class="review-line ${promoPending?'hidden':''}">
@@ -5520,6 +5522,7 @@ export async function startManualOrder(
       </section>
     `;
 
+    if(manualAddonQuote){const el=document.getElementById('manualUpdatedTotal');if(el)el.textContent=money(manualAddonQuote.totalCents);}
     document.getElementById('manualViewBlackLibriPrize')?.addEventListener('click',()=>{
       void openBlackLibriPrizeDetails(order.pricing.snapshot?.blackLibri,{
         paid: order.alreadyPaid === true
@@ -5535,7 +5538,7 @@ export async function startManualOrder(
       const deposit = document.getElementById('manualUpdatedDeposit');
       const balance = document.getElementById('manualUpdatedBalance');
       const items = document.getElementById('manualUpdatedItems');
-      if (total) total.textContent = promoPending ? 'A revelar' : money(totalCents);
+      if (total) total.textContent = money(totalCents);
       if (deposit) deposit.textContent = order.pricing.paymentMethod === 'pix'
         ? `Pix • ${order.pricing.depositPercent === 50 ? 'entrada de ' : 'integral de '}${money(depositCents)}`
         : `Cartão • integral de ${money(depositCents)}`;
@@ -5551,6 +5554,7 @@ export async function startManualOrder(
           .filter(Boolean).join(', ');
       }
     };
+    updateManualSummary();
     const addonFeedback = document.getElementById('manualAddonQuoteFeedback');
     const paymentButton = document.getElementById('manualPay');
     const refreshManualQuote = async () => {
@@ -5706,6 +5710,20 @@ export async function startManualOrder(
         },
       );
 
+    // Oferta única antes do balão ou do pagamento. A aceitação é explícita;
+    // o servidor reaplica a cotação na contratação, sem criar outra cobrança.
+    const maybeManualUpsell=(continueAction)=>{
+      if(manualUpsellSeen||!manualUpsell||!addonOffer.editable||order.alreadyPaid||paymentPending||manualAddonQuotePending||manualProductChanged()||selectedManualAddonCodes.length)return false;
+      manualUpsellSeen=true;
+      const u=manualUpsell,q=u.quote;
+      const termsAccepted=!!document.getElementById('manualAcceptTerms')?.checked;
+      const close=modal(u.title,`<div class="manual-upsell-card"><span class="manual-upsell-kicker">UMA SUGESTÃO PARA SEU PEDIDO</span><p>${esc(u.description)}</p><div class="manual-upsell-delta"><small>Por apenas mais</small><strong>${money(q.increaseCents)}</strong></div><div class="manual-upsell-totals"><span>Novo total <b>${money(q.totalCents)}</b></span>${q.depositPercent===50?`<span>Entrada de 50% <b>${money(q.depositCents)}</b></span><span>Saldo posterior <b>${money(q.balanceCents)}</b></span>`:''}</div><p class="muted">Opcional. Seu pedido original continua disponível.</p><div class="action-row"><button type="button" class="btn btn-ghost" id="manualUpsellSkip">Agora não</button><button type="button" class="btn btn-primary" id="manualUpsellAccept">Quero adicionar</button></div></div>`);
+      document.getElementById('manualUpsellSkip')?.addEventListener('click',()=>{close();continueAction();});
+      document.getElementById('manualUpsellAccept')?.addEventListener('click',()=>{
+        close();selectedManualAddonCodes=[...u.addonCodes];selectedManualProductCode=u.productCode;selectedManualVariantCode=u.variantCode;manualAddonQuote=q;render();const accept=document.getElementById('manualAcceptTerms');if(accept)accept.checked=termsAccepted;showToast('Sugestão adicionada. Confira o novo total e continue.');
+      });
+      return true;
+    };
     const payManualNow=async()=>{
           const checkoutTab = prepareMercadoPagoTab();
 
@@ -5784,12 +5802,13 @@ export async function startManualOrder(
             );
           }
     };
-    document.getElementById('manualRevealPrize')?.addEventListener('click',async()=>{
+    const revealManualPrize=async()=>{
       if (manualAddonQuotePending ||
         ((selectedManualAddonCodes.length||manualProductChanged())&&!manualAddonQuote)) {
         showToast('Confira os adicionais antes de descobrir seu presente.');
         return;
       }
+      if(maybeManualUpsell(()=>void revealManualPrize()))return;
       const selection={
         addonCodes:[...selectedManualAddonCodes],
         productCode:selectedManualProductCode,
@@ -5820,6 +5839,7 @@ export async function startManualOrder(
               manualAddonQuotePending=false;
               selectedManualProductCode=order.pricing.snapshot.product?.code||'';
               selectedManualVariantCode=order.pricing.snapshot.variant?.code||'';
+              originalProductCode=selectedManualProductCode;originalVariantCode=selectedManualVariantCode;
               render();
               showToast('Seu presente foi aplicado ao total do pedido!');
             } catch(error) {
@@ -5830,7 +5850,8 @@ export async function startManualOrder(
       } catch(error) {
         showToast(error.message||'Não foi possível abrir a surpresa.');
       }
-    });
+    };
+    document.getElementById('manualRevealPrize')?.addEventListener('click',revealManualPrize);
 
     document.getElementById('manualPay')?.addEventListener('click',async()=>{
       if (manualAddonQuotePending
@@ -5843,6 +5864,7 @@ export async function startManualOrder(
         showToast('Leia e aceite as condições para continuar.');
         return;
       }
+      if(maybeManualUpsell(()=>void payManualNow()))return;
       await payManualNow();
     });
   };

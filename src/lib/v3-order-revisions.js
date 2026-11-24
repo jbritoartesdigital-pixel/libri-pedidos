@@ -4,7 +4,7 @@ import {findOrCreateCustomer} from './v3-checkout.js';
 import {createV3OrderRecords} from './v3-order-records.js';
 import {listV3Extras} from './v3-extras-catalog.js';
 import {quoteV3Cart} from './v3-cart-quote.js';
-import {validateV2DeliveryWindow,planV2AllocationForWindow,findV2DeliveryOptions} from './v2-agenda.js';
+import {validateV2DeliveryWindow,planV2AllocationForWindow,findV2DeliveryOptions,validateV3ManualDeliveryWindow} from './v2-agenda.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {endUnpaidAttempts} from './v3-admin-payment-policy.js';
 import {v3LineStatements} from './v3-order-records.js';
@@ -114,7 +114,7 @@ async function manualUpsell(db,row,r){
    const unchanged=q.items.every(n=>{const o=old.items.find(i=>i.family===n.family);return o&&(n.family==='convite'?o.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))&&(c.key.startsWith('upgrade:')||o.productCents===n.productCents):o.totalCents===n.totalCents);});
    if(!unchanged)continue;
    const w=data.deliveryWindow,capacity={...p.capacity,...w};
-   await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)continue;
+   if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)continue;
    const depositCents=row.deposit_percent===50?Math.ceil(q.totalCents/2):q.totalCents;
    return {key:c.key,title:c.title,description:c.description,increaseCents:q.totalCents-old.totalCents,totalCents:q.totalCents,depositCents,balanceCents:q.totalCents-depositCents,depositPercent:row.deposit_percent,items,pricing:{...q,schemaVersion:3,contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:q.paymentMethod,depositPercent:row.deposit_percent,depositCents,balanceCents:q.totalCents-depositCents}}};
   }catch{/* Incompatible suggestions are skipped, never block the original. */}
@@ -142,7 +142,7 @@ export async function acceptV3Revision(db,token,input={}){
   if(input.confirmed!==true||input.termsAccepted!==true||input.expectedTotalCents!==q.totalCents)fail('Confira os valores e aceite as condições da proposta.',422);
   if(await db.prepare("SELECT 1 FROM v2_payments WHERE order_id=? AND status NOT IN ('expired','cancelled','rejected')").bind(row.id).first())fail('Existe cobrança a conciliar.');
   const w=data.deliveryWindow,capacity={eventDate:row.event_date,...w,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
-  await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)fail('A agenda mudou. Solicite uma nova proposta.');
+  if(r.kind==='manual'&&data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);if(!(await planV2AllocationForWindow(db,capacity)).fits)fail('A agenda mudou. Solicite uma nova proposta.');
   const at=nowIso(),deposit=q.payment.depositCents;
   await db.batch([
    db.prepare('DELETE FROM v2_order_items WHERE order_id=?').bind(row.id),
@@ -185,7 +185,7 @@ function manualInput(input){
  const customer={name:String(input.customer?.name||'').trim(),whatsapp:normalizeWhatsapp(input.customer?.whatsapp),email:String(input.customer?.email||'').trim()};
  if(!customer.name||customer.name.length>160||!/^\d{10,15}$/.test(customer.whatsapp)||customer.email.length>240||customer.email&&!/^\S+@\S+\.\S+$/.test(customer.email))fail('Confira os dados da cliente.',422);
  const event=input.event||{};
- if(!event.honoreeName||!/^\d{4}-\d{2}-\d{2}$/.test(event.date||'')||!event.type)fail('Confira os dados da comemoração.',422);
+ if(!['birthday','15_years','wedding','celebration','other'].includes(event.type)||!event.honoreeName||!/^\d{4}-\d{2}-\d{2}$/.test(event.date||'')||!event.type)fail('Confira os dados da comemoração.',422);
  const depositPercent=input.depositPercent??100;
  if(!['pix','card'].includes(input.paymentMethod)||![50,100].includes(depositPercent)||depositPercent===50&&input.paymentMethod!=='pix')fail('Confira a forma de pagamento.',422);
  if(depositPercent===50&&(typeof input.reason!=='string'||input.reason.trim().length<5))fail('Informe o motivo da autorização excepcional de 50%.',422);
@@ -198,7 +198,7 @@ export async function previewV3ManualOrder(db,input){
  const capacity={eventDate:x.event.date,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
  const windows=await findV2DeliveryOptions(db,{...capacity,limit:8});
  const depositCents=x.depositPercent===50?Math.ceil(q.totalCents/2):q.totalCents;
- return {totalCents:q.totalCents,pointsUnits:q.pointsUnits,depositCents,balanceCents:q.totalCents-depositCents,options:windows.options.map(w=>({start:w.start,end:w.end})),terms:await termsFor(db,q)};
+ return {totalCents:q.totalCents,pointsUnits:q.pointsUnits,productionDays:q.productionDays,depositCents,balanceCents:q.totalCents-depositCents,options:windows.options.map(w=>({start:w.start,end:w.end,recommended:!!w.recommended})),terms:await termsFor(db,q)};
 }
 export async function createV3ManualOrder(env,input){
  const db=env.DB,x=manualInput(input);
@@ -207,9 +207,10 @@ export async function createV3ManualOrder(env,input){
  const old=await db.prepare("SELECT o.id,o.order_code,o.public_token,r.input_json FROM v3_order_revisions r JOIN v2_orders o ON o.id=r.order_id WHERE r.request_key=? AND r.kind='manual'").bind(input.requestKey).first();
  if(old){if(JSON.parse(old.input_json).manualFingerprint!==fingerprint)fail('Identificador já utilizado em outra proposta.');return {orderCode:old.order_code,customerAreaPath:'/meu-pedido/'+old.public_token,recovered:true};}
  const p=await previewV3ManualOrder(db,input),w=input.deliveryWindow;
- if(p.totalCents!==input.expectedTotalCents||!w||!p.options.some(y=>y.start===w.start&&y.end===w.end))fail('O valor ou a agenda mudou. Calcule novamente.');
+ if(p.totalCents!==input.expectedTotalCents||!w)fail('O valor mudou ou a entrega não foi escolhida. Calcule novamente.');
+ try{validateV3ManualDeliveryWindow({eventDate:x.event.date,start:w.start,end:w.end,productionDays:p.productionDays});}catch(e){fail(e.message,422);}
  const customerId=await findOrCreateCustomer(db,x.customer),orderCode=await nextOrderCode(db),publicToken=randomToken('ord_');
  const atelie=p.terms.services.find(s=>s.family==='identidade_visual'),retro=p.terms.services.find(s=>s.family==='retrospectiva');
- const result=await createV3OrderRecords(db,{customerId,orderCode,publicToken,contactSnapshot:x.customer,manualDraft:{depositPercent:x.depositPercent,reason:x.reason,fingerprint},body:{clientRequestId:input.requestKey,items:input.items,couponCode:input.couponCode,eventType:x.event.type,eventSubtype:x.event.subtype||'',honoreeName:x.event.honoreeName,eventDate:x.event.date,paymentMethod:input.paymentMethod,deliveryWindow:w,expectedTotalCents:p.totalCents,termsVersion:p.terms.general.version,atelieTermsAccepted:!!atelie,atelieTermsVersion:atelie?.version,retrospectiveTermsAccepted:!!retro,retrospectiveTermsVersion:retro?.version}});
+ const result=await createV3OrderRecords(db,{customerId,orderCode,publicToken,contactSnapshot:x.customer,manualDraft:{depositPercent:x.depositPercent,reason:x.reason,fingerprint,flexibleDelivery:true},body:{clientRequestId:input.requestKey,items:input.items,couponCode:input.couponCode,eventType:x.event.type,eventSubtype:x.event.subtype||'',honoreeName:x.event.honoreeName,eventDate:x.event.date,paymentMethod:input.paymentMethod,deliveryWindow:w,expectedTotalCents:p.totalCents,termsVersion:p.terms.general.version,atelieTermsAccepted:!!atelie,atelieTermsVersion:atelie?.version,retrospectiveTermsAccepted:!!retro,retrospectiveTermsVersion:retro?.version}});
  return {orderCode:result.orderCode,customerAreaPath:'/meu-pedido/'+result.publicToken,recovered:result.recovered};
 }

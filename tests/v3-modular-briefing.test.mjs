@@ -702,3 +702,34 @@ test('partial refund or chargeback remains in review and prevents release',async
  await assert.rejects(finalizeV3PaidCancellation(env,order.orderCode,{confirmed:true}),/sem devolução/);
  assert.equal(mp.refundKeys.size,0);
 });
+
+import {runV3ApprovalReminders,v3ServiceWhatsappActions} from '../src/lib/v3-service-reminders.js';
+test('V3 approval reminders are per preview, deduplicated, stop after approval and never approve on silence',async t=>{
+ const {db,order}=await paid(t),env={DB:db},family='identidade_visual';
+ const s=db.sqlite.prepare('SELECT id FROM v3_order_services WHERE order_id=? AND family=?').get(order.orderId,family);
+ const published='2026-10-01T12:00:00.000Z',deadline='2026-10-08T12:00:00.000Z';
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='waiting_customer' WHERE id=?").run(s.id);
+ const preview=db.sqlite.prepare("INSERT INTO v3_service_previews(service_id,version,r2_key,mime_type,size_bytes,published_at,adjustment_deadline) VALUES(?,1,'test-reminder-preview','image/png',8,?,?)").run(s.id,published,deadline);
+ const run=(date)=>runV3ApprovalReminders(env,{now:new Date(date+'T12:00:00.000Z')});
+ assert.equal((await run('2026-10-02')).created,0);
+ assert.equal((await run('2026-10-04')).created,1);
+ assert.equal((await run('2026-10-04')).created,0);
+ assert.equal((await run('2026-10-07')).created,1);
+ assert.equal((await run('2026-10-08')).created,1);
+ assert.equal((await run('2026-10-09')).created,0);
+ assert.equal(db.sqlite.prepare('SELECT production_status FROM v3_order_services WHERE id=?').get(s.id).production_status,'waiting_customer');
+ assert.equal(db.sqlite.prepare('SELECT status FROM v3_service_previews WHERE id=?').get(Number(preview.lastInsertRowid)).status,'active');
+ const client=await getV3ModularBriefing(db,order.publicToken);
+ assert.equal(client.services.find(x=>x.family===family).whatsappActions,undefined);
+ const {getV3AdminBriefing}=await import('../src/lib/v3-admin-briefing.js');
+ const admin=await getV3AdminBriefing(db,order.publicToken);
+ const action=admin.services.find(x=>x.family===family).whatsappActions[0];
+ assert.equal(action.kind,'approval');
+ assert.match(action.url,/^https:\/\/wa\.me\/5561999999999\?text=/);
+ assert.ok(decodeURIComponent(action.url).includes(order.publicToken));
+ assert.equal(v3ServiceWhatsappActions({service:{family,productionStatus:'waiting_customer',progress:{preview:{status:'active',adjustmentDeadline:deadline}}},customer:{whatsapp:'invalid'},order:{public_token:order.publicToken}}).length,0);
+ db.sqlite.prepare("UPDATE v3_service_previews SET status='approved' WHERE id=?").run(Number(preview.lastInsertRowid));
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='approved' WHERE id=?").run(s.id);
+ assert.equal((await run('2026-10-09')).resolved,3);
+ assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_notifications WHERE event_code='V3_APPROVAL_REMINDER' AND resolved_at IS NULL").get().n,0);
+});

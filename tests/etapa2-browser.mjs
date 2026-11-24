@@ -274,7 +274,7 @@ async function capture(browser,ref,label) {
     await page.locator('#advOrderQuery').fill('falha');
     await page.getByText('Falha fictícia do teste').waitFor();
     if (isOrganizedAdmin) {
-      await page.getByRole('button',{name:'Encontrar função'}).click();
+      await page.locator('#findAdminFeature').click();
       await page.locator('#featureFinderQuery').fill('cupom');
       assert.equal(await page.locator('[data-feature-index]').count(),1,
         'Localizador precisa mostrar exatamente a função Cupons');

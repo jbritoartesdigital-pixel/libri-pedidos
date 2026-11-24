@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V92 (24/11/2026): transição leve do carrinho e seletor estável no teste legado; gates completos mantidos.
 # Release V91 (24/11/2026): PR #151, CI 45480386817 aprovado. Migração 0063 aditiva, gates e backup D1 obrigatórios.
 # Release V80 (24/11/2026): PR #150, composição unificada, carregamento escuro, tema noturno opcional. Testes de publicação obrigatórios.
 # Release V76 (24/11/2026): PR #149, glass rosé, Manrope local, viewport fixo e modal de oferta; gate de testes obrigatório.

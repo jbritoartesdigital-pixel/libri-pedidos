@@ -502,7 +502,7 @@ async function openCart(){
   if(state.step==='cart'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;cartOpenDetails=new Set(Array.from(root.querySelectorAll('details[data-cart-group][open]'),el=>el.dataset.cartGroup));}
   hideBasket();state.step='cart';save();cartQuote=null;cartError='';cartRevision++;
   root.setAttribute('aria-busy','true');
-  loading('Organizando seu pedido','Estamos conferindo os valores das suas escolhas.');
+  root.innerHTML='<section class="v3-panel v3-panel--status v3-cart-transition" role="status"><div class="v3-cart-transition-copy"><span class="v3-cart-transition-line" aria-hidden="true"></span><h1>Preparando seu pedido</h1><p>Conferindo suas escolhas e o valor final.</p></div></section>';
   if(state.cartItems.length){
     try {
       await Promise.all(state.cartItems.map(async item=>{if(!cartExtrasCatalog[item.productCode]){const data=await request('/api/v3/extras/catalog?productCode='+encodeURIComponent(item.productCode));cartExtrasCatalog[item.productCode]=data.extras||[];}}));

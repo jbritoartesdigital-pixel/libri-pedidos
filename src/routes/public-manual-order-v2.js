@@ -10,6 +10,7 @@ import {
 } from '../lib/v2-orders-manual.js';
 import {
   getManualClientAddonOffer,
+  getManualClientUpsell,
   quoteManualClientAddons,
 } from '../lib/v2-manual-client-addons.js';
 import {
@@ -73,13 +74,9 @@ export async function handlePublicManualOrderV2Api(
       );
     }
 
-    return json({
-      ok:
-        true,
-
-      order,
-      addonOffer: await getManualClientAddonOffer(env.DB, order),
-    });
+    const addonOffer=await getManualClientAddonOffer(env.DB,order);
+    const upsell=await getManualClientUpsell(env.DB,order,addonOffer).catch(()=>null);
+    return json({ok:true,order,addonOffer,upsell});
   }
 
   // Pedido manual: o token privado encontra o WhatsApp salvo no servidor.

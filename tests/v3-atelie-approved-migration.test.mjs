@@ -36,3 +36,5 @@ test('automatic catalog migration never overwrites an active package',()=>{
   assert.equal(active.points_units,900);
   assert.equal(db.sqlite.prepare("SELECT points_units FROM v3_atelie_packages WHERE code='encanto'").get().points_units,500);
 });
+
+test('Ateliê public common items no longer advertise the removed mockup',async()=>{const db=database();for(const row of await listAteliePackages(db)){assert.ok(!row.includedCommon.some(x=>/simula/i.test(x)));assert.ok(row.includedCommon.some(x=>/PDF/.test(x)));}});

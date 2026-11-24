@@ -4,12 +4,11 @@ import { verifyAtelieRelease } from './v3-atelie-release.js';
 // carga de produção, termos, catálogo e liberação comercial aprovados.
 const CODES = new Set(['essencia', 'encanto', 'universo']);
 const SHARED_INCLUDED = [
-  'Apresentação visual da identidade',
-  'Uma simulação conceitual de decoração, sem execução física'
+  'Apresentação da identidade em PDF'
 ];
 const SHARED_EXCLUDED = [
   'Impressão ou fabricação de personalizados',
-  'Montagem ou projeto executivo de decoração',
+  'Simulação, montagem ou projeto executivo de decoração',
   'Arquivo Silhouette e arquivos editáveis não contratados',
   'Convite cinematográfico ou interativo',
   'Novas ilustrações individuais fora do escopo, personagens adicionais e peças especiais sem orçamento'

@@ -61,6 +61,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     (d.files.length?'<p>Arquivos finais disponíveis para download até '+day(d.downloadUntil.slice(0,10))+'.</p>':'')+
     (d.warning&&d.files.length?'<p role="status"><strong>'+esc(d.warning)+'</strong></p>':'')+
     d.files.map(f=>'<p>'+esc(f.filename)+' '+(f.available?'<a class="btn primary" href="'+esc(base+f.id)+'">Baixar arquivo</a>':'· Prazo de download encerrado')+'</p>').join('')+
+    (d.externalChannel==='whatsapp'?'<p>Arquivo final enviado pelo WhatsApp. Confira a conversa com a Libri.</p>':d.externalChannel==='drive'?(d.externalUrl?'<p>Baixe o arquivo até '+day(d.downloadUntil.slice(0,10))+'.</p><a class="btn primary" href="'+esc(d.externalUrl)+'" target="_blank" rel="noopener noreferrer">Abrir no Google Drive</a>':'<p>O prazo de acesso ao link pelo aplicativo encerrou.</p>'):'')+
     (d.interactiveUrl?'<p><a class="btn primary" href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir meu convite interativo</a></p><p>A validade do convite segue a contratação, independentemente do prazo de download.</p>':'')+'</section>';
   }
   function productionHtml(s){
@@ -69,7 +70,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const url='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/production/'+family+'/preview/'+preview?.id;
     const button=(action,label)=>'<button class="btn primary" type="button" data-v3-production="'+action+'" data-family="'+family+'" '+(busy?'disabled':'')+'>'+label+'</button>';
     return '<div class="card"><h4>'+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</h4>'+
-      (preview&&preview.available!==false?'<p><a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a></p>':'')+
+      (preview&&preview.available!==false?(preview.externalChannel==='whatsapp'?'<p>Prévia '+esc(preview.version)+' enviada pelo WhatsApp. Confira o vídeo na conversa com a Libri antes de aprovar.</p>':preview.externalChannel==='drive'?(preview.externalUrl?'<p><a class="btn secondary" href="'+esc(preview.externalUrl)+'" target="_blank" rel="noopener noreferrer">Ver prévia no Google Drive</a></p>':''):'<p><a class="btn secondary" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Ver prévia '+esc(preview.version)+'</a></p>'):'')+
       (p.revisionsIncluded!==null?'<p>Rodadas de ajustes utilizadas: '+esc(p.revisionsUsed)+' de '+esc(p.revisionsIncluded)+'</p>':'')+
       (s.productionStatus==='waiting_customer'&&preview?.status==='active'?'<p>Solicite ajustes até '+day(preview.adjustmentDeadline.slice(0,10))+'. A falta de resposta não aprova automaticamente a prévia.</p>'+button('approve','Aprovar prévia')+
       (Date.now()<=Date.parse(preview.adjustmentDeadline)?'<label for="v3-adjust-'+family+'">O que deseja ajustar?</label><textarea id="v3-adjust-'+family+'" class="textarea" maxlength="2000" data-adjust-note="'+family+'"></textarea>'+button('request_adjustments','Solicitar ajustes'):'<p>Prazo de ajustes encerrado. Fale com a Libri se precisar de ajuda.</p>'):'')+

@@ -63,7 +63,7 @@ async function compute(db,token,family,input={}){
  const settings=await loadV2Settings(db);
  const capacity=v2IntSetting(settings,'default_sellable_points_per_day_units',400);
  const now=today(),days=Math.max(s.production_days,family==='convite'?0:15);
- const first=day(now,Math.max(1,days)),last=day(ctx.order.event_date,-v2IntSetting(settings,'minimum_delivery_days_before_event',3));
+ const first=day(now,Math.max(1,days)),eventLimit=day(ctx.order.event_date,-v2IntSetting(settings,'minimum_delivery_days_before_event',3)),last=s.delivery_end&&s.delivery_end<eventLimit?s.delivery_end:eventLimit;
  if(first>last||day(first,2)>last)return {ctx,s,partition,rows,options:[],depends,capacity};
  // Limit planning horizon to avoid unbounded queries for malformed event dates.
  if(last>day(now,730))fail('Data fora do horizonte de planejamento.');

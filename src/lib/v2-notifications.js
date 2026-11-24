@@ -290,7 +290,7 @@ export async function listV2AdminNotifications(
     limit = 50,
   } = {},
 ) {
-  const clauses = [];
+  const clauses = ['COALESCE((SELECT p.bell_enabled FROM v2_notification_preferences p WHERE p.event_code=n.event_code),1)=1'];
 
   if (
     unreadOnly
@@ -387,8 +387,8 @@ export async function listV2AdminNotifications(
                   ELSE 0
                 END
               ) AS unresolved_count
-            FROM v2_notifications
-            WHERE read_at IS NULL
+            FROM v2_notifications n
+            WHERE read_at IS NULL AND COALESCE((SELECT p.bell_enabled FROM v2_notification_preferences p WHERE p.event_code=n.event_code),1)=1
           `,
         )
         .first(),
@@ -790,7 +790,7 @@ export async function getV2NotificationPreferences(
       )
       .all();
 
-  return (
+  const preferences = (
     result.results
     || []
   )
@@ -811,6 +811,8 @@ export async function getV2NotificationPreferences(
           row.updated_at,
       }),
     );
+  for(const eventCode of ['V3_APPROVAL_REMINDER','V3_SERVICE_DELIVERY_DUE','V3_DOWNLOAD_EXPIRING'])if(!preferences.some(p=>p.eventCode===eventCode))preferences.push({eventCode,bellEnabled:true,pushEnabled:true,updatedAt:null});
+  return preferences.sort((a,b)=>a.eventCode.localeCompare(b.eventCode));
 }
 
 export async function updateV2NotificationPreference(
@@ -1494,7 +1496,9 @@ export async function createUpcomingOperationalNotifications(
               o.next_action
             FROM v2_orders o
             WHERE
-              o.status IN (
+              o.archived_at IS NULL
+              AND NOT EXISTS(SELECT 1 FROM v3_order_checkout_snapshots v3 WHERE v3.order_id=o.id)
+              AND o.status IN (
                 'awaiting_urgency_decision',
                 'ready_for_production',
                 'adjustments',

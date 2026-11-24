@@ -787,6 +787,9 @@ test('unified Admin search finds all modular services without duplicate orders',
  const id=db.sqlite.prepare("SELECT id FROM v3_order_services WHERE family='identidade_visual'").get().id;
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='waiting_customer' WHERE id=?").run(id);
  assert.equal((await searchV2AdminOrders(db,{status:'waiting_customer'}))[0].status,'waiting_customer');
+ assert.equal((await searchV2AdminOrders(db,{family:'identidade_visual',status:'waiting_customer'})).length,1);
+ assert.equal((await searchV2AdminOrders(db,{family:'convite',status:'waiting_customer'})).length,0);
+ assert.equal((await searchV2AdminOrders(db,{family:'convite',status:'briefing_pending'})).length,1);
  const {getV2Central}=await import('../src/lib/v2-admin-core.js');
  const central=await getV2Central(db);
  assert.equal(central.modularOrders.length,1);

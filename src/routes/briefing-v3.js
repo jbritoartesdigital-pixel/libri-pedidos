@@ -9,6 +9,7 @@ import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../li
 import {previewV3ServiceAgenda,scheduleV3Service,releaseV3ServiceCapacity} from '../lib/v3-service-agenda.js';
 import {getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
 import {json,fail,readJson} from '../lib/http.js';
+import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
 const customerBrief=async(env,token)=>{const b=await getV3ModularBriefing(env.DB,token);return b?{...b,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}:null;};
 const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
@@ -87,6 +88,13 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+ const urgency=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/urgency$/);
+ if(urgency){
+  if(request.method!=='POST')return fail('Método não permitido.',405);
+  if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Operação administrativa V3 ainda indisponível.',503);
+  try{const row=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(urgency[1]).first();if(!row)return fail('Pedido V3 não encontrado.',404);const result=await decideV2Urgency(env.DB,urgency[1],await boundedJson(request));return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});}catch(e){return errorResponse(e);}
+ }
+
  const manual=url.pathname.match(/^\/api\/admin\/v2\/orders\/v3\/manual\/(catalog|preview|create)$/);
  if(manual){
   if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Pedido manual V3 ainda indisponível.',503);

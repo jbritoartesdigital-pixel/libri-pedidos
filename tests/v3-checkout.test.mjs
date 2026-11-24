@@ -7,6 +7,7 @@ import {getV3CheckoutTerms} from '../src/lib/v3-checkout.js';
 import {setAtelieSaleStatus} from '../src/lib/v3-atelie-release.js';
 import {randomToken} from '../src/lib/http.js';
 import {decideV2Urgency} from '../src/lib/v2-urgency-admin.js';
+import {handleAdminBriefingV3Api} from '../src/routes/briefing-v3.js';
 const items=[{productCode:'retrospectiva_070',variantCode:'retrospectiva_070_default',addonCodes:[]}];
 const base={items,eventType:'birthday',paymentMethod:'pix'};
 async function setup(){
@@ -324,7 +325,11 @@ test('V3 urgent invitation requires admin approval, never charges before approva
  const res=await call(input);assert.equal(res.status,200,await res.clone().text());const result=await res.json();assert.equal(result.urgencyRequested,true);assert.equal(mp.posts,0);
  const retry=await (await call(input)).json();assert.equal(retry.publicToken,result.publicToken);assert.equal(mp.posts,0);
  const key={publicToken:result.publicToken};assert.equal((await (await call(key,env,'recover')).json()).state,'urgency_pending');assert.equal((await call(key,env,'renew')).status,409);assert.equal(mp.posts,0);
- await decideV2Urgency(DB,result.orderCode,{decision:'approve',deliveryStart:day(1),deliveryEnd:day(2),note:'Capacidade conferida'});
+ const url=new URL('https://test/api/admin/v2/orders/'+result.orderCode+'/v3/urgency');
+ const approve=()=>new Request(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({decision:'approve',deliveryStart:day(1),deliveryEnd:day(2),note:'Capacidade conferida'})});
+ assert.equal((await worker.fetch(approve(),{...env,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'},{waitUntil(){}})).status,401);
+ assert.equal((await handleAdminBriefingV3Api(approve(),env,url)).status,503);
+ const admin=await handleAdminBriefingV3Api(approve(),{...env,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'},url);assert.equal(admin.status,200,await admin.clone().text());assert.equal((await admin.json()).briefing.urgency.status,'approved');
  const approved=await (await call(key,env,'recover')).json();assert.equal(approved.state,'not_started');assert.equal(approved.canRenew,true);assert.equal(mp.posts,0);
  const paid=await call(key,env,'renew');assert.equal(paid.status,200,await paid.clone().text());assert.equal(mp.posts,1);
  assert.equal(DB.sqlite.prepare('SELECT total_cents FROM v2_order_pricing').get().total_cents,preview.urgencyQuote.totalCents);

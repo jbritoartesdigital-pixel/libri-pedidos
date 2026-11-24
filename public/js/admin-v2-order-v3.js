@@ -135,7 +135,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
  let path=base,payload=null,method='POST';
- if(action.startsWith('urgency-')){const decision=action.slice(8);if(!confirm(decision==='approve'?'Aprovar o encaixe e liberar a contratação pelo valor informado? Nenhuma cobrança será criada agora.':'Rejeitar este encaixe?'))return;path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/urgency';payload={decision,deliveryStart:host.querySelector('[data-urgency-start]').value,deliveryEnd:host.querySelector('[data-urgency-end]').value,note:host.querySelector('[data-urgency-note]').value};}
+ if(action.startsWith('urgency-')){const decision=action.slice(8);if(!confirm(decision==='approve'?'Aprovar o encaixe e liberar a contratação pelo valor informado? Nenhuma cobrança será criada agora.':'Rejeitar este encaixe?'))return;path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/urgency';payload={decision,deliveryStart:host.querySelector('[data-urgency-start]').value,deliveryEnd:host.querySelector('[data-urgency-end]').value,note:host.querySelector('[data-urgency-note]').value};}
  else if(action.startsWith('revision-')){
    const mode=action.slice(9);path='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/revision/'+mode;
    if(mode==='editor'){method='GET';}

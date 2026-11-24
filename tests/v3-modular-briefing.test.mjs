@@ -322,3 +322,50 @@ test('interactive link survives file download deadline and is restricted to Libr
  const b=await getV3ModularBriefing(db,token);
  assert.equal(b.services.find(x=>x.family===family).delivery.interactiveUrl,d.interactiveUrl);
 });
+
+import {summarizeV3Order,listV3Production} from '../src/lib/v3-order-overview.js';
+import {guardV3LegacyAdmin,guardV3LegacyCustomer} from '../src/lib/v3-legacy-guard.js';
+import {listV2Production} from '../src/lib/v2-admin-core.js';
+test('V3 production queue derives mixed state without changing payment or parent status',async t=>{
+ const {db,order}=await paid(t);
+ const parent=()=>db.sqlite.prepare('SELECT status FROM v2_orders WHERE id=?').get(order.orderId).status;
+ const before=parent();
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=? AND family='convite'").run(order.orderId);
+ const queue=await listV3Production(db,{});
+ assert.equal(queue.length,1);assert.equal(queue[0].aggregate.totalServices,2);
+ assert.equal(queue[0].aggregate.deliveredServices,1);
+ assert.equal(queue[0].aggregate.status,'in_production');
+ assert.equal(queue[0].aggregate.mixed,true);
+ assert.equal((await listV3Production(db,{service:'retrospectivas'})).length,0);
+ assert.equal((await listV3Production(db,{service:'atelie'})).length,0);
+ assert.equal((await listV3Production(db,{service:'atelie',status:'finalized'})).length,1);
+ assert.equal((await listV3Production(db,{status:'finalized'})).length,0);
+ assert.equal((await listV2Production(db,{})).some(x=>x.code===order.orderCode),false);
+ assert.equal((await getV3ModularBriefing(db,order.publicToken)).aggregate.status,'in_production');
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=?").run(order.orderId);
+ assert.equal((await listV3Production(db,{status:'finalized'}))[0].aggregate.status,'finalized');
+ assert.equal((await listV3Production(db,{})).length,0);
+ assert.equal(parent(),before);
+ assert.equal(summarizeV3Order([{productionStatus:'delivered'}],{locked:true}).status,'awaiting_payment');
+});
+test('legacy guard blocks V3 edits, payment mutations and cascade, but permits V2 paths',async t=>{
+ const {db,order}=await paid(t),code=order.orderCode,token=order.publicToken;
+ const admin=async(path,method='POST',body)=>{const url=new URL('https://test'+path);return guardV3LegacyAdmin(new Request(url,{method,...(body?{body:JSON.stringify(body)}:{})}),db,url);};
+ for(const suffix of ['edit','cancel','action','capacity-review','briefing/submit','contracts']){
+   assert.equal((await admin('/api/admin/v2/orders/'+code+'/'+suffix)).status,409);
+ }
+ assert.equal(await admin('/api/admin/v2/orders/'+code,'GET'),null);
+ assert.equal((await admin('/api/admin/v2/orders/'+code+'/download-folder','GET')).status,409);
+ assert.equal(await admin('/api/admin/v2/orders/'+code+'/notes'),null);
+ assert.equal((await admin('/api/admin/v2/finance/payments','POST',{orderCode:code})).status,409);
+ const payment=db.sqlite.prepare('SELECT id FROM v2_payments WHERE order_id=?').get(order.orderId);
+ assert.equal((await admin('/api/admin/v2/finance/payments/'+payment.id+'/void')).status,409);
+ assert.equal((await admin('/api/admin/v2/agenda/cascade/anticipate','POST',{sourceOrderCode:'LIBRI-123',targetOrderCode:code})).status,409);
+ assert.equal(await admin('/api/admin/v2/orders/LIBRI-123/edit'),null);
+ for(const path of ['/api/v2/customer-area/'+token+'/previews/1/approve','/api/v2/manual-order/'+token+'/start-payment','/api/v2/urgency/'+token+'/checkout']){
+   const url=new URL('https://test'+path);assert.equal((await guardV3LegacyCustomer(new Request(url,{method:'POST'}),db,url)).status,409);
+ }
+ const safe=new URL('https://test/api/v2/customer-area/ord_'+'a'.repeat(36)+'/briefing');
+ assert.equal(await guardV3LegacyCustomer(new Request(safe),db,safe),null);
+});

@@ -1,3 +1,4 @@
+import {trackStoreStage,storeJourneyId,finishStoreJourney} from './store-funnel.js';
 import {
   api,
   app,
@@ -4686,6 +4687,7 @@ function renderTerms(
   // O modal chama checkoutNow no clique real do botão de continuação,
   // preservando a abertura da aba do Mercado Pago no Safari/iOS.
   const checkoutNow = async () => {
+        if(!state.simulationMode)trackStoreStage('tentativa');
         const checkoutTab = prepareMercadoPagoTab();
 
         const button =
@@ -4709,6 +4711,7 @@ function renderTerms(
                   'POST',
                 body:
                   JSON.stringify({
+                    storeJourneyId:state.simulationMode?null:storeJourneyId(),
                     clientRequestId:
                       state.clientRequestId,
                     customer:
@@ -4728,6 +4731,7 @@ function renderTerms(
               },
             );
 
+          if(result.order?.customerAreaPath)finishStoreJourney();
           if (
             !result.payment
               ?.checkoutUrl
@@ -5110,6 +5114,7 @@ export async function startStore(
   }
 
   const render = () => {
+    if(!state.simulationMode){const stage=['evento','modelo','configuracao','dados','agenda','adicionais','adicionais','dados','revisao','pagamento','revisao'][state.step];if(stage)trackStoreStage(stage);}
     persist(state);
 
     if (

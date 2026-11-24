@@ -2,6 +2,7 @@
 // Parent, pricing, service snapshots, terms and idempotency are written together.
 // Payment creation, capacity hold and customer-area routing must be integrated
 // before calling this from any HTTP route. No Mercado Pago calls here.
+import {normalizeV3ExtraSelection} from './v3-extras-catalog.js';
 import {quoteV3Cart,V3CartValidationError} from './v3-cart-quote.js';
 import {validateV2DeliveryWindow,planV2AllocationForWindow} from './v2-agenda.js';
 
@@ -34,7 +35,7 @@ function canonicalItems(items){
     // No client-supplied monetary values or capacity enter the order.
     if(item.couponCode)fail('Cupons conjuntos ainda não estão configurados.','cart_promotion_pending');
     return {productCode:required(item.productCode,80,'Produto'),variantCode:required(item.variantCode,80,'Variante'),
-      addonCodes:[...new Set(item.addonCodes??[])].sort(),comboCode:item.comboCode||''};
+      addonCodes:[...new Set(item.addonCodes??[])].sort(),extras:normalizeV3ExtraSelection(item.extras),comboCode:item.comboCode||''};
   }).sort((a,b)=>a.productCode.localeCompare(b.productCode));
 }
 export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,body,termsEvidence={}}){
@@ -118,10 +119,11 @@ export async function createV3OrderRecords(db,{customerId,orderCode,publicToken,
     const records=[{type:'product',code:q.variant.code,name:q.product.pricingMode==='scene_count'?q.product.name+' • '+q.variant.label:q.product.name,
       price:q.variant.priceCents,points:q.variant.pointsUnits,config:{productCode:q.product.code,productSlug:q.product.slug,variantCode:q.variant.code,
         sceneCount:q.variant.sceneCount,...q.variant.config,serviceFamily:line.family}},
-      ...q.addons.map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,config:{...a.config,serviceFamily:line.family}}))];
+      ...q.addons.map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.pointsUnits,config:{...a.config,serviceFamily:line.family}})),
+      ...(q.v3Extras||[]).map(a=>({type:'addon',code:a.code,name:a.name,price:a.priceCents,points:a.totalPointsUnits,quantity:a.quantity,config:{v3Extra:true,unitPointsUnits:a.pointsUnits,serviceFamily:line.family}}))];
     for(const item of records){
       statements.push(db.prepare(`INSERT INTO v2_order_items(order_id,item_type,item_code,name_snapshot,quantity,unit_price_cents,points_units,configuration_json,created_at)
-        VALUES(${idSql},?,?,?,1,?,?,?,?)`).bind(orderCode,item.type,item.code,item.name,item.price,item.points,JSON.stringify(item.config),stamp));
+        VALUES(${idSql},?,?,?,?,?,?,?,?)`).bind(orderCode,item.type,item.code,item.name,item.quantity||1,item.price,item.points,JSON.stringify(item.config),stamp));
     }
   }
   try{

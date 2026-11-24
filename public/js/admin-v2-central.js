@@ -179,18 +179,19 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   const active=modular.flatMap(o=>o.services.filter(s=>!['delivered','cancelled'].includes(s.productionStatus)).map(s=>({...s,code:o.code,honoreeName:o.honoreeName})));
   const soon=active.filter(s=>s.deliveryWindow&&s.deliveryWindow.end<=new Date(new Date(c.today+'T12:00:00Z').getTime()+6*86400000).toISOString().slice(0,10)).sort((a,b)=>a.deliveryWindow.end.localeCompare(b.deliveryWindow.end));
   viewRoot.innerHTML = `
+    ${!ordersOnly?`<section class="admin-hero" aria-label="Resumo executivo"><div class="admin-hero-copy"><span class="hero-kicker">LIBRI / ESTÚDIO EM MOVIMENTO</span><h2>Seu dia, em ordem.</h2><p>${esc(dateBr(c.today))} · Visão da operação</p></div><div class="hero-revenue"><small>Recebido neste mês</small><strong>${money(c.finance.cashCents)}</strong><span>Vendas: ${money(c.finance.salesCents)} · A receber: ${money(c.finance.receivableCents)}</span></div><img class="hero-emblem" src="/images/libri-emblem.png" alt=""></section>`:''}
     <div class="central-quick-summary" aria-label="Resumo operacional">
       <a href="#central-new" class="central-quick-item"><small>Novos pedidos</small><strong>${newOrders.length}</strong><span>Conferir e programar</span></a>
       <a href="#central-payments" class="central-quick-item"><small>Pagamentos pendentes</small><strong>${pendingPayments.length}</strong><span>Entradas e saldos</span></a>
       <a href="#central-ongoing" class="central-quick-item"><small>Pedidos integrados em andamento</small><strong>${modular.length}</strong><span>Serviços ativos</span></a>
       <a href="#central-deadlines" class="central-quick-item"><small>Prazos próximos</small><strong>${soon.length}</strong><span>Até 7 dias</span></a>
     </div>
-    ${exceptions.length?`<section class="card" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
+    ${exceptions.length?`<section class="card admin-critical-alerts" style="margin-top:14px"><div class="section-title"><h2>Conferências necessárias</h2><span class="status">${exceptions.length}</span></div><div class="list">${exceptions.map(attentionRow).join('')}</div></section>`:''}
     <section class="card attention-center">
       <div class="section-title">
         <div>
           <span class="eyebrow">Prioridade</span>
-          <h2 style="margin:4px 0 0">Hoje precisa da sua atenção</h2>
+          <h2 style="margin:4px 0 0">Minha missão de hoje</h2>
         </div>
         <span class="status">${attentionItems.length}</span>
       </div>
@@ -386,7 +387,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
 
     <section class="card monthly-goal-card" aria-label="Meta mensal de faturamento">
       <div class="section-title">
-        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)} 🎯</h2></div>
+        <div><span class="eyebrow">Meta do mês</span><h2>Rumo aos ${money(c.finance.monthlyGoal?.targetCents || 200000)}</h2></div>
         <span class="status">${Number(c.finance.monthlyGoal?.progressPercent || 0)}%</span>
       </div>
       <div class="monthly-goal-amounts">
@@ -505,6 +506,7 @@ export async function renderCentral(openOrder,{ordersOnly=false}={}) {
   move('#central-schedule-grid','agenda');move('#central-workload','agenda');move('#central-capacity','agenda');
   move('.monthly-goal-card','numbers');move('#central-finance-kpis','numbers');move('.central-analytics','numbers');move('.central-shortcut-fold','numbers');
   move('.attention-center','today');move('#central-parties-today','today');
+  if(!ordersOnly){const timeline=[...active.filter(s=>s.deliveryWindow?.end).map(s=>({code:s.code,title:s.honoreeName+' · '+s.productName,day:s.deliveryWindow.end,label:'Entrega',key:s.code+'|'+s.family})),...(c.workload?.orders||[]).map(s=>({code:s.code,title:s.honoreeName,day:s.end,label:'Entrega',key:s.code+'|legacy'})),...(c.partiesUpcoming||[]).map(s=>({code:s.code,title:s.honoreeName,day:s.eventDate,label:'Festa',key:s.code+'|party'}))].filter(x=>x.day).sort((a,b)=>a.day.localeCompare(b.day));const unique=[...new Map(timeline.map(x=>[x.key,x])).values()].slice(0,8);const el=document.createElement('section');el.className='card admin-day-timeline';el.innerHTML='<div class="section-title"><h2>Próximos compromissos</h2></div><div class="timeline-list">'+(unique.map(x=>'<button type="button" class="timeline-item" data-open-order="'+esc(x.code)+'"><span>'+dateBr(x.day)+'</span><div><strong>'+esc(x.title)+'</strong><small>'+esc(x.label)+'</small></div></button>').join('')||empty('Nenhum compromisso previsto.'))+'</div>';panels.today.append(el);}
   function showSection(id){if(!panels[id])return;for(const [k,el] of Object.entries(panels))el.hidden=k!==id;for(const b of nav.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.centralSection===id));}
   nav.addEventListener('click',e=>{const b=e.target.closest('[data-central-section]');if(b)showSection(b.dataset.centralSection);});
   for(const link of viewRoot.querySelectorAll('.central-quick-summary a'))link.addEventListener('click',e=>{e.preventDefault();showSection('orders');const target=viewRoot.querySelector(link.getAttribute('href'));if(target?.tagName==='DETAILS')target.open=true;target?.scrollIntoView({block:'start'});});

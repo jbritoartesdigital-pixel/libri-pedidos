@@ -1,5 +1,6 @@
 import {
   bindNav,
+  api,
   esc,
   loading,
   setBellCount,
@@ -8,7 +9,7 @@ import {
 } from './admin-v2-core.js';
 
 import { initAdminDiagnostics } from './admin-v2-diagnostics.js';
-import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-83';
+import { initAdminFeatureFinder } from './admin-v2-find.js?v=20261124-admin-v3-86';
 
 import {
   ensureAuth,
@@ -17,7 +18,7 @@ import {
 
 import {
   renderCentral,
-} from './admin-v2-central.js?v=20261124-admin-v3-84';
+} from './admin-v2-central.js?v=20261124-admin-v3-86';
 
 import {
   renderProduction,
@@ -70,6 +71,12 @@ const ADMIN_VIEWS =
     'security',
   ]);
 
+// Session-only view memory. Never persist client names, phones or free-text searches.
+const viewMemory=new Map();let mountedView=null;
+const rememberedControls={orders:['advOrderStatus','advOrderFamily','advOrderProduct','advOrderScenes','advOrderArchived','advOrderDate','advOrderFrom','advOrderTo'],production:['productionStatus','productionWhen'],finance:['financePreset','financeStart','financeEnd']};
+function rememberView(){if(!mountedView||mountedView==='manual')return;const url=new URL(location.href),values={};for(const id of rememberedControls[mountedView]||[]){const el=document.getElementById(id);if(el)values[id]=el.value;}viewMemory.set(mountedView,{values,scroll:scrollY,params:Object.fromEntries(['storeTab','financeTab','service','artStage'].filter(k=>url.searchParams.has(k)).map(k=>[k,url.searchParams.get(k)]))});}
+function restoreQuery(view,url){const saved=viewMemory.get(view);for(const key of ['storeTab','financeTab','service','artStage'])url.searchParams.delete(key);for(const [k,v] of Object.entries(saved?.params||{}))url.searchParams.set(k,v);}
+function restoreView(view){const saved=viewMemory.get(view);if(!saved)return;const changed=[];for(const [id,value] of Object.entries(saved.values)){const el=document.getElementById(id);if(el&&el.value!==value){el.value=value;changed.push(el);}}for(const el of changed)el.dispatchEvent(new Event('change',{bubbles:true}));requestAnimationFrame(()=>{if(mountedView===view)scrollTo(0,saved.scroll);});}
 function syncNavActive() {
   const more = document.getElementById('adminMoreMenu');
   const secondary = ['archived', 'notifications', 'security'].includes(state.view);
@@ -155,7 +162,10 @@ function syncViewQuery() {
   );
 }
 
+let rendering=false;
 async function renderCurrent() {
+  if(rendering)return;rendering=true;
+  const target=state.view;try{
   // Clear view-owned delegated handlers before mounting the next screen.
   const root=document.getElementById('viewRoot');root.onclick=null;root.onchange=null;
   loading();
@@ -211,15 +221,17 @@ async function renderCurrent() {
     await renderCentral(open);
   }
 
+  mountedView=target;restoreView(target);
   await refreshBell();
+  }finally{rendering=false;}
 }
 
 async function navigateTo(view, storeTab, service) {
-  if (!ADMIN_VIEWS.has(view)) return;
-  state.view = view;
+  if (!ADMIN_VIEWS.has(view)||rendering) return;
+  rememberView();state.view = view;
   const more = document.getElementById('adminMoreMenu');
   if (more && !['archived', 'notifications', 'security'].includes(view)) more.open = false;
-  const url = new URL(window.location.href);
+  const url = new URL(window.location.href);restoreQuery(view,url);
   if (view === 'production' && ['atelie','convites','retrospectivas'].includes(service)) {
     url.searchParams.set('service',service);
     url.searchParams.delete('artStage');
@@ -230,19 +242,17 @@ async function navigateTo(view, storeTab, service) {
   history.replaceState({}, '', url.pathname + url.search + url.hash);
   syncNavActive();
   syncViewQuery();
-  await renderCurrent();
+  scrollTo(0,0);await renderCurrent();
 }
 
 async function ready() {
   applyInitialView();
 
   bindNav(
-    async () => {
-      syncNavActive();
-      syncViewQuery();
-
+    async (view) => {
+      if(rendering){state.view=mountedView||state.view;syncNavActive();return;}
       try {
-        await renderCurrent();
+        await navigateTo(view);
       } catch (error) {
         document
           .getElementById('viewRoot')
@@ -265,7 +275,10 @@ async function ready() {
   document.getElementById('notificationBell').addEventListener('click',
     () => navigateTo('notifications'));
 
-  initAdminFeatureFinder(navigateTo);
+  const rail=document.getElementById('adminRailToggle');let compact=false;try{compact=localStorage.getItem('libriAdminRail')==='compact';}catch{}
+  function applyRail(){document.documentElement.classList.toggle('admin-rail-compact',compact);rail.setAttribute('aria-pressed',String(compact));rail.setAttribute('aria-label',compact?'Expandir menu':'Recolher menu');rail.title=rail.getAttribute('aria-label');}
+  rail.addEventListener('click',()=>{compact=!compact;applyRail();try{localStorage.setItem('libriAdminRail',compact?'compact':'full');}catch{}});applyRail();
+  initAdminFeatureFinder(navigateTo,{lookup:async q=>(await api('/api/admin/v2/orders/search?'+new URLSearchParams({q,archived:'all',limit:'6'}))).orders||[],openOrder:code=>openOrder(code,renderCurrent)});
 
   document
     .getElementById('logoutBtn')

@@ -2869,7 +2869,7 @@ test('Central starts with only name search and keeps all optional order filters 
   assert.match(central, /quickSearch\?\.addEventListener\('keydown'/);
   assert.match(central, /setTimeout\(runOrderSearch, 350\)/);
   assert.match(central, /if \(!ordersOnly && !hasQuery && !hasExtraFilters\)/);
-  assert.match(central, /if \(revision !== searchRevision\) return/);
+  assert.match(central, /if \(revision !== searchRevision \|\| !results\.isConnected\) return/);
   assert.match(central, /Mostrar mais filtros • ativos/);
   assert.match(central, /\['q','advOrderQuery'\]/);
   assert.match(central, /\['archived','advOrderArchived'\]/);

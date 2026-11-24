@@ -70,3 +70,5 @@ V82: financeiro segmentado e correção de regex de abertura de pedido, produç�
 V83: catálogo de retrospectivas real disponível no Admin em leitura autenticada. O gate atual de release impede edição comercial fora da especificação e reativa pacotes pausados; gestão de preço/pausa precisa decisão e correção do gate, não foi alterada. Tests de acesso e navegação ampliados.
 
 V84: corrigida ausência de listagem inicial real de Pedidos; paginação e filtros efetivos, não apenas fila modular parcial. Backend busca com parâmetros validados. Verificar CI e capturas antes de declarar concluído.
+
+V86: aprovadas todas as 25 propostas. Fundação de navegação e identidade implementada, Central editorial inicial com dados reais e linha do tempo. Novos testes de busca universal, atalho, drawer e navegação mobile. Ainda pendem inspeção visual, Kanban, histórico, filtros rápidos, gráficos, agenda e funil, além da gestão comercial Retro. Sem deploy. Não declarar entrega integral.

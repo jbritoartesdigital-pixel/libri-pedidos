@@ -190,7 +190,10 @@ try{
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await admin.goto(origin+'/admin-v2');
- await admin.locator('.central-section-tabs [data-central-section="today"]').waitFor();
+ await admin.locator('.central-section-tabs [data-central-section="today"]').waitFor();await admin.locator('.admin-hero').waitFor();
+ await admin.locator('#adminRailToggle').click();assert.equal(await admin.locator('html').evaluate(el=>el.classList.contains('admin-rail-compact')),true);await admin.locator('#adminRailToggle').click();
+ await admin.locator('#findAdminFeature').click();await admin.locator('#featureFinderQuery').fill(paidFixture.orderCode);await admin.locator('[data-universal-order="'+paidFixture.orderCode+'"]').waitFor();await admin.locator('[data-universal-order="'+paidFixture.orderCode+'"]').click();await admin.locator('#v3AdminOrder').waitFor();assert.equal(await admin.locator('#modalRoot').evaluate(el=>el.classList.contains('order-drawer-root')),true);await admin.locator('#modalRoot .close-btn').click();
+ await admin.locator('#findAdminFeature').click();await admin.locator('#featureFinderQuery').fill('cupom');await admin.locator('[data-pin-index]').first().click();assert.equal(await admin.locator('#adminPinned [data-pin-open]').count(),1);await admin.locator('#featureFinderClose').click();
  assert.equal(await admin.locator('[data-central-page="today"]').isVisible(),true);
  assert.equal(await admin.locator('#central-parties-today').isVisible(),true);
  assert.equal(await admin.locator('#central-new').isVisible(),false);
@@ -207,7 +210,7 @@ try{
  await admin.locator('[data-view="orders"]').click();await admin.locator('#viewTitle').filter({hasText:'Pedidos'}).waitFor();await admin.locator('#advancedOrderSearch').waitFor();await admin.locator('#central-new').waitFor();await admin.locator('[data-searched-order]').first().waitFor();assert.equal(await admin.locator('#advOrderArchived').inputValue(),'no');assert.equal(await admin.locator('#central-parties-today').count(),0);
  await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-desktop.png',fullPage:true});
  await admin.reload();await admin.locator('#central-new').waitFor();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'dark');
- await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+ await admin.setViewportSize({width:390,height:844});assert.equal(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.equal(await admin.locator('.nav-primary').evaluate(el=>getComputedStyle(el).position),'fixed');
  await admin.screenshot({path:'artifacts/v3-browser/admin-orders-night-mobile.png',fullPage:true});await admin.locator('#adminThemeToggle').click();assert.equal(await admin.locator('html').getAttribute('data-admin-theme'),'light');
  await admin.locator('[data-view="production"]').click();await admin.locator('[data-production-service="retrospectivas"]').click();await admin.locator('#productionList').getByText(/LIBRI-|Nenhum pedido nessa fila/).first().waitFor();assert.equal(await admin.locator('[data-production-service="retrospectivas"]').getAttribute('aria-pressed'),'true');await admin.screenshot({path:'artifacts/v3-browser/admin-production-mobile.png',fullPage:true});
  await admin.goto(origin+'/admin-v2?view=store&storeTab=retrospectives');await admin.locator('.retro-catalog-card').first().waitFor();assert.equal(await admin.locator('.retro-catalog-card').count(),5);await admin.screenshot({path:'artifacts/v3-browser/admin-retrospectives-mobile.png',fullPage:true});

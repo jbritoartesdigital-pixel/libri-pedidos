@@ -46,7 +46,7 @@ test('destinos do localizador existem e todas as abas da Loja têm acesso direto
   assert.ok(tabs.includes('atelie'), 'Ateliê deve permanecer dentro da Loja');
   assert.ok(ADMIN_FEATURES.filter(x=>x.view==='store'&&x.tab).every(x=>tabs.includes(x.tab)));
   assert.match(store, /searchParams\.set\('storeTab', tab\)/);
-  assert.match(admin, /initAdminFeatureFinder\(navigateTo\)/);
+  assert.match(admin, /initAdminFeatureFinder\(navigateTo,\{/);
   assert.match(admin, /searchParams\.set\('storeTab', storeTab\)/);
   assert.match(admin, /openOrder\(/);
 });

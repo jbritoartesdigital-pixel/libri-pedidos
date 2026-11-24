@@ -91,3 +91,17 @@
 @media(prefers-reduced-motion:reduce){.black-libri-balloon,.black-libri-result,.black-libri-balloon.chosen::after{animation:none}}
 
 .black-libri-error{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:min(92%,460px);padding:12px 16px;border:1px solid #e3b99488;background:#4e3035;color:#fff4e8;border-radius:12px;text-align:center;z-index:2;box-shadow:0 6px 20px #130d1166}
+
+/* V97 — immersive Black stage, premium champagne contrast, no commercial changes. */
+.black-libri-overlay{background:radial-gradient(ellipse at 50% 0,#62434f99,transparent 65%),#140d13ed}
+.black-libri-panel{max-width:590px;background:radial-gradient(ellipse at 50% -5%,#97676b7d,transparent 55%),radial-gradient(ellipse at 100% 95%,#b7806945,transparent 52%),linear-gradient(155deg,#20151d,#38232e 62%,#513337);border-radius:28px;border-color:#d0a68b80;box-shadow:0 28px 100px #0e080dbe,inset 0 1px #ecd0b96b}
+.black-libri-campaign{font-size:clamp(48px,12vw,78px);letter-spacing:-.055em;color:#fff2e7;text-shadow:0 0 30px #d6a57e45}
+.black-libri-campaign em{color:#e8be9a}
+.black-libri-heading{font-size:clamp(24px,5.4vw,34px)}
+.black-libri-grid{max-width:100%;background:radial-gradient(ellipse at 50% 0,#be8e7c33,transparent 66%),#150b152c;border:1px solid #d4a88935;gap:4px 6px;padding:12px 6px 7px;margin:11px auto 7px}
+.black-libri-balloon{min-height:108px}
+.black-libri-balloon .bulb{width:min(94%,92px);box-shadow:inset 3px 4px 8px #fff8,inset -6px -11px 14px #31111d6b,0 8px 18px #10090c80}
+.black-libri-result{padding:26px 16px;background:radial-gradient(ellipse at 50% 0,#b98b6b5c,transparent 70%),linear-gradient(145deg,#65444a,#302029);border-color:#e4bc8c}
+.black-libri-result strong{font-size:clamp(30px,7vw,42px);color:#fff4e6}
+.black-libri-button{min-height:54px;background:linear-gradient(115deg,#f7dfc2,#d8b38e);font-size:15px}
+@media(max-height:660px){.black-libri-panel{padding:12px 14px}.black-libri-campaign{font-size:43px;margin:4px 0 7px}.black-libri-heading{font-size:23px}.black-libri-grid{padding:4px;gap:1px 4px;margin:6px 0}.black-libri-balloon{min-height:82px}.black-libri-balloon .bulb{width:min(88%,65px)}.black-libri-result{padding:15px 12px}}

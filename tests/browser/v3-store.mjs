@@ -196,6 +196,20 @@ try{
  await rp.locator('[data-action="retro-buy"]').first().click();await click(rp,'added-view');await rp.locator('[data-action="cart-unified-checkout"]').waitFor();
  assert.equal(await rp.locator('.v3-cart-item').count(),1);await checkout(rp);
  await rp.screenshot({path:'artifacts/v3-browser/retro-checkout-mobile.png',fullPage:true});await standalone.context.close();
+ // A real eligible combo must outrank a decorative upgrade; never advertise a zero discount.
+ const oldCombos=db.sqlite.prepare('SELECT code,discount_value FROM v2_combos').all();
+ try{
+  db.sqlite.exec("UPDATE v2_combos SET discount_value=CASE WHEN code='organizacao' THEN 10 ELSE 0 END");
+  const comboCase=await pageFor(390,844);const cp=comboCase.page;
+  await click(cp,'event','birthday');await click(cp,'creation','invitation');await click(cp,'intent','simple');await click(cp,'product','interactive_essential');
+  await click(cp,'guided-options','reminder');await cp.locator('#v3-modal [data-action="guided-addon"][data-value="reminder_static"]').click();
+  await cp.locator('[data-action="guided-options"][data-value="reminder"][aria-pressed="true"]').waitFor();
+  await click(cp,'guided-finish');await cp.locator('#v3-offer-title').waitFor();
+  assert.match(await cp.locator('#v3-offer-title').innerText(),/Complete o combo Organização/);
+  await click(cp,'accept-offer');await click(cp,'added-view');await cp.locator('[data-action="cart-unified-checkout"]').waitFor();
+  const comboDraft=await cp.evaluate(()=>JSON.parse(localStorage.getItem('libriV3Draft')).cartItems[0]);assert.equal(comboDraft.comboCode,'organizacao');assert.equal(comboDraft.addonCodes.length,2);assert.ok(comboDraft.addonCodes.includes('reminder_static'));
+  await comboCase.context.close();
+ }finally{for(const c of oldCombos)db.sqlite.prepare('UPDATE v2_combos SET discount_value=? WHERE code=?').run(c.discount_value,c.code);}
  // Actual private shell, actual persisted three-family briefing.
  const privateContext=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});
  await privateContext.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());

@@ -9,7 +9,7 @@ export async function assertV3ConfirmedPayment(db,payment){
     FROM v2_order_pricing p JOIN v3_order_checkout_snapshots s ON s.order_id=p.order_id WHERE p.order_id=?`)
     .bind(payment.order_id).first();
   const quote=JSON.parse(row?.quote_json||'{}');
-  if(!row||row.service_count<2||row.service_count>3||row.deposit_percent!==100||row.balance_cents!==0||
+  if(!row||row.service_count<1||row.service_count>3||row.service_count!==quote.items?.length||row.deposit_percent!==100||row.balance_cents!==0||
     row.total_cents!==quote.totalCents||row.deposit_cents!==row.total_cents||payment.amount_cents!==row.total_cents||
     payment.method!==row.payment_method||quote.paymentMethod!==row.payment_method||payment.payment_type==='refund')
     throw new Error('Pagamento combinado divergente do valor integral contratado; revisão necessária.');

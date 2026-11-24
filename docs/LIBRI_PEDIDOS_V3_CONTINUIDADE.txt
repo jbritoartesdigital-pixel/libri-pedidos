@@ -1,5 +1,5 @@
 LIBRI PEDIDOS V3 | TXT MESTRE DE CONTINUIDADE
-Versão 01 | 23/11/2026 (Brasil)
+Versão 02 | 23/11/2026 (Brasil)
 ESCOPO: refatoração integral do mesmo aplicativo, não somente Ateliê.
 
 REPOSITÓRIO E ESTADO
@@ -21,7 +21,7 @@ REGRAS E VISÃO
 - Compra guiada começa pelo tipo de evento; perguntas condicionais, explicações claras, escolhas explícitas, valor total em reais e não por cena.
 - Não apagar dados, pedidos, pagamentos, cupons, regras ou histórico V2. Pix público integral, cartão integral; 50% somente exceção autorizada no Admin. Não duplicar cobrança, pedido, alocação de agenda ou uso de cupom.
 - Ateliê e Retrospectivas: mínimo 15 dias corridos após briefing completo; capacidade compartilhada em pontos e entrega inteligente.
-- Ateliê: Essência, Encanto, Universo. Monograma, assinatura comemorativa e mascotinho (quando desejado) fazem parte das decisões discutidas. Mascotinho é ilustração da criança; possibilidade de substituir por elemento temático equivalente; personagens adicionais personalizados são extras, não personagem temático genérico. Quantidades e valores precisam ser reconciliados com catálogo oficial e decisões finais, sem publicar preço provisório. A descrição antiga do PR cita 159/299/549 e 3/4/5 poses, mas histórico também registra valores provisórios e 1/2/3 poses; não considerar essa descrição uma aprovação comercial suficiente.
+- Ateliê V4.1 DEFINITIVO, confirmado nos trechos originais e aprovação nesta conversa: Essência R$159, 3 poses, 3 pontos (300 unidades), 1 revisão; Encanto R$299, 4 poses, 5 pontos (500 unidades), 1 revisão; Universo R$549, 5 poses, 8 pontos (800 unidades), 2 revisões. Todos: logotipo, assinatura comemorativa, paleta, tipografia, PDF de apresentação e 1 simulação conceitual; monogramas 1/1/2; brasões 1/1/1+variação; estampas 1/2/3; elementos 2/5/8; papelaria 0/2/4. Mascotinho opcional sem redução de preço, variações temáticas equivalentes. Novas ilustrações individualizadas fora do escopo são extras, personagens temáticos na composição não são. Entrega digital sem marca-d'água, PNG/JPG/PDF conforme uso, licença pessoal, sem impressão, fabricação ou editáveis. Valores e poses anteriores superados. Capacidade aprovada nesta conversa.
 - Não deixar botão de aplicação manual de configuração como solução final. Aplicar por migração ou processo técnico idempotente somente com valores/escopo aprovados.
 - Manter arquivos privados; fotos de crianças não são autorização de divulgação.
 - Usuária quer app completo, bonito e funcional, sem homologação separada obrigatória, porém validar regressões/CI antes da publicação.
@@ -42,5 +42,13 @@ PRÓXIMO PASSO EXATO
 5. Reformular Admin integral: pedidos, produção, agenda, pagamentos, filtros, extras, revisão, histórico, etapas por serviço, arquivos e entrega/aprovação.
 6. Funil de abandono e conversão, retenção/privacidade, regressão V2/V3, CI e testes de uso, deploy e verificação.
 7. Atualizar este documento com commits e resultado real dos testes antes de encerrar nova etapa.
+
+RETOMADA V02 — CATÁLOGO APROVADO
+- 27b54a8: pontos 300/500/800 registrados no catálogo oficial.
+- 0f5fe89: migration 0040 aplica automaticamente preços, entregáveis, pontos, revisões e termos aos pacotes inativos, sem ativar vendas nem alterar pedidos legados.
+- 03ab6fa/fa9596e: mensagens Admin corrigidas, importação eventual restaura capacidade aprovada.
+- 10722cb/9ef3a2f/64cf6c3/d2dd5f8/0e6c587/04833cc: fixtures e testes históricos ajustados para distinguir catálogo inicial antigo da configuração nova.
+- bb61210: testes da migração automática, igualdade com catálogo JS, proteção de pacote já ativo e ausência de pedidos/pagamentos criados.
+- CI desta rodada ainda não confirmado no momento do registro. Não declarar deploy ou sucesso sem leitura do estado real. A migration não foi executada em produção. O PR segue em rascunho. Próxima prioridade: checkout multiproduto, Retrospectivas, briefing modular, agenda e Admin integral; não reabrir preços/pontos já aprovados.
 
 IMPORTANTE: esta versão documenta avanço parcial. Não afirmar que a compra conjunta, retrospectivas, Admin integral ou publicação estão concluídos.

@@ -22,7 +22,7 @@ import {
   renderStoreCombos,
   renderStoreCoupons,
 } from './admin-v2-store-commercial.js';
-import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261124-recovery-73';
+import { renderBlackLibri } from './admin-v2-black-libri.js?v=20261124-v95';
 import { renderAtelieStore } from './admin-v2-atelie.js?v=20261124-admin-v3-83';
 
 export async function renderStore() {

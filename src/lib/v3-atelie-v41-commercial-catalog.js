@@ -126,6 +126,7 @@ export function getAtelieV41CatalogDraft(code) {
     includedItems:[...p.includedItems],
     excludedItems:[...p.excludedItems],
     revisionLimit:p.revisionLimit,
+    pointsUnits:null,
     scopeReference:'Libri Ateliê V4.1 | Catálogo comercial aprovado em 23/11/2026',
     specificTerms:ATELIE_V41_COMMON_TERMS,
     // Não aprovar pontos nem ativar venda: produção e briefing tardio pendentes.

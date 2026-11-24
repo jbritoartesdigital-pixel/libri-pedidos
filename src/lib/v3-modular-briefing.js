@@ -99,7 +99,7 @@ export async function getV3ModularBriefing(db,token){
   if(!ctx)return null;
   const {order,services,locked,drafts,revisions}=ctx;
   const purchased=services.map(s=>({family:s.family,briefingStatus:s.briefing_status,productionStatus:s.production_status,productName:s.snapshot.product.name,
-    variantName:s.snapshot.variant?.label||'',totalCents:s.total_cents,productionDays:s.production_days,
+    variantName:s.snapshot.variant?.label||'',submittedAt:s.briefing_submitted_at,complementNote:s.complement_note,reviewedAt:s.reviewed_at,totalCents:s.total_cents,productionDays:s.production_days,
     extras:(s.snapshot.v3Extras||[]).map(x=>({name:x.name,quantity:x.quantity,totalCents:x.totalCents}))}));
   const base={orderCode:order.order_code,locked,orderStatus:order.status,payment:{totalCents:order.total_cents,method:order.payment_method},
     deliveryWindow:{start:order.delivery_start,end:order.delivery_end,provisional:services.some(s=>s.production_days>0)},event:{honoreeName:order.honoree_display_name,date:order.event_date,type:order.event_type},services:purchased};
@@ -119,7 +119,7 @@ export async function getV3ModularBriefing(db,token){
     const phone=String(setting?.value||'').replace(/\D/g,'');
     const text='Olá! Vou enviar os materiais da retrospectiva do pedido '+order.order_code+'.';
     retro.schema.materials.whatsappUrl=/^\d{10,15}$/.test(phone)?'https://wa.me/'+phone+'?text='+encodeURIComponent(text):null;
-    retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,video_durations_json AS videoDurationsJson,raw_video_seconds AS rawVideoSeconds,received_at AS receivedAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
+    retro.receipt=await db.prepare('SELECT photo_count AS photoCount,video_count AS videoCount,video_durations_json AS videoDurationsJson,raw_video_seconds AS rawVideoSeconds,received_at AS receivedAt,complete_at AS completeAt FROM v3_retro_material_receipts WHERE order_id=?').bind(order.id).first();
   }
   return {...base,modules};
 }
@@ -178,15 +178,15 @@ export async function saveV3ModuleDraft(db,token,module,payload={}){
 }
 // Called only from authenticated Admin in the future. A WhatsApp click or
 // customer assertion is not receipt confirmation, and does not start production.
-export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoCount,videoDurations,rawVideoSeconds=0,note=''}={}){
+export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoCount,videoDurations,rawVideoSeconds=0,note='',complete=false}={}){
   if(!Number.isSafeInteger(orderId)||!Number.isSafeInteger(photoCount)||!Number.isSafeInteger(videoCount)||photoCount<0||videoCount<0||photoCount+videoCount===0||
-    typeof note!=='string'||note.length>500)fail('Informe os materiais efetivamente recebidos.');
+    typeof complete!=='boolean'||typeof note!=='string'||note.length>500)fail('Informe os materiais efetivamente recebidos.');
   return withV2PaymentLock(db,orderId,async()=>{
-    const row=await db.prepare(`SELECT s.commercial_snapshot_json,o.status,o.briefing_status,o.public_token
+    const row=await db.prepare(`SELECT s.commercial_snapshot_json,s.production_status,s.briefing_status AS service_briefing_status,o.status,o.briefing_status,o.public_token
       FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id WHERE s.order_id=? AND s.family='retrospectiva'`).bind(orderId).first();
     if(!row)fail('Retrospectiva não contratada.',404);
     const ctx=await contextV3Briefing(db,row.public_token);
-    if(!ctx||ctx.locked||!['available','in_progress'].includes(row.briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
+    if(!ctx||ctx.locked||row.production_status!=='pending'||!['available','in_progress','completed'].includes(row.service_briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
       fail('Pedido indisponível para confirmação de materiais.',409);
     const spec=retroSpec(parse(row.commercial_snapshot_json));
     if(photoCount>spec.maxPhotos||videoCount>spec.maxVideos)fail('Os materiais excedem o limite contratado. Avalie um adicional antes de confirmar.');
@@ -194,10 +194,11 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
     if(spec.maxVideoSeconds&&(!Array.isArray(videoDurations)||videoDurations.length!==videoCount||videoDurations.some(x=>!Number.isSafeInteger(x)||x<1||x>spec.maxVideoSeconds)||videoDurations.reduce((n,x)=>n+x,0)>spec.maxTotalVideoSeconds))
       fail('Confira a duração de cada vídeo e o limite acumulado contratado.');
     const durations=spec.maxVideoSeconds?videoDurations:[];
-    await db.prepare(`INSERT INTO v3_retro_material_receipts(order_id,photo_count,video_count,received_at,note,video_durations_json,raw_video_seconds)
-      VALUES(?,?,?,datetime('now'),?,?,?) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
-      video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note,video_durations_json=excluded.video_durations_json,raw_video_seconds=excluded.raw_video_seconds`).bind(orderId,photoCount,videoCount,note.trim(),JSON.stringify(durations),rawVideoSeconds).run();
-    return {photoCount,videoCount,videoDurations:durations,rawVideoSeconds,received:true};
+    await db.prepare(`INSERT INTO v3_retro_material_receipts(order_id,photo_count,video_count,received_at,note,video_durations_json,raw_video_seconds,complete_at)
+      VALUES(?,?,?,datetime('now'),?,?,?,CASE WHEN ?=1 THEN datetime('now') ELSE NULL END) ON CONFLICT(order_id) DO UPDATE SET photo_count=excluded.photo_count,
+      video_count=excluded.video_count,received_at=excluded.received_at,note=excluded.note,video_durations_json=excluded.video_durations_json,raw_video_seconds=excluded.raw_video_seconds,complete_at=excluded.complete_at`).bind(orderId,photoCount,videoCount,note.trim(),JSON.stringify(durations),rawVideoSeconds,complete?1:0).run();
+    await db.prepare("UPDATE v3_order_services SET reviewed_at=NULL WHERE order_id=? AND family='retrospectiva'").bind(orderId).run();
+    return {photoCount,videoCount,videoDurations:durations,rawVideoSeconds,received:true,complete};
   });
 }
 
@@ -235,7 +236,7 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}){
     if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;throw e;}
     // Completing the artistic briefing is not a production release. Materials,
     // dependencies and the independent agenda still require confirmation.
-    const result=await db.prepare("UPDATE v3_order_services SET briefing_status='completed',updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','in_progress')").bind(service.id).run();
+    const result=await db.prepare("UPDATE v3_order_services SET briefing_status='completed',briefing_submitted_at=datetime('now'),reviewed_at=NULL,complement_note=NULL,updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','in_progress')").bind(service.id).run();
     if(Number(result.meta?.changes)!==1)fail('O briefing mudou. Atualize a página.',409);
     return getV3ModularBriefing(db,token);
   });

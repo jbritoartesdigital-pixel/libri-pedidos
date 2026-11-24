@@ -267,3 +267,33 @@ test('all gift-only prizes carry positive workload, free delivery scope and crea
   assert.equal(fields.some(x=>x.key==='black_gift_media_sent'),['mini_retrospective','child_birthday'].includes(code));
  }
 });
+
+test('V3 full refund preserves historical gross inflow and records outflow only once',async t=>{
+ const {DB,body,env,call}=await setup(),mp=providerMock(t);
+ const value=await (await call()).json();
+ mp.approve(value.providerOrderId);
+ assert.equal((await (await call({clientRequestId:body.clientRequestId},env,'recover')).json()).state,'paid');
+ const {getV2FinanceDashboard}=await import('../src/lib/v2-finance.js');
+ const order=DB.sqlite.prepare('SELECT id FROM v2_orders').get();
+ const payment=DB.sqlite.prepare("SELECT id,amount_cents,paid_at FROM v2_payments WHERE order_id=? AND status='approved'").get(order.id);
+ const date='2026-10-05T12:00:00.000Z',refundDate='2026-11-05T12:00:00.000Z';
+ DB.sqlite.prepare("UPDATE v2_payments SET paid_at=? WHERE id=?").run(date,payment.id);
+ DB.sqlite.prepare("INSERT INTO v3_paid_cancellations(order_id,status,reason,created_at) VALUES(?,'review','Teste',?)").run(order.id,refundDate);
+ DB.sqlite.prepare("INSERT INTO v3_cancellation_charges(order_id,charge_key,provider,provider_order_id,reference,amount_cents,original_paid_at,status,refund_key,refund_confirmed_at,updated_at) VALUES(?,?,?,?,?,?,?,'refunded',?,?,?)").run(order.id,'original:'+payment.id,'mercado_pago',value.providerOrderId,value.orderCode,payment.amount_cents,date,'test-refund-key',refundDate,refundDate);
+ const october=()=>getV2FinanceDashboard(DB,{preset:'custom',start:'2026-10-01',end:'2026-10-31'});
+ const november=()=>getV2FinanceDashboard(DB,{preset:'custom',start:'2026-11-01',end:'2026-11-30'});
+ assert.equal((await october()).summary.cashInCents,payment.amount_cents);
+ assert.equal((await november()).summary.refundsCents,payment.amount_cents);
+ DB.sqlite.prepare("UPDATE v2_payments SET status='refunded' WHERE id=?").run(payment.id);
+ DB.sqlite.prepare("UPDATE v2_orders SET status='cancelled' WHERE id=?").run(order.id);
+ DB.sqlite.prepare("UPDATE v3_paid_cancellations SET status='completed',completed_at=? WHERE order_id=?").run(refundDate,order.id);
+ const after=await october(),refund=await november();
+ assert.equal(after.summary.salesCents,payment.amount_cents);
+ assert.equal(after.summary.cashInCents,payment.amount_cents);
+ assert.equal(after.summary.refundsCents,0);
+ assert.equal(refund.summary.cashInCents,0);
+ assert.equal(refund.summary.refundsCents,payment.amount_cents);
+ assert.equal(refund.refunds.movements.length,1);
+ assert.equal(refund.summary.netCashMovementComplete,false);
+ assert.equal((await november()).summary.refundsCents,payment.amount_cents);
+});

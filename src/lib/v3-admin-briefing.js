@@ -33,6 +33,8 @@ export async function reviewV3ServiceBriefing(db,token,family,input={}){
        db.prepare("UPDATE v3_order_briefing_drafts SET revision=revision+1,updated_at=datetime('now') WHERE order_id=? AND module=?").bind(ctx.order.id,family)
      ]);
    }else if(input.action==='confirm'){
+     const prize=service.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
+     if(['mini_retrospective','child_birthday'].includes(prize)&&input.giftMediaConfirmed!==true)fail('Confirme as fotos e a autorização do presente Black Libri antes de liberar.',409);
      if(family==='retrospectiva'){
        const r=await db.prepare('SELECT complete_at FROM v3_retro_material_receipts WHERE order_id=?').bind(ctx.order.id).first();
        if(!r?.complete_at)fail('Confirme o recebimento completo dos materiais da retrospectiva.',409);

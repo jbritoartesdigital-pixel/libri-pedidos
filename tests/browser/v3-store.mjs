@@ -100,7 +100,7 @@ async function invite(p,fromCreation=false){
  // Optional additions stay on one screen; no sequential upsell.
  const confirmation=p.locator('[data-action="guided-options"][data-value="confirmation"]');await confirmation.click();await confirmation.and(p.locator('[aria-pressed="true"]')).waitFor();assert.equal(await p.locator('#v3-modal').isVisible(),false);await confirmation.click();await confirmation.and(p.locator('[aria-pressed="false"]')).waitFor();
  await p.locator('[data-action="guided-back"]').waitFor();await click(p,'guided-finish');
- await p.locator('[data-action="add-invitation"]').waitFor();if(await p.locator('[data-action="dismiss-offer"]').count()){await p.locator('.v3-offer-card[role="dialog"]').waitFor();await click(p,'dismiss-offer');}await click(p,'add-invitation');
+ await p.locator('[data-action="add-invitation"]').waitFor();if(await p.locator('[data-action="dismiss-offer"]').count()){await p.locator('.v3-offer-card[role="dialog"]').waitFor();await click(p,'dismiss-offer');}await click(p,'add-invitation');await click(p,'added-view');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
 }
 async function checkout(p){
@@ -113,7 +113,7 @@ async function checkout(p){
  await p.screenshot({path:'artifacts/v3-browser/checkout-before-agenda-'+p.viewportSize().width+'.png',fullPage:true});
  assert.equal(await p.locator('[data-v3-checkout="agenda"]').count(),0);
  assert.equal(await p.locator('[name="email"]').count(),0);
- await p.locator('[name="deliveryWindow"]').first().waitFor();
+ await p.locator('[name="deliveryWindow"]').first().waitFor();assert.ok(await p.locator('[name="deliveryWindow"]').count()<=3);assert.equal(await p.locator('[name="requestedDeliveryEnd"]').count(),0);
  await p.locator('#v3-app[aria-busy="false"]').waitFor();await p.waitForFunction(()=>{const el=document.querySelector('.v3-checkout-block h2');return el&&getComputedStyle(el).fontFamily.includes('Manrope')});
  assert.equal(await p.locator('#v3-unified-checkout button[type="submit"]').isDisabled(),true);await p.locator('#v3-theme-toggle').click();assert.equal(await p.locator('html').getAttribute('data-v3-theme'),'dark');assert.equal(await p.locator('#v3c-eventDate').inputValue(),day(65));assert.equal(await p.locator('#v3c-eventDate').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(36, 27, 30)');await p.locator('#v3-theme-toggle').click();
  assert.match(p.url(),/\/loja$/);
@@ -125,9 +125,9 @@ try{
  let releaseCatalog;const catalogGate=new Promise(resolve=>{releaseCatalog=resolve;});
  await loadContext.route('**/*',async route=>{if(!route.request().url().startsWith(origin+'/'))return route.abort();if(new URL(route.request().url()).pathname==='/api/v2/catalog')await catalogGate;return route.continue();});
  await loadPage.goto(origin+'/loja');
- await loadPage.locator('.v3-status-title').waitFor();assert.match(await loadPage.locator('.v3-panel--status').evaluate(el=>getComputedStyle(el).backgroundImage),/radial-gradient/);await loadPage.evaluate(()=>document.fonts.ready);
+ await loadPage.locator('.v3-status-line').waitFor();assert.equal(await loadPage.locator('.v3-panel--status').evaluate(el=>getComputedStyle(el).backgroundImage),'none');await loadPage.evaluate(()=>document.fonts.ready);
  assert.match(await loadPage.locator('.v3-status-title').evaluate(el=>getComputedStyle(el).fontFamily),/Manrope/);
- assert.equal(await loadPage.locator('.v3-status-line').count(),1);
+ assert.equal(await loadPage.locator('.v3-status-line').count(),1);assert.equal(await loadPage.locator('.v3-status-line').evaluate(el=>getComputedStyle(el).borderTopStyle),'solid');
  assert.equal(await loadPage.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true);
  await loadPage.screenshot({path:'artifacts/v3-browser/loading-mobile.png',fullPage:true});
  releaseCatalog();await loadPage.locator('#v3-welcome-name').waitFor();await loadPage.screenshot({path:'artifacts/v3-browser/welcome-mobile.png',fullPage:true});await loadPage.locator('[data-action="welcome-skip"]').click();await loadPage.locator('[data-action="event"]').first().waitFor();await loadContext.close();
@@ -142,7 +142,7 @@ try{
  const {context,page}=await pageFor(390,844,'Tereza');
  await invite(page);
  await page.screenshot({path:'artifacts/v3-browser/cart-mobile.png',fullPage:true});
- await click(page,'cart-edit','0');await page.locator('[data-action="add-invitation"]').waitFor();await click(page,'add-invitation');await page.locator('[data-action="cart-unified-checkout"]').waitFor();
+ await click(page,'cart-edit','0');await page.locator('[data-action="add-invitation"]').waitFor();await click(page,'add-invitation');await click(page,'added-view');await page.locator('[data-action="cart-unified-checkout"]').waitFor();
  await checkout(page);
  assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza');await page.locator('.v3-instagram-optional summary').click();await page.locator('#v3c-instagram').fill('@tereza.teste');assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('[data-v3-checkout="back"]').click();await page.locator('[data-action="cart-unified-checkout"]').waitFor();await click(page,'cart-unified-checkout');await page.locator('#v3-app[aria-busy="false"]').waitFor();assert.equal(await page.locator('#v3c-instagram').inputValue(),'@tereza.teste');await page.locator('#v3c-name').fill('Tereza da Silva');assert.equal(await page.locator('#v3c-name').inputValue(),'Tereza da Silva');
  await page.screenshot({path:'artifacts/v3-browser/checkout-mobile.png',fullPage:true});
@@ -150,14 +150,14 @@ try{
  await context.close();
  const desktop=await pageFor(1280,900);const p=desktop.page;
  await click(p,'event','birthday');await click(p,'creation','identity');
- await click(p,'atelie-package','essencia');await click(p,'atelie-buy');
+ await click(p,'atelie-package','essencia');await click(p,'atelie-buy');await click(p,'added-view');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();
  await click(p,'cart-extra-start');await p.locator('#v3-modal [data-action="guided-cart-expand"]').waitFor();await click(p,'guided-cart-expand');await click(p,'guided-cart-plus','atelie_pose');await click(p,'guided-cart-next');
  await click(p,'guided-cart-skip');await click(p,'guided-cart-skip');p.once('dialog',d=>d.accept());await click(p,'guided-cart-skip');await p.locator('[data-action="cart-unified-checkout"]').waitFor();await p.getByText('1 × Pose extra',{exact:true}).waitFor();
  await p.screenshot({path:'artifacts/v3-browser/atelie-cart-desktop.png',fullPage:true});
  // Add a retrospective and invitation to the existing Ateliê cart.
  await click(p,'cart-more');await click(p,'creation','retrospective');
- await p.locator('[data-action="retro-buy"]').first().waitFor();await p.locator('[data-action="retro-buy"]').first().click();
+ await p.locator('[data-action="retro-buy"]').first().waitFor();await p.locator('[data-action="retro-buy"]').first().click();await click(p,'added-view');
  await p.locator('[data-action="cart-unified-checkout"]').waitFor();assert.equal(await p.locator('.v3-cart-item').count(),2);
  await click(p,'cart-more');await invite(p,true);assert.equal(await p.locator('.v3-cart-item').count(),3);
  await p.getByText('Desconto combinado (10%)',{exact:true}).waitFor();
@@ -167,7 +167,7 @@ try{
  await desktop.context.close();
  const standalone=await pageFor(390,844);const rp=standalone.page;
  await click(rp,'event','birthday');await click(rp,'creation','retrospective');
- await rp.locator('[data-action="retro-buy"]').first().click();await rp.locator('[data-action="cart-unified-checkout"]').waitFor();
+ await rp.locator('[data-action="retro-buy"]').first().click();await click(rp,'added-view');await rp.locator('[data-action="cart-unified-checkout"]').waitFor();
  assert.equal(await rp.locator('.v3-cart-item').count(),1);await checkout(rp);
  await rp.screenshot({path:'artifacts/v3-browser/retro-checkout-mobile.png',fullPage:true});await standalone.context.close();
  // Actual private shell, actual persisted three-family briefing.

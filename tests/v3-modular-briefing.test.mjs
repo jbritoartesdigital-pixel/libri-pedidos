@@ -224,6 +224,20 @@ test('service agenda requires reviewed briefing, keeps points once and enforces 
  const brief=await getV3ModularBriefing(db,order.publicToken);
  assert.ok(brief.services.every(s=>s.deliveryWindow&&s.productionStatus==='ready'));
  assert.equal(brief.services.find(s=>s.family==='convite').dependsOnIdentity,false);
+ const {getV2AgendaRange,anticipateV2Production,releaseV2CascadeSurplus}=await import('../src/lib/v2-agenda-admin.js');
+ const range=await getV2AgendaRange(db,{start:day(0),end:day(85)});
+ const allocations=range.days.flatMap(d=>d.orders.filter(x=>x.code===order.orderCode));
+ assert.equal(allocations.reduce((n,x)=>n+x.pointsUnits,0),400);
+ assert.ok(allocations.every(x=>x.serviceFamily&&!x.provisional));
+ const deliveries=range.days.flatMap(d=>d.deliveries.filter(x=>x.code===order.orderCode));
+ assert.ok(deliveries.length>=6);
+ assert.ok(deliveries.every(x=>x.serviceFamily&&x.modular));
+ assert.equal(range.days.flatMap(d=>d.events).filter(x=>x.code===order.orderCode).length,1);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
+ const after=await getV2AgendaRange(db,{start:day(0),end:day(85)});
+ assert.ok(after.days.flatMap(d=>d.deliveries).filter(x=>x.code===order.orderCode).every(x=>x.serviceFamily==='convite'));
+ assert.equal(after.days.flatMap(d=>d.orders.filter(x=>x.code===order.orderCode)).reduce((n,x)=>n+x.pointsUnits,0),400);
+
 });
 
 import {changeV3Production,publishV3ServicePreview,streamV3ServicePreview} from '../src/lib/v3-service-production.js';

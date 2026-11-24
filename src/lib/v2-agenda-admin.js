@@ -1264,6 +1264,10 @@ export async function getV2AgendaRange(
         status:
           row.status,
 
+        serviceFamily:row.service_family||null,
+        modular:Boolean(row.modular),
+        serviceStatus:row.service_status||null,
+        provisional:!!row.modular&&!row.scheduled_at,
         pointsUnits:
           Number(
             row.points_units

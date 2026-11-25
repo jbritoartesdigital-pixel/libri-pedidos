@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V112: PRs #162 e #163; nomes Studio, saudação, carrinho direto e adicionais opcionais; gates de produção mantidos.
 # Release V110: PR #161; checkout manual compacto, seleção V2 e modal de adicionais; gates de produção obrigatórios, sem nova migration.
 # Release V109: PR #160, CI 45513930500 aprovado; checkout manual, Black, datas e DDI; migration 0066, backup e gates mantidos.
 # Release V107: PR #159, CI 45509768298 aprovado; capturas reais e cinco adicionais sem rolagem verificados no simulador 390x740. Gates mantidos.

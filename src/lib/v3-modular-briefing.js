@@ -4,7 +4,7 @@ import {originalV3FinancialState} from './v3-admin-payment-policy.js';
 // Internal modular briefing model. Public routes, authenticated Admin receipt
 // action, invite/Ateliê private upload integration and final submission follow.
 // Retrospectiva never creates R2 objects; only receipt metadata is persisted.
-import {buildV2BriefingSimulationSchema} from './v2-customer-area.js';
+import {buildV2BriefingSimulationSchema,normalizePixPhoneKey,validPixKey} from './v2-customer-area.js';
 import {buildAtelieBriefingBlueprint} from './v3-atelie-briefing.js';
 import {listV3Supplements,getV3SupplementTotals} from './v3-service-supplements.js';
 import {summarizeV3Order} from './v3-order-overview.js';
@@ -191,6 +191,11 @@ export async function saveV3ModuleDraft(db,token,module,payload={}){
       if(['info','upload'].includes(f.type))continue;
       if(Object.hasOwn(payload.data,f.key))data[f.key]=normalizeField(f,payload.data[f.key]);
     }
+    if(module==='convite'){
+      if(data.pix_key_type==='phone'&&data.pix_key)data.pix_key=normalizePixPhoneKey(data.pix_key);
+      const previous=ctx.drafts.convite||{};
+      if(['pix_key_type','pix_key','pix_holder'].some(k=>String(data[k]??'')!==String(previous[k]??'')))delete data.pix_confirmed;
+    }
     const result=await db.prepare(`INSERT INTO v3_order_briefing_drafts(order_id,module,data_json,revision,updated_at)
       VALUES(?,?,?,1,datetime('now')) ON CONFLICT(order_id,module) DO UPDATE SET data_json=excluded.data_json,
       revision=revision+1,updated_at=datetime('now') WHERE revision=?`).bind(ctx.order.id,module,JSON.stringify(data),payload.revision).run();
@@ -254,6 +259,7 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}){
       }
     }
     const data=ctx.drafts[family]||{};
+    if(family==='convite'&&['pix','both'].includes(data.gift_mode)&&!validPixKey(data.pix_key_type,data.pix_key))missing.push('Confira o formato da chave Pix informada.');
     const prize=service.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
     if(['mini_retrospective','child_birthday'].includes(prize)){
       if(data.black_gift_media_authorization!=='sim')missing.push('Autorização para as fotos do presente Black Libri.');

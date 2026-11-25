@@ -50,7 +50,7 @@ test('a explicação não muda seleção nem pagamento e não aumenta outros adi
 
 test('a loja diferencia confirmação simples do RSVP Libri', () => {
   const store = readFileSync('public/js/client-v2-store.js', 'utf8');
-  const customerArea = readFileSync('src/lib/v2-customer-area.js', 'utf8');
+  const customerArea = readFileSync('public/js/briefing-schema-v2.v119.js', 'utf8');
   const styles = readFileSync('public/css/client-v2.css', 'utf8');
   const shell = readFileSync('public/client-v2.html', 'utf8');
   const entry = readFileSync('public/js/client-v2.js', 'utf8');

@@ -2261,7 +2261,25 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 @keyframes studio-private-load{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
 @media(prefers-reduced-motion:reduce){.studio-loading-line:after{animation:none;width:100%}}
 
-/* V115: mobile-first post-payment customer home */
+/* V115: compact optional rows, fixed payment, no unnecessary space under terms. */
+.libri-manual-checkout .manual-shell{gap:3px;padding-block:3px max(3px,env(safe-area-inset-bottom,0px))}
+.libri-manual-checkout .manual-scroll{gap:3px;padding-bottom:0}
+.libri-manual-checkout .manual-heading h1{margin:1px 0;font-size:clamp(22px,5.6vw,28px)}
+.libri-manual-checkout .manual-event,.libri-manual-checkout .manual-cart-item{padding:5px 8px;gap:2px 8px}
+.libri-manual-checkout .manual-cart-item p{margin:1px 0}
+.libri-manual-checkout .studio-manual-row{min-height:34px;padding:3px 8px}
+.libri-manual-checkout .studio-manual-addons-toggle{min-height:23px;padding:2px 0}
+.libri-manual-checkout .manual-terms{padding:5px 8px}
+.libri-manual-checkout .manual-terms-check{padding:2px 0;margin:0;gap:5px;font-size:12px;align-items:center}
+.libri-manual-checkout .manual-footer{gap:2px;padding-top:2px}
+.libri-manual-checkout .manual-total{padding:1px 0}
+.libri-manual-checkout .manual-included p{margin:0}
+.libri-manual-checkout .studio-manual-price small{margin-top:0}
+
+.libri-manual-checkout .manual-terms-fixed{display:grid;gap:2px;flex:none}
+.libri-manual-checkout .manual-terms[open]{max-height:min(35dvh,240px);overflow:auto}
+
+/* V116: mobile-first post-payment customer home */
 #app.libri-v3-area{gap:12px;margin-top:10px;align-content:start}
 .libri-v3-area .v3-client-header{padding:4px 2px 0}
 .libri-v3-area .v3-client-header h1{font:800 25px/1.18 var(--private-sans);letter-spacing:-.04em;margin:3px 0}

@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V115: PR #166; compactacao dos carrinhos, filtro uniforme e Atelie opcional; gates obrigatorios.
 # Release V114: PR #165; resumo administrativo, historico, premio Black e fila manual; sem campo e-mail no resumo; gates mantidos.
 # Release V113: PR #164; edição manual direta, formato/cenas, adicionais visíveis e loading Studio; gates de produção obrigatórios.
 # Release V112: PRs #162 e #163; nomes Studio, saudação, carrinho direto e adicionais opcionais; gates de produção mantidos.

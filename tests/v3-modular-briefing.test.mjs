@@ -982,7 +982,8 @@ test('admin edits pristine manual order in place without customer acceptance or 
  const {getV3RevisionEditor,getV3ManualCheckout}=await import('../src/lib/v3-order-revisions.js');
  const input={customer:{name:'Cliente edição',whatsapp:'5561888888666',email:''},event:{type:'birthday',honoreeName:'Edição',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:100};
  const initial=await previewV3ManualOrder(db,input);
- const created=await createV3ManualOrder(env,{...input,deliveryWindow:initial.options[0],expectedTotalCents:initial.totalCents,requestKey:'3c'.repeat(18),confirmed:true});
+ const combined=await previewV3ManualOrder(db,{...input,items:[...input.items,{productCode:'atelie_essencia',variantCode:'atelie_essencia_default',addonCodes:[]}]});
+ const created=await createV3ManualOrder(env,{...input,deliveryWindow:combined.options[0],expectedTotalCents:initial.totalCents,requestKey:'3c'.repeat(18),confirmed:true});
  const token=created.customerAreaPath.split('/').pop(),editor=await getV3RevisionEditor(db,created.orderCode);
  const original=await getV3ManualCheckout(env,token,'catalog');
  const addon=original.addons.find(a=>a.group==='confirmation');assert.ok(editor.direct);assert.ok(addon);
@@ -1007,11 +1008,11 @@ test('admin edits pristine manual order in place without customer acceptance or 
  const next=await getV3ManualCheckout(env,token,'quote',{revisionVersion:c.revisionVersion,invitationVariant:{productCode:variant.productCode,variantCode:variant.variantCode},extras:[],addonCodes:[]});
  assert.equal(next.quote.items.find(i=>i.family==='convite').productName,variant.name);
  const atelie=c.identityOptions.find(v=>v.productCode==='atelie_essencia');
- if(atelie){
+ assert.ok(atelie);
  const identity={productCode:atelie.productCode,variantCode:atelie.variantCode};
  const identityQuote=await getV3ManualCheckout(env,token,'quote',{revisionVersion:c.revisionVersion,identityVariant:identity,extras:[],addonCodes:[]});
  assert.ok(identityQuote.quote.items.some(x=>x.family==='identidade_visual'));
  assert.ok(identityQuote.terms.services.some(t=>t.family==='identidade_visual'));
- }
+ await assert.rejects(acceptV3Revision(db,token,{id:c.revisionId,revisionVersion:c.revisionVersion,identityVariant:identity,manualCheckout:true,confirmed:true,termsAccepted:true,expectedTotalCents:identityQuote.quote.totalCents}),/condições da identidade visual/);
  assert.equal(mp.posts,0);
 });

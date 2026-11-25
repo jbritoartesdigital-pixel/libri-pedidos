@@ -32,6 +32,7 @@ export async function handleCustomerBriefingV3Api(request,env,url){
   const ctx=await contextV3Briefing(env.DB,contracts[1]);if(!ctx)return fail('Pedido não encontrado.',404);
   if(contracts[3]==='sign'&&(ctx.locked||ctx.order.archived_at))return fail('Contrato indisponível para assinatura.',409);
   const mapped=new URL(url);mapped.pathname=url.pathname.replace('/v3/contracts','/contracts');
+  if(contracts[3]==='sign'&&request.method==='POST'){try{return await withV2PaymentLock(env.DB,ctx.order.id,async()=>{const fresh=await contextV3Briefing(env.DB,contracts[1]);if(fresh.locked||fresh.order.archived_at)return fail('Contrato indisponível para assinatura.',409);return await handleCustomerContractsV2Api(request,env,mapped);});}catch(e){return errorResponse(e);}}
   return await handleCustomerContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);
  }
  const manualCheckout=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/manual-checkout\/(catalog|quote|status|reveal|preview|finish)$/);
@@ -142,11 +143,12 @@ export async function handleAdminBriefingV3Api(request,env,url){
     if(id&&!await env.DB.prepare('SELECT 1 FROM v2_contracts WHERE order_id=? AND id=?').bind(row.id,Number(id)).first())return fail('Contrato não encontrado neste pedido.',404);
     if(request.method!=='GET'&&(ctx.locked||ctx.order.archived_at))return fail('Contrato indisponível para alteração.',409);
     const mapped=new URL(url);mapped.pathname=id?'/api/admin/v2/contracts/'+id+'/'+action:'/api/admin/v2/orders/'+code+'/contracts';
-    if(!id&&request.method==='POST')return withV2PaymentLock(env.DB,row.id,async()=>{
+    if(!id&&request.method==='POST')return await withV2PaymentLock(env.DB,row.id,async()=>{
      const fresh=await contextV3Briefing(env.DB,token);
      if(fresh.locked||fresh.order.archived_at||await env.DB.prepare("SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=? AND a.status NOT IN ('cancelled','declined','expired')").bind(row.id).first())return fail('Contratos com alterações complementares exigem revisão contratual. Preserve as condições já aceitas.',409);
      return await handleAdminContractsV2Api(request,env,mapped);
     });
+    if(id&&request.method==='POST')return await withV2PaymentLock(env.DB,row.id,async()=>{const fresh=await contextV3Briefing(env.DB,token);const c=await env.DB.prepare('SELECT status FROM v2_contracts WHERE order_id=? AND id=?').bind(row.id,Number(id)).first();if(fresh.locked||fresh.order.archived_at||!c||c.status==='signed'||(action==='sign-libri'&&c.status!=='waiting_libri'))return fail('Contrato indisponível para alteração.',409);return await handleAdminContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);});
     return await handleAdminContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);
    }
    return fail('Método não permitido.',405);

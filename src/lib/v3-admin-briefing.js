@@ -31,6 +31,7 @@ export async function getV3AdminBriefing(db,token){
  brief.customer={name:contact.name||customer?.name||'',whatsapp:contact.whatsapp||customer?.whatsapp||'',email:contact.email||customer?.email||''};
  brief.orderMeta={createdAt:order.created_at,updatedAt:order.updated_at,source:order.source,nextAction:order.next_action,eventSubtype:order.event_subtype};
  brief.history=history;
+ brief.notes=((await db.prepare('SELECT id,note,created_at FROM v2_internal_notes WHERE order_id=? ORDER BY created_at DESC,id DESC').bind(order.id).all()).results||[]).map(n=>({id:n.id,note:n.note,createdAt:n.created_at}));
  brief.termsAcceptances=acceptances.results||[];
  brief.paymentAttempts=(financialCtx.finance?.payments||[]).map(p=>({provider:p.provider,type:p.payment_type,status:p.status,amountCents:p.amount_cents,method:p.method,paidAt:p.paid_at}));
  brief.priceBreakdown={grossCents:quote.grossCents,discountCents:quote.discountCents,cardFeeCents:quote.cardFeeCents,couponCode:quote.coupon?.code||''};

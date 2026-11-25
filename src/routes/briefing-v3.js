@@ -232,7 +232,13 @@ export async function handleAdminBriefingV3Api(request,env,url){
     }
     if(request.method==='GET'&&match[4]){
       const [,family,,id]=match[4].split('/');
-      return await getV3ServiceImage(env,row.public_token,family,Number(id));
+      const response=await getV3ServiceImage(env,row.public_token,family,Number(id));
+      if(response.ok&&url.searchParams.get('download')==='1'){
+        const upload=await env.DB.prepare('SELECT original_filename FROM v3_service_uploads WHERE order_id=? AND family=? AND id=?').bind(row.id,family,Number(id)).first();
+        const headers=new Headers(response.headers);headers.set('content-disposition',"attachment; filename*=UTF-8''"+encodeURIComponent(upload?.original_filename||'imagem'));
+        return new Response(response.body,{status:response.status,headers});
+      }
+      return response;
     }
     return fail('Método não permitido.',405);
   }catch(e){return errorResponse(e);}

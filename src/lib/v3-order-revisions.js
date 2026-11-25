@@ -49,7 +49,10 @@ async function price(db,row,input){
 export async function previewV3Revision(db,code,input){
  const row=await load(db,code);await eligible(db,row);
  const p=await price(db,row,input);
- return {totalCents:p.quote.totalCents,pointsUnits:p.quote.pointsUnits,items:p.quote.items.map(l=>({name:l.productName,variant:l.variantName,totalCents:l.totalCents})),options:p.options,blackLibri:p.quote.blackLibri};
+ const pending=await pendingV3Revision(db,row.id),direct=pending?.kind==='manual'&&row.source==='manual_whatsapp';
+ let options=p.options;
+ if(direct){const w=input.deliveryWindow||pending.deliveryWindow;validateV3ManualDeliveryWindow({...p.capacity,...w});if(!(await planV2AllocationForWindow(db,{...p.capacity,...w})).fits)fail('A agenda não comporta essa alteração.');options=[w,...options.filter(x=>x.start!==w.start||x.end!==w.end)];}
+ return {direct,options,productionDays:p.quote.productionDays,totalCents:p.quote.totalCents,pointsUnits:p.quote.pointsUnits,items:p.quote.items.map(l=>({name:l.productName,variant:l.variantName,totalCents:l.totalCents})),blackLibri:p.quote.blackLibri};
 }
 export async function createV3Revision(env,code,input={}){
  if(input.confirmed!==true||! /^[a-f0-9]{36}$/.test(input.requestKey||'')||typeof input.reason!=='string'||input.reason.trim().length<5||input.reason.length>500)fail('Confirme e descreva a alteração.',422);
@@ -59,7 +62,33 @@ export async function createV3Revision(env,code,input={}){
   const canonical=JSON.stringify({items:input.items,deliveryWindow:input.deliveryWindow,couponCode:input.couponCode,expectedTotalCents:input.expectedTotalCents,depositPercent:row.deposit_percent});
   const prior=await db.prepare('SELECT * FROM v3_order_revisions WHERE request_key=?').bind(input.requestKey).first();
   if(prior){if(prior.order_id!==row.id||prior.input_json!==canonical)fail('Identificador de revisão já utilizado.');return {id:prior.id,status:prior.status};}
-  if(await pendingV3Revision(db,row.id))fail('Já existe uma proposta aguardando aceite.');
+  const pending=await db.prepare("SELECT * FROM v3_order_revisions WHERE order_id=? AND status='offered'").bind(row.id).first();
+  if(pending?.kind==='manual'&&row.source==='manual_whatsapp'){
+   if(await db.prepare('SELECT 1 FROM v2_payments WHERE order_id=? UNION ALL SELECT 1 FROM v2_checkout_holds WHERE order_id=? UNION ALL SELECT 1 FROM v2_contracts WHERE order_id=? UNION ALL SELECT 1 FROM v2_order_terms_acceptances WHERE order_id=?').bind(row.id,row.id,row.id,row.id).first())fail('Já existe pagamento, tentativa ou aceite. Confira antes de editar.');
+   const old=JSON.parse(pending.quote_json),data=JSON.parse(pending.input_json);
+   if(input.expectedRevisionId!==pending.id||input.expectedOriginalTotalCents!==old.totalCents||input.expectedRevisionVersion!==(data.adminEditVersion||pending.created_at))fail('O pedido foi atualizado. Abra o editor novamente.');
+   const percent=input.depositPercent??row.deposit_percent;
+   if(![50,100].includes(percent)||percent===50&&row.payment_method!=='pix')fail('Condição de entrada inválida.',422);
+   const p=await price(db,row,input),q=p.quote,w=input.deliveryWindow;
+   if(q.totalCents!==input.expectedTotalCents||!w)fail('Confira o valor e a entrega.');
+   validateV3ManualDeliveryWindow({...p.capacity,...w});if(!(await planV2AllocationForWindow(db,{...p.capacity,...w})).fits)fail('A agenda não comporta essa alteração.');
+   const at=nowIso(),deposit=percent===50?Math.ceil(q.totalCents/2):q.totalCents;
+   const pricing={...q,schemaVersion:3,manualFlexibleDelivery:true,contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:row.payment_method,depositPercent:percent,depositCents:deposit,balanceCents:q.totalCents-deposit}};
+   const json=JSON.stringify(pricing),nextData={...data,items:input.items.map(({family,...i})=>i),deliveryWindow:w,depositPercent:percent,flexibleDelivery:true,adminEditVersion:input.requestKey};
+   await db.batch([
+    db.prepare('DELETE FROM v2_order_items WHERE order_id=?').bind(row.id),
+    db.prepare('DELETE FROM v3_order_services WHERE order_id=?').bind(row.id),
+    ...v3LineStatements(db,pricing,'?',row.id,at),
+    db.prepare('UPDATE v3_order_checkout_snapshots SET quote_json=?,terms_version=? WHERE order_id=?').bind(json,p.terms.general.version,row.id),
+    db.prepare('UPDATE v2_order_pricing SET subtotal_cents=?,combo_discount_cents=?,coupon_discount_cents=?,total_cents=?,deposit_percent=?,deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=? WHERE order_id=?').bind(q.subtotalCents,q.discountCents-q.couponDiscountCents,q.couponDiscountCents,q.totalCents,percent,deposit,q.totalCents-deposit,json,at,row.id),
+    db.prepare("INSERT INTO v3_admin_payment_policies(order_id,deposit_percent,reason,updated_at) VALUES(?,?,?,?) ON CONFLICT(order_id) DO UPDATE SET deposit_percent=excluded.deposit_percent,reason=excluded.reason,updated_at=excluded.updated_at").bind(row.id,percent,input.reason.trim(),at),
+    db.prepare("UPDATE v2_orders SET delivery_start=?,delivery_end=?,next_action='Aguardando pagamento',updated_at=? WHERE id=?").bind(w.start,w.end,at,row.id),
+    db.prepare("UPDATE v3_order_revisions SET input_json=?,quote_json=?,terms_json=?,reason=? WHERE id=? AND status='offered'").bind(JSON.stringify(nextData),json,JSON.stringify(p.terms),input.reason.trim(),pending.id),
+    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_manual_edited','Pedido manual atualizado pela administradora, sem aceite ou cobrança.',?,?)").bind(row.id,JSON.stringify({reason:input.reason.trim(),oldTotalCents:old.totalCents,newTotalCents:q.totalCents,depositPercent:percent}),at)
+   ]);
+   return {direct:true,orderCode:code,totalCents:q.totalCents};
+  }
+  if(pending)fail('Já existe uma alteração comercial aguardando aceite.');
   if(await db.prepare('SELECT 1 FROM v2_contracts WHERE order_id=? LIMIT 1').bind(row.id).first())fail('Existe contrato emitido; revise-o antes de alterar o pedido.');
   const p=await price(db,row,input),q=p.quote,w=input.deliveryWindow;
   if(q.totalCents!==input.expectedTotalCents)fail('O valor mudou. Confira novamente.');
@@ -142,14 +171,21 @@ async function manualCheckoutContext(db,token){
  const owned=new Set(invite?.addonCodes||[]),groups=new Set(catalogue.addons.filter(a=>owned.has(a.code)).map(a=>a.group));
  const addons=invite?catalogue.addons.filter(a=>!owned.has(a.code)&&!groups.has(a.group)&&!(invite.productCode==='cinematic_video'&&a.group==='confirmation')&&!(groups.has('moments')&&a.group==='filter')&&!(groups.has('filter')&&a.group==='moments')&&!(data.items.some(i=>i.productCode.startsWith('retrospectiva_'))&&a.group==='retrospectiva')).map(a=>({code:a.code,name:a.name,group:a.group,priceCents:a.priceCents})):[];
  const extras=old.items.flatMap(l=>listV3Extras(l.family,l.productCode).map(e=>({code:e.code,name:e.name,family:l.family,priceCents:e.priceCents,maxQuantity:e.maxQuantity-(l.extras||[]).filter(x=>x.code===e.code).reduce((n,x)=>n+x.quantity,0)}))).filter(x=>x.maxQuantity>0);
- return {row,r,old,data,addons,extras,invite};
+ const invitationVariants=invite?catalogue.products.filter(p=>['cinematic_video','cinematic_interactive','interactive_essential','interactive_gif','interactive_animated','book','infinite'].includes(p.code)).flatMap(p=>p.variants.map(v=>({productCode:p.code,variantCode:v.code,name:p.name,variantName:v.label,sceneCount:v.sceneCount,priceCents:v.priceCents}))):[];
+ return {row,r,old,data,addons,extras,invite,invitationVariants,allConfirmationCodes:catalogue.addons.filter(a=>a.group==='confirmation').map(a=>a.code)};
 }
 function manualPublicQuote(q,percent){
  const deposit=percent===50?Math.ceil(q.totalCents/2):q.totalCents;
  return {totalCents:q.totalCents,depositCents:deposit,balanceCents:q.totalCents-deposit,depositPercent:percent,discountCents:q.discountCents||0,cardFeeCents:q.cardFeeCents||0,blackLibri:q.blackLibri,blackLibriDiscountCents:q.blackLibriDiscountCents||0,items:q.items.map(l=>({family:l.family,productName:l.productName,variantName:l.variantName,grossCents:l.grossCents,totalCents:l.totalCents,addons:l.commercialSnapshot.addons.map(a=>a.name),extras:(l.extras||[]).map(e=>({name:e.name,quantity:e.quantity}))}))};
 }
 async function manualCheckoutQuote(db,c,input={}){
- const {row,r,old,data,addons,extras,invite}=c;
+ const {row,r,old,data,addons,extras,invite,invitationVariants}=c;
+ const change=input.invitationVariant;
+ const replacement=change?invitationVariants.find(v=>v.productCode===change.productCode&&v.variantCode===change.variantCode):null;
+ if(change&&!replacement)fail('Selecione um formato válido.',422);
+ const changed=!!replacement&&(replacement.productCode!==invite.productCode||replacement.variantCode!==invite.variantCode);
+ if(changed&&replacement.productCode==='cinematic_video'&&[...(invite.addonCodes||[]),...(Array.isArray(input.addonCodes)?input.addonCodes:[])].some(code=>c.allConfirmationCodes.includes(code)))fail('O formulário contratado exige um convite interativo.',422);
+ if(data.adminEditVersion&&input.revisionVersion!==data.adminEditVersion)fail('Pedido atualizado pela Libri. Reabra o link.');
  const selected=input.addonCodes??[],additional=normalizeV3ExtraSelection(input.extras);
  if(!Array.isArray(selected)||selected.length>20||new Set(selected).size!==selected.length||selected.some(x=>!addons.some(a=>a.code===x)))fail('Escolha apenas os adicionais disponíveis.',422);
  const groups=selected.map(code=>addons.find(a=>a.code===code).group);
@@ -159,21 +195,21 @@ async function manualCheckoutQuote(db,c,input={}){
   const oldLine=old.items.find(l=>l.productCode===i.productCode);
   const quantities=new Map((i.extras||[]).map(x=>[x.code,x.quantity]));
   for(const x of additional.filter(x=>extras.some(e=>e.code===x.code&&e.family===oldLine.family)))quantities.set(x.code,(quantities.get(x.code)||0)+x.quantity);
-  return {...i,addonCodes:[...(i.addonCodes||[]),...(invite?.productCode===i.productCode?selected:[])],extras:[...quantities].map(([code,quantity])=>({code,quantity}))};
+  return {...i,...(changed&&i===invite?{productCode:replacement.productCode,variantCode:replacement.variantCode,comboCode:''}:{}),addonCodes:[...(i.addonCodes||[]),...(invite?.productCode===i.productCode?selected:[])],extras:[...quantities].map(([code,quantity])=>({code,quantity}))};
  });
  const customer=old.contactSnapshot||await db.prepare('SELECT name,whatsapp,email FROM v2_customers WHERE id=?').bind(row.customer_id).first();
  const blackBody={items,eventType:row.event_type,paymentMethod:row.payment_method,couponCode:old.couponComparison?.code||old.coupon?.code||'',customer:{...customer,whatsapp:'+'+String(customer.whatsapp).replace(/\D/g,'')},clientRequestId:row.request_key};
  let q=old;
- if(selected.length||additional.length||input.blackLibriClaimId){
+ if(changed||selected.length||additional.length||input.blackLibriClaimId){
   const claim=input.blackLibriClaimId?await getV3BlackClaim(db,{...blackBody,blackLibriClaimId:input.blackLibriClaimId}):null;
   q=await quoteV3Cart(db,blackBody,{includeSnapshots:true,requireSale:true,customerId:row.customer_id,attachedBlackClaim:claim,excludeCouponOrderId:row.id});
   // No change to the originally contracted product, unit prices or terms.
   for(const l of old.items){
    const n=q.items.find(x=>x.family===l.family);
-   if(!n||n.productCode!==l.productCode||n.variantCode!==l.variantCode||n.commercialSnapshot.variant.priceCents!==l.commercialSnapshot.variant.priceCents||!l.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))||!(l.extras||[]).every(a=>n.extras.some(b=>b.code===a.code&&b.priceCents===a.priceCents&&b.quantity>=a.quantity)))fail('O catálogo mudou desde o seu pedido. Fale com a Libri para preservar os valores combinados.');
+   if(!n||(!(changed&&l.family==='convite')&&(n.productCode!==l.productCode||n.variantCode!==l.variantCode||n.commercialSnapshot.variant.priceCents!==l.commercialSnapshot.variant.priceCents))||!l.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))||!(l.extras||[]).every(a=>n.extras.some(b=>b.code===a.code&&b.priceCents===a.priceCents&&b.quantity>=a.quantity)))fail('O catálogo mudou desde o seu pedido. Fale com a Libri para preservar os valores combinados.');
   }
   if(JSON.stringify(await termsFor(db,q))!==JSON.stringify(JSON.parse(r.terms_json)))fail('As condições do pedido precisam de conferência pela Libri.');
-  if(q.totalCents>old.totalCents+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
+  if(!changed&&q.totalCents>old.totalCents+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
  }
  const w=data.deliveryWindow,capacity={eventDate:row.event_date,...w,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
  if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);
@@ -183,7 +219,7 @@ async function manualCheckoutQuote(db,c,input={}){
 }
 export async function getV3ManualCheckout(env,token,action,input={}){
  const c=await manualCheckoutContext(env.DB,token);
- if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],quote:manualPublicQuote(c.old,c.row.deposit_percent)};
+ if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],invitationVariants:c.invitationVariants,invitationVariant:c.invite?{productCode:c.invite.productCode,variantCode:c.invite.variantCode}:null,revisionVersion:c.data.adminEditVersion||c.r.created_at,quote:manualPublicQuote(c.old,c.row.deposit_percent)};
  const p=await manualCheckoutQuote(env.DB,c,input);
  if(action==='quote'||action==='preview')return {quote:p.public};
  if(action==='status'||action==='reveal')return v3BlackStatus(env,{...p.blackBody,balloon:input.balloon},{reveal:action==='reveal'});
@@ -231,7 +267,8 @@ export async function getV3RevisionEditor(db,code=null){
  for(const v of variants){v.family=v.productCode.startsWith('atelie_')?'identidade_visual':v.productCode.startsWith('retrospectiva_')?'retrospectiva':'convite';v.extras=listV3Extras(v.family,v.productCode);}
  const addons=(await db.prepare("SELECT code,name,price_cents AS priceCents FROM v2_addons WHERE active=1 ORDER BY sort_order,code").all()).results||[];
  const items=q.items.map(l=>({family:l.family,productCode:l.productCode,variantCode:l.variantCode,addonCodes:l.commercialSnapshot.addons.filter(a=>!a.config?.blackLibriGift).map(a=>a.code),extras:(l.extras||[]).map(x=>({code:x.code,quantity:x.quantity})),comboCode:l.comboCode||l.availableComboCode||''}));
- return {items,variants,addons,couponCode:q.couponComparison?.code||q.coupon?.code||'',paymentMethod:row?.payment_method||'pix',blackLibri:q.blackLibri||null};
+ const pending=row?await db.prepare("SELECT id,kind,created_at,input_json FROM v3_order_revisions WHERE order_id=? AND status='offered'").bind(row.id).first():null;
+ return {items,variants,addons,couponCode:q.couponComparison?.code||q.coupon?.code||'',paymentMethod:row?.payment_method||'pix',blackLibri:q.blackLibri||null,direct:pending?.kind==='manual'&&row?.source==='manual_whatsapp',revisionId:pending?.id,revisionVersion:pending?(JSON.parse(pending.input_json).adminEditVersion||pending.created_at):null,originalTotalCents:row?.total_cents,depositPercent:row?.deposit_percent||100,deliveryWindow:row?{start:row.delivery_start,end:row.delivery_end}:null};
 }
 export async function withdrawV3Revision(db,code,input){
  const row=await load(db,code);

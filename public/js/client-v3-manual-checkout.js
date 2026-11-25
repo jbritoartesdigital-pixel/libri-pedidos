@@ -14,18 +14,18 @@ function safePay(v){try{const u=new URL(v);return u.protocol==='https:'&&/(^|\.)
 export async function startV3ManualCheckout(root,{token,api}){
  const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/manual-checkout';
  const c=await api(endpoint+'/catalog');
- let quote=c.quote,extrasOpen=false,busy=false,error='',terms=false,black=null,suggestionSeen=false;
- const chosen=new Map(),quantities=new Map();let savedChosen=new Map(),savedQuantities=new Map();
- const selection=()=>({addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
+ let quote=c.quote,extrasOpen=true,busy=false,error='',terms=false,black=null,suggestionSeen=false;
+ const chosen=new Map(),quantities=new Map();let invitationVariant=c.invitationVariant,savedVariant=c.invitationVariant;let savedChosen=new Map(),savedQuantities=new Map();
+ const selection=()=>({revisionVersion:c.revisionVersion,...(invitationVariant?{invitationVariant}:{}),addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
  const request=(action,data={})=>api(endpoint+'/'+action,{method:'POST',body:JSON.stringify(data)});
  const grouped=manualGroups(c.addons);
  const albumSelected=()=>Boolean(c.ownedAddonCodes?.some(isMomentsPlan)||[...chosen.values()].some(isMomentsPlan));
  const blocked=g=>g==='moments'&&chosen.has('filter')||g==='filter'&&chosen.has('moments')||g==='moments_extra'&&!albumSelected();
  root.classList.add('libri-manual-checkout');
  document.body.classList.add('libri-manual-body');
- function itemsHtml(){return quote.items.map(i=>'<article class="manual-cart-item"><div><h3>'+esc(i.productName)+'</h3><p>'+esc(i.variantName)+'</p></div><strong>'+money(i.totalCents)+'</strong>'+((i.addons.length||i.extras.length)?'<div class="manual-included"><strong>Adicionais escolhidos</strong><p>'+esc([...i.addons,...i.extras.map(x=>x.quantity+' × '+x.name)].join(' · '))+'</p></div>':'')+'</article>').join('');}
+ function itemsHtml(){return quote.items.map(i=>'<article class="manual-cart-item"><div><h3>'+esc(i.productName)+'</h3><p>'+esc(i.variantName)+'</p>'+(i.family==='convite'&&c.invitationVariants?.length&&!black?'<button type="button" class="studio-manual-inline" data-manual-action="format">Alterar</button>':'')+'</div><strong>'+money(i.totalCents)+'</strong>'+((i.addons.length||i.extras.length)?'<div class="manual-included"><strong>Inclusos no pedido</strong><p>'+esc([...i.addons,...i.extras.map(x=>x.quantity+' × '+x.name)].join(' · '))+'</p></div>':'')+'</article>').join('');}
  function extrasHtml(){
- const rows=grouped.filter(g=>g.key!=='moments_extra'||albumSelected()).map(g=>{
+ const rows=grouped.filter(g=>(g.key!=='moments_extra'||albumSelected())&&!(g.key==='confirmation'&&invitationVariant?.productCode==='cinematic_video')).map(g=>{
  const value=chosen.get(g.key)||'',selected=g.options.find(a=>a.code===value),disabled=blocked(g.key)||busy;
  if(g.options.length===1){
  const a=g.options[0];
@@ -50,6 +50,13 @@ export async function startV3ManualCheckout(root,{token,api}){
  const {d,close}=openStudioDialog(g.label,(group==='moments'?'<p>Inclui o filtro personalizado na câmera Libri.</p>':'')+'<div class="studio-manual-option-list">'+g.options.map(a=>'<button type="button" class="studio-manual-option" data-option="'+esc(a.code)+'" aria-pressed="'+(selected===a.code)+'"><span>'+esc(shortVariant(a))+'</span><b>+'+money(a.priceCents)+'</b></button>').join('')+'</div>'+(selected?'<button type="button" class="studio-manual-text" data-option="">Retirar adicional</button>':'')+'<button type="button" class="studio-manual-text" data-dismiss>Voltar</button>');
  d.addEventListener('click',e=>{const opt=e.target.closest('[data-option]');if(opt){const value=opt.dataset.option;if(value)chosen.set(group,value);else chosen.delete(group);if(!albumSelected())chosen.delete('moments_extra');close();refresh();}else if(e.target.closest('[data-dismiss]'))close();});
  }
+ function openFormat(){
+ const options=c.invitationVariants||[];
+ const {d,close}=openStudioDialog('Alterar convite','<p>Escolha o formato e a quantidade de cenas. O total será conferido antes de pagar.</p><label class="studio-format-field">Formato<select data-format>'+[...new Map(options.map(v=>[v.productCode,v.name])).entries()].map(([code,name])=>'<option value="'+esc(code)+'" '+(code===invitationVariant?.productCode?'selected':'')+'>'+esc(name)+'</option>').join('')+'</select></label><label class="studio-format-field">Configuração<select data-variant></select></label><button class="studio-format-save" type="button" data-apply-format>Atualizar valor</button>');
+ const product=d.querySelector('[data-format]'),variant=d.querySelector('[data-variant]');
+ const fill=()=>{variant.innerHTML=options.filter(v=>v.productCode===product.value).map(v=>'<option value="'+esc(v.variantCode)+'" '+(v.variantCode===invitationVariant?.variantCode?'selected':'')+'>'+esc(v.variantName)+' · '+money(v.priceCents)+'</option>').join('');};fill();product.onchange=fill;
+ d.querySelector('[data-apply-format]').onclick=()=>{invitationVariant={productCode:product.value,variantCode:variant.value};if(product.value==='cinematic_video')chosen.delete('confirmation');terms=false;close();refresh();};
+ }
  function render(){
  const firstName=String(c.customerName||'').trim().split(/\s+/)[0],hasExtras=Boolean(c.addons.length||c.extras.length);
  root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(firstName?'Olá, '+esc(firstName)+'!':'Olá!')+'</h1><p>Aqui é sua área para finalizar seu pedido.</p></header>'+
@@ -66,8 +73,8 @@ export async function startV3ManualCheckout(root,{token,api}){
  if(busy)return;
  const y=root.querySelector('.manual-scroll')?.scrollTop||0;busy=true;error='';
  root.setAttribute('aria-busy','true');root.querySelectorAll('input,button').forEach(el=>{el.disabled=true;});
- try{quote=(await request('quote',selection())).quote;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);}
- catch(e){error=e.message||'Não foi possível conferir os adicionais.';chosen.clear();for(const [k,v] of savedChosen)chosen.set(k,v);quantities.clear();for(const [k,v] of savedQuantities)quantities.set(k,v);}
+ try{quote=(await request('quote',selection())).quote;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);savedVariant=invitationVariant;}
+ catch(e){error=e.message||'Não foi possível conferir a alteração.';invitationVariant=savedVariant;chosen.clear();for(const [k,v] of savedChosen)chosen.set(k,v);quantities.clear();for(const [k,v] of savedQuantities)quantities.set(k,v);}
  finally{busy=false;render();const el=root.querySelector('.manual-scroll');if(el)el.scrollTop=y;}
  }
  async function payFinal(){
@@ -87,7 +94,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  }
  async function findSuggestion(){
  for(const group of ['confirmation','filter','moments','save_the_date','reminder']){
-  if(chosen.has(group)||blocked(group))continue;
+  if(chosen.has(group)||blocked(group)||group==='confirmation'&&invitationVariant?.productCode==='cinematic_video')continue;
   const g=grouped.find(x=>x.key===group);if(!g)continue;
   const a=g.options[0];
   try{const next=(await request('quote',{...selection(),addonCodes:[...selection().addonCodes,a.code]})).quote;
@@ -99,7 +106,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  function showSuggestion({group,a,next,delta}){
  const {d,close}=openStudioDialog(groupNames[group]||a.name,'<p>'+esc(suggestionCopy[group])+'</p><div class="studio-manual-offer"><small>Por apenas mais</small><strong>'+money(delta)+'</strong></div><div class="studio-manual-offer-total"><span>Novo total <b>'+money(next.totalCents)+'</b></span>'+(next.depositPercent===50?'<span>Entrada <b>'+money(next.depositCents)+'</b></span><span>Saldo <b>'+money(next.balanceCents)+'</b></span>':'')+'</div><div class="studio-manual-dialog-actions"><button type="button" id="manualV3SuggestionSkip">Agora não</button><button type="button" id="manualV3SuggestionAccept">Quero adicionar</button></div>');
  d.querySelector('#manualV3SuggestionSkip').onclick=()=>{close();finish();};
- d.querySelector('#manualV3SuggestionAccept').onclick=()=>{close();extrasOpen=false;chosen.set(group,a.code);quote=next;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);error='';render();};
+ d.querySelector('#manualV3SuggestionAccept').onclick=()=>{close();chosen.set(group,a.code);quote=next;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);error='';render();};
  }
  async function finish(){
  if(busy)return;
@@ -126,6 +133,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  if(busy)return;
  const open=e.target.closest('[data-manual-open]');if(open&&!black){openOptions(open.dataset.manualOpen);return;}
  const action=e.target.closest('[data-manual-action]')?.dataset.manualAction;
+ if(action==='format'&&!black){openFormat();return;}
  if(action==='extras'&&!black){const y=root.querySelector('.manual-scroll')?.scrollTop||0;extrasOpen=!extrasOpen;error='';render();const body=root.querySelector('.manual-scroll');if(body)body.scrollTop=y;root.querySelector('[data-manual-action="extras"]')?.focus({preventScroll:true});return;}
  if(action==='pay')finish();
  });

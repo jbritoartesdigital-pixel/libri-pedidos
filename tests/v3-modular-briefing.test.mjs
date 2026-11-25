@@ -1129,3 +1129,24 @@ test('V125 archive and restore are audited and unpaid deletion checks confirmati
  assert.equal((await changeV3AdminLifecycle({DB:fixture.db},unpaid.publicToken,{action:'delete',confirmed:true,orderCode:unpaid.orderCode})).deleted,true);
  assert.equal(await getV3ModularBriefing(fixture.db,unpaid.publicToken),null);
 });
+
+test('V125 contract uses all original products, is scoped to its order, and has both signatures',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,objects=new Map();
+ const env={DB:db,FILES:{put:async(key,data)=>objects.set(key,data),get:async key=>objects.has(key)?{body:objects.get(key)}:null}};
+ db.sqlite.prepare("INSERT INTO v2_contract_templates(version,title,body,content_hash,active) VALUES(999,'Teste','Pedido {{ORDER_CODE}}. Serviços: {{PRODUCT_NAME}}. Adicionais: {{ADDONS}}. Total {{TOTAL}}.','test',1)").run();
+ const base='/api/admin/v2/orders/'+order.orderCode+'/v3/contracts';
+ const call=async(path,method='GET',body)=>{const url=new URL('https://test'+base+path);return handleAdminBriefingV3Api(new Request(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),env,url);};
+ assert.equal((await call('','POST',{})).status,201);
+ const c=db.sqlite.prepare('SELECT id,body_snapshot FROM v2_contracts WHERE order_id=?').get(order.orderId);
+ const names=db.sqlite.prepare("SELECT name_snapshot FROM v2_order_items WHERE order_id=? AND item_type='product'").all(order.orderId);
+ assert.equal(names.length,2);for(const n of names)assert.ok(c.body_snapshot.includes(n.name_snapshot));
+ assert.equal((await call('/999999/sign-libri','POST',{})).status,404);
+ assert.equal((await call('/'+c.id+'/sign-libri','POST',{})).status,200);
+ const customer=async(path,method='GET',body,who=token)=>{const url=new URL('https://test/api/v2/customer-area/'+who+'/v3/contracts'+path);return handleCustomerBriefingV3Api(new Request(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),env,url);};
+ assert.equal((await customer('', 'GET',undefined,'ord_'+'f'.repeat(36))).status,404);
+ assert.equal((await (await customer('')).json()).result.contracts[0].status,'waiting_customer');
+ assert.equal((await customer('/'+c.id+'/sign','POST',{accepted:true,signerName:'Cliente teste'})).status,200);
+ assert.equal((await (await customer('')).json()).result.contracts[0].status,'signed');
+ assert.equal(objects.size,1);
+ assert.equal((await call('/'+c.id+'/sign-libri','POST',{})).status,409);
+});

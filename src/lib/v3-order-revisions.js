@@ -171,14 +171,21 @@ async function manualCheckoutContext(db,token){
  const owned=new Set(invite?.addonCodes||[]),groups=new Set(catalogue.addons.filter(a=>owned.has(a.code)).map(a=>a.group));
  const addons=invite?catalogue.addons.filter(a=>!owned.has(a.code)&&!groups.has(a.group)&&!(invite.productCode==='cinematic_video'&&a.group==='confirmation')&&!(groups.has('moments')&&a.group==='filter')&&!(groups.has('filter')&&a.group==='moments')&&!(data.items.some(i=>i.productCode.startsWith('retrospectiva_'))&&a.group==='retrospectiva')).map(a=>({code:a.code,name:a.name,group:a.group,priceCents:a.priceCents})):[];
  const extras=old.items.flatMap(l=>listV3Extras(l.family,l.productCode).map(e=>({code:e.code,name:e.name,family:l.family,priceCents:e.priceCents,maxQuantity:e.maxQuantity-(l.extras||[]).filter(x=>x.code===e.code).reduce((n,x)=>n+x.quantity,0)}))).filter(x=>x.maxQuantity>0);
- return {row,r,old,data,addons,extras,invite};
+ const invitationVariants=invite?catalogue.products.filter(p=>['cinematic_video','cinematic_interactive','interactive_essential','interactive_gif','interactive_animated','book','infinite'].includes(p.code)).flatMap(p=>p.variants.map(v=>({productCode:p.code,variantCode:v.code,name:p.name,variantName:v.label,sceneCount:v.sceneCount,priceCents:v.priceCents}))):[];
+ return {row,r,old,data,addons,extras,invite,invitationVariants,allConfirmationCodes:catalogue.addons.filter(a=>a.group==='confirmation').map(a=>a.code)};
 }
 function manualPublicQuote(q,percent){
  const deposit=percent===50?Math.ceil(q.totalCents/2):q.totalCents;
  return {totalCents:q.totalCents,depositCents:deposit,balanceCents:q.totalCents-deposit,depositPercent:percent,discountCents:q.discountCents||0,cardFeeCents:q.cardFeeCents||0,blackLibri:q.blackLibri,blackLibriDiscountCents:q.blackLibriDiscountCents||0,items:q.items.map(l=>({family:l.family,productName:l.productName,variantName:l.variantName,grossCents:l.grossCents,totalCents:l.totalCents,addons:l.commercialSnapshot.addons.map(a=>a.name),extras:(l.extras||[]).map(e=>({name:e.name,quantity:e.quantity}))}))};
 }
 async function manualCheckoutQuote(db,c,input={}){
- const {row,r,old,data,addons,extras,invite}=c;
+ const {row,r,old,data,addons,extras,invite,invitationVariants}=c;
+ const change=input.invitationVariant;
+ const replacement=change?invitationVariants.find(v=>v.productCode===change.productCode&&v.variantCode===change.variantCode):null;
+ if(change&&!replacement)fail('Selecione um formato válido.',422);
+ const changed=!!replacement&&(replacement.productCode!==invite.productCode||replacement.variantCode!==invite.variantCode);
+ if(changed&&replacement.productCode==='cinematic_video'&&[...(invite.addonCodes||[]),...(Array.isArray(input.addonCodes)?input.addonCodes:[])].some(code=>c.allConfirmationCodes.includes(code)))fail('O formulário contratado exige um convite interativo.',422);
+ if(data.adminEditVersion&&input.revisionVersion!==data.adminEditVersion)fail('Pedido atualizado pela Libri. Reabra o link.');
  const selected=input.addonCodes??[],additional=normalizeV3ExtraSelection(input.extras);
  if(!Array.isArray(selected)||selected.length>20||new Set(selected).size!==selected.length||selected.some(x=>!addons.some(a=>a.code===x)))fail('Escolha apenas os adicionais disponíveis.',422);
  const groups=selected.map(code=>addons.find(a=>a.code===code).group);
@@ -188,21 +195,21 @@ async function manualCheckoutQuote(db,c,input={}){
   const oldLine=old.items.find(l=>l.productCode===i.productCode);
   const quantities=new Map((i.extras||[]).map(x=>[x.code,x.quantity]));
   for(const x of additional.filter(x=>extras.some(e=>e.code===x.code&&e.family===oldLine.family)))quantities.set(x.code,(quantities.get(x.code)||0)+x.quantity);
-  return {...i,addonCodes:[...(i.addonCodes||[]),...(invite?.productCode===i.productCode?selected:[])],extras:[...quantities].map(([code,quantity])=>({code,quantity}))};
+  return {...i,...(changed&&i===invite?{productCode:replacement.productCode,variantCode:replacement.variantCode,comboCode:''}:{}),addonCodes:[...(i.addonCodes||[]),...(invite?.productCode===i.productCode?selected:[])],extras:[...quantities].map(([code,quantity])=>({code,quantity}))};
  });
  const customer=old.contactSnapshot||await db.prepare('SELECT name,whatsapp,email FROM v2_customers WHERE id=?').bind(row.customer_id).first();
  const blackBody={items,eventType:row.event_type,paymentMethod:row.payment_method,couponCode:old.couponComparison?.code||old.coupon?.code||'',customer:{...customer,whatsapp:'+'+String(customer.whatsapp).replace(/\D/g,'')},clientRequestId:row.request_key};
  let q=old;
- if(selected.length||additional.length||input.blackLibriClaimId){
+ if(changed||selected.length||additional.length||input.blackLibriClaimId){
   const claim=input.blackLibriClaimId?await getV3BlackClaim(db,{...blackBody,blackLibriClaimId:input.blackLibriClaimId}):null;
   q=await quoteV3Cart(db,blackBody,{includeSnapshots:true,requireSale:true,customerId:row.customer_id,attachedBlackClaim:claim,excludeCouponOrderId:row.id});
   // No change to the originally contracted product, unit prices or terms.
   for(const l of old.items){
    const n=q.items.find(x=>x.family===l.family);
-   if(!n||n.productCode!==l.productCode||n.variantCode!==l.variantCode||n.commercialSnapshot.variant.priceCents!==l.commercialSnapshot.variant.priceCents||!l.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))||!(l.extras||[]).every(a=>n.extras.some(b=>b.code===a.code&&b.priceCents===a.priceCents&&b.quantity>=a.quantity)))fail('O catálogo mudou desde o seu pedido. Fale com a Libri para preservar os valores combinados.');
+   if(!n||(!(changed&&l.family==='convite')&&(n.productCode!==l.productCode||n.variantCode!==l.variantCode||n.commercialSnapshot.variant.priceCents!==l.commercialSnapshot.variant.priceCents))||!l.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))||!(l.extras||[]).every(a=>n.extras.some(b=>b.code===a.code&&b.priceCents===a.priceCents&&b.quantity>=a.quantity)))fail('O catálogo mudou desde o seu pedido. Fale com a Libri para preservar os valores combinados.');
   }
   if(JSON.stringify(await termsFor(db,q))!==JSON.stringify(JSON.parse(r.terms_json)))fail('As condições do pedido precisam de conferência pela Libri.');
-  if(q.totalCents>old.totalCents+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
+  if(!changed&&q.totalCents>old.totalCents+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
  }
  const w=data.deliveryWindow,capacity={eventDate:row.event_date,...w,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
  if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);
@@ -212,7 +219,7 @@ async function manualCheckoutQuote(db,c,input={}){
 }
 export async function getV3ManualCheckout(env,token,action,input={}){
  const c=await manualCheckoutContext(env.DB,token);
- if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],quote:manualPublicQuote(c.old,c.row.deposit_percent)};
+ if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],invitationVariants:c.invitationVariants,invitationVariant:c.invite?{productCode:c.invite.productCode,variantCode:c.invite.variantCode}:null,revisionVersion:c.data.adminEditVersion||c.r.created_at,quote:manualPublicQuote(c.old,c.row.deposit_percent)};
  const p=await manualCheckoutQuote(env.DB,c,input);
  if(action==='quote'||action==='preview')return {quote:p.public};
  if(action==='status'||action==='reveal')return v3BlackStatus(env,{...p.blackBody,balloon:input.balloon},{reveal:action==='reveal'});

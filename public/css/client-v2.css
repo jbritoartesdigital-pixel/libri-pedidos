@@ -2240,3 +2240,23 @@ body.libri-manual-body .studio-manual-dialog::backdrop{background:#37282b65}
 .libri-manual-checkout #manualOptionalAddons:not([hidden]){padding-top:5px}
 .libri-manual-checkout .manual-terms{padding:8px 10px}
 .libri-manual-checkout .manual-event>strong{font-size:18px}
+
+/* V113: compact cart controls and shared editorial loading state. */
+.libri-manual-checkout .studio-manual-row{min-height:40px;padding-block:4px}
+.libri-manual-checkout .studio-manual-addons-toggle{border:0;background:none;min-height:29px;padding:4px 1px}
+.libri-manual-checkout .studio-manual-inline{padding:0;background:none;border:0;color:var(--private-rose);font:650 11px/1.4 var(--private-sans);cursor:pointer;text-decoration:underline}
+.studio-format-field{display:grid;gap:5px;margin:9px 0;font-weight:650}
+.studio-format-field select{min-height:44px;width:100%;border:1px solid var(--private-line);background:var(--private-surface);color:var(--private-ink);border-radius:9px;padding:7px;font:400 13px/1.4 var(--private-sans)}
+.studio-format-save{width:100%;min-height:44px;border:0;border-radius:10px;background:var(--private-rose);color:white;font:650 13px/1.3 var(--private-sans);cursor:pointer;margin-top:8px}
+body:has(.studio-private-loading){background:#f7f1ed;color:#37282b;font-family:LibriManrope,sans-serif}
+body:has(.studio-private-loading) .ambient{display:none}
+body:has(.studio-private-loading) .site-header{visibility:hidden}
+.studio-private-loading{display:grid;justify-items:center;align-content:center;gap:10px;min-height:min(65dvh,480px);background:transparent;box-shadow:none;border:0;backdrop-filter:none;text-align:center;color:#37282b}
+.studio-private-loading img{width:56px;height:56px;object-fit:contain}
+.studio-private-loading .studio-loading-brand{font:700 10px/1.2 LibriManrope,sans-serif;letter-spacing:.16em;color:#754942}
+.studio-private-loading strong{font:400 clamp(25px,6vw,34px)/1.2 Georgia,serif}
+.studio-private-loading small{font:400 12px/1.4 LibriManrope,sans-serif;color:#77656a}
+.studio-private-loading .studio-loading-line{width:110px;height:2px;background:#e5d6ce;overflow:hidden}
+.studio-loading-line:after{content:'';display:block;width:40%;height:100%;background:#ad7d6c;animation:studio-private-load 1.25s ease-in-out infinite}
+@keyframes studio-private-load{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
+@media(prefers-reduced-motion:reduce){.studio-loading-line:after{animation:none;width:100%}}

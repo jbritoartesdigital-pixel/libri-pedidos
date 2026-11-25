@@ -2,7 +2,7 @@ import {
   errorPage,
   loading,
   pathInfo,
-} from './client-v2-core.js';
+} from './client-v2-core.js?v=113';
 
 import {
   startManualOrder,
@@ -11,7 +11,7 @@ import {
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261124-v112';
+} from './client-v2-area.js?v=20261124-v113';
 
 import {mountStorePrivacy} from './store-privacy.js';
 async function bootstrap() {

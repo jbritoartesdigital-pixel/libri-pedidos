@@ -365,9 +365,11 @@ export function loading(
   subtitle = 'Um instante ✨',
 ) {
   app.innerHTML = `
-    <section class="loading-card">
-      <span class="spinner" aria-hidden="true"></span>
+    <section class="loading-card studio-private-loading" role="status">
+      <img src="/images/libri-emblem.png" alt="" width="56" height="56">
+      <span class="studio-loading-brand">LIBRI CONVITES</span>
       <strong>${esc(title)}</strong>
+      <span class="studio-loading-line" aria-hidden="true"></span>
       <small>${esc(subtitle)}</small>
     </section>
   `;

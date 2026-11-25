@@ -10,6 +10,9 @@ export async function guardV3LegacyAdmin(request,db,url){
  const method=request.method,path=url.pathname,read=['GET','HEAD'].includes(method);
  // V3 endpoints are dispatched first. Existing read-only order summaries
  // remain available to finance/search; incompatible legacy actions fail closed.
+ // The shared ZIP handler now understands both V2 and V3. It runs only
+ // after Admin authentication in index.js; allow exactly its GET route.
+ if(method==='GET'&&/^\/api\/admin\/v2\/orders\/LIBRI-\d+\/download-folder$/.test(path))return null;
  const order=path.match(/^\/api\/admin\/v2\/(?:atelie\/)?orders\/(LIBRI-\d+)(?:\/(.*))?$/);
  if(order){
    const suffix=order[2]||'';

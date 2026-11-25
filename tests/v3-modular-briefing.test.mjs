@@ -370,7 +370,10 @@ test('legacy guard blocks V3 edits, payment mutations and cascade, but permits V
    assert.equal((await admin('/api/admin/v2/orders/'+code+'/'+suffix)).status,409);
  }
  assert.equal(await admin('/api/admin/v2/orders/'+code,'GET'),null);
- assert.equal((await admin('/api/admin/v2/orders/'+code+'/download-folder','GET')).status,409);
+ assert.equal(await admin('/api/admin/v2/orders/'+code+'/download-folder','GET'),null);
+ assert.equal((await admin('/api/admin/v2/orders/'+code+'/download-folder','POST')).status,409);
+ assert.equal((await admin('/api/admin/v2/orders/'+code+'/download-folder/extra','GET')).status,409);
+ assert.equal((await admin('/api/admin/v2/atelie/orders/'+code+'/download-folder','GET')).status,409);
  assert.equal(await admin('/api/admin/v2/orders/'+code+'/notes'),null);
  assert.equal((await admin('/api/admin/v2/finance/payments','POST',{orderCode:code})).status,409);
  const payment=db.sqlite.prepare('SELECT id FROM v2_payments WHERE order_id=?').get(order.orderId);

@@ -12,7 +12,7 @@ async function access(db,token,family){
  return {ctx,s};
 }
 function check(s,version){
- if(s.production_status!=='approved')fail('A prévia precisa estar aprovada pela cliente.');
+ if(!['in_production','approved'].includes(s.production_status))fail('Inicie a produção ou conclua a prévia já publicada antes de entregar.');
  if(!Number.isSafeInteger(version)||version!==s.production_version)fail('Atualize a ficha antes de continuar.');
 }
 function interactive(s){return s.family==='convite'&&/^interactive_/.test(s.product_code);}
@@ -71,7 +71,7 @@ export async function deliverV3Service(env,token,family,input={}){
  if(await env.DB.prepare("SELECT 1 FROM v3_service_supplements a JOIN v3_order_services z ON z.id=a.service_id WHERE z.order_id=? AND (z.family=? OR json_extract(a.offer_json,'$.targetFamily')=?) AND a.status IN ('accepted','payment_pending','review')").bind(s.order_id,family,family).first())fail('Concilie os adicionais contratados antes de liberar a entrega.');
  if(input.confirmed!==true)fail('Confirme a entrega completa.',422);
  const approved=await env.DB.prepare("SELECT id,status FROM v3_service_previews WHERE service_id=? ORDER BY version DESC LIMIT 1").bind(s.id).first();
- if(approved?.status!=='approved')fail('A última prévia precisa estar aprovada.');
+ if(s.production_status==='approved'&&approved?.status!=='approved')fail('A última prévia precisa estar aprovada.');
  const files=(await env.DB.prepare('SELECT r2_key FROM v3_service_final_files WHERE service_id=? AND purged_at IS NULL').bind(s.id).all()).results||[];
  const url=interactive(s)?link(input.interactiveUrl):null;
  const external=family==='retrospectiva'?externalV3RetroMedia({channel:input.externalChannel,url:input.externalUrl}):null;
@@ -81,7 +81,7 @@ export async function deliverV3Service(env,token,family,input={}){
  const now=new Date(),stamp=now.toISOString(),until=n=>new Date(now.getTime()+n*DAY).toISOString();
  await env.DB.batch([
  env.DB.prepare("UPDATE v3_order_services SET production_status='delivered',delivered_at=?,download_until=?,originals_until=?,interactive_url=?,external_delivery_channel=?,external_delivery_url=?,production_version=production_version+1,updated_at=datetime('now') WHERE id=?").bind(stamp,until(90),until(30),url,external?.channel||null,external?.url||null,s.id),
- env.DB.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,preview_id) VALUES(?,'admin','delivered',?)").bind(s.id,approved.id)
+ env.DB.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,preview_id) VALUES(?,'admin','delivered',?)").bind(s.id,approved?.status==='approved'?approved.id:null)
  ]);
  return getV3Delivery(env.DB,{...s,production_status:'delivered',delivered_at:stamp,download_until:until(90),originals_until:until(30),interactive_url:url,external_delivery_channel:external?.channel||null,external_delivery_url:external?.url||null},{admin:true});
  });
@@ -90,7 +90,7 @@ export async function downloadV3FinalFile(env,token,family,id,{admin=false}={}){
  const c=await access(env.DB,token,family);if(!c)return httpFail('Pedido não encontrado.',404);
  if(!admin&&!c.ctx.finance?.fullyPaid)return httpFail('Saldo do pedido em aberto.',403);
  const s=c.s,delivered=s.production_status==='delivered';
- if(!delivered&&!(admin&&s.production_status==='approved'))return httpFail('Arquivo ainda não entregue.',403);
+ if(!delivered&&!(admin&&['in_production','approved'].includes(s.production_status)))return httpFail('Arquivo ainda não entregue.',403);
  if(delivered&&(!s.download_until||Date.now()>=Date.parse(s.download_until)))return httpFail('Prazo de download encerrado.',410);
  const row=await env.DB.prepare('SELECT * FROM v3_service_final_files WHERE service_id=? AND id=? AND purged_at IS NULL').bind(s.id,id).first();
  if(!row)return httpFail('Arquivo não encontrado.',404);

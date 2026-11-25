@@ -282,12 +282,12 @@ test('independent production requires agenda, tracks previews and revision round
 
 import {stageV3FinalFile,deliverV3Service,downloadV3FinalFile,removeV3FinalFile} from '../src/lib/v3-service-delivery.js';
 import {runV3DeliveryRetention} from '../src/lib/v3-delivery-retention.js';
-test('final delivery requires explicit approval and exposes only delivered service files',async t=>{
+test('legacy approved preview delivery exposes only delivered service files',async t=>{
  const {db,order}=await paid(t),token=order.publicToken,family='identidade_visual';
  const files=new Map(),env={DB:db,FILES:{async put(k,body){files.set(k,await new Response(body).arrayBuffer())},async get(k){return files.has(k)?{body:files.get(k)}:null},async head(k){return files.has(k)?{size:files.get(k).byteLength}:null},async delete(k){files.delete(k)}}};
  const service=db.sqlite.prepare('SELECT id FROM v3_order_services WHERE order_id=? AND family=?').get(order.orderId,family);
  const stage=(version)=>{const form=new FormData();form.append('file',new Blob(['%PDF-1.7'],{type:'application/pdf'}),'identidade.pdf');form.append('version',String(version));return stageV3FinalFile(new Request('https://test/final',{method:'POST',body:form}),env,token,family);};
- await assert.rejects(stage(0),/aprovada/);
+ await assert.rejects(stage(0),/Inicie a produção/);
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='approved' WHERE id=?").run(service.id);
  db.sqlite.prepare("INSERT INTO v3_service_previews(service_id,version,r2_key,mime_type,size_bytes,status,published_at,adjustment_deadline,approved_at) VALUES(?,1,'v3_test_preview','application/pdf',8,'approved',datetime('now'),datetime('now','+7 days'),datetime('now'))").run(service.id);
  files.set('v3_test_preview',new ArrayBuffer(8));
@@ -306,7 +306,7 @@ test('final delivery requires explicit approval and exposes only delivered servi
  const brief=await getV3ModularBriefing(db,token);
  assert.equal(brief.services.find(s=>s.family===family).productionStatus,'delivered');
  assert.equal(brief.services.find(s=>s.family==='convite').productionStatus,'pending');
- await assert.rejects(removeV3FinalFile(env,token,family,id,2),/aprovada/);
+ await assert.rejects(removeV3FinalFile(env,token,family,id,2),/Inicie a produção/);
  const upload=db.sqlite.prepare("INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,?,'childPhotos','original.jpg','image/jpeg',8,'v3_test_original')").run(order.orderId,family);
  files.set('v3_test_original',new ArrayBuffer(8));
  const soon=new Date(Date.parse(done.downloadUntil)-6*86400000);
@@ -1069,4 +1069,15 @@ test('V121 starts a submitted service in one operation without changing contract
  const state=await getV3ModularBriefing(db,token),s=state.services.find(x=>x.family==='convite');assert.ok(s.reviewedAt);assert.equal(s.productionStatus,'in_production');assert.equal(s.progress.version,1);assert.equal(s.progress.events.filter(e=>e.action==='started').length,1);
  assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,points);
  await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+});
+
+test('V121 direct final delivery without preview still requires full payment and final files',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,family='convite';
+ const s=db.sqlite.prepare('SELECT id FROM v3_order_services WHERE order_id=? AND family=?').get(order.orderId,family);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE id=?").run(s.id);
+ const env={DB:db};
+ await assert.rejects(deliverV3Service(env,token,family,{version:0,confirmed:false,interactiveUrl:'https://libriconvites.com.br/festa-teste'}),/Confirme a entrega/);
+ const d=await deliverV3Service(env,token,family,{version:0,confirmed:true,interactiveUrl:'https://libriconvites.com.br/festa-teste'});assert.equal(d.delivered,true);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_service_previews WHERE service_id=?').get(s.id).n,0);
+ assert.equal(db.sqlite.prepare("SELECT preview_id FROM v3_service_production_events WHERE service_id=? AND action='delivered'").get(s.id).preview_id,null);
 });

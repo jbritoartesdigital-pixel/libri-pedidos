@@ -1006,5 +1006,12 @@ test('admin edits pristine manual order in place without customer acceptance or 
  assert.ok(variant);
  const next=await getV3ManualCheckout(env,token,'quote',{revisionVersion:c.revisionVersion,invitationVariant:{productCode:variant.productCode,variantCode:variant.variantCode},extras:[],addonCodes:[]});
  assert.equal(next.quote.items.find(i=>i.family==='convite').productName,variant.name);
+ const atelie=c.identityOptions.find(v=>v.productCode==='atelie_essencia');
+ if(atelie){
+ const identity={productCode:atelie.productCode,variantCode:atelie.variantCode};
+ const identityQuote=await getV3ManualCheckout(env,token,'quote',{revisionVersion:c.revisionVersion,identityVariant:identity,extras:[],addonCodes:[]});
+ assert.ok(identityQuote.quote.items.some(x=>x.family==='identidade_visual'));
+ assert.ok(identityQuote.terms.services.some(t=>t.family==='identidade_visual'));
+ }
  assert.equal(mp.posts,0);
 });

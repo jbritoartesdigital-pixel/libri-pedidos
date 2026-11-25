@@ -32,7 +32,7 @@ test('carrinhos antigos e Safari sem localStorage não obrigam a comprar o upsel
 });
 
 test('cache atualizado somente no checkout público',()=>{
-  assert.match(html,/client-v2\.js\?v=20261124-v113/);
+  assert.match(html,/client-v2\.js\?v=20261124-v115/);
   assert.match(entry,/client-v2-store\.js\?v=20261124-v99/);
-  assert.match(entry,/client-v2-area\.js\?v=20261124-v113/);
+  assert.match(entry,/client-v2-area\.js\?v=20261124-v115/);
 });

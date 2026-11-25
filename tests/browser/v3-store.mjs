@@ -315,6 +315,10 @@ try{
  await manualPage.locator('[data-manual-action="format"]').click();await manualPage.locator('dialog [data-format]').waitFor();await manualPage.locator('dialog .studio-manual-close').click();
  assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
  assert.equal(await manualPage.getByText('Formulário de confirmação',{exact:true}).count(),1);
+ assert.equal(await manualPage.locator('[data-manual-choice="filter"]').count(),0);
+ assert.equal(await manualPage.locator('[data-manual-open="filter"]').count(),1);
+ assert.equal(await manualPage.locator('.manual-terms-fixed [data-manual-terms]').count(),1);
+
  const optionsButton=manualPage.locator('[data-manual-open="save_the_date"]');
  const scrollHeightBefore=await manualPage.locator('.manual-scroll').evaluate(el=>el.scrollHeight);
  await optionsButton.click();await manualPage.locator('dialog.studio-manual-dialog[open]').waitFor();

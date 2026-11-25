@@ -11,6 +11,7 @@ import {endUnpaidAttempts} from './v3-admin-payment-policy.js';
 import {v3LineStatements} from './v3-order-records.js';
 import {nowIso} from './http.js';
 import {loadV2Catalog} from './v2-catalog.js';
+import {listAteliePackages} from './v3-atelie-catalog.js';
 const fail=(message,status=409)=>{throw Object.assign(new Error(message),{status});};
 async function load(db,code){
  const row=await db.prepare(`SELECT o.*,p.total_cents,p.payment_method,p.deposit_percent,s.quote_json,s.request_key FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id JOIN v2_order_pricing p ON p.order_id=o.id WHERE o.order_code=?`).bind(code).first();
@@ -172,7 +173,8 @@ async function manualCheckoutContext(db,token){
  const addons=invite?catalogue.addons.filter(a=>!owned.has(a.code)&&!groups.has(a.group)&&!(invite.productCode==='cinematic_video'&&a.group==='confirmation')&&!(groups.has('moments')&&a.group==='filter')&&!(groups.has('filter')&&a.group==='moments')&&!(data.items.some(i=>i.productCode.startsWith('retrospectiva_'))&&a.group==='retrospectiva')).map(a=>({code:a.code,name:a.name,group:a.group,priceCents:a.priceCents})):[];
  const extras=old.items.flatMap(l=>listV3Extras(l.family,l.productCode).map(e=>({code:e.code,name:e.name,family:l.family,priceCents:e.priceCents,maxQuantity:e.maxQuantity-(l.extras||[]).filter(x=>x.code===e.code).reduce((n,x)=>n+x.quantity,0)}))).filter(x=>x.maxQuantity>0);
  const invitationVariants=invite?catalogue.products.filter(p=>['cinematic_video','cinematic_interactive','interactive_essential','interactive_gif','interactive_animated','book','infinite'].includes(p.code)).flatMap(p=>p.variants.map(v=>({productCode:p.code,variantCode:v.code,name:p.name,variantName:v.label,sceneCount:v.sceneCount,priceCents:v.priceCents}))):[];
- return {row,r,old,data,addons,extras,invite,invitationVariants,allConfirmationCodes:catalogue.addons.filter(a=>a.group==='confirmation').map(a=>a.code)};
+ const identityOptions=invite&&!old.items.some(l=>l.family==='identidade_visual')?(await listAteliePackages(db)).filter(p=>p.purchaseAvailable&&p.scopeApproved).map(p=>({productCode:'atelie_'+p.code,variantCode:p.variantCode,name:p.name,priceCents:p.priceCents,description:p.shortDescription,included:p.includedItems})):[];
+ return {row,r,old,data,addons,extras,invite,invitationVariants,identityOptions,allConfirmationCodes:catalogue.addons.filter(a=>a.group==='confirmation').map(a=>a.code)};
 }
 function manualPublicQuote(q,percent){
  const deposit=percent===50?Math.ceil(q.totalCents/2):q.totalCents;
@@ -180,6 +182,8 @@ function manualPublicQuote(q,percent){
 }
 async function manualCheckoutQuote(db,c,input={}){
  const {row,r,old,data,addons,extras,invite,invitationVariants}=c;
+ const identity=input.identityVariant?c.identityOptions.find(v=>v.productCode===input.identityVariant.productCode&&v.variantCode===input.identityVariant.variantCode):null;
+ if(input.identityVariant&&!identity)fail('Pacote de identidade visual indisponível.',422);
  const change=input.invitationVariant;
  const replacement=change?invitationVariants.find(v=>v.productCode===change.productCode&&v.variantCode===change.variantCode):null;
  if(change&&!replacement)fail('Selecione um formato válido.',422);
@@ -197,10 +201,11 @@ async function manualCheckoutQuote(db,c,input={}){
   for(const x of additional.filter(x=>extras.some(e=>e.code===x.code&&e.family===oldLine.family)))quantities.set(x.code,(quantities.get(x.code)||0)+x.quantity);
   return {...i,...(changed&&i===invite?{productCode:replacement.productCode,variantCode:replacement.variantCode,comboCode:''}:{}),addonCodes:[...(i.addonCodes||[]),...(invite?.productCode===i.productCode?selected:[])],extras:[...quantities].map(([code,quantity])=>({code,quantity}))};
  });
+ if(identity)items.push({productCode:identity.productCode,variantCode:identity.variantCode,addonCodes:[],extras:[]});
  const customer=old.contactSnapshot||await db.prepare('SELECT name,whatsapp,email FROM v2_customers WHERE id=?').bind(row.customer_id).first();
  const blackBody={items,eventType:row.event_type,paymentMethod:row.payment_method,couponCode:old.couponComparison?.code||old.coupon?.code||'',customer:{...customer,whatsapp:'+'+String(customer.whatsapp).replace(/\D/g,'')},clientRequestId:row.request_key};
  let q=old;
- if(changed||selected.length||additional.length||input.blackLibriClaimId){
+ if(identity||changed||selected.length||additional.length||input.blackLibriClaimId){
   const claim=input.blackLibriClaimId?await getV3BlackClaim(db,{...blackBody,blackLibriClaimId:input.blackLibriClaimId}):null;
   q=await quoteV3Cart(db,blackBody,{includeSnapshots:true,requireSale:true,customerId:row.customer_id,attachedBlackClaim:claim,excludeCouponOrderId:row.id});
   // No change to the originally contracted product, unit prices or terms.
@@ -208,20 +213,22 @@ async function manualCheckoutQuote(db,c,input={}){
    const n=q.items.find(x=>x.family===l.family);
    if(!n||(!(changed&&l.family==='convite')&&(n.productCode!==l.productCode||n.variantCode!==l.variantCode||n.commercialSnapshot.variant.priceCents!==l.commercialSnapshot.variant.priceCents))||!l.commercialSnapshot.addons.every(a=>n.commercialSnapshot.addons.some(b=>b.code===a.code&&b.priceCents===a.priceCents))||!(l.extras||[]).every(a=>n.extras.some(b=>b.code===a.code&&b.priceCents===a.priceCents&&b.quantity>=a.quantity)))fail('O catálogo mudou desde o seu pedido. Fale com a Libri para preservar os valores combinados.');
   }
-  if(JSON.stringify(await termsFor(db,q))!==JSON.stringify(JSON.parse(r.terms_json)))fail('As condições do pedido precisam de conferência pela Libri.');
-  if(!changed&&q.totalCents>old.totalCents+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
+  const currentTerms=await termsFor(db,q),originalTerms=JSON.parse(r.terms_json);
+  if(JSON.stringify(currentTerms.general)!==JSON.stringify(originalTerms.general)||!originalTerms.services.every(t=>currentTerms.services.some(x=>JSON.stringify(x)===JSON.stringify(t))))fail('As condições do pedido precisam de conferência pela Libri.');
+  if(!changed&&q.totalCents>old.totalCents+(identity?.priceCents||0)+selected.reduce((n,code)=>n+addons.find(a=>a.code===code).priceCents,0)+additional.reduce((n,x)=>n+extras.find(e=>e.code===x.code).priceCents*x.quantity,0)+(q.cardFeeCents-old.cardFeeCents))fail('O valor combinado precisa ser preservado. Fale com a Libri.');
  }
  const w=data.deliveryWindow,capacity={eventDate:row.event_date,...w,pointsUnits:q.pointsUnits,productionDays:q.productionDays};
  if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);
  if(!(await planV2AllocationForWindow(db,capacity)).fits)fail('A agenda não comporta essa seleção. Retire um adicional ou fale com a Libri.');
  const priced={...q,schemaVersion:3,...(old.manualFlexibleDelivery===true?{manualFlexibleDelivery:true}:{}),contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:row.payment_method,depositPercent:row.deposit_percent,depositCents:row.deposit_percent===50?Math.ceil(q.totalCents/2):q.totalCents,balanceCents:row.deposit_percent===50?Math.floor(q.totalCents/2):0}};
- return {q:priced,items,blackBody,public:manualPublicQuote(priced,row.deposit_percent)};
+ const terms=await termsFor(db,priced);
+ return {q:priced,items,blackBody,terms,public:manualPublicQuote(priced,row.deposit_percent)};
 }
 export async function getV3ManualCheckout(env,token,action,input={}){
  const c=await manualCheckoutContext(env.DB,token);
- if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],invitationVariants:c.invitationVariants,invitationVariant:c.invite?{productCode:c.invite.productCode,variantCode:c.invite.variantCode}:null,revisionVersion:c.data.adminEditVersion||c.r.created_at,quote:manualPublicQuote(c.old,c.row.deposit_percent)};
+ if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],identityOptions:c.identityOptions,invitationVariants:c.invitationVariants,invitationVariant:c.invite?{productCode:c.invite.productCode,variantCode:c.invite.variantCode}:null,revisionVersion:c.data.adminEditVersion||c.r.created_at,quote:manualPublicQuote(c.old,c.row.deposit_percent)};
  const p=await manualCheckoutQuote(env.DB,c,input);
- if(action==='quote'||action==='preview')return {quote:p.public};
+ if(action==='quote'||action==='preview')return {quote:p.public,terms:p.terms};
  if(action==='status'||action==='reveal')return v3BlackStatus(env,{...p.blackBody,balloon:input.balloon},{reveal:action==='reveal'});
  fail('Operação inválida.',422);
 }
@@ -234,8 +241,8 @@ export async function acceptV3Revision(db,token,input={}){
   if(!r)fail('Proposta não encontrada.',404);
   if(r.status==='accepted')return {accepted:true,alreadyAccepted:true};
   if(r.status!=='offered')fail('Esta proposta não está disponível.');
-  let q=JSON.parse(r.quote_json),data=JSON.parse(r.input_json);const terms=JSON.parse(r.terms_json);
-  if(input.manualCheckout===true){if(r.kind!=='manual'||row.source!=='manual_whatsapp'||input.upsellKey)fail('Este pedido não permite essa contratação.',422);const c=await manualCheckoutContext(db,token);if(c.r.id!==r.id)fail('Pedido atualizado. Reabra o link.');const p=await manualCheckoutQuote(db,c,input);q=p.q;data={...data,items:p.items};}
+  let q=JSON.parse(r.quote_json),data=JSON.parse(r.input_json);let terms=JSON.parse(r.terms_json);
+  if(input.manualCheckout===true){if(r.kind!=='manual'||row.source!=='manual_whatsapp'||input.upsellKey)fail('Este pedido não permite essa contratação.',422);const c=await manualCheckoutContext(db,token);if(c.r.id!==r.id)fail('Pedido atualizado. Reabra o link.');const p=await manualCheckoutQuote(db,c,input);q=p.q;if(input.identityVariant&&input.identityTermsVersion!==p.terms.services.find(t=>t.family==='identidade_visual')?.version)fail('Leia e aceite as condições da identidade visual.',422);terms=p.terms;data={...data,items:p.items};}
   if(input.upsellKey){const u=await manualUpsell(db,row,r);if(!u||u.key!==input.upsellKey||u.totalCents!==input.expectedTotalCents)fail('A sugestão mudou. Reabra a proposta original antes de continuar.');q=u.pricing;data={...data,items:u.items};}
   const quoteJson=JSON.stringify(q);
   if(input.confirmed!==true||input.termsAccepted!==true||input.expectedTotalCents!==q.totalCents)fail('Confira os valores e aceite as condições da proposta.',422);
@@ -251,7 +258,7 @@ export async function acceptV3Revision(db,token,input={}){
    db.prepare('UPDATE v2_order_pricing SET subtotal_cents=?,combo_discount_cents=?,coupon_discount_cents=?,total_cents=?,deposit_cents=?,balance_cents=?,pricing_snapshot_json=?,updated_at=? WHERE order_id=?').bind(q.subtotalCents,q.comboDiscountCents,q.couponDiscountCents,q.totalCents,deposit,q.totalCents-deposit,quoteJson,at,row.id),
    db.prepare("UPDATE v2_orders SET delivery_start=?,delivery_end=?,next_action='Aguardando pagamento',updated_at=? WHERE id=?").bind(w.start,w.end,at,row.id),
    db.prepare("INSERT INTO v2_order_terms_acceptances(order_id,terms_version,terms_hash,accepted_at,evidence_json) VALUES(?,?,?,?,?)").bind(row.id,terms.general.version,terms.general.content_hash||null,at,JSON.stringify({revisionId:r.id,services:terms.services.map(s=>({family:s.family,version:s.version,accepted:true}))})),
-   db.prepare("UPDATE v3_order_revisions SET status='accepted',accepted_at=?,quote_json=?,input_json=? WHERE id=?").bind(at,quoteJson,JSON.stringify(data),r.id),
+   db.prepare("UPDATE v3_order_revisions SET status='accepted',accepted_at=?,quote_json=?,input_json=?,terms_json=? WHERE id=?").bind(at,quoteJson,JSON.stringify(data),JSON.stringify(terms),r.id),
    db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_revision_accepted','Cliente confirmou os termos e valores antes de pagar.',?,?)").bind(row.id,JSON.stringify({revisionId:r.id,totalCents:q.totalCents}),at)
   ]);
   return {accepted:true};

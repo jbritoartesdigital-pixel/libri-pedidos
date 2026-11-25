@@ -94,16 +94,20 @@ function normalizeField(f,value){
   if(typeof value!=='string'||value.length>(f.type==='textarea'?12000:2000))fail('Resposta inválida: '+f.label);
   return value.trim();
 }
-export async function saveV3ModuleDraft(db,token,module,payload={}){
+export async function saveV3ModuleDraft(db,token,module,payload={}, {actor='customer'}={}){
   const initial=await contextV3Briefing(db,token);
   if(!initial)return null;
   return withV2PaymentLock(db,initial.order.id,async()=>{
     const ctx=await contextV3Briefing(db,token);
     if(!ctx||ctx.locked)fail('O briefing será liberado após o pagamento.',403);
+    if(ctx.order.archived_at)fail('Restaure o pedido antes de editar.',409);
+    const administrative=actor==='admin';
+    const affected=module==='shared'?ctx.services:ctx.services.filter(s=>s.family===module);
+    if(administrative&&(!affected.length||affected.some(s=>s.production_status!=='pending')))fail('A edição administrativa exige produção ainda pendente.',409);
     if(!['available','in_progress'].includes(ctx.order.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
       fail('O briefing não está disponível para edição.',409);
-    if(module==='shared'&&ctx.services.some(s=>s.briefing_status==='completed'))fail('Os dados compartilhados já foram usados em um briefing enviado. Solicite uma alteração à Libri.',409);
-    if(module!=='shared'&&!ctx.services.some(s=>s.family===module&&['available','in_progress'].includes(s.briefing_status)))
+    if(!administrative&&module==='shared'&&ctx.services.some(s=>s.briefing_status==='completed'))fail('Os dados compartilhados já foram usados em um briefing enviado. Solicite uma alteração à Libri.',409);
+    if(module!=='shared'&&!ctx.services.some(s=>s.family===module&&(['available','in_progress'].includes(s.briefing_status)||(administrative&&s.briefing_status==='completed'))))
       fail('Este serviço não permite edição.',409);
     if(!obj(payload.data)||JSON.stringify(payload.data).length>90000||!Number.isSafeInteger(payload.revision)||payload.revision<0)
       fail('Dados inválidos.');
@@ -126,7 +130,10 @@ export async function saveV3ModuleDraft(db,token,module,payload={}){
       VALUES(?,?,?,1,datetime('now')) ON CONFLICT(order_id,module) DO UPDATE SET data_json=excluded.data_json,
       revision=revision+1,updated_at=datetime('now') WHERE revision=?`).bind(ctx.order.id,module,JSON.stringify(data),payload.revision).run();
     if(Number(result.meta?.changes)!==1)fail('O briefing mudou. Atualize antes de salvar.',409);
-    if(module!=='shared')await db.prepare("UPDATE v3_order_services SET briefing_status='in_progress' WHERE order_id=? AND family=? AND briefing_status='available'").bind(ctx.order.id,module).run();
+    if(administrative){
+      for(const s of affected)await db.prepare("UPDATE v3_order_services SET briefing_status='in_progress',reviewed_at=NULL,updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','completed','in_progress')").bind(s.id).run();
+      await db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_admin_briefing_saved','Dados do briefing preenchidos pela administração.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({module})).run();
+    }else if(module!=='shared')await db.prepare("UPDATE v3_order_services SET briefing_status='in_progress' WHERE order_id=? AND family=? AND briefing_status='available'").bind(ctx.order.id,module).run();
     return getV3ModularBriefing(db,token);
   });
 }
@@ -156,7 +163,7 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
   });
 }
 
-export async function submitV3ServiceBriefing(db,token,family,payload={}){
+export async function submitV3ServiceBriefing(db,token,family,payload={}, {actor='customer'}={}){
   const initial=await contextV3Briefing(db,token);
   if(!initial)return null;
   return withV2PaymentLock(db,initial.order.id,async()=>{
@@ -194,10 +201,13 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}){
     if(family==='retrospectiva'&&data.media_authorization!=='sim')missing.push('Autorização para uso das fotos e vídeos.');
     if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))missing.push('Autorização do responsável para a ilustração da criança.');
     if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;throw e;}
+    if(ctx.order.archived_at)fail('Restaure o pedido antes de enviar.',409);
+    if(actor==='admin'&&(payload.confirmed!==true||service.production_status!=='pending'))fail('Confirme o envio administrativo dos dados fornecidos pela cliente.',409);
     // Completing the artistic briefing is not a production release. Materials,
     // dependencies and the independent agenda still require confirmation.
     const result=await db.prepare("UPDATE v3_order_services SET briefing_status='completed',briefing_submitted_at=datetime('now'),reviewed_at=NULL,complement_note=NULL,updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','in_progress')").bind(service.id).run();
     if(Number(result.meta?.changes)!==1)fail('O briefing mudou. Atualize a página.',409);
+    if(actor==='admin')await db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_admin_briefing_submitted','Briefing enviado pela administração com confirmação dos dados da cliente.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({family})).run();
     return getV3ModularBriefing(db,token);
   });
 }

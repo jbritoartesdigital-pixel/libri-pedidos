@@ -348,6 +348,15 @@ try{
  assert.equal(await admin.locator('#orderPhotoViewerTitle').innerText(),'teste-2.png');
  assert.equal(await admin.locator('#orderPhotoViewerDownload').getAttribute('href'),photoPaths[1]+'?download=1');
  await admin.locator('#orderPhotoViewerClose').click();
+ await admin.locator('[data-v3-admin-tab="summary"]').first().click();
+ assert.equal(await admin.locator('[data-v3-admin-page="summary"] a').filter({hasText:'Área da cliente'}).getAttribute('href'),galleryBase.replace('/briefing','/customer-area'));
+ await admin.locator('[data-v3-admin-tab="contracts"]').first().click();
+ assert.equal(await admin.locator('[data-v3-admin="contract-generate"]').isVisible(),true);
+ await admin.locator('[data-v3-admin-tab="briefing"]').first().click();
+ await admin.locator('[data-v3-panel="briefing-shared"] summary').click();
+ await admin.locator('[data-v3-admin="brief-edit"][data-family="shared"]').click();
+ assert.equal(await admin.locator('[data-admin-brief-editor] [data-v3-field="theme_or_style"]').count(),1);
+ await admin.locator('[data-v3-admin="brief-edit-cancel"]').click();
  assert.equal(await admin.locator('#orderPhotoViewer').isVisible(),false);
  await admin.locator('[data-v3-admin-tab="production"]').first().click();
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});

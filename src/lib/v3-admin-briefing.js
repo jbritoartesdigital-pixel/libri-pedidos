@@ -1,3 +1,5 @@
+import {v3AdminLifecycle} from './v3-admin-lifecycle.js';
+import {listV2ContractsForAdmin} from './v2-contracts.js';
 import {convertHoldToAgenda} from './v2-mercadopago.js';
 import {pendingPaidCapacityReview} from './v2-capacity-review.js';
 import {getV3CapacityRelease} from './v3-service-agenda.js';
@@ -31,6 +33,9 @@ export async function getV3AdminBriefing(db,token){
  brief.customer={name:contact.name||customer?.name||'',whatsapp:contact.whatsapp||customer?.whatsapp||'',email:contact.email||customer?.email||''};
  brief.orderMeta={createdAt:order.created_at,updatedAt:order.updated_at,source:order.source,nextAction:order.next_action,eventSubtype:order.event_subtype};
  brief.history=history;
+ brief.lifecycle=v3AdminLifecycle(financialCtx);
+ brief.contracts=(await listV2ContractsForAdmin(db,order.order_code))?.contracts||[];
+ for(const m of brief.modules){const affected=m.module==='shared'?financialCtx.services:financialCtx.services.filter(s=>s.family===m.module);m.adminEditable=!brief.locked&&!order.archived_at&&['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&affected.length>0&&affected.every(s=>s.production_status==='pending');}
  brief.notes=((await db.prepare('SELECT id,note,created_at FROM v2_internal_notes WHERE order_id=? ORDER BY created_at DESC,id DESC').bind(order.id).all()).results||[]).map(n=>({id:n.id,note:n.note,createdAt:n.created_at}));
  brief.termsAcceptances=acceptances.results||[];
  brief.paymentAttempts=(financialCtx.finance?.payments||[]).map(p=>({provider:p.provider,type:p.payment_type,status:p.status,amountCents:p.amount_cents,method:p.method,paidAt:p.paid_at}));

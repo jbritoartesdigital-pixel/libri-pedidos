@@ -1,3 +1,8 @@
+import {changeV3AdminLifecycle} from '../lib/v3-admin-lifecycle.js';
+import {contextV3Briefing} from '../lib/v3-modular-briefing.js';
+import {handleAdminContractsV2Api} from './admin-contracts-v2.js';
+import {handleCustomerContractsV2Api} from './customer-contracts-v2.js';
+import {withV2PaymentLock} from '../lib/v2-payment-lock.js';
 import {openV3PaidCancellation,refreshV3Cancellation,refundV3CancellationCharge,finalizeV3PaidCancellation} from '../lib/v3-paid-cancellation.js';
 import {getV3RevisionEditor,previewV3Revision,createV3Revision,acceptV3Revision,withdrawV3Revision,previewV3ManualOrder,createV3ManualOrder,getV3ManualUpsell,getV3ManualCheckout} from '../lib/v3-order-revisions.js';
 import {changeV3AdminDeposit,recordV3AdminBalance,cancelV3UnpaidOrder} from '../lib/v3-admin-payment-policy.js';
@@ -22,6 +27,14 @@ async function boundedJson(request){
   return body;
 }
 export async function handleCustomerBriefingV3Api(request,env,url){
+ const contracts=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/contracts(?:\/(\d+)\/(sign|pdf))?$/);
+ if(contracts){
+  const ctx=await contextV3Briefing(env.DB,contracts[1]);if(!ctx)return fail('Pedido não encontrado.',404);
+  if(contracts[3]==='sign'&&(ctx.locked||ctx.order.archived_at))return fail('Contrato indisponível para assinatura.',409);
+  const mapped=new URL(url);mapped.pathname=url.pathname.replace('/v3/contracts','/contracts');
+  if(contracts[3]==='sign'&&request.method==='POST'){try{return await withV2PaymentLock(env.DB,ctx.order.id,async()=>{const fresh=await contextV3Briefing(env.DB,contracts[1]);if(fresh.locked||fresh.order.archived_at)return fail('Contrato indisponível para assinatura.',409);return await handleCustomerContractsV2Api(request,env,mapped);});}catch(e){return errorResponse(e);}}
+  return await handleCustomerContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);
+ }
  const manualCheckout=url.pathname.match(/^\/api\/v2\/customer-area\/(ord_[a-f0-9]{36})\/v3\/manual-checkout\/(catalog|quote|status|reveal|preview|finish)$/);
  if(manualCheckout){
   const [,token,action]=manualCheckout;
@@ -107,6 +120,40 @@ export async function handleCustomerBriefingV3Api(request,env,url){
 // This handler must remain exclusively inside the existing authenticated
 // Admin dispatcher. No customer token or public API can confirm receipt.
 export async function handleAdminBriefingV3Api(request,env,url){
+ const ops=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/(customer-area|lifecycle|contracts(?:\/\d+\/(?:sign-libri|cancel|pdf))?|briefing-edit\/(?:shared|convite|identidade_visual|retrospectiva)(?:\/submit)?)$/);
+ if(ops){
+  try{
+   const [,code,op]=ops;
+   const row=await env.DB.prepare('SELECT o.id,o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(code).first();
+   if(!row)return fail('Pedido V3 não encontrado.',404);
+   const token=row.public_token,ctx=await contextV3Briefing(env.DB,token);
+   if(op==='customer-area'&&request.method==='GET')return new Response(null,{status:302,headers:{location:'/meu-pedido/'+token,'cache-control':'private, no-store','referrer-policy':'no-referrer'}});
+   if(op==='lifecycle'&&request.method==='POST'){const result=await changeV3AdminLifecycle(env,token,await boundedJson(request));return json({ok:true,result,...(result.deleted?{}:{briefing:await getV3AdminBriefing(env.DB,token)})});}
+   if(op.startsWith('briefing-edit/')){
+    const [,module,submit]=op.split('/');
+    const body=await boundedJson(request);
+    if(body.confirmed!==true)return fail('Confirme que os dados foram fornecidos pela cliente.',422);
+    if(submit&&request.method==='POST')await submitV3ServiceBriefing(env.DB,token,module,body,{actor:'admin'});
+    else if(!submit&&request.method==='PATCH')await saveV3ModuleDraft(env.DB,token,module,body,{actor:'admin'});
+    else return fail('Método não permitido.',405);
+    return json({ok:true,briefing:await getV3AdminBriefing(env.DB,token)});
+   }
+   if(op.startsWith('contracts')){
+    const [,id,action]=op.split('/');
+    if(id&&!await env.DB.prepare('SELECT 1 FROM v2_contracts WHERE order_id=? AND id=?').bind(row.id,Number(id)).first())return fail('Contrato não encontrado neste pedido.',404);
+    if(request.method!=='GET'&&(ctx.locked||ctx.order.archived_at))return fail('Contrato indisponível para alteração.',409);
+    const mapped=new URL(url);mapped.pathname=id?'/api/admin/v2/contracts/'+id+'/'+action:'/api/admin/v2/orders/'+code+'/contracts';
+    if(!id&&request.method==='POST')return await withV2PaymentLock(env.DB,row.id,async()=>{
+     const fresh=await contextV3Briefing(env.DB,token);
+     if(fresh.locked||fresh.order.archived_at||await env.DB.prepare("SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=? AND a.status NOT IN ('cancelled','declined','expired')").bind(row.id).first())return fail('Contratos com alterações complementares exigem revisão contratual. Preserve as condições já aceitas.',409);
+     return await handleAdminContractsV2Api(request,env,mapped);
+    });
+    if(id&&request.method==='POST')return await withV2PaymentLock(env.DB,row.id,async()=>{const fresh=await contextV3Briefing(env.DB,token);const c=await env.DB.prepare('SELECT status FROM v2_contracts WHERE order_id=? AND id=?').bind(row.id,Number(id)).first();if(fresh.locked||fresh.order.archived_at||!c||c.status==='signed'||(action==='sign-libri'&&c.status!=='waiting_libri'))return fail('Contrato indisponível para alteração.',409);return await handleAdminContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);});
+    return await handleAdminContractsV2Api(request,env,mapped)||fail('Método não permitido.',405);
+   }
+   return fail('Método não permitido.',405);
+  }catch(e){return errorResponse(e);}
+ }
  const capacity=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/paid-capacity$/);
  if(capacity){if(request.method!=='POST')return fail('Método não permitido.',405);if(env.LIBRI_V3_ADMIN_PAYMENT_ENABLED!=='true')return fail('Operação administrativa V3 indisponível.',503);try{const row=await env.DB.prepare('SELECT public_token FROM v2_orders WHERE order_code=?').bind(capacity[1]).first();if(!row)return fail('Pedido não encontrado.',404);const result=await recoverV3PaidCapacity(env.DB,row.public_token,await boundedJson(request));return result?json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)}):fail('Pedido V3 não encontrado.',404);}catch(e){return errorResponse(e);}}
 

@@ -1091,3 +1091,62 @@ test('V123 notes remain private and are visible in the V3 administrative ficha',
  const admin=await getV3AdminBriefing(db,order.publicToken),customer=await getV3ModularBriefing(db,order.publicToken);
  assert.equal(admin.notes[0].note,'Observacao interna V123');assert.equal(customer.notes,undefined);
 });
+
+import {changeV3AdminLifecycle} from '../src/lib/v3-admin-lifecycle.js';
+import {handleAdminBriefingV3Api,handleCustomerBriefingV3Api} from '../src/routes/briefing-v3.js';
+test('V125 admin editor saves, submits and audits the modular briefing without changing payment or starting production',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,env={DB:db};
+ const base='/api/admin/v2/orders/'+order.orderCode+'/v3/';
+ const call=async(path,method='GET',body)=>{const url=new URL('https://test'+base+path);return handleAdminBriefingV3Api(new Request(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),env,url);};
+ const data={theme_or_style:'Jardim',joint_celebration:'no',age:3,event_time:'14:00',venue_name:'Salão',venue_address:'Rua 1'};
+ assert.equal((await call('briefing-edit/shared','PATCH',{revision:0,data})).status,422);
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:0,data})).status,200);
+ assert.equal((await call('briefing-edit/identidade_visual','PATCH',{confirmed:true,revision:0,data:{mascotMode:'ilustração temática',additionalSubjects:'não',styleFreedom:'a Libri pode decidir',exactTexts:'Ana 3 anos'}})).status,200);
+ assert.equal((await call('briefing-edit/identidade_visual/submit','POST',{confirmed:true,revision:1,sharedRevision:1})).status,200);
+ const admin=await getV3AdminBriefing(db,token),s=admin.services.find(s=>s.family==='identidade_visual');
+ assert.equal(s.briefingStatus,'completed');assert.equal(s.productionStatus,'pending');assert.equal(admin.payment.fullyPaid,true);
+ assert.ok(admin.history.some(h=>h.action==='v3_admin_briefing_submitted'));
+ assert.ok(!JSON.stringify(admin).includes(token));
+ const redirect=await call('customer-area');assert.equal(redirect.status,302);assert.equal(redirect.headers.get('location'),'/meu-pedido/'+token);
+ const noAuth=await worker.fetch(new Request('https://test'+base+'customer-area',{redirect:'manual'}),env,{waitUntil(){}});assert.equal(noAuth.status,401);
+ const invalid=await call('lifecycle','POST',{confirmed:true,action:'delete',orderCode:order.orderCode});assert.equal(invalid.status,409);
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:1,data:{...data,theme_or_style:'Outro'}})).status,200);
+ assert.equal((await getV3AdminBriefing(db,token)).services.find(s=>s.family==='identidade_visual').briefingStatus,'in_progress');
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:2,data})).status,409);
+});
+test('V125 archive and restore are audited and unpaid deletion checks confirmation and preserves paid orders',async t=>{
+ const {db,order}=await paid(t);const env={DB:db};
+ await assert.rejects(changeV3AdminLifecycle(env,order.publicToken,{action:'delete',confirmed:true,orderCode:order.orderCode}),/Exclusão/);
+ await assert.rejects(changeV3AdminLifecycle(env,order.publicToken,{action:'archive',confirmed:true}),/estado atual/);
+ db.sqlite.prepare("UPDATE v2_orders SET event_date='2020-01-01' WHERE id=?").run(order.orderId);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=?").run(order.orderId);
+ assert.equal((await changeV3AdminLifecycle(env,order.publicToken,{action:'archive',confirmed:true})).archived,true);
+ assert.equal((await getV3AdminBriefing(db,order.publicToken)).lifecycle.canRestore,true);
+ assert.equal((await changeV3AdminLifecycle(env,order.publicToken,{action:'restore',confirmed:true})).archived,false);
+ const fixture=await setup(),unpaid=await createV3OrderRecords(fixture.db,fixture.input);
+ await assert.rejects(changeV3AdminLifecycle({DB:fixture.db},unpaid.publicToken,{action:'delete',confirmed:true,orderCode:'wrong'}),/Exclusão/);
+ assert.equal((await changeV3AdminLifecycle({DB:fixture.db},unpaid.publicToken,{action:'delete',confirmed:true,orderCode:unpaid.orderCode})).deleted,true);
+ assert.equal(await getV3ModularBriefing(fixture.db,unpaid.publicToken),null);
+});
+
+test('V125 contract uses all original products, is scoped to its order, and has both signatures',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,objects=new Map();
+ const env={DB:db,FILES:{put:async(key,data)=>objects.set(key,data),get:async key=>objects.has(key)?{body:objects.get(key)}:null}};
+ db.sqlite.prepare("INSERT INTO v2_contract_templates(version,title,body,content_hash,active) VALUES(999,'Teste','Pedido {{ORDER_CODE}}. Serviços: {{PRODUCT_NAME}}. Adicionais: {{ADDONS}}. Total {{TOTAL}}.','test',1)").run();
+ const base='/api/admin/v2/orders/'+order.orderCode+'/v3/contracts';
+ const call=async(path,method='GET',body)=>{const url=new URL('https://test'+base+path);return handleAdminBriefingV3Api(new Request(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),env,url);};
+ assert.equal((await call('','POST',{})).status,201);
+ const c=db.sqlite.prepare('SELECT id,body_snapshot FROM v2_contracts WHERE order_id=?').get(order.orderId);
+ const names=db.sqlite.prepare("SELECT name_snapshot FROM v2_order_items WHERE order_id=? AND item_type='product'").all(order.orderId);
+ assert.equal(names.length,2);for(const n of names)assert.ok(c.body_snapshot.includes(n.name_snapshot));
+ assert.equal((await call('/999999/sign-libri','POST',{})).status,404);
+ assert.equal((await call('/'+c.id+'/sign-libri','POST',{})).status,200);
+ const customer=async(path,method='GET',body,who=token)=>{const url=new URL('https://test/api/v2/customer-area/'+who+'/v3/contracts'+path);return handleCustomerBriefingV3Api(new Request(url,{method,...(body?{headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})}),env,url);};
+ assert.equal((await customer('', 'GET',undefined,'ord_'+'f'.repeat(36))).status,404);
+ assert.equal((await (await customer('')).json()).result.contracts[0].status,'waiting_customer');
+ assert.equal((await customer('/'+c.id+'/sign','POST',{accepted:true,signerName:'Cliente teste'})).status,200);
+ assert.equal((await (await customer('')).json()).result.contracts[0].status,'signed');
+ assert.equal(objects.size,1);
+ assert.equal((await call('/'+c.id+'/sign-libri','POST',{})).status,409);
+});

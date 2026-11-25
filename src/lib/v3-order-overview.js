@@ -71,7 +71,7 @@ export async function getV3CentralQueues(db,production){
   (SELECT COUNT(*) FROM v2_checkout_holds h WHERE h.order_id=o.id AND h.status IN ('active','converted')) AS live_holds,
   (EXISTS(SELECT 1 FROM v2_order_history h WHERE h.order_id=o.id AND h.action_code='payment_capacity_review') AND NOT EXISTS(SELECT 1 FROM v2_agenda_allocations a WHERE a.order_id=o.id)) AS capacity_pending,
   (SELECT status FROM v3_paid_cancellations WHERE order_id=o.id) AS cancellation,
-  EXISTS(SELECT 1 FROM v3_order_revisions WHERE order_id=o.id AND status='offered') AS revision,
+  EXISTS(SELECT 1 FROM v3_order_revisions WHERE order_id=o.id AND status='offered' AND kind='edit') AS revision,
   EXISTS(SELECT 1 FROM v3_service_supplements a JOIN v3_order_services s ON s.id=a.service_id WHERE s.order_id=o.id AND a.status='review') AS supplement_review
  FROM v3_order_checkout_snapshots snap JOIN v2_orders o ON o.id=snap.order_id JOIN v2_customers c ON c.id=o.customer_id JOIN v2_order_pricing p ON p.order_id=o.id
  WHERE o.archived_at IS NULL AND o.status!='cancelled'

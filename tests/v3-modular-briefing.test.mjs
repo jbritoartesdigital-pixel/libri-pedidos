@@ -967,6 +967,9 @@ test('manual checkout: optional additions, terms, Black and one original order t
  const row=db.sqlite.prepare('SELECT id,order_code FROM v2_orders WHERE public_token=?').get(token);assert.equal(row.order_code,created.orderCode);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,1);
  const attached=db.sqlite.prepare('SELECT order_id,status FROM v2_black_libri_claims WHERE id=?').get(reveal.claim.id);assert.equal(attached.order_id,row.id);assert.equal(attached.status,'attached');
+ const adminPrize=await getV3AdminBriefing(db,token);
+ assert.equal(adminPrize.services.find(s=>s.family==='convite').blackLibri.gift.code,'save_static');
+ assert.ok(adminPrize.history.length>0);assert.equal(adminPrize.termsAcceptances.length,1);assert.equal(adminPrize.paymentAttempts.length,1);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_order_terms_acceptances WHERE order_id=?').get(row.id).n,1);
  assert.ok((await getV3ModularBriefing(db,token)).locked);
  const payment=db.sqlite.prepare('SELECT provider_order_id,amount_cents FROM v2_payments WHERE order_id=?').get(row.id);assert.equal(payment.amount_cents,final.depositCents);
@@ -989,6 +992,13 @@ test('admin edits pristine manual order in place without customer acceptance or 
  await createV3Revision(env,created.orderCode,{...payload,expectedTotalCents:p.totalCents,confirmed:true,requestKey:'4d'.repeat(18)});
  const c=await getV3ManualCheckout(env,token,'catalog');
  assert.equal(c.quote.totalCents,p.totalCents);assert.equal(c.depositPercent,50);assert.equal(c.revisionId,editor.revisionId);assert.equal(mp.posts,0);
+ const admin=await getV3AdminBriefing(db,token);
+ assert.equal(admin.customer.name,input.customer.name);
+ assert.ok(admin.history.some(e=>e.action==='order_created'));
+ assert.ok(admin.history.some(e=>e.action==='v3_manual_edited'));
+ assert.equal(admin.services[0].addons[0].name,addon.name);
+ assert.equal(admin.termsAcceptances.length,0);assert.equal(admin.paymentAttempts.length,0);
+ assert.ok(!JSON.stringify(admin).includes(token));
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM v2_orders').get().n,1);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM v2_order_terms_acceptances').get().n,0);
  await assert.rejects(getV3ManualCheckout(env,token,'quote',{revisionVersion:original.revisionVersion,extras:[],addonCodes:[]}),/atualizado/);

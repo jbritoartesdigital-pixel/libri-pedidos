@@ -1,3 +1,5 @@
+import {guardV3LegacyAdmin} from '../../src/lib/v3-legacy-guard.js';
+import {handleAdminOrderZipV2Api} from '../../src/routes/admin-order-zip-v2.js';
 import {handleStoreFunnel,getStoreFunnel} from '../../src/lib/v3-store-funnel.js';
 // Real Chromium, actual public JS/CSS and server catalogue, isolated SQLite.
 import {createServer} from 'node:http';
@@ -78,6 +80,10 @@ const server=createServer(async(req,res)=>{
    else if(req.method==='GET'&&['/api/admin/v2/agenda','/api/admin/v2/agenda/cascade'].includes(url.pathname))result=await handleAdminAgendaV2Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/v3/manual/catalog')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/notifications')result=await handleAdminNotificationsV2Api(request,readEnv,url);
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/download-folder'){
+     const zipEnv={...readEnv,FILES:{get:async()=>null}};
+     result=await guardV3LegacyAdmin(request,zipEnv.DB,url)||await handleAdminOrderZipV2Api(request,zipEnv,url);
+   }
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
@@ -295,7 +301,11 @@ try{
  await adminContext.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
  const admin=await adminContext.newPage();admin.on('pageerror',e=>errors.push(e.message));
  await admin.goto(origin+'/admin-v2?order='+paidFixture.orderCode);
- await admin.locator('#v3AdminOrder .v3-admin-mini-service').first().waitFor();assert.equal(await admin.locator('#v3AdminOrder .v3-admin-mini-service').count(),3);assert.equal(await admin.locator('[data-v3-admin-page="summary"] [data-v3-download-folder]').getAttribute('href'),'/api/admin/v2/orders/'+paidFixture.orderCode+'/download-folder');assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
+ await admin.locator('#v3AdminOrder .v3-admin-mini-service').first().waitFor();assert.equal(await admin.locator('#v3AdminOrder .v3-admin-mini-service').count(),3);assert.equal(await admin.locator('[data-v3-admin-page="summary"] [data-v3-download-folder]').getAttribute('href'),'/api/admin/v2/orders/'+paidFixture.orderCode+'/download-folder');
+ const downloaded=admin.waitForEvent('download');
+ await admin.locator('[data-v3-admin-page="summary"] [data-v3-download-folder]').click();
+ const zip=await downloaded;assert.equal(await zip.failure(),null);assert.match(zip.suggestedFilename(),/\.zip$/i);
+ const zipBytes=await readFile(await zip.path());assert.equal(zipBytes.readUInt32LE(0),0x04034b50);assert.match(zipBytes.toString('utf8'),/Jardim de teste/);assert.match(zipBytes.toString('utf8'),/Música de teste/);assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await admin.goto(origin+'/admin-v2');
@@ -375,6 +385,13 @@ try{
  assert.equal(manualDb.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_black_libri_claims WHERE order_id=? AND status='attached'").get(manualOrder.id).n,1);
  manualMP.approve(manualPay.provider_order_id);globalThis.fetch=manualFetch;try{await syncMercadoPagoOrder(manualEnv,manualPay.provider_order_id);}finally{globalThis.fetch=originalFetch;}
  await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('[data-v3-tab="shared"]').waitFor();await manualPage.locator('[data-v3-start]').waitFor();await manualPage.screenshot({path:'artifacts/v3-browser/manual-v116-paid.png',fullPage:true});
+ // Verify the paid manual single-order path too, using the same auth-dispatch
+ // guard and ZIP endpoint, not a direct call to the ZIP builder.
+ const manualZipUrl=new URL(origin+'/api/admin/v2/orders/'+manualOrder.order_code+'/download-folder');
+ const manualZipRequest=new Request(manualZipUrl);
+ const manualZipEnv={...manualEnv,FILES:{get:async()=>null}};
+ const manualZipResponse=await guardV3LegacyAdmin(manualZipRequest,manualDb,manualZipUrl)||await handleAdminOrderZipV2Api(manualZipRequest,manualZipEnv,manualZipUrl);
+ assert.equal(manualZipResponse.status,200);const manualZipBytes=Buffer.from(await manualZipResponse.arrayBuffer());assert.equal(manualZipBytes.readUInt32LE(0),0x04034b50);assert.match(manualZipBytes.toString('utf8'),/dados_do_convite\.txt/);
  await manualContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);

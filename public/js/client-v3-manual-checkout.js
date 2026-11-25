@@ -3,29 +3,37 @@ import {openBlackLibriBeforePayment} from './client-v2-black-libri.js?v=109';
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0)/100);
 const day=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.split('-').reverse().join('/'):'A confirmar';
-const labels={save_the_date:'Save the Date',reminder:'Lembrete',confirmation:'Confirmação de presença',filter:'Filtro personalizado',moments:'Álbum de fotos',retrospectiva:'Retrospectiva',identidade_visual:'Libri Ateliê'};
+import {compactManualAddonGroups,isMomentsPlan} from './client-v2-manual-addon-groups.js?v=20261110-confirmation-clear-1';
+import {modal} from './client-v2-core.js';
+const suggestionCopy={confirmation:'Acompanhe as respostas e escolha confirmação livre ou por lista de convidados.',filter:'Uma câmera com filtro personalizado para os convidados registrarem a festa.',moments:'Reúna os registros dos convidados em um álbum digital com filtro incluso.',save_the_date:'Avise seus convidados sobre a data com antecedência.',reminder:'Relembre os convidados perto da comemoração.'};
 function safePay(v){try{const u=new URL(v);return u.protocol==='https:'&&/(^|\.)mercadopago\.com(\.br)?$/.test(u.hostname)?u.href:null;}catch{return null;}}
 export async function startV3ManualCheckout(root,{token,api}){
  const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/manual-checkout';
  const c=await api(endpoint+'/catalog');
- let quote=c.quote,step=c.addons.length||c.extras.length?'extras':'cart',busy=false,error='',terms=false,black=null;
+ let quote=c.quote,step=c.addons.length||c.extras.length?'extras':'cart',busy=false,error='',terms=false,black=null,suggestionSeen=false;
  const chosen=new Map(),quantities=new Map();
  const selection=()=>({addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
  const request=(action,data={})=>api(endpoint+'/'+action,{method:'POST',body:JSON.stringify(data)});
- const grouped=Array.from(new Set(c.addons.map(x=>x.group))).map(g=>({group:g,options:c.addons.filter(x=>x.group===g)}));
+ const grouped=compactManualAddonGroups(c.addons),expanded=new Set();
+ const albumSelected=()=>Boolean(c.ownedAddonCodes?.some(isMomentsPlan)||[...chosen.values()].some(isMomentsPlan));
+ const blocked=g=>g==='moments'&&chosen.has('filter')||g==='filter'&&chosen.has('moments')||g==='moments_extra'&&!albumSelected();
  root.classList.add('libri-manual-checkout');
  document.body.classList.add('libri-manual-body');
  function itemsHtml(){return quote.items.map(i=>'<article class="manual-cart-item"><div><h3>'+esc(i.productName)+'</h3><p>'+esc(i.variantName)+'</p></div><strong>'+money(i.totalCents)+'</strong>'+((i.addons.length||i.extras.length)?'<div class="manual-included"><strong>Adicionais escolhidos</strong><p>'+esc([...i.addons,...i.extras.map(x=>x.quantity+' × '+x.name)].join(' · '))+'</p></div>':'')+'</article>').join('');}
  function extrasHtml(){
- return grouped.map(({group,options})=>{
- const value=chosen.get(group)||'';
- const unavailable=(group==='moments'&&chosen.has('filter'))||(group==='filter'&&chosen.has('moments'));
- return '<article class="manual-extra"><div><h3>'+esc(labels[group]||options[0].name)+'</h3><p>'+esc(options.length===1?options[0].name:'Escolha a opção que prefere.')+'</p></div><div>'+ (options.length===1?'<button class="manual-small-btn" type="button" data-manual-addon="'+esc(group)+'" data-code="'+esc(options[0].code)+'" '+(unavailable?'disabled':'')+'>'+ (value?'Retirar':'+ '+money(options[0].priceCents))+'</button>':'<select aria-label="'+esc(labels[group]||group)+'" data-manual-group="'+esc(group)+'" '+(unavailable?'disabled':'')+'><option value="">Não adicionar</option>'+options.map(a=>'<option value="'+esc(a.code)+'" '+(value===a.code?'selected':'')+'>'+esc(a.name)+' · '+money(a.priceCents)+'</option>').join('')+'</select>')+'</div></article>';
- }).join('')+c.extras.map(x=>'<article class="manual-extra"><div><h3>'+esc(x.name)+'</h3><p>'+money(x.priceCents)+' por unidade</p></div><label><span class="manual-quantity-label">Quantidade</span><input type="number" min="0" max="'+x.maxQuantity+'" step="1" data-manual-extra="'+esc(x.code)+'" value="'+(quantities.get(x.code)||0)+'"></label></article>').join('');
+ const rows=grouped.filter(g=>g.key!=='moments_extra'||albumSelected()).map(g=>{
+ const value=chosen.get(g.key)||'',selected=g.options.find(a=>a.code===value),disabled=blocked(g.key)||busy;
+ if(g.options.length===1){
+ const a=g.options[0];
+ return '<label class="manual-addon-single manual-v110-row"><input type="checkbox" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value?'checked ':'')+(disabled?'disabled':'')+'><span class="manual-addon-copy"><strong class="manual-addon-label">'+esc(g.label)+'</strong>'+(g.key==='confirmation'?'<small class="manual-confirmation-note">A confirmação simples do convite continua inclusa.</small>':'')+'</span><strong class="manual-addon-price">+'+money(a.priceCents)+'</strong></label>';
+ }
+ return '<details class="manual-addon-group manual-v110-row" data-manual-expand="'+esc(g.key)+'" '+(expanded.has(g.key)?'open':'')+'><summary><span class="manual-addon-title">'+esc(g.label)+(selected?'<small>'+esc(selected.name)+'</small>':'')+'</span><strong class="manual-addon-price">'+(selected?money(selected.priceCents):'A partir de '+money(g.minPriceCents))+'</strong></summary><div class="manual-addon-options">'+[{code:'',name:'Não adicionar'},...g.options].map(a=>'<label class="manual-addon-option"><input type="radio" name="manual_'+esc(g.key)+'" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value===a.code?'checked ':'')+(disabled?'disabled':'')+'><span>'+esc(a.name)+'</span>'+(a.code?'<strong>+'+money(a.priceCents)+'</strong>':'')+'</label>').join('')+'</div></details>';
+ }).join('');
+ return '<div class="manual-extras-list">'+rows+c.extras.map(x=>'<article class="manual-extra manual-v110-row"><div><h3>'+esc(x.name)+'</h3><p>'+money(x.priceCents)+' por unidade</p></div><label><span class="manual-quantity-label">Quantidade</span><input type="number" min="0" max="'+x.maxQuantity+'" step="1" data-manual-extra="'+esc(x.code)+'" value="'+(quantities.get(x.code)||0)+'"></label></article>').join('')+'</div>';
  }
  function render(){
  const cart=step==='cart';
- root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>LIBRI CONVITES · '+esc(c.orderCode)+'</small><h1>'+(cart?'Seu pedido':'Personalize seu pedido')+'</h1><p>'+(cart?'Confira os serviços escolhidos e finalize o pagamento.':'Escolha os adicionais que quiser. Todos são opcionais.')+'</p></header>'+
+ root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(cart?'Seu pedido':'Adicionais')+'</h1><p>'+(cart?'Confira os serviços escolhidos e finalize o pagamento.':'Escolha se quiser ou siga para o carrinho.')+'</p></header>'+
  '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+(cart?
  '<div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
  ((c.addons.length||c.extras.length)&&!black?'<button type="button" data-manual-action="extras" class="manual-text-btn">+ Alterar adicionais</button>':'')+
@@ -37,7 +45,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  }
  async function refresh(){
  if(busy)return;
- const y=root.querySelector('.manual-scroll')?.scrollTop||0;busy=true;error='';render();
+ const y=root.querySelector('.manual-scroll')?.scrollTop||0;expanded.clear();root.querySelectorAll('[data-manual-expand][open]').forEach(el=>expanded.add(el.dataset.manualExpand));busy=true;error='';render();
  try{quote=(await request('quote',selection())).quote;}
  catch(e){error=e.message||'Não foi possível conferir os adicionais.';chosen.clear();quantities.clear();quote=c.quote;}
  finally{busy=false;render();const el=root.querySelector('.manual-scroll');if(el)el.scrollTop=y;}
@@ -57,10 +65,27 @@ export async function startV3ManualCheckout(root,{token,api}){
   error=e.message||'Não foi possível continuar. Reabra seu pedido para conferir o pagamento.';busy=false;render();
  }
  }
+ async function findSuggestion(){
+ for(const group of ['confirmation','filter','moments','save_the_date','reminder']){
+  if(chosen.has(group)||blocked(group))continue;
+  const g=grouped.find(x=>x.key===group);if(!g)continue;
+  const a=g.options[0];
+  try{const next=(await request('quote',{...selection(),addonCodes:[...selection().addonCodes,a.code]})).quote;
+   if(next.totalCents>quote.totalCents)return {group,a,next,delta:next.totalCents-quote.totalCents};
+  }catch{/* Incompatible suggestions never block the original checkout. */}
+ }
+ return null;
+ }
+ function showSuggestion({group,a,next,delta}){
+ const close=modal(a.name,'<div class="manual-upsell-card"><span class="manual-upsell-kicker">UMA SUGESTÃO PARA SEU PEDIDO</span><p>'+esc(suggestionCopy[group])+'</p><div class="manual-upsell-delta"><small>Por apenas mais</small><strong>'+money(delta)+'</strong></div><div class="manual-upsell-totals"><span>Novo total <b>'+money(next.totalCents)+'</b></span>'+(next.depositPercent===50?'<span>Entrada <b>'+money(next.depositCents)+'</b></span><span>Saldo <b>'+money(next.balanceCents)+'</b></span>':'')+'</div><div class="action-row"><button type="button" class="btn btn-ghost" id="manualV3SuggestionSkip">Agora não</button><button type="button" class="btn btn-primary" id="manualV3SuggestionAccept">Quero adicionar</button></div></div>');
+ document.getElementById('manualV3SuggestionSkip').onclick=()=>{close();finish();};
+ document.getElementById('manualV3SuggestionAccept').onclick=()=>{close();chosen.set(group,a.code);quote=next;error='';render();};
+ }
  async function finish(){
  if(busy)return;
  if(!terms){error='Leia e aceite os termos da contratação para continuar.';render();return;}
  if(!quote.items.some(i=>i.family==='convite')||black){await payFinal();return;}
+ if(!suggestionSeen){suggestionSeen=true;busy=true;error='';render();const offer=await findSuggestion();busy=false;render();if(offer){showSuggestion(offer);return;}}
  busy=true;error='';render();
  let continuation=null;
  try{
@@ -74,13 +99,11 @@ export async function startV3ManualCheckout(root,{token,api}){
  root.addEventListener('change',e=>{
  if(e.target.matches('[data-manual-terms]')){terms=e.target.checked;return;}
  if(busy||black)return;
- if(e.target.matches('[data-manual-group]')){const g=e.target.dataset.manualGroup;if(e.target.value)chosen.set(g,e.target.value);else chosen.delete(g);refresh();}
+ if(e.target.matches('[data-manual-choice]')){const g=e.target.dataset.manualChoice;if(e.target.checked&&e.target.value)chosen.set(g,e.target.value);else chosen.delete(g);if(!albumSelected())chosen.delete('moments_extra');refresh();}
  if(e.target.matches('[data-manual-extra]')){const n=Number(e.target.value),max=Number(e.target.max);quantities.set(e.target.dataset.manualExtra,Number.isInteger(n)?Math.max(0,Math.min(max,n)):0);refresh();}
  });
  root.addEventListener('click',e=>{
  if(busy)return;
- const addon=e.target.closest('[data-manual-addon]');
- if(addon&&!black){const g=addon.dataset.manualAddon;if(chosen.has(g))chosen.delete(g);else chosen.set(g,addon.dataset.code);refresh();return;}
  const action=e.target.closest('[data-manual-action]')?.dataset.manualAction;
  if(action==='cart'||action==='extras'&&!black){step=action;error='';render();return;}
  if(action==='pay')finish();

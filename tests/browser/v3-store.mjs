@@ -298,18 +298,28 @@ try{
  const manualContext=await browser.newContext({viewport:{width:390,height:740},reducedMotion:'reduce'});
  await manualContext.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.request().url().startsWith('https://www.mercadopago.com.br/checkout/v1/redirect')?route.fulfill({status:200,contentType:'text/html',body:'<h1>Pagamento simulado</h1>'}):route.abort());
  const manualPage=await manualContext.newPage();manualPage.on('pageerror',e=>errors.push(e.message));
- await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.libri-manual-checkout .manual-extra').first().waitFor();
+ await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.libri-manual-checkout .manual-v110-row').first().waitFor();
  assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
  assert.equal(await manualPage.locator('.manual-total').count(),1);
- await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-extras.png',fullPage:true});
- const add=manualPage.locator('[data-manual-addon="confirmation"]');
- await add.click();await manualPage.locator('[data-manual-addon="confirmation"]').filter({hasText:'Retirar'}).waitFor();await manualPage.locator('#app[aria-busy="false"]').waitFor();
+ for(const size of [{width:390,height:740},{width:360,height:640},{width:320,height:568}]){
+  await manualPage.setViewportSize(size);
+  const fit=await manualPage.evaluate(()=>{const button=document.querySelector('[data-manual-action="cart"]').getBoundingClientRect();const total=document.querySelector('.manual-total').getBoundingClientRect();const scroll=document.querySelector('.manual-scroll');return {bottom:button.bottom,top:total.top,viewport:innerHeight,wide:document.documentElement.scrollWidth>innerWidth,rows:document.querySelectorAll('.manual-v110-row').length,overflow:scroll.scrollHeight-scroll.clientHeight};});
+  assert.ok(fit.bottom<=fit.viewport+1&&fit.top>=0,JSON.stringify(fit));
+  assert.equal(fit.wide,false);
+  if(size.height===740&&fit.rows<=8)assert.ok(fit.overflow<=2,JSON.stringify(fit));
+ }
+ await manualPage.setViewportSize({width:390,height:740});
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v110-extras.png',fullPage:true});
+ const add=manualPage.locator('[data-manual-choice="confirmation"]');
+ await add.check();await manualPage.locator('#app[aria-busy="false"]').waitFor();assert.equal(await add.isChecked(),true);
  await manualPage.locator('[data-manual-action="cart"]').click();
  await manualPage.locator('[data-manual-terms]').waitFor();assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
  assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
  await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-cart.png',fullPage:true});
  await manualPage.locator('[data-manual-action="pay"]').click();await manualPage.locator('.manual-error').waitFor();assert.equal(manualMP.posts,0);
  await manualPage.locator('[data-manual-terms]').check();await manualPage.locator('[data-manual-action="pay"]').click();
+ await manualPage.locator('#manualV3SuggestionAccept').waitFor();assert.equal(manualMP.posts,0);await manualPage.screenshot({path:'artifacts/v3-browser/manual-v110-suggestion.png',fullPage:true});
+ await manualPage.locator('#manualV3SuggestionAccept').click();assert.equal(manualMP.posts,0);await manualPage.locator('[data-manual-action="pay"]').click();
  await manualPage.locator('.black-libri-overlay [data-black-slot]').first().waitFor();
  await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-black.png',fullPage:true});
  await manualPage.locator('[data-black-sound]').click();await manualPage.locator('[data-black-slot]').first().click();await manualPage.locator('[data-black-continue]:enabled').waitFor();

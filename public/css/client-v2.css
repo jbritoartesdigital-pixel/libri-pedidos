@@ -2167,3 +2167,36 @@ body.libri-manual-body{height:100dvh;overflow:hidden;display:flex;flex-direction
 .libri-v3-area input[type=checkbox],.libri-v3-area input[type=radio]{accent-color:var(--private-rose)}
 @media(max-width:360px){.libri-manual-checkout .manual-shell{padding-inline:10px}.libri-manual-checkout .manual-extra h3{font-size:17px}.libri-manual-checkout .manual-total b{font-size:21px}}
 @media(max-height:650px){.libri-manual-checkout .manual-shell{padding-top:8px;gap:5px}.libri-manual-checkout .manual-heading h1{font-size:26px}.libri-manual-checkout .manual-extra{padding:9px}.libri-manual-checkout .manual-total{padding:8px}}
+
+/* V110: light, compact manual checkout; scope excludes the store and paid area. */
+body.libri-manual-body{min-height:0;height:100dvh;max-height:100dvh}
+body.libri-manual-body .site-header{flex:none;min-height:44px;padding:5px 0;width:min(680px,calc(100% - 28px))}
+body.libri-manual-body .brand-mark{width:28px;height:28px;font-size:20px}
+body.libri-manual-body .brand{gap:8px}
+body.libri-manual-body .brand-copy small{margin-top:1px}
+#app.libri-manual-checkout{height:auto;max-height:100%;min-height:0}
+.libri-manual-checkout .manual-shell{gap:7px;padding:8px 14px max(7px,env(safe-area-inset-bottom,0px));height:100%;min-height:0}
+.libri-manual-checkout .manual-heading small{font-size:9px}
+.libri-manual-checkout .manual-heading h1{font-size:clamp(23px,6.2vw,30px);margin:3px 0 3px;line-height:1.15}
+.libri-manual-checkout .manual-heading p{font-size:12px;line-height:1.35}
+.libri-manual-checkout .manual-scroll{gap:5px;padding:0 0 2px;min-height:0}
+.libri-manual-checkout .manual-extras-list{display:flex;flex-direction:column;flex:none;min-width:0;border:1px solid var(--private-line);border-radius:12px;background:rgba(255,253,250,.7);overflow:hidden}
+.libri-manual-checkout .manual-extra{background:none;border:0;border-radius:0;box-shadow:none;backdrop-filter:none;padding:3px 9px;gap:7px;min-height:47px;grid-template-columns:minmax(0,1fr) minmax(0,auto)}
+.libri-manual-checkout .manual-extra+.manual-extra{border-top:1px solid var(--private-line)}
+.libri-manual-checkout .manual-extra h3{font:650 13px/1.25 var(--private-sans);letter-spacing:0;overflow-wrap:anywhere}
+.libri-manual-checkout .manual-extra p{font-size:11px;margin:2px 0 0}
+.libri-manual-checkout .manual-extra>div,.libri-manual-checkout .manual-extra>label{min-width:0}
+.libri-manual-checkout :is(.manual-small-btn,.manual-extra select,.manual-extra input[type=number]){min-height:40px;padding:4px 8px;max-width:min(43vw,190px);font-size:11px;border-radius:8px;background:transparent}
+.libri-manual-checkout .manual-small-btn{min-width:80px}
+.libri-manual-checkout .manual-small-btn[aria-pressed=true]{background:#f1dfd8;border-color:var(--private-accent)}
+.libri-manual-checkout .manual-extra select{width:min(43vw,190px);text-overflow:ellipsis}
+.libri-manual-checkout .manual-extra input[type=number]{width:64px}
+.libri-manual-checkout .manual-total{border:0;border-radius:0;box-shadow:none;backdrop-filter:none;background:none;padding:3px 0}
+.libri-manual-checkout .manual-total b{font-size:21px}
+.libri-manual-checkout .manual-footer{gap:4px;border-top:1px solid var(--private-line);padding-top:5px}
+.libri-manual-checkout .manual-primary{min-height:44px;border-radius:10px}
+.libri-manual-checkout .manual-progress span{height:2px;width:25px}
+.libri-manual-checkout .manual-cart-item,.libri-manual-checkout .manual-event,.libri-manual-checkout .manual-terms{box-shadow:none;backdrop-filter:none;border-radius:12px;padding:9px}
+.libri-manual-checkout .manual-cart-item h3{font-size:18px}
+@media(max-width:360px){.libri-manual-checkout .manual-shell{padding-inline:10px}.libri-manual-checkout .manual-extra{padding-inline:7px}.libri-manual-checkout .manual-extra h3{font-size:12px}}
+@media(max-height:650px){.libri-manual-checkout .manual-shell{gap:4px;padding-top:5px}.libri-manual-checkout .manual-heading h1{font-size:23px}.libri-manual-checkout .manual-extra{padding-block:2px;min-height:45px}.libri-manual-checkout .manual-progress{display:none}}

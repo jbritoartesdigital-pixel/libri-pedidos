@@ -278,7 +278,7 @@ try{
  await customer.locator('[data-v3-field="gift_clothing_size"]').waitFor();
  assert.equal(await customer.locator('[data-v3-field="music_request"]').inputValue(),'Música de teste');
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();await customer.getByText('Fotos e vídeos pelo WhatsApp',{exact:true}).waitFor();
- await customer.locator('[data-v3-draft-status]').getByText('Respostas salvas',{exact:false}).waitFor();
+ await customer.locator('[data-v3-draft-status]').filter({hasText:'Respostas salvas'}).waitFor();
  await customer.reload();await customer.locator('[data-v3-tab="convite"]').first().click();
  assert.equal(await customer.locator('[data-v3-field="music_request"]').inputValue(),'Música de teste');
  assert.equal(await customer.locator('[data-v3-field="appearance_choice"][value="no"]').isChecked(),true);

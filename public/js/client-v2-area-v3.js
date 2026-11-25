@@ -85,9 +85,9 @@ export async function startV3CustomerArea(root,{token,initial,api}){
         const [module,patch]=pending.entries().next().value;
         const m=area.modules.find(m=>m.module===module);
         if(!m?.editable){saveError='Não é possível editar este serviço.';return false;}
-        const before=schemaSignature(current());
         try{
           const r=await api(endpoint+'/'+module,{method:'PATCH',body:JSON.stringify({revision:m.revision,data:{...m.data,...patch}})});
+          const before=schemaSignature(current());
           const remaining={...pending.get(module)};
           for(const key of Object.keys(patch))if(Object.is(remaining[key],patch[key]))delete remaining[key];
           if(Object.keys(remaining).length)pending.set(module,remaining);else pending.delete(module);
@@ -275,6 +275,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       el.checked=false;let alert=root.querySelector('[data-v3-choice-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3ChoiceError='';alert.setAttribute('role','alert');el.closest('.field')?.append(alert);}alert.textContent='Escolha até '+f.max+' opções.';return;
     }
     root.querySelector('[data-v3-choice-error]')?.remove();
+    if(el.type==='radio'||el.type==='checkbox')for(const input of el.closest('.field').querySelectorAll('input[data-v3-field]'))input.closest('.choice-card')?.classList.toggle('selected',input.checked);
     rememberField(m,f.key,value);scheduleSave(immediate);
   }
   root.addEventListener('input',e=>{const el=e.target;if(el.type!=='radio'&&el.type!=='checkbox')captureInput(el,false);});

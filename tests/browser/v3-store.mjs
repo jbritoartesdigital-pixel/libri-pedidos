@@ -316,6 +316,16 @@ try{
  await admin.locator('#orderSummary').waitFor();
  const oldDrawer=admin.locator('#modalRoot.order-drawer-root .libri-order-drawer');await oldDrawer.waitFor();
  const oldBounds=await oldDrawer.boundingBox();
+ // UI-only synthetic image fixture: actual gallery/drawer, no production files.
+ const galleryBase='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing';
+ const photoPaths=[galleryBase+'/convite/uploads/91001/content',galleryBase+'/convite/uploads/91002/content'];
+ await admin.route(origin+galleryBase,async route=>{
+   const response=await route.fetch();const json=await response.json();
+   const module=json.briefing.modules.find(m=>m.module==='convite');
+   module.uploads=photoPaths.map((contentPath,i)=>({id:91001+i,fieldKey:'childPhotos',originalFilename:'teste-'+(i+1)+'.png',mimeType:'image/png',contentPath}));
+   await route.fulfill({response,json});
+ });
+ for(const photoPath of photoPaths)await admin.route(origin+photoPath+'*',route=>route.fulfill({status:200,contentType:'image/png',headers:{'cache-control':'private, no-store'},body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF2sAAAAASUVORK5CYII=','base64')}));
  await admin.goto(origin+'/admin-v2?order='+paidFixture.orderCode);
  const newDrawer=admin.locator('#modalRoot.order-drawer-root .libri-order-drawer');await newDrawer.waitFor();
  const newBounds=await newDrawer.boundingBox();assert.ok(Math.abs(oldBounds.width-newBounds.width)<2);assert.ok(Math.abs(oldBounds.x-newBounds.x)<2);
@@ -325,6 +335,19 @@ try{
  const zip=await downloaded;assert.equal(await zip.failure(),null);assert.match(zip.suggestedFilename(),/\.zip$/i);
  const zipBytes=await readFile(await zip.path());assert.equal(zipBytes.readUInt32LE(0),0x04034b50);assert.match(zipBytes.toString('utf8'),/Jardim de teste/);assert.match(zipBytes.toString('utf8'),/Música de teste/);assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin="copy-data"]').isVisible(),true);assert.equal(await admin.locator('[data-v3-admin="copy-full"]').isVisible(),true);assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
+ await admin.locator('[data-v3-admin-tab="briefing"]').first().click();
+ assert.equal(await admin.locator('#adminOrderPhotos [data-order-photo]').count(),2);
+ await admin.locator('#adminOrderPhotos [data-order-photo]').first().click();
+ await admin.locator('#orderPhotoViewer[open]').waitFor();
+ assert.equal(await admin.locator('#orderPhotoViewerTitle').innerText(),'teste-1.png');
+ await admin.locator('#orderPhotoZoom').click();
+ assert.equal(await admin.locator('#orderPhotoViewerScroll').evaluate(el=>el.classList.contains('is-zoomed')),true);
+ await admin.locator('#orderPhotoNext').click();
+ assert.equal(await admin.locator('#orderPhotoViewerTitle').innerText(),'teste-2.png');
+ assert.equal(await admin.locator('#orderPhotoViewerDownload').getAttribute('href'),photoPaths[1]+'?download=1');
+ await admin.locator('#orderPhotoViewerClose').click();
+ assert.equal(await admin.locator('#orderPhotoViewer').isVisible(),false);
+ await admin.locator('[data-v3-admin-tab="production"]').first().click();
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await admin.goto(origin+'/admin-v2');
  await admin.locator('.central-section-tabs [data-central-section="today"]').waitFor();await admin.locator('.admin-hero').waitFor();

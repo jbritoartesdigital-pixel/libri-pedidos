@@ -2200,3 +2200,19 @@ body.libri-manual-body .brand-copy small{margin-top:1px}
 .libri-manual-checkout .manual-cart-item h3{font-size:18px}
 @media(max-width:360px){.libri-manual-checkout .manual-shell{padding-inline:10px}.libri-manual-checkout .manual-extra{padding-inline:7px}.libri-manual-checkout .manual-extra h3{font-size:12px}}
 @media(max-height:650px){.libri-manual-checkout .manual-shell{gap:4px;padding-top:5px}.libri-manual-checkout .manual-heading h1{font-size:23px}.libri-manual-checkout .manual-extra{padding-block:2px;min-height:45px}.libri-manual-checkout .manual-progress{display:none}}
+
+/* V110: V2 selection language, with the new palette. */
+.libri-manual-checkout :is(.manual-addon-single,.manual-addon-group){background:transparent;border:0;border-radius:0;font:650 13px/1.3 var(--private-sans);flex:none;min-width:0}
+.libri-manual-checkout .manual-v110-row+.manual-v110-row{border-top:1px solid var(--private-line)}
+.libri-manual-checkout :is(.manual-addon-single,.manual-addon-group summary){padding:6px 9px;gap:8px;min-height:45px;align-items:center}
+.libri-manual-checkout .manual-addon-single input,.libri-manual-checkout .manual-addon-option input{accent-color:var(--private-rose);margin:0;width:17px;height:17px;flex:none}
+.libri-manual-checkout .manual-addon-price{color:var(--private-rose);font:700 11px/1.25 var(--private-sans)}
+.libri-manual-checkout .manual-addon-title{font-weight:650}
+.libri-manual-checkout .manual-addon-title small,.libri-manual-checkout .manual-confirmation-note{font:400 10px/1.3 var(--private-sans);color:var(--private-muted);display:block;margin-top:2px}
+.libri-manual-checkout .manual-addon-group summary::after{font-size:17px;color:var(--private-rose)}
+.libri-manual-checkout .manual-addon-options{padding:0 9px 5px;border-color:var(--private-line)}
+.libri-manual-checkout .manual-addon-option{padding:7px 1px;min-height:38px}
+.libri-manual-checkout .manual-addon-option span,.libri-manual-checkout .manual-addon-option strong{font-size:11px}
+body.libri-manual-body .modal-card{background:var(--private-surface);border-color:var(--private-line);color:var(--private-ink);font-family:var(--private-sans)}
+body.libri-manual-body .manual-upsell-card .btn-primary{background:var(--private-rose);color:white}
+body.libri-manual-body .manual-upsell-card .btn-ghost{color:var(--private-rose)}

@@ -3201,13 +3201,17 @@ test('admin sees client photos inline with protected R2 access and human-friendl
 
 test('customer and admin use plain-language labels, photo viewer and fresh mobile assets', () => {
   const admin = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const gallery = readFileSync('public/js/admin-order-gallery.v124.js', 'utf8');
+  const modular = readFileSync('public/js/admin-v2-order-v3.js', 'utf8');
+  assert.match(admin, /bindOrderGallery\(/);
+  assert.match(modular, /bindOrderGallery\(/);
   const customer = readFileSync('public/js/client-v2-area.js', 'utf8');
   const shell = readFileSync('public/admin-v2.html', 'utf8');
   const entry = readFileSync('public/js/admin-v2.js', 'utf8');
   const publicShell = readFileSync('public/client-v2.html', 'utf8');
-  assert.match(admin, /Fotos e referências recebidas/);
-  assert.match(admin, /data-order-photo/);
-  assert.match(admin, /orderPhotoViewer/);
+  assert.match(gallery, /Fotos e referências recebidas/);
+  assert.match(gallery, /data-order-photo/);
+  assert.match(gallery, /orderPhotoViewer/);
   assert.match(admin, /Dados enviados pela cliente/);
   assert.match(admin, /definition\?\.label/);
   assert.match(customer, /Preencher dados/);
@@ -3219,6 +3223,7 @@ test('customer and admin use plain-language labels, photo viewer and fresh mobil
 
 test('approved admin bundle wires music, gallery navigation, fees, order links and contextual WhatsApp', () => {
   const order = readFileSync('public/js/admin-v2-order.js', 'utf8');
+  const gallery = readFileSync('public/js/admin-order-gallery.v124.js', 'utf8');
   const finance = readFileSync('public/js/admin-v2-finance.js', 'utf8');
   const admin = readFileSync('public/js/admin-v2.js', 'utf8');
   const shell = readFileSync('public/admin-v2.html', 'utf8');
@@ -3226,11 +3231,11 @@ test('approved admin bundle wires music, gallery navigation, fees, order links a
   assert.match(order, /musicPreferenceBlock/);
   assert.match(order, /Abrir música/);
   assert.match(order, /rel="noopener noreferrer"/);
-  assert.match(order, /orderPhotoPrev/);
-  assert.match(order, /orderPhotoNext/);
-  assert.match(order, /orderPhotoZoom/);
-  assert.match(order, /touchstart/);
-  assert.match(order, /ArrowRight/);
+  assert.match(gallery, /orderPhotoPrev/);
+  assert.match(gallery, /orderPhotoNext/);
+  assert.match(gallery, /orderPhotoZoom/);
+  assert.match(gallery, /touchstart/);
+  assert.match(gallery, /ArrowRight/);
   assert.match(finance, /feeBreakdownHtml/);
   assert.match(finance, /finance-fee-details/);
   assert.match(finance, /data-finance-open-order/);

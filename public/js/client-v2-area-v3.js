@@ -160,10 +160,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function render(){
     const m=current();
-    root.innerHTML=clientHeader()+(active==='summary'?briefingHome():'')+(area.capacityReview&&active==='summary'?'<section class="card v3-client-notice"><strong>Agenda em conferência</strong><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+
+    root.innerHTML=clientHeader()+(active==='summary'?briefingHome():'')+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
-      (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. Salve as respostas para atualizar as próximas perguntas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
-        (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">Salvar ou enviar o briefing não inicia a produção automaticamente.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
+      (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
+        (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
     dirty=false;
   }
@@ -178,14 +178,16 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     return data;
   }
-  async function save(){
+  async function save({quiet=false,anchor=null}={}){
     const m=current();if(!m?.editable||busy)return false;
     const data=collect(m);busy=true;error='';notice='';
     const controls=Array.from(root.querySelectorAll('#v3-module-form input,#v3-module-form textarea,#v3-module-form button')).filter(el=>!el.disabled);
     controls.forEach(el=>{el.disabled=true;});
     try{
       const r=await api(endpoint+'/'+m.module,{method:'PATCH',body:JSON.stringify({revision:m.revision,data})});
-      area=r.briefing;notice='Rascunho salvo. Confira se novas perguntas apareceram.';busy=false;render();return true;
+      area=r.briefing;notice=quiet?'':'Rascunho salvo. Confira se novas perguntas apareceram.';busy=false;render();
+      if(anchor){const el=document.getElementById(anchor.id);if(el){el.focus({preventScroll:true});window.scrollBy(0,el.getBoundingClientRect().top-anchor.top);}}
+      return true;
     }catch(e){
       busy=false;error=e.message;controls.forEach(el=>{el.disabled=false;});
       // Keep unsaved form values in the DOM; never silently replace a draft.
@@ -235,7 +237,21 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   root.addEventListener('input',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;});
-  root.addEventListener('change',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;const fieldKey=e.target.dataset.v3Upload;if(fieldKey&&e.target.files?.[0])fileAction({fieldKey,file:e.target.files[0]});});
+  root.addEventListener('change',e=>{
+    const el=e.target,fieldKey=el.dataset.v3Upload;
+    if(fieldKey&&el.files?.[0]){void fileAction({fieldKey,file:el.files[0]});return;}
+    if(!el.hasAttribute('data-v3-field')||busy||!current()?.editable)return;
+    dirty=true;
+    if(el.type==='radio'||el.type==='checkbox'){
+      const f=current().schema.sections.flatMap(s=>s.fields).find(f=>f.key===el.dataset.v3Field);
+      if(el.type==='checkbox'&&Number.isInteger(f?.max)&&collect(current())[f.key].length>f.max){
+        el.checked=false;
+        let alert=root.querySelector('[data-v3-save-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3SaveError='';alert.setAttribute('role','alert');el.closest('.field')?.append(alert);}
+        alert.textContent='Escolha até '+f.max+' opções.';return;
+      }
+      void save({quiet:true,anchor:{id:el.id,top:el.getBoundingClientRect().top}});
+    }
+  });
   root.addEventListener('submit',e=>{if(e.target.id==='v3-module-form'){e.preventDefault();save();}});
   root.addEventListener('click',async e=>{
     const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab||e.target.closest('[data-v3-start]')?.dataset.v3Start;
@@ -257,7 +273,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:acceptedUpsell?.totalCents??r.totalCents,upsellKey:acceptedUpsell?.key})});area=res.briefing;acceptedUpsell=null;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
       if(!area.revision)await verify();return;
     }
-    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save()){const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
+    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save()){const missing=current().schema.sections.flatMap(s=>s.fields).filter(f=>f.required&&!['info','upload'].includes(f.type)&&!String(current().data[f.key]??'').trim());if(missing.length){error='Ainda falta preencher: '+missing.map(f=>f.label).join('; ');notice='';render();document.getElementById('v3-f-'+missing[0].key)?.scrollIntoView({block:'center'});return;}const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
     if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);

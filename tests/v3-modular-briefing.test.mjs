@@ -1016,3 +1016,18 @@ test('admin edits pristine manual order in place without customer acceptance or 
  await assert.rejects(acceptV3Revision(db,token,{id:c.revisionId,revisionVersion:c.revisionVersion,identityVariant:identity,manualCheckout:true,confirmed:true,termsAccepted:true,expectedTotalCents:identityQuote.quote.totalCents}),/condições da identidade visual/);
  assert.equal(mp.posts,0);
 });
+
+ test('V117 preserves invitation questions across all models and reveals music, gifts, speech and photos from saved choices',()=>{
+ const order={event_type:'birthday',honoree_display_name:'Ana',event_date:day(65)};
+ for(const code of ['cinematic_video','cinematic_interactive','interactive_essential','interactive_animated','interactive_gif','book','infinite']){
+ const service={family:'convite',product_code:code,snapshot:{product:{code,name:'Convite'},addons:[{code:'libri_confirmation',name:'Confirmação de Presença Libri'},{code:'custom_filter',name:'Filtro personalizado'}]}};
+ const schema=buildV3ModuleSchema(order,[service],'convite',{convite:{appearance_choice:'yes',outfit_choice:'send_photo',interactive_resources:['gifts','location'],gift_page_video:'yes',gift_mode:'suggestions',gift_categories:['clothes','shoes','other'],music_choice:'yes',speech_preference:'customer_text',rsvp_mode:'guest_list'}});
+ const keys=schema.sections.flatMap(s=>s.fields.map(f=>f.key));
+ for(const k of ['music_choice','music_request','gift_mode','gift_categories','gift_clothing_size','gift_shoe_size','gift_other_details','gift_suggestions','visual_style','outfit_choice','rsvp_mode','rsvp_list_behavior','filter_channel','references_note'])assert.ok(keys.includes(k),code+' missing '+k);
+ assert.ok(schema.uploadRules.some(r=>r.fieldKey==='person_photos'));assert.ok(schema.uploadRules.some(r=>r.fieldKey==='outfit_photos'));
+ if(code.startsWith('cinematic'))assert.ok(keys.includes('speech_text'));
+ if(code!=='cinematic_video')assert.ok(keys.includes('location_url'));
+ const both=buildV3ModuleSchema(order,[service],'convite',{convite:{interactive_resources:['gifts'],gift_page_video:'yes',gift_mode:'both'}}).sections.flatMap(s=>s.fields.map(f=>f.key));
+ assert.ok(both.includes('pix_key'));assert.ok(!both.includes('gift_registry_url'));
+ }
+ });

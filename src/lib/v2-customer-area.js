@@ -1372,12 +1372,7 @@ function buildSchema(
       );
 
       if (
-        [
-          'registry',
-          'both',
-        ].includes(
-          data.gift_mode,
-        )
+        wedding && ['registry', 'both'].includes(data.gift_mode)
       ) {
         productFields.push(
           field(
@@ -2380,12 +2375,7 @@ function cleanBranches(
     }
   } else {
     if (
-      ![
-        'registry',
-        'both',
-      ].includes(
-        data.gift_mode,
-      )
+      !wedding || !['registry', 'both'].includes(data.gift_mode)
     ) {
       delete data.gift_registry_url;
     }

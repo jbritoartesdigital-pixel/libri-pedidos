@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V119: PR #170; perguntas locais e aviso WhatsApp apos briefing; gates obrigatorios.
 # Release V118: PR #169; autosave nao bloqueante, fila de rascunhos e testes de latencia; gates obrigatorios.
 # Release V117: PR #168; perguntas dinamicas, paridade do briefing de convite e agenda interna; gates obrigatorios.
 # Release V116: PR #167; area da cliente pos-pagamento, briefing guiado e resumo compacto; gates obrigatorios.

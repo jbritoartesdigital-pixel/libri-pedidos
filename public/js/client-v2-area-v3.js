@@ -57,8 +57,50 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   root.classList.add('libri-v3-area');document.body.classList.add('libri-v3-area-body');
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
-  let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null,upsellSeen=false,acceptedUpsell=null;
-  function current(){return area.modules.find(m=>m.module===active);}
+  let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null;
+  // Edits remain local until confirmed; a single serialized writer preserves server revisions.
+  const pending=new Map();let writer=null,saveTimer=null,saveError='',saveNotice='';
+  function current(){const m=area.modules.find(m=>m.module===active);return m?{...m,data:{...m.data,...pending.get(m.module)}}:null;}
+  function saveStatusHtml(){return !area.locked?'<div class="v3-draft-status" data-v3-draft-status role="status">'+draftStatusText()+'</div>':'';}
+  function draftStatusText(){return saveError?'Não foi possível salvar. Suas respostas continuam nesta tela. <button type="button" class="btn secondary" data-v3-action="retry-draft">Tentar novamente</button>':pending.size||writer?'Salvando respostas…':saveNotice?'Respostas salvas ✓':'';}
+  function refreshSaveStatus(){const el=root.querySelector('[data-v3-draft-status]');if(el)el.innerHTML=draftStatusText();}
+  function rememberField(m,key,value){const patch=pending.get(m.module)||{};pending.set(m.module,{...patch,[key]:value});saveError='';saveNotice='';refreshSaveStatus();}
+  function scheduleSave(immediate=false){clearTimeout(saveTimer);if(immediate){void flushDrafts();}else{saveTimer=setTimeout(()=>{void flushDrafts();},450);}}
+  function schemaSignature(m){return JSON.stringify([m?.schema,m?.editable]);}
+  function refreshAfterSchemaChange(){
+    const focus=document.activeElement, id=root.contains(focus)?focus.id:'', top=id?focus.getBoundingClientRect().top:null;
+    const selection=id&&typeof focus.selectionStart==='number'?[focus.selectionStart,focus.selectionEnd]:null;
+    const y=window.scrollY;render();
+    const el=id?document.getElementById(id):null;
+    if(el){el.focus({preventScroll:true});if(selection&&typeof el.setSelectionRange==='function'){try{el.setSelectionRange(...selection);}catch{}}window.scrollBy(0,el.getBoundingClientRect().top-top);}
+    else window.scrollTo(0,y);
+  }
+  async function flushDrafts(){
+    clearTimeout(saveTimer);
+    if(writer)return writer;
+    if(!pending.size)return true;
+    saveError='';
+    writer=(async()=>{
+      while(pending.size){
+        const [module,patch]=pending.entries().next().value;
+        const m=area.modules.find(m=>m.module===module);
+        if(!m?.editable){saveError='Não é possível editar este serviço.';return false;}
+        const before=schemaSignature(current());
+        try{
+          const r=await api(endpoint+'/'+module,{method:'PATCH',body:JSON.stringify({revision:m.revision,data:{...m.data,...patch}})});
+          const remaining={...pending.get(module)};
+          for(const key of Object.keys(patch))if(Object.is(remaining[key],patch[key]))delete remaining[key];
+          if(Object.keys(remaining).length)pending.set(module,remaining);else pending.delete(module);
+          area=r.briefing;saveNotice='saved';
+          if(active!=='summary'&&before!==schemaSignature(current()))refreshAfterSchemaChange();
+        }catch(e){saveError=e.message||'Falha de conexão';return false;}
+      }
+      return true;
+    })();
+    refreshSaveStatus();
+    try{return await writer;}finally{writer=null;refreshSaveStatus();}
+  }
+  if(typeof window!=='undefined')window.addEventListener('beforeunload',e=>{if(pending.size){e.preventDefault();e.returnValue='';}});
   function nextBriefing(){return area.modules.find(m=>m.module==='shared'&&m.editable&&(!m.revision||m.schema?.sections.flatMap(s=>s.fields).some(f=>f.required&&!['info','upload'].includes(f.type)&&!String(m.data?.[f.key]??'').trim())))||area.modules.find(m=>m.module!=='shared'&&m.editable)||area.modules.find(m=>m.editable);}
   function briefingHome(){
     const next=nextBriefing(),count=area.services.filter(s=>s.briefingStatus==='completed').length,total=area.services.length;
@@ -112,7 +154,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       (x.status==='offered'?'<div class="grid two"><button type="button" class="btn primary" data-v3-supplement="accept" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Aceitar proposta</button><button type="button" class="btn secondary" data-v3-supplement="decline" data-id="'+x.id+'" '+(busy?'disabled':'')+'>Recusar</button></div>':'')+supplementPaymentHtml(x)+'</section>').join('');
   }
   async function supplementPaymentAction(id,action){
-    if(busy)return;
+    if(busy||!await flushDrafts()||busy)return;
     const x=(area.supplements||[]).find(y=>y.id===Number(id));if(!x)return;
     if(action!=='verify'&&!window.confirm('Confirma o pagamento integral do adicional de '+money(x.totalCents)+'? O valor já pago do pedido original não será cobrado novamente.'))return;
     busy=true;error='';notice='';render();
@@ -124,7 +166,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     finally{busy=false;render();}
   }
   async function decideSupplement(id,action){
-    if(busy)return;
+    if(busy||!await flushDrafts()||busy)return;
     const x=(area.supplements||[]).find(y=>y.id===Number(id));
     if(!x||x.status!=='offered')return;
     const termsAccepted=!!root.querySelector('[data-change-terms="'+x.id+'"]')?.checked;
@@ -160,12 +202,11 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function render(){
     const m=current();
-    root.innerHTML=clientHeader()+(active==='summary'?briefingHome():'')+
+    root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
         (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
-    dirty=false;
   }
   function collect(m){
     const data={};
@@ -178,26 +219,15 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     return data;
   }
-  async function save({quiet=false,anchor=null}={}){
-    const m=current();if(!m?.editable||busy)return false;
-    const data=collect(m);busy=true;error='';notice='';
-    const controls=Array.from(root.querySelectorAll('#v3-module-form input,#v3-module-form textarea,#v3-module-form button')).filter(el=>!el.disabled);
-    controls.forEach(el=>{el.disabled=true;});
-    try{
-      const r=await api(endpoint+'/'+m.module,{method:'PATCH',body:JSON.stringify({revision:m.revision,data})});
-      area=r.briefing;notice=quiet?'':'Rascunho salvo. Confira se novas perguntas apareceram.';busy=false;render();
-      if(anchor){const el=document.getElementById(anchor.id);if(el){el.focus({preventScroll:true});window.scrollBy(0,el.getBoundingClientRect().top-anchor.top);}}
-      return true;
-    }catch(e){
-      busy=false;error=e.message;controls.forEach(el=>{el.disabled=false;});
-      // Keep unsaved form values in the DOM; never silently replace a draft.
-      let alert=root.querySelector('[data-v3-save-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3SaveError='';alert.setAttribute('role','alert');root.prepend(alert);}alert.textContent=error;
-      return false;
-    }
+  async function save({quiet=false}={}){
+    const tab=active;
+    const ok=await flushDrafts();
+    if(ok&&!quiet&&active===tab){notice='Rascunho salvo.';render();}
+    return ok;
   }
   async function fileAction({fieldKey,file,id}){
     if(busy||!current()?.editable)return;
-    if(dirty&&!await save())return;
+    const tab=active;if(!await save({quiet:true})||active!==tab||busy)return;
     const m=current();busy=true;error='';notice='';render();
     try{
       if(file){const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);await api(endpoint+'/'+m.module+'/uploads',{method:'POST',body});}
@@ -207,7 +237,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   async function submit(){
     if(busy||!current()?.editable||active==='shared')return;
-    if(dirty&&!await save())return;
+    const tab=active;if(!await save({quiet:true})||active!==tab||busy)return;
     if(!window.confirm('Enviar as respostas definitivas deste serviço? Os dados compartilhados ficarão bloqueados para alterações.'))return;
     const m=current();busy=true;error='';notice='';render();
     try{
@@ -216,7 +246,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   async function productionAction(family,action){
-    if(busy)return;
+    if(busy||!await flushDrafts()||busy)return;
     const s=area.services.find(x=>x.family===family),p=s?.progress;
     if(!p?.preview)return;
     const note=root.querySelector('[data-adjust-note="'+family+'"]')?.value.trim()||'';
@@ -236,28 +266,28 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       if(!area.locked){active='summary';notice='';}
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
-  root.addEventListener('input',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;});
+  function captureInput(el,immediate){
+    const m=current();if(!el.hasAttribute('data-v3-field')||busy||!m?.editable)return;
+    const f=m.schema.sections.flatMap(s=>s.fields).find(f=>f.key===el.dataset.v3Field);
+    if(!f)return;
+    const value=collect(m)[f.key];
+    if(el.type==='checkbox'&&Number.isInteger(f.max)&&value.length>f.max){
+      el.checked=false;let alert=root.querySelector('[data-v3-choice-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3ChoiceError='';alert.setAttribute('role','alert');el.closest('.field')?.append(alert);}alert.textContent='Escolha até '+f.max+' opções.';return;
+    }
+    root.querySelector('[data-v3-choice-error]')?.remove();
+    rememberField(m,f.key,value);scheduleSave(immediate);
+  }
+  root.addEventListener('input',e=>{const el=e.target;if(el.type!=='radio'&&el.type!=='checkbox')captureInput(el,false);});
   root.addEventListener('change',e=>{
     const el=e.target,fieldKey=el.dataset.v3Upload;
     if(fieldKey&&el.files?.[0]){void fileAction({fieldKey,file:el.files[0]});return;}
-    if(!el.hasAttribute('data-v3-field')||busy||!current()?.editable)return;
-    dirty=true;
-    if(el.type==='radio'||el.type==='checkbox'){
-      const f=current().schema.sections.flatMap(s=>s.fields).find(f=>f.key===el.dataset.v3Field);
-      if(el.type==='checkbox'&&Number.isInteger(f?.max)&&collect(current())[f.key].length>f.max){
-        el.checked=false;
-        let alert=root.querySelector('[data-v3-save-error]');if(!alert){alert=document.createElement('p');alert.dataset.v3SaveError='';alert.setAttribute('role','alert');el.closest('.field')?.append(alert);}
-        alert.textContent='Escolha até '+f.max+' opções.';return;
-      }
-      void save({quiet:true,anchor:{id:el.id,top:el.getBoundingClientRect().top}});
-    }
+    if(el.type==='radio'||el.type==='checkbox')captureInput(el,true);
   });
   root.addEventListener('submit',e=>{if(e.target.id==='v3-module-form'){e.preventDefault();save();}});
   root.addEventListener('click',async e=>{
     const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab||e.target.closest('[data-v3-start]')?.dataset.v3Start;
     if(tab&&!busy){
-      if(dirty&&current()?.editable&&!await save())return;
-      active=tab;notice='';error='';render();window.scrollTo(0,0);return;
+      active=tab;notice='';error='';render();window.scrollTo(0,0);void flushDrafts();return;
     }
     const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
     if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
@@ -273,7 +303,8 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:acceptedUpsell?.totalCents??r.totalCents,upsellKey:acceptedUpsell?.key})});area=res.briefing;acceptedUpsell=null;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
       if(!area.revision)await verify();return;
     }
-    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save()){const missing=current().schema.sections.flatMap(s=>s.fields).filter(f=>f.required&&!['info','upload'].includes(f.type)&&!String(current().data[f.key]??'').trim());if(missing.length){error='Ainda falta preencher: '+missing.map(f=>f.label).join('; ');notice='';render();document.getElementById('v3-f-'+missing[0].key)?.scrollIntoView({block:'center'});return;}const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
+    if(action==='retry-draft'&&!busy){void flushDrafts();return;}
+    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save({quiet:true})&&active==='shared'&&!busy){const missing=current().schema.sections.flatMap(s=>s.fields).filter(f=>f.required&&!['info','upload'].includes(f.type)&&!String(current().data[f.key]??'').trim());if(missing.length){error='Ainda falta preencher: '+missing.map(f=>f.label).join('; ');notice='';render();document.getElementById('v3-f-'+missing[0].key)?.scrollIntoView({block:'center'});return;}const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
     if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);

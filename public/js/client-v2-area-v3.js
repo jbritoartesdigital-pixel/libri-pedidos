@@ -1,3 +1,4 @@
+import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js';
 // V3 customer area is isolated from legacy single-product forms.
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
@@ -60,7 +61,18 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null;
   // Edits remain local until confirmed; a single serialized writer preserves server revisions.
   const pending=new Map();let writer=null,saveTimer=null,saveError='',saveNotice='';
-  function current(){const m=area.modules.find(m=>m.module===active);return m?{...m,data:{...m.data,...pending.get(m.module)}}:null;}
+  function current(){
+    const m=area.modules.find(m=>m.module===active);if(!m)return null;
+    const data={...m.data,...pending.get(m.module)};
+    if(!area.schemaContext||!m.editable)return {...m,data};
+    const drafts=Object.fromEntries(area.modules.map(x=>[x.module,{...x.data,...pending.get(x.module)}]));
+    const {order,services}=area.schemaContext;
+    try{
+      const schema=buildV3ModuleSchema(order,services,m.module,drafts);
+      if(schema.materials&&m.schema?.materials?.whatsappUrl)schema.materials.whatsappUrl=m.schema.materials.whatsappUrl;
+      return {...m,data,schema};
+    }catch{return {...m,data};}
+  }
   function saveStatusHtml(){return !area.locked?'<div class="v3-draft-status" data-v3-draft-status role="status">'+draftStatusText()+'</div>':'';}
   function draftStatusText(){return saveError?'Não foi possível salvar. Suas respostas continuam nesta tela. <button type="button" class="btn secondary" data-v3-action="retry-draft">Tentar novamente</button>':pending.size||writer?'Salvando respostas…':saveNotice?'Respostas salvas ✓':'';}
   function refreshSaveStatus(){const el=root.querySelector('[data-v3-draft-status]');if(el)el.innerHTML=draftStatusText();}
@@ -102,6 +114,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   if(typeof window!=='undefined')window.addEventListener('beforeunload',e=>{if(pending.size){e.preventDefault();e.returnValue='';}});
   function nextBriefing(){return area.modules.find(m=>m.module==='shared'&&m.editable&&(!m.revision||m.schema?.sections.flatMap(s=>s.fields).some(f=>f.required&&!['info','upload'].includes(f.type)&&!String(m.data?.[f.key]??'').trim())))||area.modules.find(m=>m.module!=='shared'&&m.editable)||area.modules.find(m=>m.editable);}
+  function completionNotice(){const url=safeWhatsApp(area.briefingWhatsappUrl);return !area.locked&&url?'<section class="card v3-client-completion"><h3>Tudo pronto! 💛</h3><p>Seus dados foram enviados. Avise a Libri pelo WhatsApp para facilitar o acompanhamento.</p><a class="btn primary" data-v3-briefing-whatsapp href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Avisar a Libri no WhatsApp 💛</a></section>':'';}
   function briefingHome(){
     const next=nextBriefing(),count=area.services.filter(s=>s.briefingStatus==='completed').length,total=area.services.length;
     if(area.locked||area.cancellation)return '';
@@ -202,7 +215,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function render(){
     const m=current();
-    root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+
+    root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+completionNotice()+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
         (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
@@ -242,7 +255,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const m=current();busy=true;error='';notice='';render();
     try{
       const r=await api(endpoint+'/'+m.module+'/submit',{method:'POST',body:JSON.stringify({revision:m.revision,sharedRevision:area.modules.find(x=>x.module==='shared')?.revision||0})});
-      area=r.briefing;notice='Briefing enviado. A Libri vai conferir a produção e os materiais.';
+      area=r.briefing;notice='Briefing enviado com sucesso.';if(area.services.length&&area.services.every(s=>s.briefingStatus==='completed')){active='summary';window.scrollTo(0,0);}
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   async function productionAction(family,action){
@@ -268,6 +281,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function captureInput(el,immediate){
     const m=current();if(!el.hasAttribute('data-v3-field')||busy||!m?.editable)return;
+    const before=schemaSignature(m);
     const f=m.schema.sections.flatMap(s=>s.fields).find(f=>f.key===el.dataset.v3Field);
     if(!f)return;
     const value=collect(m)[f.key];
@@ -276,7 +290,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     root.querySelector('[data-v3-choice-error]')?.remove();
     if(el.type==='radio'||el.type==='checkbox')for(const input of el.closest('.field').querySelectorAll('input[data-v3-field]'))input.closest('.choice-card')?.classList.toggle('selected',input.checked);
-    rememberField(m,f.key,value);scheduleSave(immediate);
+    rememberField(m,f.key,value);
+    if(m.module==='convite'&&['pix_key_type','pix_key','pix_holder'].includes(f.key))rememberField(m,'pix_confirmed','');
+    if(before!==schemaSignature(current()))refreshAfterSchemaChange();
+    scheduleSave(immediate);
   }
   root.addEventListener('input',e=>{const el=e.target;if(el.type!=='radio'&&el.type!=='checkbox')captureInput(el,false);});
   root.addEventListener('change',e=>{

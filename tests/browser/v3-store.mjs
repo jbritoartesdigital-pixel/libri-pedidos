@@ -264,6 +264,8 @@ try{
  assert.equal(await customer.locator('#v3-f-theme_or_style').inputValue(),'Jardim de teste');
  await customer.locator('[data-v3-tab="convite"]').first().click();
  await customer.locator('[data-v3-field="music_choice"][value="yes"]').check();
+ assert.equal(await customer.locator('[data-v3-field="music_request"]').count(),1);
+ assert.equal(await customer.locator('[data-v3-draft-status]').filter({hasText:'Salvando'}).count(),1);
  assert.equal(await customer.locator('[data-v3-field="appearance_choice"][value="no"]').isEnabled(),true);
  await customer.locator('[data-v3-field="appearance_choice"][value="no"]').check();
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();
@@ -273,9 +275,11 @@ try{
  await customer.locator('[data-v3-field="music_request"]').waitFor();
  await customer.locator('[data-v3-field="music_request"]').fill('Música de teste');
  await customer.locator('[data-v3-field="interactive_resources"][value="gifts"]').check();
+ assert.equal(await customer.locator('[data-v3-field="gift_mode"][value="suggestions"]').count(),1);
  await customer.locator('[data-v3-field="gift_mode"][value="suggestions"]').check();
+ assert.equal(await customer.locator('[data-v3-field="gift_categories"][value="clothes"]').count(),1);
  await customer.locator('[data-v3-field="gift_categories"][value="clothes"]').check();
- await customer.locator('[data-v3-field="gift_clothing_size"]').waitFor();
+ assert.equal(await customer.locator('[data-v3-field="gift_clothing_size"]').count(),1);
  assert.equal(await customer.locator('[data-v3-field="music_request"]').inputValue(),'Música de teste');
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();await customer.getByText('Fotos e vídeos pelo WhatsApp',{exact:true}).waitFor();
  await customer.locator('[data-v3-draft-status]').filter({hasText:'Respostas salvas'}).waitFor();

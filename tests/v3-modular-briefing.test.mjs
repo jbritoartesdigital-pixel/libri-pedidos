@@ -1031,3 +1031,14 @@ test('admin edits pristine manual order in place without customer acceptance or 
  assert.ok(both.includes('pix_key'));assert.ok(!both.includes('gift_registry_url'));
  }
  });
+
+ test('V119 local schema uses the exact authoritative questions and completion WhatsApp only after all briefings',async t=>{
+ const {db,order}=await paid(t);
+ db.sqlite.prepare("INSERT INTO v2_settings(key,value) VALUES('libri_whatsapp','5561999999999') ON CONFLICT(key) DO UPDATE SET value=excluded.value").run();
+ let b=await getV3ModularBriefing(db,order.publicToken);assert.equal(b.briefingWhatsappUrl,null);
+ for(const m of b.modules){const schema=buildV3ModuleSchema(b.schemaContext.order,b.schemaContext.services,m.module,Object.fromEntries(b.modules.map(x=>[x.module,x.data])));assert.deepEqual(schema.sections,m.schema.sections);}
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=? AND family='convite'").run(order.orderId);
+ b=await getV3ModularBriefing(db,order.publicToken);assert.equal(b.briefingWhatsappUrl,null);
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=?").run(order.orderId);
+ b=await getV3ModularBriefing(db,order.publicToken);assert.equal(new URL(b.briefingWhatsappUrl).hostname,'wa.me');assert.match(new URL(b.briefingWhatsappUrl).searchParams.get('text'),new RegExp(order.orderCode));assert.ok(!b.briefingWhatsappUrl.includes(order.publicToken));
+ });

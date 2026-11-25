@@ -39,3 +39,10 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
   assert.doesNotMatch(root.innerHTML,/Pagamento recebido, agenda em conferência/);
   assert.doesNotMatch(root.innerHTML,/v3-financial-details" open/);
 });
+
+ test('V119 completed order restores WhatsApp button without exposing order token',async t=>{
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'document');Object.defineProperty(globalThis,'document',{configurable:true,value:{body:{classList:{add(){}}}}});t.after(()=>{if(previous)Object.defineProperty(globalThis,'document',previous);else delete globalThis.document;});
+ const root={innerHTML:'',classList:{add(){}},setAttribute(){},addEventListener(){}};
+ const initial={orderCode:'LIBRI-TEST',locked:false,orderStatus:'briefing_pending',event:{honoreeName:'Ana',date:'2027-02-01'},payment:{totalCents:14900,fullyPaid:true,receivedCents:14900},deliveryWindow:{start:'2027-01-05',end:'2027-01-07'},services:[{family:'convite',productName:'Convite',variantName:'Vídeo',briefingStatus:'completed',productionStatus:'pending',totalCents:14900,extras:[]}],modules:[{module:'shared',editable:false},{module:'convite',editable:false}],briefingWhatsappUrl:'https://wa.me/5561999999999?text=LIBRI-TEST'};
+ await startV3CustomerArea(root,{token:'ord_test',initial,api:async()=>{throw Error('unexpected API request');}});assert.match(root.innerHTML,/Avisar a Libri no WhatsApp/);assert.match(root.innerHTML,/data-v3-briefing-whatsapp/);
+ });

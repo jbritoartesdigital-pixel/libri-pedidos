@@ -1054,3 +1054,19 @@ test('V120 admin ZIP includes modular questions and authorized originals, not th
  assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/application\/zip/);
  const bytes=new Uint8Array(await response.arrayBuffer()),raw=new TextDecoder().decode(bytes);assert.match(raw,/Jardim V120/);assert.match(raw,/Musica V120/);assert.match(raw,/FOTOS\/aniversariante_01\.jpg/);assert.match(raw,/IDENTIDADE_VISUAL\/briefing_identidade.txt/);assert.deepEqual(requested,['test-authorized']);assert.ok(!raw.includes(order.publicToken));
 });
+
+import {startV3ServiceFromBriefing} from '../src/lib/v3-service-agenda.js';
+test('V121 starts a submitted service in one operation without changing contracted dates or duplicating points',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken;
+ const before=await getV3ModularBriefing(db,token),original=before.deliveryWindow;
+ const input={confirmed:true,revision:0,sharedRevision:0,version:0,dependsOnIdentity:false};
+ await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=? AND family='convite'").run(order.orderId);
+ await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',{...input,version:9}),/mudou/);
+ const points=db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n;
+ const result=await startV3ServiceFromBriefing(db,token,'convite',input);
+ assert.equal(result.productionStatus,'in_production');assert.deepEqual(result.deliveryWindow,{start:original.start,end:original.end});
+ const state=await getV3ModularBriefing(db,token),s=state.services.find(x=>x.family==='convite');assert.ok(s.reviewedAt);assert.equal(s.productionStatus,'in_production');assert.equal(s.progress.version,1);assert.equal(s.progress.events.filter(e=>e.action==='started').length,1);
+ assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,points);
+ await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+});

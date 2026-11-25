@@ -20,13 +20,27 @@ export async function getV3AdminBriefing(db,token){
    for(const u of m.uploads||[])u.contentPath=base+m.module+'/uploads/'+u.id+'/content';
  }
  const financialCtx=await contextV3Briefing(db,token);
- const contactRow=await db.prepare('SELECT quote_json FROM v3_order_checkout_snapshots WHERE order_id=?').bind(financialCtx.order.id).first();
- try{const contact=JSON.parse(contactRow?.quote_json||'{}').contactSnapshot;if(contact?.instagram&&/^[A-Za-z0-9._]{1,30}$/.test(contact.instagram))brief.instagram=contact.instagram;}catch{}
+ const order=financialCtx.order;
+ const [contactRow,customer,history,acceptances]=await Promise.all([
+ db.prepare('SELECT quote_json FROM v3_order_checkout_snapshots WHERE order_id=?').bind(order.id).first(),
+ db.prepare('SELECT name,whatsapp,email FROM v2_customers WHERE id=?').bind(order.customer_id).first(),
+ getV3OrderHistory(db,order.id),
+ db.prepare('SELECT terms_version,accepted_at FROM v2_order_terms_acceptances WHERE order_id=? ORDER BY accepted_at DESC LIMIT 20').bind(order.id).all()]);
+ const quote=JSON.parse(contactRow?.quote_json||'{}'),contact=quote.contactSnapshot||{};
+ if(contact.instagram&&/^[A-Za-z0-9._]{1,30}$/.test(contact.instagram))brief.instagram=contact.instagram;
+ brief.customer={name:contact.name||customer?.name||'',whatsapp:contact.whatsapp||customer?.whatsapp||'',email:contact.email||customer?.email||''};
+ brief.orderMeta={createdAt:order.created_at,updatedAt:order.updated_at,source:order.source,nextAction:order.next_action,eventSubtype:order.event_subtype};
+ brief.history=history;
+ brief.termsAcceptances=acceptances.results||[];
+ brief.paymentAttempts=(financialCtx.finance?.payments||[]).map(p=>({provider:p.provider,type:p.payment_type,status:p.status,amountCents:p.amount_cents,method:p.method,paidAt:p.paid_at}));
+ brief.priceBreakdown={grossCents:quote.grossCents,discountCents:quote.discountCents,cardFeeCents:quote.cardFeeCents,couponCode:quote.coupon?.code||''};
+ for(const s of financialCtx.services){const line=brief.services.find(x=>x.family===s.family);if(!line)continue;line.sceneCount=s.snapshot.variant?.sceneCount||null;line.addons=(s.snapshot.addons||[]).filter(a=>!a.config?.blackLibriGift).map(a=>({name:a.name,priceCents:a.priceCents}));}
+
  brief.cancellation=await getV3Cancellation(db,financialCtx.order.id,{admin:true});
  brief.adminPayment={canCancelPaid:!brief.cancellation&&!financialCtx.order.archived_at&&brief.orderStatus!=='cancelled'&&financialCtx.finance?.payments.some(p=>p.paid_at||['approved','refunded'].includes(p.status)),canChangeDeposit:brief.locked&&brief.payment.method==='pix'&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canCancelUnpaid:brief.locked&&['configuring','awaiting_payment'].includes(brief.orderStatus)&&!financialCtx.order.archived_at,canRecordBalance:!brief.locked&&brief.payment.depositPercent===50&&brief.payment.remainingCents>0};
  brief.adminPayment.canEditManual=brief.revision?.kind==='manual'&&brief.adminPayment.canCancelUnpaid&&!await db.prepare('SELECT 1 FROM v2_payments WHERE order_id=? UNION ALL SELECT 1 FROM v2_checkout_holds WHERE order_id=? UNION ALL SELECT 1 FROM v2_contracts WHERE order_id=? UNION ALL SELECT 1 FROM v2_order_terms_acceptances WHERE order_id=?').bind(financialCtx.order.id,financialCtx.order.id,financialCtx.order.id,financialCtx.order.id).first();
- if(brief.cancellation){brief.adminPayment={};brief.history=await getV3OrderHistory(db,financialCtx.order.id);}
- if(!brief.locked){const ctx=await contextV3Briefing(db,token);brief.history=await getV3OrderHistory(db,ctx.order.id);const customer=await db.prepare('SELECT name,whatsapp FROM v2_customers WHERE id=?').bind(ctx.order.customer_id).first();for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.capacityRelease=await getV3CapacityRelease(db,s,{eligible:!ctx.order.archived_at&&ctx.finance?.fullyPaid===true});line.supplementCatalog=await supplementCatalog(db,s);line.changeCatalog=await changeCatalog(db,ctx,s);line.whatsappActions=ctx.order.archived_at?[]:v3ServiceWhatsappActions({service:line,customer,order:ctx.order});}}
+ if(brief.cancellation){brief.adminPayment={};}
+ if(!brief.locked){const ctx=financialCtx;const customer=await db.prepare('SELECT name,whatsapp FROM v2_customers WHERE id=?').bind(ctx.order.customer_id).first();for(const s of ctx.services){const line=brief.services.find(x=>x.family===s.family);line.delivery=await getV3Delivery(db,s,{admin:true});line.capacityRelease=await getV3CapacityRelease(db,s,{eligible:!ctx.order.archived_at&&ctx.finance?.fullyPaid===true});line.supplementCatalog=await supplementCatalog(db,s);line.changeCatalog=await changeCatalog(db,ctx,s);line.whatsappActions=ctx.order.archived_at?[]:v3ServiceWhatsappActions({service:line,customer,order:ctx.order});}}
  return brief;
 }
 export async function reviewV3ServiceBriefing(db,token,family,input={}){

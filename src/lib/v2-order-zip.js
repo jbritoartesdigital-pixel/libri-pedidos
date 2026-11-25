@@ -1,3 +1,4 @@
+import {contextV3Briefing,buildV3ModuleSchema} from './v3-modular-briefing.js';
 import {
   fail,
   nowIso,
@@ -1878,6 +1879,43 @@ function createZipStream(
   return stream.readable;
 }
 
+// The existing authenticated download route also serves modular V3 orders.
+async function buildV3ZipEntries(db,bundle,ctx){
+  const {order,services,drafts}=ctx;
+  const folders={shared:'DADOS_DO_CONVITE',convite:'DADOS_DO_CONVITE',identidade_visual:'IDENTIDADE_VISUAL',retrospectiva:'RETROSPECTIVA'};
+  const names={shared:'Dados da comemoração',convite:'Convite digital',identidade_visual:'Identidade visual',retrospectiva:'Retrospectiva'};
+  const entries=[],modules=['shared',...services.map(s=>s.family)];
+  const servicesSummary=services.map(s=>[s.snapshot.product.name,s.snapshot.variant?.label||'',...((s.snapshot.addons||[]).map(a=>'Adicional: '+a.name)),...((s.snapshot.v3Extras||[]).map(x=>x.quantity+' × '+x.name)),...(s.snapshot.blackLibri?.gift?['Brinde Black Libri: '+s.snapshot.blackLibri.gift.name]:[]),'Briefing: '+(s.briefing_status==='completed'?'Enviado':'Não concluído'),'Entrega: '+dateBr(s.delivery_start)+' a '+dateBr(s.delivery_end)].filter(Boolean).join('\n')).join('\n\n');
+  entries.push({path:'DADOS_DO_CONVITE/resumo-pedido.txt',kind:'text',text:[`PEDIDO ${order.order_code}`,`Homenageado: ${order.honoree_display_name}`,`Festa: ${dateBr(order.event_date)}`,`Cliente: ${bundle.order.customer_name}`,`WhatsApp: ${bundle.order.whatsapp}`,'','SERVIÇOS CONTRATADOS',servicesSummary,'',`Total original: ${moneyBr(bundle.order.total_cents)}`].join('\n')});
+  const schemas=new Map();
+  for(const module of modules){
+    const schema=buildV3ModuleSchema(order,services,module,drafts),data=drafts[module]||{};
+    schemas.set(module,schema);
+    const lines=[`PEDIDO ${order.order_code} · ${names[module]}`,`Homenageado: ${order.honoree_display_name}`,`Data: ${dateBr(order.event_date)}`,''];
+    if(module==='convite')for(const sec of schemas.get('shared').sections){lines.push(sec.title);for(const field of sec.fields){const v=dataForZip(field,drafts.shared?.[field.key]);if(v)lines.push(field.label+': '+v);}lines.push('');}
+    for(const sec of schema.sections){lines.push(sec.title);for(const field of sec.fields){const v=dataForZip(field,data[field.key]);if(v)lines.push(field.label+': '+v);}lines.push('');}
+    if(module==='retrospectiva')lines.push('Os materiais da retrospectiva são recebidos pelo WhatsApp/Drive e não estão armazenados neste ZIP.');
+    entries.push({path:folders[module]+'/'+({shared:'dados-da-comemoracao.txt',convite:'dados-do-convite.txt',identidade_visual:'briefing-identidade.txt',retrospectiva:'briefing-retrospectiva.txt'})[module],kind:'text',text:lines.join('\n')});
+  }
+  const uploads=(await db.prepare('SELECT id,family,field_key,original_filename,mime_type,size_bytes,r2_key FROM v3_service_uploads WHERE order_id=? ORDER BY id').bind(order.id).all()).results||[];
+  const counts=new Map();
+  for(const u of uploads){
+    const service=services.find(s=>s.family===u.family),rule=schemas.get(u.family)?.uploadRules.find(r=>r.fieldKey===u.field_key);
+    if(!service||!rule?.authorized||service.originals_until&&Date.now()>=Date.parse(service.originals_until))continue;
+    const category={person_photos:'FOTOS',outfit_photos:'ROUPA',reference_files:'REFERENCIAS',childPhotos:'IDENTIDADE_VISUAL/FOTOS',referenceFiles:'IDENTIDADE_VISUAL/REFERENCIAS'}[u.field_key]||(folders[u.family]+'/IMAGENS');
+    const count=(counts.get(category)||0)+1;counts.set(category,count);
+    const base=u.field_key==='person_photos'?personBaseName(order.event_type):u.field_key==='outfit_photos'?'roupa':u.field_key==='childPhotos'?'crianca':'referencia';
+    entries.push({path:category+'/'+base+'-'+String(count).padStart(2,'0')+(extensionFromMime(u.mime_type)||'.bin'),kind:'r2',r2Key:u.r2_key,expectedSize:Number(u.size_bytes||0)});
+  }
+  entries.push(...contractEntries(bundle));
+  const terms=termsText(bundle);if(terms)entries.push({path:'DOCUMENTOS/termos-aceitos.txt',kind:'text',text:terms});
+  return entries;
+}
+function dataForZip(field,value){
+ if(value===undefined||value===null||value===''||Array.isArray(value)&&!value.length||['info','upload'].includes(field.type))return '';
+ const label=v=>field.options?.find(o=>typeof o==='object'&&o.value===v)?.label??v;
+ return Array.isArray(value)?value.map(label).join(', '):String(label(value));
+}
 export async function downloadV2OrderFolder(
   env,
   orderCode,
@@ -1902,10 +1940,13 @@ export async function downloadV2OrderFolder(
     );
   }
 
-  let entries =
-    buildEntries(
-      bundle,
-    );
+  const modular=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.id=?').bind(bundle.order.id).first();
+  let entries;
+  if(modular){
+    const ctx=await contextV3Briefing(env.DB,modular.public_token);
+    if(!ctx||ctx.locked)return fail('Os dados privados estão indisponíveis para este pedido.',403);
+    entries=await buildV3ZipEntries(env.DB,bundle,ctx);
+  }else entries=buildEntries(bundle);
 
   entries =
     await prepareR2Entries(

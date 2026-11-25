@@ -1049,7 +1049,8 @@ test('V120 admin ZIP includes modular questions and authorized originals, not th
  await saveV3ModuleDraft(db,order.publicToken,'shared',{revision:0,data:{theme_or_style:'Jardim V120',joint_celebration:'no',age:4}});
  await saveV3ModuleDraft(db,order.publicToken,'convite',{revision:0,data:{appearance_choice:'yes',private_photo_authorization:'sim',music_choice:'yes',music_request:'Musica V120'}});
  db.sqlite.prepare("INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,'convite','person_photos','foto.jpg','image/jpeg',4,'test-authorized')").run(order.orderId);
+ db.sqlite.prepare("INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,'convite','outfit_photos','roupa.jpg','image/jpeg',4,'test-not-authorized')").run(order.orderId);
  const requested=[];const response=await downloadV2OrderFolder({DB:db,FILES:{get:async key=>{requested.push(key);return {body:new Response(new Uint8Array([255,216,255,217])).body};}}},order.orderCode||'LIBRI-9000');
  assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/application\/zip/);
- const bytes=new Uint8Array(await response.arrayBuffer()),raw=new TextDecoder().decode(bytes);assert.match(raw,/Jardim V120/);assert.match(raw,/Musica V120/);assert.match(raw,/FOTOS\/aniversariante-01.jpg/);assert.match(raw,/IDENTIDADE_VISUAL\/briefing_identidade.txt/);assert.deepEqual(requested,['test-authorized']);assert.ok(!raw.includes(order.publicToken));
+ const bytes=new Uint8Array(await response.arrayBuffer()),raw=new TextDecoder().decode(bytes);assert.match(raw,/Jardim V120/);assert.match(raw,/Musica V120/);assert.match(raw,/FOTOS\/aniversariante_01\.jpg/);assert.match(raw,/IDENTIDADE_VISUAL\/briefing_identidade.txt/);assert.deepEqual(requested,['test-authorized']);assert.ok(!raw.includes(order.publicToken));
 });

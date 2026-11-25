@@ -250,7 +250,11 @@ try{
  await customer.locator('[data-v3-action="payment"]').waitFor();assert.equal(await customer.locator('[data-v3-tab="shared"]').count(),0);
  await customer.goto(origin+paidFixture.customerAreaPath);
  await customer.locator('[data-v3-tab="shared"]').waitFor();
- await customer.locator('[data-v3-tab="shared"]').click();
+ await customer.getByRole('button',{name:'Preencher dados',exact:true}).waitFor();
+ assert.equal(await customer.locator('.v3-financial-details').getAttribute('open'),null);
+ await customer.locator('[data-v3-start]').click();
+ await customer.locator('#v3-module-form').waitFor();
+ assert.equal(await customer.locator('[data-v3-tab="shared"]').getAttribute('aria-current'),'page');
  await customer.locator('#v3-f-theme_or_style').fill('Jardim de teste');
  await customer.locator('#v3-module-form button[type="submit"]').click();await customer.getByText('Rascunho salvo.',{exact:false}).waitFor();
  await customer.reload();await customer.locator('[data-v3-tab="shared"]').click();
@@ -338,7 +342,7 @@ try{
  const manualOrder=manualDb.sqlite.prepare('SELECT * FROM v2_orders WHERE public_token=?').get(manualFixture.publicToken);const manualPay=manualDb.sqlite.prepare('SELECT * FROM v2_payments WHERE order_id=?').get(manualOrder.id);
  assert.equal(manualDb.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_black_libri_claims WHERE order_id=? AND status='attached'").get(manualOrder.id).n,1);
  manualMP.approve(manualPay.provider_order_id);globalThis.fetch=manualFetch;try{await syncMercadoPagoOrder(manualEnv,manualPay.provider_order_id);}finally{globalThis.fetch=originalFetch;}
- await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('[data-v3-tab="shared"]').waitFor();await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-paid.png',fullPage:true});
+ await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('[data-v3-tab="shared"]').waitFor();await manualPage.locator('[data-v3-start]').waitFor();await manualPage.screenshot({path:'artifacts/v3-browser/manual-v115-paid.png',fullPage:true});
  await manualContext.close();
  assert.deepEqual(errors,[]);assert.equal(blocked,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);

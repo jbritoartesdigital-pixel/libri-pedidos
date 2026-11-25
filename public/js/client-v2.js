@@ -11,7 +11,7 @@ import {
 
 import {
   startCustomerArea,
-} from './client-v2-area.js?v=20261124-v115';
+} from './client-v2-area.js?v=20261124-v116';
 
 import {mountStorePrivacy} from './store-privacy.js';
 async function bootstrap() {

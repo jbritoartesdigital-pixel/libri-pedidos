@@ -2278,3 +2278,29 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 
 .libri-manual-checkout .manual-terms-fixed{display:grid;gap:2px;flex:none}
 .libri-manual-checkout .manual-terms[open]{max-height:min(35dvh,240px);overflow:auto}
+
+/* V116: mobile-first post-payment customer home */
+#app.libri-v3-area{gap:12px;margin-top:10px;align-content:start}
+.libri-v3-area .v3-client-header{padding:4px 2px 0}
+.libri-v3-area .v3-client-header h1{font:800 25px/1.18 var(--private-sans);letter-spacing:-.04em;margin:3px 0}
+.libri-v3-area .v3-client-header p{margin:4px 0;font-size:12px}
+.libri-v3-area .v3-client-kicker{font:800 10px/1.4 var(--private-sans);letter-spacing:.09em;text-transform:uppercase;color:var(--private-rose)}
+.libri-v3-area .v3-client-nav{display:flex;gap:6px;overflow:auto;padding:2px 0 4px;scrollbar-width:thin}
+.libri-v3-area .v3-client-nav .btn{flex:none;white-space:nowrap;min-height:36px;padding:8px 12px;border-radius:999px;font-size:12px}
+.libri-v3-area .v3-client-nav .btn[aria-current=page]{background:var(--private-rose);color:#fff;border-color:var(--private-rose)}
+.libri-v3-area .v3-client-next{background:linear-gradient(135deg,#fffdfa,#f2e3db);border:1px solid var(--private-line);padding:18px;border-radius:18px;display:grid;gap:7px}
+.libri-v3-area .v3-client-next h2{font:800 23px/1.2 var(--private-sans);letter-spacing:-.035em;margin:0}
+.libri-v3-area .v3-client-next p{margin:0 0 4px}
+.libri-v3-area .v3-client-next .btn{width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left;min-height:46px}
+.libri-v3-area .v3-client-next small{font-size:11px;color:var(--private-muted)}
+.libri-v3-area .v3-financial-details{padding:12px 14px;box-shadow:none}
+.libri-v3-area .v3-financial-details summary{font:700 13px/1.5 var(--private-sans);cursor:pointer;color:var(--private-rose)}
+.libri-v3-area .v3-client-service{padding:14px;box-shadow:none}
+.libri-v3-area .v3-client-service h3{font:800 17px/1.3 var(--private-sans);letter-spacing:-.02em;margin:0 0 3px}
+.libri-v3-area .v3-client-service-status{display:inline-block;font:700 11px/1.3 var(--private-sans);border-radius:999px;padding:5px 9px;background:#f1e4dc;color:var(--private-rose)}
+.libri-v3-area .v3-client-service>.btn{width:100%;margin:6px 0 2px}
+.libri-v3-area .v3-client-form-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.libri-v3-area .v3-client-form-actions>.btn{flex:1 1 140px}
+.libri-v3-area .v3-client-notice{box-shadow:none;padding:12px 14px}
+
+.libri-v3-area .v3-client-progress{display:grid;gap:4px;margin-top:3px}.libri-v3-area .v3-client-progress progress{width:100%;height:7px;accent-color:var(--private-rose);border:0;border-radius:8px;overflow:hidden}.libri-v3-area .v3-client-progress progress::-webkit-progress-bar{background:#e8d7ce;border-radius:8px}.libri-v3-area .v3-client-progress progress::-webkit-progress-value{background:var(--private-rose);border-radius:8px}

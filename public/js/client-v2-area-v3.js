@@ -59,6 +59,15 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
   let area=initial,active='summary',busy=false,error='',notice='',dirty=false,payment=null,upsellSeen=false,acceptedUpsell=null;
   function current(){return area.modules.find(m=>m.module===active);}
+  function nextBriefing(){return area.modules.find(m=>m.module==='shared'&&m.editable&&!m.revision)||area.modules.find(m=>m.module!=='shared'&&m.editable)||area.modules.find(m=>m.editable);}
+  function briefingHome(){
+    const next=nextBriefing(),count=area.services.filter(s=>s.briefingStatus==='completed').length,total=area.services.length;
+    if(area.locked||area.cancellation)return '';
+    return '<section class="v3-client-next"><span class="v3-client-kicker">'+(area.payment.fullyPaid?'Pagamento confirmado':area.payment.receivedCents>0?'Entrada confirmada':'Meu pedido')+'</span><h2>'+(next?'Vamos começar?':count===total?'Dados enviados!':'Acompanhe seu pedido')+'</h2><p>'+(next?'Preencha os dados da comemoração e dos serviços contratados. Assim podemos preparar tudo para você.':count===total?'Recebemos seus dados. Acompanhe as próximas etapas por aqui.':'Consulte seus serviços e as atualizações do pedido.')+'</p>'+(next?'<button type="button" class="btn primary" data-v3-start="'+esc(next.module)+'">'+(next.revision?'Continuar preenchimento':'Preencher meus dados')+' <span aria-hidden="true">›</span></button>':'')+'<div class="v3-client-progress"><progress aria-label="Serviços com dados enviados" value="'+count+'" max="'+Math.max(total,1)+'"></progress><small>'+count+' de '+total+' '+(total===1?'serviço com dados enviados':'serviços com dados enviados')+'</small></div></section>';
+  }
+  function clientHeader(){
+    return '<header class="v3-client-header"><span class="v3-client-kicker">'+esc(area.orderCode)+'</span><h1>Meu pedido</h1><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p></header><nav aria-label="Área do pedido" class="v3-client-nav"><button type="button" class="btn secondary" aria-current="'+(active==='summary'?'page':'false')+'" data-v3-tab="summary">Resumo</button>'+(!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" aria-current="'+(active===x.module?'page':'false')+'" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</nav>';
+  }
   function deliveryHtml(s){
     const d=s.delivery;if(!d?.delivered)return '';
     const base='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/delivery/'+esc(s.family)+'/files/';
@@ -128,11 +137,11 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   function summary(){
-    return '<section class="card"><h2>Seu pedido</h2><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p><p><strong>Contratação original:</strong> '+money(area.payment.totalCents)+'</p>'+(area.payment.depositPercent===50?'<p>Entrada autorizada: '+money(area.payment.depositCents)+'</p><p>Recebido: '+money(area.payment.receivedCents)+'</p><p><strong>Saldo do pedido: '+money(area.payment.remainingCents)+'</strong></p>':'')+(area.financial?'<p>Adicionais confirmados: '+money(area.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(area.financial.confirmedTotalCents)+'</strong></p>'+(area.financial.pendingSupplementCents?'<p>Adicionais aguardando pagamento: '+money(area.financial.pendingSupplementCents)+'</p>':'')+(area.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(area.financial.reviewSupplementCents)+'</p>':''):'')+
-      '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></section>'+
-      area.services.map(s=>'<section class="card"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><p>'+esc(briefingLabels[s.briefingStatus]||'Em acompanhamento')+' · '+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
+    return '<details class="card v3-financial-details" '+(area.locked?'open':'')+'><summary>Detalhes do pedido e pagamento</summary><p><strong>Contratação original:</strong> '+money(area.payment.totalCents)+'</p>'+(area.payment.depositPercent===50?'<p>Entrada autorizada: '+money(area.payment.depositCents)+'</p><p>Recebido: '+money(area.payment.receivedCents)+'</p><p><strong>Saldo do pedido: '+money(area.payment.remainingCents)+'</strong></p>':'')+(area.financial?'<p>Adicionais confirmados: '+money(area.financial.paidSupplementCents)+'</p><p><strong>Total confirmado: '+money(area.financial.confirmedTotalCents)+'</strong></p>'+(area.financial.pendingSupplementCents?'<p>Adicionais aguardando pagamento: '+money(area.financial.pendingSupplementCents)+'</p>':'')+(area.financial.reviewSupplementCents?'<p>Valores em conferência: '+money(area.financial.reviewSupplementCents)+'</p>':''):'')+
+      '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></details>'+
+      area.services.map(s=>'<section class="card v3-client-service"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><span class="v3-client-service-status">'+esc(s.briefingStatus==='available'?'Dados pendentes':briefingLabels[s.briefingStatus]||'Em acompanhamento')+'</span><p>'+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
         (s.deliveryWindow?'<p><strong>Entrega prevista:</strong> '+day(s.deliveryWindow.start)+' a '+day(s.deliveryWindow.end)+'</p>':'<p>Prazo individual aguardando conferência.</p>')+(s.complementNote?'<p><strong>Complemento solicitado:</strong> '+esc(s.complementNote)+'</p>':'')+'<p>'+money(s.totalCents)+'</p>'+(s.blackLibri?'<p><strong>Black Libri:</strong> '+esc(s.blackLibri.label)+(s.blackLibri.gift?' · Brinde incluído':s.blackLibri.applied?' · Desconto aplicado':' · Melhor condição mantida')+'</p>':'')+s.extras.map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+
-        (!area.locked?'<button type="button" class="btn secondary" data-v3-tab="'+esc(s.family)+'">Ver briefing do serviço</button>':'')+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('');
+        (!area.locked?'<button type="button" class="btn '+(area.modules.find(m=>m.module===s.family)?.editable?'primary':'secondary')+'" data-v3-tab="'+esc(s.family)+'">'+(area.modules.find(m=>m.module===s.family)?.editable?'Preencher dados do serviço':'Ver dados do serviço')+'</button>':'')+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('');
   }
   function paymentHtml(){
     if(!area.locked)return '';
@@ -151,11 +160,10 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   function render(){
     const m=current();
-    root.innerHTML=(area.capacityReview?'<section class="card"><h3>Pagamento recebido, agenda em conferência</h3><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+'<section class="card"><h1>Meu pedido · '+esc(area.orderCode)+'</h1><p>'+(area.locked?'Acompanhe seu pagamento.':'Escolha o serviço que deseja acompanhar.')+'</p><div class="grid two"><button type="button" class="btn secondary" data-v3-tab="summary">Resumo</button>'+
-      (!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</div></section>'+
+    root.innerHTML=clientHeader()+(active==='summary'?briefingHome():'')+(area.capacityReview&&active==='summary'?'<section class="card v3-client-notice"><strong>Agenda em conferência</strong><p>Você já pode preencher seus dados. A Libri confirmará a previsão antes de iniciar a produção.</p></section>':'')+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. Salve as respostas para atualizar as próximas perguntas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
-        (m.editable?'<button type="submit" class="btn primary" '+(busy?'disabled':'')+'>Salvar rascunho</button>':'')+'</form><p class="field-help">Salvar ou enviar o briefing não inicia a produção automaticamente.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar briefing definitivo</button></section>':''):summary()+paymentHtml());
+        (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">Salvar ou enviar o briefing não inicia a produção automaticamente.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
     dirty=false;
   }
@@ -223,17 +231,17 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     try{
       payment=await api('/api/v3/cart/'+(renew?'renew':'recover'),{method:'POST',body:JSON.stringify({publicToken:token})});
       const r=await api(endpoint);area=r.briefing;
-      if(!area.locked){active='summary';notice='Pagamento confirmado. Seus briefings estão disponíveis.';}
+      if(!area.locked){active='summary';notice='';}
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
   root.addEventListener('input',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;});
   root.addEventListener('change',e=>{if(e.target.hasAttribute('data-v3-field'))dirty=true;const fieldKey=e.target.dataset.v3Upload;if(fieldKey&&e.target.files?.[0])fileAction({fieldKey,file:e.target.files[0]});});
   root.addEventListener('submit',e=>{if(e.target.id==='v3-module-form'){e.preventDefault();save();}});
   root.addEventListener('click',async e=>{
-    const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab;
+    const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab||e.target.closest('[data-v3-start]')?.dataset.v3Start;
     if(tab&&!busy){
       if(dirty&&current()?.editable&&!await save())return;
-      active=tab;notice='';error='';render();return;
+      active=tab;notice='';error='';render();window.scrollTo(0,0);return;
     }
     const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
     if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
@@ -249,6 +257,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       try{const res=await api('/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/revision/accept',{method:'POST',body:JSON.stringify({id:r.id,confirmed:true,termsAccepted:true,expectedTotalCents:acceptedUpsell?.totalCents??r.totalCents,upsellKey:acceptedUpsell?.key})});area=res.briefing;acceptedUpsell=null;notice='Proposta aceita. Confira o pagamento atualizado.';}catch(e){error=e.message;}finally{busy=false;render();}
       if(!area.revision)await verify();return;
     }
+    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save()){const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
     if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);

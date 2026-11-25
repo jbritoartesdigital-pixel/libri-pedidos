@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V118: PR #169; autosave nao bloqueante, fila de rascunhos e testes de latencia; gates obrigatorios.
 # Release V117: PR #168; perguntas dinamicas, paridade do briefing de convite e agenda interna; gates obrigatorios.
 # Release V116: PR #167; area da cliente pos-pagamento, briefing guiado e resumo compacto; gates obrigatorios.
 # Release V115: PR #166; compactacao dos carrinhos, filtro uniforme e Atelie opcional; gates obrigatorios.

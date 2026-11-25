@@ -76,7 +76,7 @@ test('standalone order gated by sale flag, paid once and material receipt checks
   assert.equal((await streamV3ServicePreview(env,token,family,progress.preview.id,new Request('https://test'))).status,404);
   let delivery=(await getV3ModularBriefing(db,token)).services[0].delivery;
   assert.equal(delivery.externalChannel,null);
-  await assert.rejects(deliverV3Service(env,token,family,{version:progress.version,confirmed:true,externalChannel:'drive',externalUrl:drive}),/aprovada/);
+  await assert.rejects(deliverV3Service(env,token,family,{version:progress.version,confirmed:true,externalChannel:'drive',externalUrl:drive}),/conclua a prévia já publicada/);
   progress=await changeV3Production(db,token,family,{action:'request_adjustments',version:progress.version,previewId:progress.preview.id,note:'Ajustar texto'},'customer');
   progress=await changeV3Production(db,token,family,{action:'included_revision',version:progress.version,note:'Ajuste solicitado'});
   progress=await publishV3ExternalPreview(env,token,family,{version:progress.version,channel:'drive',url:drive,confirmed:true,watermarkConfirmed:true});

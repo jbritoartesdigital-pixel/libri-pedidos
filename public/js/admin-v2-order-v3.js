@@ -203,7 +203,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  host.addEventListener('click',async e=>{
  const tab=e.target.closest('[data-v3-admin-tab]');if(tab&&!busy){selectTab(tab.dataset.v3AdminTab);return;}const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
- if(action==='brief-edit'){const m=brief.modules.find(x=>x.module===family);if(!m?.adminEditable)return;editingModule=family;editData={...m.data};openPanels.set('briefing-'+family,true);render();return;}
+ if(action==='brief-edit'){const m=brief.modules.find(x=>x.module===family);if(!m?.adminEditable)return;editingModule=family;editData={...m.data};const panel=host.querySelector('[data-v3-panel="briefing-'+family+'"]');if(panel)panel.open=true;render();return;}
  if(action==='brief-edit-cancel'){editingModule=null;editData=null;render();return;}
  if(['archive','restore','delete','brief-save','brief-submit','contract-generate','contract-sign','contract-cancel'].includes(action)){
   let path=base.replace('/briefing','/'),method='POST',payload={};

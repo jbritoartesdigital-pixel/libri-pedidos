@@ -250,8 +250,10 @@ try{
  await customer.locator('[data-v3-action="payment"]').waitFor();assert.equal(await customer.locator('[data-v3-tab="shared"]').count(),0);
  await customer.goto(origin+paidFixture.customerAreaPath);
  await customer.locator('[data-v3-tab="shared"]').waitFor();
- await customer.getByRole('button',{name:'Preencher dados',exact:true}).waitFor();
+ await customer.getByRole('button',{name:'Preencher meus dados',exact:true}).waitFor();
  assert.equal(await customer.locator('.v3-financial-details').getAttribute('open'),null);
+ assert.equal(await customer.locator('.v3-client-next progress').count(),1);
+ assert.equal(await customer.locator('[data-v3-start]').evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight),true);
  await customer.locator('[data-v3-start]').click();
  await customer.locator('#v3-module-form').waitFor();
  assert.equal(await customer.locator('[data-v3-tab="shared"]').getAttribute('aria-current'),'page');

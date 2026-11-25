@@ -23,7 +23,7 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
   Object.defineProperty(globalThis,'document',{configurable:true,value:{body:{classList:{add:(name)=>bodyClasses.add(name)}}}});
   t.after(()=>{if(previousDocument)Object.defineProperty(globalThis,'document',previousDocument);else delete globalThis.document;});
   const root={innerHTML:'',classList:{add:(name)=>rootClasses.add(name)},setAttribute(){},addEventListener(){}};
-  const initial={orderCode:'LIBRI-TEST',locked:false,orderStatus:'briefing_pending',event:{honoreeName:'Ana',date:'2027-02-01'},payment:{totalCents:14900},deliveryWindow:{start:'2027-01-05',end:'2027-01-07',provisional:true},services:[{family:'retrospectiva',productName:'Memórias',variantName:'Memórias',briefingStatus:'available',productionStatus:'pending',totalCents:14900,extras:[]}],modules:[{module:'shared'},{module:'retrospectiva'}]};
+  const initial={orderCode:'LIBRI-TEST',locked:false,orderStatus:'briefing_pending',event:{honoreeName:'Ana',date:'2027-02-01'},capacityReview:true,payment:{totalCents:14900,fullyPaid:true,receivedCents:14900},deliveryWindow:{start:'2027-01-05',end:'2027-01-07',provisional:true},services:[{family:'retrospectiva',productName:'Memórias',variantName:'Memórias',briefingStatus:'available',productionStatus:'pending',totalCents:14900,extras:[]}],modules:[{module:'shared',editable:true,revision:0},{module:'retrospectiva',editable:true,revision:0}]};
   await startV3CustomerArea(root,{token:'ord_test',initial,api:async()=>{throw Error('unexpected API request');}});
   assert.ok(rootClasses.has('libri-v3-area'));
   assert.ok(bodyClasses.has('libri-v3-area-body'));
@@ -32,4 +32,10 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
   assert.doesNotMatch(root.innerHTML,/data-v3-tab="convite"/);
   assert.doesNotMatch(root.innerHTML,/data-v3-tab="identidade_visual"/);
   assert.match(root.innerHTML,/149,00/);
+  assert.match(root.innerHTML,/Pagamento confirmado/);
+  assert.match(root.innerHTML,/data-v3-start="shared"[^>]*>Preencher meus dados/);
+  assert.match(root.innerHTML,/<progress[^>]*value="0" max="1"/);
+  assert.match(root.innerHTML,/Agenda em conferência/);
+  assert.doesNotMatch(root.innerHTML,/Pagamento recebido, agenda em conferência/);
+  assert.doesNotMatch(root.innerHTML,/v3-financial-details" open/);
 });

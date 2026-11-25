@@ -2302,3 +2302,5 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 .libri-v3-area .v3-client-form-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .libri-v3-area .v3-client-form-actions>.btn{flex:1 1 140px}
 .libri-v3-area .v3-client-notice{box-shadow:none;padding:12px 14px}
+
+.libri-v3-area .v3-client-progress{display:grid;gap:4px;margin-top:3px}.libri-v3-area .v3-client-progress progress{width:100%;height:7px;accent-color:var(--private-rose);border:0;border-radius:8px;overflow:hidden}.libri-v3-area .v3-client-progress progress::-webkit-progress-bar{background:#e8d7ce;border-radius:8px}.libri-v3-area .v3-client-progress progress::-webkit-progress-value{background:var(--private-rose);border-radius:8px}

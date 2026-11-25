@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V123: painel lateral comum e funcoes restauradas na ficha V3; gates obrigatorios.
 # Release V122: corrigir guard do ZIP modular e validar download real; gates obrigatorios.
 # V121: revalidar teste de retrospectiva legada apos ajuste da mensagem de bloqueio.
 # Release V121: PR #172; inicio direto e entrega sem previa obrigatoria; gates obrigatorios.

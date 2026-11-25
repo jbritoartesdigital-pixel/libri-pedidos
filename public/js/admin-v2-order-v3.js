@@ -1,3 +1,4 @@
+import {orderGalleryHtml,bindOrderGallery} from './admin-order-gallery.v124.js';
 import {openOrderDrawer} from './admin-order-drawer.v123.js';
 import {api,esc,money,modal,showToast,dateTimeBr} from './admin-v2-core.js';
 const names={shared:'Dados da comemoração',convite:'Convite digital',identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
@@ -138,6 +139,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(text);return;}catch{}}
  const el=document.createElement('textarea');el.value=text;el.style.position='fixed';el.style.opacity='0';host.append(el);el.select();const ok=document.execCommand('copy');el.remove();if(!ok)throw new Error('Não foi possível copiar.');
  }
+ function galleryFiles(){return brief.modules.flatMap(m=>(m.uploads||[]).map(u=>({...u,fieldLabel:(names[m.module]||m.module)+' · '+(m.schema.sections.flatMap(s=>s.fields).find(f=>f.key===u.fieldKey)?.label||'Imagem enviada')})));}
  function briefingActions(){return !brief.locked?folderButton()+' <button class="btn btn-secondary" data-v3-admin="copy-data">Copiar dados do pedido</button> <button class="btn btn-secondary" data-v3-admin="copy-full">Copiar ficha completa</button>':'';}
  function notesHtml(){return '<section class="card"><h3>Observações internas</h3><label>Somente a administração vê estas anotações<textarea maxlength="4000" data-v3-internal-note></textarea></label><button class="btn btn-secondary" data-v3-admin="save-note">Salvar observação</button>'+((brief.notes||[]).map(n=>'<p>'+esc(n.note)+' <small>'+esc(dateTimeBr(n.createdAt))+'</small></p>').join(''))+'</section>';}
  function folderButton(){return !brief.locked&&!brief.cancellation?'<a class="btn btn-primary" data-v3-download-folder href="/api/admin/v2/orders/'+encodeURIComponent(code)+'/download-folder" download>Baixar pasta ZIP</a>':'';}
@@ -165,7 +167,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
   const statuses={pending:'Aguardando programação',ready:'Pronto para produzir',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue'};
   pages.get('summary').innerHTML=(brief.adminPayment?.canEditManual?'<button class="btn btn-primary" data-v3-admin="revision-editor">Editar pedido</button>':'')+folderButton()+'<h3>Serviços contratados</h3>'+brief.services.map(purchasedHtml).join('');
   pages.get('finance').innerHTML=financeReadout();
-  if(folderButton())pages.get('briefing').innerHTML=briefingActions();
+  if(!brief.locked)pages.get('briefing').innerHTML=briefingActions()+orderGalleryHtml(galleryFiles(),file=>file.contentPath);
   pages.get('history').innerHTML=notesHtml();
   for(const el of sections){if(el===summary)continue;const k=el.dataset.v3Panel||'';if(el.matches('[role="alert"]'))pages.get(activeTab).prepend(el);else if(k.startsWith('briefing-'))pages.get('briefing').append(el);else if(k==='finance'||k==='cancel')pages.get('finance').append(el);else if(k==='revision')pages.get('changes').append(el);else if(el.classList.contains('v3-admin-service'))pages.get('production').append(el);else if(el.tagName==='DETAILS'&&!k)pages.get('history').append(el);else if(el.matches('p.muted'))pages.get('production').append(el);else if(el.querySelector('[data-v3-admin^="paid-capacity-"],[data-v3-admin^="urgency-"]'))pages.get('production').prepend(el);}
   for(const [key,page] of pages)if(!page.childElementCount)page.innerHTML='<p class="muted">Nenhuma informação nesta seção.</p>';
@@ -182,12 +184,11 @@ export async function openV3AdminOrder(code,initial,onChanged){
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card v3-admin-panel" data-v3-panel="briefing-'+esc(m.module)+'"'+opened('briefing-'+m.module,!!s&&s.briefingStatus==='completed'&&!s.reviewedAt)+'><summary><strong>'+esc(names[m.module])+'</strong>'+ (s?' · '+esc(s.reviewedAt?'Conferido':s.briefingStatus==='completed'?'A conferir':'Aguardando respostas'):'')+'</summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
- (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a> · <a href="'+esc(u.contentPath)+'?download=1" download>Baixar original</a></p>').join('')+
  materials(m)+(m.schema.sections.some(sec=>sec.fields.some(f=>f.key==='black_gift_media_sent'))?'<label><input type="checkbox" data-gift-media="'+esc(m.module)+'"> Conferi as fotos, a autorização e o escopo do presente Black Libri</label>':'')+(s?.briefingStatus==='completed'&&s.productionStatus==='pending'?'<div><button class="btn btn-primary" data-v3-admin="confirm" data-family="'+esc(m.module)+'">Confirmar briefing conferido</button><label>Complemento necessário <textarea maxlength="500" data-note="'+esc(m.module)+'"></textarea></label><button class="btn btn-secondary" data-v3-admin="reopen" data-family="'+esc(m.module)+'">Solicitar complemento</button></div>':'')+'</details>';}).join('')+
  ('<details class="card history-timeline" open><summary>Histórico geral do pedido</summary><div class="history-track">'+((brief.history||[]).length?brief.history.map(e=>'<article class="history-event"><time>'+esc(dateTimeBr(e.created_at))+'</time><strong>'+esc(e.description||e.action)+'</strong>'+(e.family?'<small>'+esc(names[e.family]||e.family)+'</small>':'')+(e.note?'<p>'+esc(e.note)+'</p>':'')+'</article>').join(''):'<p>Nenhuma movimentação registrada.</p>')+'</div></details>')+
  '<p class="muted">A agenda é validada ao iniciar a produção.</p>';
  for(const el of host.querySelectorAll('details[data-v3-panel]'))if(openPanels.has(el.dataset.v3Panel)&&!el.dataset.v3Panel.startsWith('finance')&&!el.dataset.v3Panel.startsWith('revision')&&!el.dataset.v3Panel.startsWith('cancel'))el.open=openPanels.get(el.dataset.v3Panel);
- organizeTabs();host.querySelectorAll('button').forEach(b=>b.disabled=busy);
+ organizeTabs();if(!brief.locked)bindOrderGallery(host,galleryFiles(),file=>file.contentPath);host.querySelectorAll('button').forEach(b=>b.disabled=busy);
  }
  host.addEventListener('change',e=>{if(!e.target.matches('[data-revision-family]')||!revisionEditor)return;const draft=readRevision();revisionEditor.items=draft.items;revisionEditor.couponCode=draft.couponCode;revisionPreview=null;render();});
  host.addEventListener('click',async e=>{

@@ -15,8 +15,8 @@ export async function startV3ManualCheckout(root,{token,api}){
  const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/manual-checkout';
  const c=await api(endpoint+'/catalog');
  let quote=c.quote,extrasOpen=true,busy=false,error='',terms=false,black=null,suggestionSeen=false;
- const chosen=new Map(),quantities=new Map();let invitationVariant=c.invitationVariant,savedVariant=c.invitationVariant;let savedChosen=new Map(),savedQuantities=new Map();
- const selection=()=>({revisionVersion:c.revisionVersion,...(invitationVariant?{invitationVariant}:{}),addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
+ const chosen=new Map(),quantities=new Map();let invitationVariant=c.invitationVariant,savedVariant=c.invitationVariant,identityVariant=null,savedIdentity=null,activeTerms=c.terms;let savedChosen=new Map(),savedQuantities=new Map();
+ const selection=()=>({revisionVersion:c.revisionVersion,...(invitationVariant?{invitationVariant}:{}),...(identityVariant?{identityVariant,identityTermsVersion:activeTerms.services.find(t=>t.family==='identidade_visual')?.version}:{}),addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
  const request=(action,data={})=>api(endpoint+'/'+action,{method:'POST',body:JSON.stringify(data)});
  const grouped=manualGroups(c.addons);
  const albumSelected=()=>Boolean(c.ownedAddonCodes?.some(isMomentsPlan)||[...chosen.values()].some(isMomentsPlan));
@@ -27,13 +27,13 @@ export async function startV3ManualCheckout(root,{token,api}){
  function extrasHtml(){
  const rows=grouped.filter(g=>(g.key!=='moments_extra'||albumSelected())&&!(g.key==='confirmation'&&invitationVariant?.productCode==='cinematic_video')).map(g=>{
  const value=chosen.get(g.key)||'',selected=g.options.find(a=>a.code===value),disabled=blocked(g.key)||busy;
- if(g.options.length===1){
+ if(g.options.length===1&&g.key!=='filter'){
  const a=g.options[0];
  return '<label class="manual-v110-row studio-manual-row"><input type="checkbox" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value?'checked ':'')+(disabled?'disabled':'')+'><span class="studio-manual-copy"><strong>'+esc(g.label)+'</strong>'+(g.key==='confirmation'?'<small>Confirmação simples já inclusa no convite.</small>':'')+'</span><b>+'+money(a.priceCents)+'</b></label>';
  }
- return '<button type="button" class="manual-v110-row studio-manual-row studio-manual-expand" data-manual-open="'+esc(g.key)+'" '+(disabled?'disabled':'')+'><span class="studio-manual-copy"><strong>'+esc(g.label)+'</strong>'+(selected?'<small>'+esc(shortVariant(selected))+'</small>':'')+'</span><span class="studio-manual-price"><b>'+(selected?money(selected.priceCents):'A partir de '+money(g.minPriceCents))+'</b><small>'+(selected?'Alterar':'Ver opções')+'</small></span></button>';
+ return '<button type="button" class="manual-v110-row studio-manual-row studio-manual-expand" data-manual-open="'+esc(g.key)+'" '+(disabled?'disabled':'')+'><span class="studio-manual-copy"><strong>'+esc(g.label)+'</strong>'+(selected?'<small>'+esc(shortVariant(selected))+'</small>':'')+'</span><span class="studio-manual-price"><b>'+(selected?money(selected.priceCents):'A partir de '+money(g.minPriceCents))+'</b><small>'+(selected?(g.key==='filter'?'Retirar':'Alterar'):(g.key==='filter'?'Adicionar':'Ver opções'))+'</small></span></button>';
  }).join('');
- return '<div class="manual-extras-list">'+rows+c.extras.map(x=>'<article class="manual-extra manual-v110-row"><div><h3>'+esc(x.name)+'</h3><p>'+money(x.priceCents)+' por unidade</p></div><label><span class="manual-quantity-label">Quantidade</span><input type="number" min="0" max="'+x.maxQuantity+'" step="1" data-manual-extra="'+esc(x.code)+'" value="'+(quantities.get(x.code)||0)+'"></label></article>').join('')+'</div>';
+ return '<div class="manual-extras-list">'+rows+(c.identityOptions?.length?'<button type="button" class="manual-v110-row studio-manual-row studio-manual-expand" data-manual-action="identity"><span class="studio-manual-copy"><strong>Identidade visual</strong>'+(identityVariant?'<small>'+esc(c.identityOptions.find(v=>v.variantCode===identityVariant.variantCode)?.name||'')+'</small>':'')+'</span><span class="studio-manual-price"><b>'+(identityVariant?money(c.identityOptions.find(v=>v.variantCode===identityVariant.variantCode).priceCents):'A partir de '+money(Math.min(...c.identityOptions.map(v=>v.priceCents))))+'</b><small>'+(identityVariant?'Alterar':'Ver opções')+'</small></span></button>':'')+c.extras.map(x=>'<article class="manual-extra manual-v110-row"><div><h3>'+esc(x.name)+'</h3><p>'+money(x.priceCents)+' por unidade</p></div><label><span class="manual-quantity-label">Quantidade</span><input type="number" min="0" max="'+x.maxQuantity+'" step="1" data-manual-extra="'+esc(x.code)+'" value="'+(quantities.get(x.code)||0)+'"></label></article>').join('')+'</div>';
  }
  function openStudioDialog(title,html){
  const d=document.createElement('dialog');d.className='studio-manual-dialog';d.setAttribute('aria-label',title);
@@ -46,9 +46,15 @@ export async function startV3ManualCheckout(root,{token,api}){
  }
  function openOptions(group){
  const g=grouped.find(x=>x.key===group);if(!g||blocked(group)||busy)return;
+ if(group==='filter'&&g.options.length===1){if(chosen.has(group))chosen.delete(group);else chosen.set(group,g.options[0].code);refresh();return;}
  const selected=chosen.get(group);
  const {d,close}=openStudioDialog(g.label,(group==='moments'?'<p>Inclui o filtro personalizado na câmera Libri.</p>':'')+'<div class="studio-manual-option-list">'+g.options.map(a=>'<button type="button" class="studio-manual-option" data-option="'+esc(a.code)+'" aria-pressed="'+(selected===a.code)+'"><span>'+esc(shortVariant(a))+'</span><b>+'+money(a.priceCents)+'</b></button>').join('')+'</div>'+(selected?'<button type="button" class="studio-manual-text" data-option="">Retirar adicional</button>':'')+'<button type="button" class="studio-manual-text" data-dismiss>Voltar</button>');
  d.addEventListener('click',e=>{const opt=e.target.closest('[data-option]');if(opt){const value=opt.dataset.option;if(value)chosen.set(group,value);else chosen.delete(group);if(!albumSelected())chosen.delete('moments_extra');close();refresh();}else if(e.target.closest('[data-dismiss]'))close();});
+ }
+ function openIdentity(){
+ const options=c.identityOptions||[];
+ const {d,close}=openStudioDialog('Identidade visual','<p>Escolha um pacote do Libri Ateliê. Entrega mínima de 15 dias após pagamento e briefing completo.</p><div class="studio-manual-option-list">'+options.map(v=>'<button type="button" class="studio-manual-option" data-identity="'+esc(v.variantCode)+'" aria-pressed="'+(identityVariant?.variantCode===v.variantCode)+'"><span>'+esc(v.name)+'<small style="display:block;font-weight:400">'+esc(v.description)+'</small></span><b>'+money(v.priceCents)+'</b></button>').join('')+'</div>'+(identityVariant?'<button type="button" class="studio-manual-text" data-identity="">Retirar identidade visual</button>':''));
+ d.addEventListener('click',e=>{const b=e.target.closest('[data-identity]');if(!b)return;const v=options.find(x=>x.variantCode===b.dataset.identity);identityVariant=v?{productCode:v.productCode,variantCode:v.variantCode}:null;terms=false;close();refresh();});
  }
  function openFormat(){
  const options=c.invitationVariants||[];
@@ -58,12 +64,12 @@ export async function startV3ManualCheckout(root,{token,api}){
  d.querySelector('[data-apply-format]').onclick=()=>{invitationVariant={productCode:product.value,variantCode:variant.value};if(product.value==='cinematic_video')chosen.delete('confirmation');terms=false;close();refresh();};
  }
  function render(){
- const firstName=String(c.customerName||'').trim().split(/\s+/)[0],hasExtras=Boolean(c.addons.length||c.extras.length);
+ const firstName=String(c.customerName||'').trim().split(/\s+/)[0],hasExtras=Boolean(c.addons.length||c.extras.length||c.identityOptions?.length);
  root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(firstName?'Olá, '+esc(firstName)+'!':'Olá!')+'</h1><p>Aqui é sua área para finalizar seu pedido.</p></header>'+
  '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+
  '<div class="studio-manual-section-title">Seu pedido</div><div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
  (hasExtras&&!black?'<div class="studio-manual-addons"><button type="button" data-manual-action="extras" aria-expanded="'+extrasOpen+'" aria-controls="manualOptionalAddons" class="studio-manual-addons-toggle" '+(busy?'disabled':'')+'><span>Adicionais opcionais</span><small>'+(extrasOpen?'Recolher':'+ Ver opções')+'</small></button><div id="manualOptionalAddons" '+(extrasOpen?'':'hidden')+'>'+(extrasOpen?extrasHtml():'')+'</div></div>':'')+
- '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(c.terms.general.body)+'</div>'+c.terms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked ':'')+(busy?'disabled':'')+'> Li e aceito os termos da contratação.</label></div>'+
+ '</div><div class="manual-terms-fixed"><details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(activeTerms.general.body)+'</div>'+activeTerms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked ':'')+(busy?'disabled':'')+'> Li e aceito os termos da contratação.</label></div>'+
  '<footer class="manual-footer"><div class="manual-total"><div><strong>'+(c.paymentMethod==='pix'?'Total no Pix':'Total no cartão')+'</strong>'+(quote.discountCents?'<small>Desconto: − '+money(quote.discountCents)+'</small>':'')+(quote.blackLibri?'<small>Black Libri: '+esc(quote.blackLibri.label)+'</small>':'')+'</div><b>'+money(quote.totalCents)+'</b></div>'+
  (quote.depositPercent===50?'<div class="manual-payment-split"><span>Entrada: <b>'+money(quote.depositCents)+'</b></span><span>Saldo: '+money(quote.balanceCents)+'</span></div>':'')+
  '<button class="manual-primary" type="button" data-manual-action="pay" '+(busy?'disabled':'')+'>'+(busy?'Conferindo…':quote.depositPercent===50?'Pagar entrada':'Continuar para pagamento')+'</button></footer></section>';
@@ -73,15 +79,15 @@ export async function startV3ManualCheckout(root,{token,api}){
  if(busy)return;
  const y=root.querySelector('.manual-scroll')?.scrollTop||0;busy=true;error='';
  root.setAttribute('aria-busy','true');root.querySelectorAll('input,button').forEach(el=>{el.disabled=true;});
- try{quote=(await request('quote',selection())).quote;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);savedVariant=invitationVariant;}
- catch(e){error=e.message||'Não foi possível conferir a alteração.';invitationVariant=savedVariant;chosen.clear();for(const [k,v] of savedChosen)chosen.set(k,v);quantities.clear();for(const [k,v] of savedQuantities)quantities.set(k,v);}
+ try{const result=await request('quote',selection());quote=result.quote;if(result.terms&&JSON.stringify(result.terms)!==JSON.stringify(activeTerms)){activeTerms=result.terms;terms=false;}savedIdentity=identityVariant;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);savedVariant=invitationVariant;}
+ catch(e){error=e.message||'Não foi possível conferir a alteração.';invitationVariant=savedVariant;identityVariant=savedIdentity;chosen.clear();for(const [k,v] of savedChosen)chosen.set(k,v);quantities.clear();for(const [k,v] of savedQuantities)quantities.set(k,v);}
  finally{busy=false;render();const el=root.querySelector('.manual-scroll');if(el)el.scrollTop=y;}
  }
  async function payFinal(){
  busy=true;error='';render();
  try{
   const finalSelection={...selection(),...(black?.status==='reserved'?{blackLibriClaimId:black.id}:{})};
-  quote=(await request('quote',finalSelection)).quote;render();
+  const final=await request('quote',finalSelection);quote=final.quote;if(final.terms&&JSON.stringify(final.terms)!==JSON.stringify(activeTerms)){activeTerms=final.terms;terms=false;busy=false;error='As condições foram atualizadas. Confira e aceite novamente.';render();return;}render();
   const result=await request('finish',{...finalSelection,id:c.revisionId,termsAccepted:true,confirmed:true,expectedTotalCents:quote.totalCents});
   const url=safePay(result.payment?.checkoutUrl);if(url){location.assign(url);return;}
   location.reload();
@@ -133,6 +139,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  if(busy)return;
  const open=e.target.closest('[data-manual-open]');if(open&&!black){openOptions(open.dataset.manualOpen);return;}
  const action=e.target.closest('[data-manual-action]')?.dataset.manualAction;
+ if(action==='identity'&&!black){openIdentity();return;}
  if(action==='format'&&!black){openFormat();return;}
  if(action==='extras'&&!black){const y=root.querySelector('.manual-scroll')?.scrollTop||0;extrasOpen=!extrasOpen;error='';render();const body=root.querySelector('.manual-scroll');if(body)body.scrollTop=y;root.querySelector('[data-manual-action="extras"]')?.focus({preventScroll:true});return;}
  if(action==='pay')finish();

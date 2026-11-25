@@ -504,6 +504,20 @@ async function moveExtraFlow({skip=false}={}){
   state.cartItems=proposedItems;modalClose();await openCart();
  }catch(e){f.busy=false;renderExtraQuestion();const msg=document.createElement('p');msg.setAttribute('role','alert');msg.textContent=e.message;modalRoot.querySelector('.v3-modal-card')?.prepend(msg);}
 }
+function cartServiceShortcuts(){
+ if(!state.cartItems.length)return '';
+ const atelie=!state.cartItems.some(i=>cartFamily(i.productCode)==='identity')?ateliePackages.filter(p=>p.purchaseAvailable&&p.variantCode):[];
+ const retro=!state.cartItems.some(i=>cartFamily(i.productCode)==='retrospective')&&!state.cartItems.some(i=>(i.addonCodes||[]).some(c=>/^retro_/.test(c)))?retrosPackages.filter(p=>p.previewAvailable):[];
+ const row=(label,key,price)=>'<button type="button" class="v115-cart-service" data-action="cart-service-options" data-value="'+key+'"><span>'+label+'</span><span><b>A partir de '+money(price)+'</b><small>Ver opções</small></span></button>';
+ return atelie.length||retro.length?'<div class="v115-cart-services"><small>Complemente sua festa</small>'+(atelie.length?row('Identidade visual','identity',Math.min(...atelie.map(p=>p.priceCents))):'')+(retro.length?row('Retrospectiva','retrospective',Math.min(...retro.map(p=>p.previewPriceCents))):'')+'</div>':'';
+}
+function showCartServiceOptions(family){
+ const isIdentity=family==='identity';
+ const options=isIdentity?ateliePackages.filter(p=>p.purchaseAvailable&&p.variantCode).map(p=>({code:p.code,name:p.name,description:p.shortDescription,price:p.priceCents})):retrosPackages.filter(p=>p.previewAvailable).map(p=>({code:p.code,name:p.name,description:'Até '+p.maxPhotos+' fotos',price:p.previewPriceCents}));
+ modalClose();
+ modalRoot.innerHTML='<div class="v3-modal-card" role="dialog" aria-modal="true" tabindex="-1"><h2>'+(isIdentity?'Identidade visual':'Retrospectiva')+'</h2><p>Escolha um pacote. O valor e a entrega serão conferidos no carrinho.</p><div class="v115-cart-services">'+options.map(p=>'<button type="button" class="v115-cart-service" data-action="'+(isIdentity?'cart-add-identity':'retro-details')+'" data-value="'+clean(p.code)+'"><span>'+clean(p.name)+'<small>'+clean(p.description)+'</small></span><b>'+money(p.price)+'</b></button>').join('')+'</div><button class="v3-btn v3-btn-text" type="button" data-action="close-modal">Voltar</button></div>';
+ modalRoot.hidden=false;modalRoot.querySelector('[role="dialog"]')?.focus({preventScroll:true});
+}
 function renderCart() {
   trackStoreStage('carrinho');
   const items=state.cartItems;
@@ -526,7 +540,7 @@ function renderCart() {
     '</div><div class="v3-total"><div><strong>Total no Pix</strong><small>Valor estimado, antes de escolher a data</small></div><b>'+money(cartQuote.totalCents)+'</b></div>':'';
   const notice=cartError?'<div class="v3-notice" role="alert">'+clean(cartError)+'</div>':'';
   panel('Seu pedido','Confira o que você escolheu.',
-    '<div class="v97-cart-layout v105-cart-layout"><div class="v3-cart-scroll"><div class="v3-cart-list">'+(lines||'<p>Seu carrinho está vazio.</p>')+'</div></div><aside class="v97-cart-summary">'+totals+notice+cartDateHtml()+'</aside></div>',
+    '<div class="v97-cart-layout v105-cart-layout"><div class="v3-cart-scroll"><div class="v3-cart-list">'+ (lines||'<p>Seu carrinho está vazio.</p>')+'</div>'+cartServiceShortcuts()+'</div><aside class="v97-cart-summary">'+totals+notice+cartDateHtml()+'</aside></div>',
     '<div class="v3-action-row v105-cart-actions">'+
     (items.length&&cartQuote&&!cartError?'<button class="v3-btn v3-btn-primary" type="button" data-action="cart-unified-checkout">Continuar para os dados</button>':'')+
     '<button class="v3-btn v3-btn-text" type="button" data-action="cart-more">'+(items.length?'+ Adicionar outro serviço':'Escolher serviço')+'</button></div>',4);
@@ -835,6 +849,8 @@ async function handleStoreClick(event) {
       addConfiguredInvite();return;
     }
     if(action==='added-more'){modalClose();await go('creation');return;} if(action==='added-view'){modalClose();await openCart();return;} if(action==='open-cart'){await openCart();return;}
+    if(action==='cart-service-options'){showCartServiceOptions(value);return;}
+    if(action==='cart-add-identity'){const item=ateliePackages.find(p=>p.code===value&&p.purchaseAvailable&&p.variantCode);if(!item)return; if(putCart({productCode:'atelie_'+item.code,variantCode:item.variantCode,addonCodes:[]})){modalClose();await openCart();}return;}
     if(action==='cart-more'){cartEventDate=root.querySelector('#v3CartEventDate')?.value||cartEventDate;await go('creation');return;}
     if(action==='cart-edit'){
       const item=state.cartItems[Number(value)];if(!item)return;

@@ -548,3 +548,18 @@ html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-coun
 @media(max-width:360px){
  html body .v3-main .v3-panel--guided.v3-stage-extras .v3-optional-list[data-count="5"] .v3-optional-card{grid-template-columns:minmax(0,1fr) 94px;padding-inline:8px}
 }
+
+/* V115: same compact optional service rows and smaller checkout terms spacing. */
+html .v115-cart-services{display:grid;gap:0;border:1px solid var(--store-line);border-radius:10px;overflow:hidden;margin-top:5px;background:var(--store-glass)}
+html .v115-cart-services>small{padding:5px 8px;font:650 11px/1.25 var(--store-sans);color:var(--store-muted)}
+html .v115-cart-service{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:0;border-top:1px solid var(--store-line);background:transparent;color:var(--store-ink);padding:5px 8px;min-height:36px;font:650 13px/1.25 var(--store-sans);cursor:pointer}
+html .v115-cart-service b{font-size:11px;color:var(--store-rose);white-space:nowrap}
+html .v115-cart-service small{display:block;font:400 10px/1.25 var(--store-sans);color:var(--store-muted)}
+html .v115-cart-service>span:last-child{text-align:right}
+html .v97-checkout .v3-checkout-block[data-checkout-stage=revisao]{gap:3px;padding:7px 9px!important;margin-bottom:0!important}
+html .v97-checkout .v3-checkout-block[data-checkout-stage=revisao] h2{margin:0 0 2px;font-size:19px}
+html .v97-checkout .v3-term-row{padding:4px 0}
+html .v97-checkout .v3-term-row label{padding-top:2px;font-size:12px;align-items:center!important}
+html .v97-checkout #v3-unified-checkout>fieldset{padding-bottom:0!important}
+html .v97-checkout .v3-action-row{margin-top:2px;padding-top:2px;gap:5px}
+@media(max-width:699px){html body .v3-stage-cart .v105-cart-layout{gap:5px}html body .v3-stage-cart .v105-cart-item{padding:8px;gap:4px}html body .v3-stage-cart .v3-cart-scroll{padding-bottom:0}}

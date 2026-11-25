@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V125: paridade administrativa consolidada, briefing, area da cliente, contratos e ciclo seguro; gates completos.
 # Release V124: galeria administrativa compartilhada V2/V3, fixture de contratos e gates completos.
 # Release V123: painel lateral comum e funcoes restauradas na ficha V3; gates obrigatorios.
 # Release V122: corrigir guard do ZIP modular e validar download real; gates obrigatorios.

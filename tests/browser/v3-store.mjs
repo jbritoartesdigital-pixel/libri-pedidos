@@ -81,7 +81,7 @@ const server=createServer(async(req,res)=>{
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
-   else if(url.pathname==='/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing/shared'&&req.method==='PATCH')result=await handleCustomerBriefingV3Api(request,readEnv,url);
+   else if(['/shared','/convite'].some(s=>url.pathname==='/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing'+s)&&req.method==='PATCH')result=await handleCustomerBriefingV3Api(request,readEnv,url);
    else if(url.pathname==='/api/v3/cart/recover'&&req.method==='POST'){const body=await request.clone().json();assert.ok([paidFixture,unpaidFixture,manualFixture].some(o=>o.publicToken===body.publicToken));const manual=body.publicToken===manualFixture.publicToken;globalThis.fetch=manual?manualFetch:mockFetch;try{result=await handlePublicCartV3Api(request,manual?manualEnv:fixtureEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else {blocked++;console.error('Unexpected test API',req.method,url.pathname);res.writeHead(403);res.end('Test: route not allowed');return;}
    res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));return;
@@ -261,6 +261,15 @@ try{
  await customer.locator('#v3-module-form button[type="submit"]').click();await customer.getByText('Rascunho salvo.',{exact:false}).waitFor();
  await customer.reload();await customer.locator('[data-v3-tab="shared"]').click();
  assert.equal(await customer.locator('#v3-f-theme_or_style').inputValue(),'Jardim de teste');
+ await customer.locator('[data-v3-tab="convite"]').first().click();
+ await customer.locator('[data-v3-field="music_choice"][value="yes"]').check();
+ await customer.locator('[data-v3-field="music_request"]').waitFor();
+ await customer.locator('[data-v3-field="music_request"]').fill('Música de teste');
+ await customer.locator('[data-v3-field="interactive_resources"][value="gifts"]').check();
+ await customer.locator('[data-v3-field="gift_mode"][value="suggestions"]').check();
+ await customer.locator('[data-v3-field="gift_categories"][value="clothes"]').check();
+ await customer.locator('[data-v3-field="gift_clothing_size"]').waitFor();
+ assert.equal(await customer.locator('[data-v3-field="music_request"]').inputValue(),'Música de teste');
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();await customer.getByText('Fotos e vídeos pelo WhatsApp',{exact:true}).waitFor();
  await customer.screenshot({path:'artifacts/v3-browser/customer-retro-mobile.png',fullPage:true});
  assert.equal(await customer.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);

@@ -47,7 +47,7 @@ const CINEMATIC_PRODUCTS =
 
 // Chaves Pix de telefone são cadastradas no DICT em formato +55 + DDD + número.
 // Aceita a digitação brasileira de 10/11 dígitos e preserva o número original.
-function normalizePixPhoneKey(rawKey) {
+export function normalizePixPhoneKey(rawKey) {
   const raw = String(rawKey || '').trim();
   const compact = raw.replace(/[\s()-]/g, '');
   if (/^\d{10,11}$/.test(compact)) return '+55' + compact;
@@ -55,7 +55,7 @@ function normalizePixPhoneKey(rawKey) {
   return compact;
 }
 
-function validPixKey(type, rawKey) {
+export function validPixKey(type, rawKey) {
   const raw = String(rawKey || '').trim();
   const digits = raw.replace(/\D/g, '');
   if (!type || !raw) return false;
@@ -1372,12 +1372,7 @@ function buildSchema(
       );
 
       if (
-        [
-          'registry',
-          'both',
-        ].includes(
-          data.gift_mode,
-        )
+        wedding && ['registry', 'both'].includes(data.gift_mode)
       ) {
         productFields.push(
           field(
@@ -2380,12 +2375,7 @@ function cleanBranches(
     }
   } else {
     if (
-      ![
-        'registry',
-        'both',
-      ].includes(
-        data.gift_mode,
-      )
+      !wedding || !['registry', 'both'].includes(data.gift_mode)
     ) {
       delete data.gift_registry_url;
     }

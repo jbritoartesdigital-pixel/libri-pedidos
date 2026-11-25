@@ -35,7 +35,7 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
   assert.match(root.innerHTML,/Pagamento confirmado/);
   assert.match(root.innerHTML,/data-v3-start="shared"[^>]*>Preencher meus dados/);
   assert.match(root.innerHTML,/<progress[^>]*value="0" max="1"/);
-  assert.match(root.innerHTML,/Agenda em conferência/);
+  assert.doesNotMatch(root.innerHTML,/Agenda em conferência/i);
   assert.doesNotMatch(root.innerHTML,/Pagamento recebido, agenda em conferência/);
   assert.doesNotMatch(root.innerHTML,/v3-financial-details" open/);
 });

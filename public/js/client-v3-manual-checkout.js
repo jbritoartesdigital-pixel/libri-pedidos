@@ -69,7 +69,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+
  '<div class="studio-manual-section-title">Seu pedido</div><div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
  (hasExtras&&!black?'<div class="studio-manual-addons"><button type="button" data-manual-action="extras" aria-expanded="'+extrasOpen+'" aria-controls="manualOptionalAddons" class="studio-manual-addons-toggle" '+(busy?'disabled':'')+'><span>Adicionais opcionais</span><small>'+(extrasOpen?'Recolher':'+ Ver opções')+'</small></button><div id="manualOptionalAddons" '+(extrasOpen?'':'hidden')+'>'+(extrasOpen?extrasHtml():'')+'</div></div>':'')+
- '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(activeTerms.general.body)+'</div>'+activeTerms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked ':'')+(busy?'disabled':'')+'> Li e aceito os termos da contratação.</label></div>'+
+ '</div><div class="manual-terms-fixed"><details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(activeTerms.general.body)+'</div>'+activeTerms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked ':'')+(busy?'disabled':'')+'> Li e aceito os termos da contratação.</label></div>'+
  '<footer class="manual-footer"><div class="manual-total"><div><strong>'+(c.paymentMethod==='pix'?'Total no Pix':'Total no cartão')+'</strong>'+(quote.discountCents?'<small>Desconto: − '+money(quote.discountCents)+'</small>':'')+(quote.blackLibri?'<small>Black Libri: '+esc(quote.blackLibri.label)+'</small>':'')+'</div><b>'+money(quote.totalCents)+'</b></div>'+
  (quote.depositPercent===50?'<div class="manual-payment-split"><span>Entrada: <b>'+money(quote.depositCents)+'</b></span><span>Saldo: '+money(quote.balanceCents)+'</span></div>':'')+
  '<button class="manual-primary" type="button" data-manual-action="pay" '+(busy?'disabled':'')+'>'+(busy?'Conferindo…':quote.depositPercent===50?'Pagar entrada':'Continuar para pagamento')+'</button></footer></section>';
@@ -87,7 +87,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  busy=true;error='';render();
  try{
   const finalSelection={...selection(),...(black?.status==='reserved'?{blackLibriClaimId:black.id}:{})};
-  quote=(await request('quote',finalSelection)).quote;render();
+  const final=await request('quote',finalSelection);quote=final.quote;if(final.terms&&JSON.stringify(final.terms)!==JSON.stringify(activeTerms)){activeTerms=final.terms;terms=false;busy=false;error='As condições foram atualizadas. Confira e aceite novamente.';render();return;}render();
   const result=await request('finish',{...finalSelection,id:c.revisionId,termsAccepted:true,confirmed:true,expectedTotalCents:quote.totalCents});
   const url=safePay(result.payment?.checkoutUrl);if(url){location.assign(url);return;}
   location.reload();

@@ -2275,3 +2275,6 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 .libri-manual-checkout .manual-total{padding:1px 0}
 .libri-manual-checkout .manual-included p{margin:0}
 .libri-manual-checkout .studio-manual-price small{margin-top:0}
+
+.libri-manual-checkout .manual-terms-fixed{display:grid;gap:2px;flex:none}
+.libri-manual-checkout .manual-terms[open]{max-height:min(35dvh,240px);overflow:auto}

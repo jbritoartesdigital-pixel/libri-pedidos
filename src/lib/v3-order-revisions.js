@@ -221,7 +221,7 @@ async function manualCheckoutQuote(db,c,input={}){
  if(data.flexibleDelivery===true)validateV3ManualDeliveryWindow(capacity);else await validateV2DeliveryWindow(db,capacity);
  if(!(await planV2AllocationForWindow(db,capacity)).fits)fail('A agenda não comporta essa seleção. Retire um adicional ou fale com a Libri.');
  const priced={...q,schemaVersion:3,...(old.manualFlexibleDelivery===true?{manualFlexibleDelivery:true}:{}),contactSnapshot:old.contactSnapshot||null,comboDiscountCents:q.discountCents-q.couponDiscountCents,payment:{method:row.payment_method,depositPercent:row.deposit_percent,depositCents:row.deposit_percent===50?Math.ceil(q.totalCents/2):q.totalCents,balanceCents:row.deposit_percent===50?Math.floor(q.totalCents/2):0}};
- const terms=await termsFor(db,priced);
+ const terms=identity?await termsFor(db,priced):JSON.parse(r.terms_json);
  return {q:priced,items,blackBody,terms,public:manualPublicQuote(priced,row.deposit_percent)};
 }
 export async function getV3ManualCheckout(env,token,action,input={}){

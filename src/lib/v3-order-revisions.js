@@ -183,7 +183,7 @@ async function manualCheckoutQuote(db,c,input={}){
 }
 export async function getV3ManualCheckout(env,token,action,input={}){
  const c=await manualCheckoutContext(env.DB,token);
- if(action==='catalog')return {orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],quote:manualPublicQuote(c.old,c.row.deposit_percent)};
+ if(action==='catalog')return {customerName:c.old.contactSnapshot?.name||(await env.DB.prepare('SELECT name FROM v2_customers WHERE id=?').bind(c.row.customer_id).first())?.name||'',orderCode:c.row.order_code,event:{honoreeName:c.row.honoree_display_name,date:c.row.event_date},deliveryWindow:c.data.deliveryWindow,paymentMethod:c.row.payment_method,depositPercent:c.row.deposit_percent,terms:JSON.parse(c.r.terms_json),revisionId:c.r.id,addons:c.addons,extras:c.extras,ownedAddonCodes:c.invite?.addonCodes||[],quote:manualPublicQuote(c.old,c.row.deposit_percent)};
  const p=await manualCheckoutQuote(env.DB,c,input);
  if(action==='quote'||action==='preview')return {quote:p.public};
  if(action==='status'||action==='reveal')return v3BlackStatus(env,{...p.blackBody,balloon:input.balloon},{reveal:action==='reveal'});

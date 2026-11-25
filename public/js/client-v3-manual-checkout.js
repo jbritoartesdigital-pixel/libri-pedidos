@@ -3,18 +3,22 @@ import {openBlackLibriBeforePayment} from './client-v2-black-libri.js?v=109';
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0)/100);
 const day=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.split('-').reverse().join('/'):'A confirmar';
-import {compactManualAddonGroups,isMomentsPlan} from './client-v2-manual-addon-groups.js?v=20261110-confirmation-clear-1';
-import {modal} from './client-v2-core.js';
+// Match the commercial language of the V3 storefront, not the legacy V2 controls.
+const groupNames={confirmation:'Formulário de confirmação',filter:'Filtro personalizado',moments:'Álbum de fotos',save_the_date:'Save the Date',reminder:'Lembrete da festa',retrospectiva:'Retrospectiva',moments_extra:'Mais fotos para o álbum'};
+const groupOrder=['save_the_date','reminder','confirmation','filter','moments','retrospectiva','moments_extra'];
+const isMomentsPlan=code=>/^moments_(festa|premium|exclusive)$/.test(code);
+const shortVariant=a=>a.code.endsWith('_static')?'Estático':a.code.endsWith('_animated')?'Animado':({moments_festa:'Festa',moments_premium:'Premium',moments_exclusive:'Exclusive',moments_extra_100:'+100 fotos'}[a.code]||a.name);
+function manualGroups(addons){const groups=new Map();for(const a of addons){if(!groups.has(a.group))groups.set(a.group,[]);groups.get(a.group).push(a);}return [...groups].sort(([a],[b])=>(groupOrder.includes(a)?groupOrder.indexOf(a):99)-(groupOrder.includes(b)?groupOrder.indexOf(b):99)).map(([key,options])=>({key,label:groupNames[key]||options[0].name,options:options.slice().sort((a,b)=>a.priceCents-b.priceCents),minPriceCents:Math.min(...options.map(a=>a.priceCents))}));}
 const suggestionCopy={confirmation:'Acompanhe as respostas e escolha confirmação livre ou por lista de convidados.',filter:'Uma câmera com filtro personalizado para os convidados registrarem a festa.',moments:'Reúna os registros dos convidados em um álbum digital com filtro incluso.',save_the_date:'Avise seus convidados sobre a data com antecedência.',reminder:'Relembre os convidados perto da comemoração.'};
 function safePay(v){try{const u=new URL(v);return u.protocol==='https:'&&/(^|\.)mercadopago\.com(\.br)?$/.test(u.hostname)?u.href:null;}catch{return null;}}
 export async function startV3ManualCheckout(root,{token,api}){
  const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/manual-checkout';
  const c=await api(endpoint+'/catalog');
  let quote=c.quote,step=c.addons.length||c.extras.length?'extras':'cart',busy=false,error='',terms=false,black=null,suggestionSeen=false;
- const chosen=new Map(),quantities=new Map();
+ const chosen=new Map(),quantities=new Map();let savedChosen=new Map(),savedQuantities=new Map();
  const selection=()=>({addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
  const request=(action,data={})=>api(endpoint+'/'+action,{method:'POST',body:JSON.stringify(data)});
- const grouped=compactManualAddonGroups(c.addons),expanded=new Set();
+ const grouped=manualGroups(c.addons);
  const albumSelected=()=>Boolean(c.ownedAddonCodes?.some(isMomentsPlan)||[...chosen.values()].some(isMomentsPlan));
  const blocked=g=>g==='moments'&&chosen.has('filter')||g==='filter'&&chosen.has('moments')||g==='moments_extra'&&!albumSelected();
  root.classList.add('libri-manual-checkout');
@@ -25,19 +29,34 @@ export async function startV3ManualCheckout(root,{token,api}){
  const value=chosen.get(g.key)||'',selected=g.options.find(a=>a.code===value),disabled=blocked(g.key)||busy;
  if(g.options.length===1){
  const a=g.options[0];
- return '<label class="manual-addon-single manual-v110-row"><input type="checkbox" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value?'checked ':'')+(disabled?'disabled':'')+'><span class="manual-addon-copy"><strong class="manual-addon-label">'+esc(g.label)+'</strong>'+(g.key==='confirmation'?'<small class="manual-confirmation-note">A confirmação simples do convite continua inclusa.</small>':'')+'</span><strong class="manual-addon-price">+'+money(a.priceCents)+'</strong></label>';
+ return '<label class="manual-v110-row studio-manual-row"><input type="checkbox" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value?'checked ':'')+(disabled?'disabled':'')+'><span class="studio-manual-copy"><strong>'+esc(g.label)+'</strong>'+(g.key==='confirmation'?'<small>Confirmação simples já inclusa no convite.</small>':'')+'</span><b>+'+money(a.priceCents)+'</b></label>';
  }
- return '<details class="manual-addon-group manual-v110-row" data-manual-expand="'+esc(g.key)+'" '+(expanded.has(g.key)?'open':'')+'><summary><span class="manual-addon-title">'+esc(g.label)+(selected?'<small>'+esc(selected.name)+'</small>':'')+'</span><strong class="manual-addon-price">'+(selected?money(selected.priceCents):'A partir de '+money(g.minPriceCents))+'</strong></summary><div class="manual-addon-options">'+[{code:'',name:'Não adicionar'},...g.options].map(a=>'<label class="manual-addon-option"><input type="radio" name="manual_'+esc(g.key)+'" data-manual-choice="'+esc(g.key)+'" value="'+esc(a.code)+'" '+(value===a.code?'checked ':'')+(disabled?'disabled':'')+'><span>'+esc(a.name)+'</span>'+(a.code?'<strong>+'+money(a.priceCents)+'</strong>':'')+'</label>').join('')+'</div></details>';
+ return '<button type="button" class="manual-v110-row studio-manual-row studio-manual-expand" data-manual-open="'+esc(g.key)+'" '+(disabled?'disabled':'')+'><span class="studio-manual-copy"><strong>'+esc(g.label)+'</strong>'+(selected?'<small>'+esc(shortVariant(selected))+'</small>':'')+'</span><span class="studio-manual-price"><b>'+(selected?money(selected.priceCents):'A partir de '+money(g.minPriceCents))+'</b><small>'+(selected?'Alterar':'Ver opções')+'</small></span></button>';
  }).join('');
  return '<div class="manual-extras-list">'+rows+c.extras.map(x=>'<article class="manual-extra manual-v110-row"><div><h3>'+esc(x.name)+'</h3><p>'+money(x.priceCents)+' por unidade</p></div><label><span class="manual-quantity-label">Quantidade</span><input type="number" min="0" max="'+x.maxQuantity+'" step="1" data-manual-extra="'+esc(x.code)+'" value="'+(quantities.get(x.code)||0)+'"></label></article>').join('')+'</div>';
  }
+ function openStudioDialog(title,html){
+ const d=document.createElement('dialog');d.className='studio-manual-dialog';d.setAttribute('aria-label',title);
+ d.innerHTML='<div class="studio-manual-dialog-head"><h2>'+esc(title)+'</h2><button type="button" class="studio-manual-close" aria-label="Fechar">×</button></div>'+html;
+ document.body.append(d);
+ const close=()=>{if(d.open)d.close();};d.addEventListener('close',()=>d.remove(),{once:true});
+ d.querySelector('.studio-manual-close').onclick=close;
+ d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();}});
+ d.showModal();return {d,close};
+ }
+ function openOptions(group){
+ const g=grouped.find(x=>x.key===group);if(!g||blocked(group)||busy)return;
+ const selected=chosen.get(group);
+ const {d,close}=openStudioDialog(g.label,(group==='moments'?'<p>Inclui o filtro personalizado na câmera Libri.</p>':'')+'<div class="studio-manual-option-list">'+g.options.map(a=>'<button type="button" class="studio-manual-option" data-option="'+esc(a.code)+'" aria-pressed="'+(selected===a.code)+'"><span>'+esc(shortVariant(a))+'</span><b>+'+money(a.priceCents)+'</b></button>').join('')+'</div>'+(selected?'<button type="button" class="studio-manual-text" data-option="">Retirar adicional</button>':'')+'<button type="button" class="studio-manual-text" data-dismiss>Voltar</button>');
+ d.addEventListener('click',e=>{const opt=e.target.closest('[data-option]');if(opt){const value=opt.dataset.option;if(value)chosen.set(group,value);else chosen.delete(group);if(!albumSelected())chosen.delete('moments_extra');close();refresh();}else if(e.target.closest('[data-dismiss]'))close();});
+ }
  function render(){
- const cart=step==='cart';
- root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(cart?'Seu pedido':'Adicionais')+'</h1><p>'+(cart?'Confira os serviços escolhidos e finalize o pagamento.':'Escolha se quiser ou siga para o carrinho.')+'</p></header>'+
+ const cart=step==='cart',firstName=String(c.customerName||'').trim().split(/\s+/)[0];
+ root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(cart?'Seu pedido':firstName?'Olá, '+esc(firstName)+'!':'Olá!')+'</h1><p>'+(cart?'Confira seu pedido e finalize o pagamento.':'Aqui é sua área para finalizar seu pedido.')+'</p></header>'+
  '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+(cart?
  '<div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
  ((c.addons.length||c.extras.length)&&!black?'<button type="button" data-manual-action="extras" class="manual-text-btn">+ Alterar adicionais</button>':'')+
- '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(c.terms.general.body)+'</div>'+c.terms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked':'')+'> Li e aceito os termos da contratação.</label>':extrasHtml())+'</div>'+
+ '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(c.terms.general.body)+'</div>'+c.terms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked':'')+'> Li e aceito os termos da contratação.</label>':'<div class="studio-manual-section-title">Adicionais opcionais</div>'+extrasHtml())+'</div>'+
  '<footer class="manual-footer"><div class="manual-total"><div><strong>'+(c.paymentMethod==='pix'?'Total no Pix':'Total no cartão')+'</strong>'+(quote.discountCents?'<small>Desconto: − '+money(quote.discountCents)+'</small>':'')+(quote.blackLibri?'<small>Black Libri: '+esc(quote.blackLibri.label)+'</small>':'')+'</div><b>'+money(quote.totalCents)+'</b></div>'+
  (quote.depositPercent===50?'<div class="manual-payment-split"><span>Entrada: <b>'+money(quote.depositCents)+'</b></span><span>Saldo: '+money(quote.balanceCents)+'</span></div>':'')+
  '<button class="manual-primary" type="button" data-manual-action="'+(cart?'pay':'cart')+'" '+(busy?'disabled':'')+'>'+(busy?'Conferindo…':cart?(quote.depositPercent===50?'Pagar entrada':'Continuar para pagamento'):'Ir para o carrinho')+'</button></footer><div class="manual-progress" aria-label="Etapas"><span class="'+(!cart?'active':'done')+'"></span><span class="'+(cart?'active':'')+'"></span><span></span></div></section>';
@@ -45,9 +64,10 @@ export async function startV3ManualCheckout(root,{token,api}){
  }
  async function refresh(){
  if(busy)return;
- const y=root.querySelector('.manual-scroll')?.scrollTop||0;expanded.clear();root.querySelectorAll('[data-manual-expand][open]').forEach(el=>expanded.add(el.dataset.manualExpand));busy=true;error='';render();
- try{quote=(await request('quote',selection())).quote;}
- catch(e){error=e.message||'Não foi possível conferir os adicionais.';chosen.clear();quantities.clear();quote=c.quote;}
+ const y=root.querySelector('.manual-scroll')?.scrollTop||0;busy=true;error='';
+ root.setAttribute('aria-busy','true');root.querySelectorAll('input,button').forEach(el=>{el.disabled=true;});
+ try{quote=(await request('quote',selection())).quote;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);}
+ catch(e){error=e.message||'Não foi possível conferir os adicionais.';chosen.clear();for(const [k,v] of savedChosen)chosen.set(k,v);quantities.clear();for(const [k,v] of savedQuantities)quantities.set(k,v);}
  finally{busy=false;render();const el=root.querySelector('.manual-scroll');if(el)el.scrollTop=y;}
  }
  async function payFinal(){
@@ -77,9 +97,9 @@ export async function startV3ManualCheckout(root,{token,api}){
  return null;
  }
  function showSuggestion({group,a,next,delta}){
- const close=modal(a.name,'<div class="manual-upsell-card"><span class="manual-upsell-kicker">UMA SUGESTÃO PARA SEU PEDIDO</span><p>'+esc(suggestionCopy[group])+'</p><div class="manual-upsell-delta"><small>Por apenas mais</small><strong>'+money(delta)+'</strong></div><div class="manual-upsell-totals"><span>Novo total <b>'+money(next.totalCents)+'</b></span>'+(next.depositPercent===50?'<span>Entrada <b>'+money(next.depositCents)+'</b></span><span>Saldo <b>'+money(next.balanceCents)+'</b></span>':'')+'</div><div class="action-row"><button type="button" class="btn btn-ghost" id="manualV3SuggestionSkip">Agora não</button><button type="button" class="btn btn-primary" id="manualV3SuggestionAccept">Quero adicionar</button></div></div>');
- document.getElementById('manualV3SuggestionSkip').onclick=()=>{close();finish();};
- document.getElementById('manualV3SuggestionAccept').onclick=()=>{close();chosen.set(group,a.code);quote=next;error='';render();};
+ const {d,close}=openStudioDialog(groupNames[group]||a.name,'<p>'+esc(suggestionCopy[group])+'</p><div class="studio-manual-offer"><small>Por apenas mais</small><strong>'+money(delta)+'</strong></div><div class="studio-manual-offer-total"><span>Novo total <b>'+money(next.totalCents)+'</b></span>'+(next.depositPercent===50?'<span>Entrada <b>'+money(next.depositCents)+'</b></span><span>Saldo <b>'+money(next.balanceCents)+'</b></span>':'')+'</div><div class="studio-manual-dialog-actions"><button type="button" id="manualV3SuggestionSkip">Agora não</button><button type="button" id="manualV3SuggestionAccept">Quero adicionar</button></div>');
+ d.querySelector('#manualV3SuggestionSkip').onclick=()=>{close();finish();};
+ d.querySelector('#manualV3SuggestionAccept').onclick=()=>{close();chosen.set(group,a.code);quote=next;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);error='';render();};
  }
  async function finish(){
  if(busy)return;
@@ -104,6 +124,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  });
  root.addEventListener('click',e=>{
  if(busy)return;
+ const open=e.target.closest('[data-manual-open]');if(open&&!black){openOptions(open.dataset.manualOpen);return;}
  const action=e.target.closest('[data-manual-action]')?.dataset.manualAction;
  if(action==='cart'||action==='extras'&&!black){step=action;error='';render();return;}
  if(action==='pay')finish();

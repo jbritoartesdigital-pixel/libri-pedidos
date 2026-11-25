@@ -301,6 +301,13 @@ try{
  await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.libri-manual-checkout .manual-v110-row').first().waitFor();
  assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
  assert.equal(await manualPage.locator('.manual-total').count(),1);
+ assert.equal(await manualPage.getByRole('heading',{name:'Olá, Cliente!'}).count(),1);
+ assert.equal(await manualPage.getByText('Formulário de confirmação',{exact:true}).count(),1);
+ const optionsButton=manualPage.locator('[data-manual-open="save_the_date"]');
+ const scrollHeightBefore=await manualPage.locator('.manual-scroll').evaluate(el=>el.scrollHeight);
+ await optionsButton.click();await manualPage.locator('dialog.studio-manual-dialog[open]').waitFor();
+ assert.equal(await manualPage.locator('.manual-scroll').evaluate(el=>el.scrollHeight),scrollHeightBefore);
+ await manualPage.locator('dialog [data-dismiss]').click();assert.equal(await manualPage.locator('dialog[open]').count(),0);
  for(const size of [{width:390,height:740},{width:360,height:640},{width:320,height:568}]){
   await manualPage.setViewportSize(size);
   const fit=await manualPage.evaluate(()=>{const button=document.querySelector('[data-manual-action="cart"]').getBoundingClientRect();const total=document.querySelector('.manual-total').getBoundingClientRect();const scroll=document.querySelector('.manual-scroll');return {bottom:button.bottom,top:total.top,viewport:innerHeight,wide:document.documentElement.scrollWidth>innerWidth,rows:document.querySelectorAll('.manual-v110-row').length,overflow:scroll.scrollHeight-scroll.clientHeight};});

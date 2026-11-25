@@ -1,9 +1,10 @@
+import {openOrderDrawer} from './admin-order-drawer.v123.js';
 import {api,esc,money,modal,showToast,dateTimeBr} from './admin-v2-core.js';
 const names={shared:'Dados da comemoração',convite:'Convite digital',identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof o==='object'&&o.value===x)?.label||x;return Array.isArray(v)?v.map(label).join(', '):label(v);};
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
- const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
+ const close=openOrderDrawer(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
  const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={},supplementCapacity={},revisionEditor=null,revisionPreview=null;
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;
@@ -126,6 +127,19 @@ export async function openV3AdminOrder(code,initial,onChanged){
  const c=brief.customer||{},m=brief.orderMeta||{},phone=String(c.whatsapp||'').replace(/\D/g,'');
  return '<div class="order-meta"><p><strong>Cliente:</strong> '+esc(c.name||'Não informado')+'</p><p>WhatsApp: '+esc(c.whatsapp||'Não informado')+'</p>'+'<p>Evento: '+esc(({birthday:'Aniversário',wedding:'Casamento','15_years':'15 anos',celebration:'Chá ou celebração',other:'Outra celebração'})[brief.event.type]||brief.event.type||'Não informado')+(m.eventSubtype?' · '+esc(m.eventSubtype):'')+'</p><p>Festa: '+dateBr(brief.event.date)+'</p><p>Entrega: '+dateBr(brief.deliveryWindow?.start)+(brief.deliveryWindow?.end&&brief.deliveryWindow.end!==brief.deliveryWindow.start?' a '+dateBr(brief.deliveryWindow.end):'')+'</p><p>Origem: '+esc(m.source==='manual_whatsapp'?'Pedido manual':m.source==='store'?'Loja':m.source||'Não informada')+'</p>'+(m.createdAt?'<p>Criado em: '+esc(dateTimeBr(m.createdAt))+'</p>':'')+(m.nextAction?'<p>Próximo: '+esc(m.nextAction)+'</p>':'')+(/^\d{10,15}$/.test(phone)?'<a class="btn btn-secondary" href="https://wa.me/'+phone+'" target="_blank" rel="noopener noreferrer">WhatsApp da cliente</a>':'')+'</div>';
  }
+ function briefingText(full=false){
+ const out=[code+' · '+brief.event.honoreeName,'Festa: '+dateBr(brief.event.date),'Entrega: '+dateBr(brief.deliveryWindow?.start)+' a '+dateBr(brief.deliveryWindow?.end),''];
+ for(const s of brief.services){out.push(s.productName+' · '+s.variantName);for(const a of s.addons||[])out.push('Adicional: '+a.name);for(const x of s.extras||[])out.push(x.quantity+' × '+x.name);}
+ for(const m of brief.modules){out.push('',names[m.module]);for(const sec of m.schema.sections){for(const f of sec.fields){const v=m.data[f.key];if(v!=null&&String(v).trim()&&!['info','upload'].includes(f.type))out.push(f.label+': '+value(f,v));}}}
+ if(full){out.push('','Cliente: '+(brief.customer?.name||''),'WhatsApp: '+(brief.customer?.whatsapp||''),'Total: '+money(brief.payment.totalCents),'Recebido: '+money(brief.payment.receivedCents),'Saldo: '+money(brief.payment.remainingCents));}
+ return out.join('\n');
+ }
+ async function copyText(text){
+ if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(text);return;}catch{}}
+ const el=document.createElement('textarea');el.value=text;el.style.position='fixed';el.style.opacity='0';host.append(el);el.select();const ok=document.execCommand('copy');el.remove();if(!ok)throw new Error('Não foi possível copiar.');
+ }
+ function briefingActions(){return !brief.locked?folderButton()+' <button class="btn btn-secondary" data-v3-admin="copy-data">Copiar dados do pedido</button> <button class="btn btn-secondary" data-v3-admin="copy-full">Copiar ficha completa</button>':'';}
+ function notesHtml(){return '<section class="card"><h3>Observações internas</h3><label>Somente a administração vê estas anotações<textarea maxlength="4000" data-v3-internal-note></textarea></label><button class="btn btn-secondary" data-v3-admin="save-note">Salvar observação</button>'+((brief.notes||[]).map(n=>'<p>'+esc(n.note)+' <small>'+esc(dateTimeBr(n.createdAt))+'</small></p>').join(''))+'</section>';}
  function folderButton(){return !brief.locked&&!brief.cancellation?'<a class="btn btn-primary" data-v3-download-folder href="/api/admin/v2/orders/'+encodeURIComponent(code)+'/download-folder" download>Baixar pasta ZIP</a>':'';}
  function quickStart(s){
  if(brief.locked||brief.cancellation||s.briefingStatus!=='completed'||s.productionStatus!=='pending')return '';
@@ -151,7 +165,8 @@ export async function openV3AdminOrder(code,initial,onChanged){
   const statuses={pending:'Aguardando programação',ready:'Pronto para produzir',in_production:'Em produção',waiting_customer:'Aguardando aprovação',adjustments:'Ajustes solicitados',approved:'Aprovado',delivered:'Entregue'};
   pages.get('summary').innerHTML=(brief.adminPayment?.canEditManual?'<button class="btn btn-primary" data-v3-admin="revision-editor">Editar pedido</button>':'')+folderButton()+'<h3>Serviços contratados</h3>'+brief.services.map(purchasedHtml).join('');
   pages.get('finance').innerHTML=financeReadout();
-  if(folderButton())pages.get('briefing').innerHTML=folderButton();
+  if(folderButton())pages.get('briefing').innerHTML=briefingActions();
+  pages.get('history').innerHTML=notesHtml();
   for(const el of sections){if(el===summary)continue;const k=el.dataset.v3Panel||'';if(el.matches('[role="alert"]'))pages.get(activeTab).prepend(el);else if(k.startsWith('briefing-'))pages.get('briefing').append(el);else if(k==='finance'||k==='cancel')pages.get('finance').append(el);else if(k==='revision')pages.get('changes').append(el);else if(el.classList.contains('v3-admin-service'))pages.get('production').append(el);else if(el.tagName==='DETAILS'&&!k)pages.get('history').append(el);else if(el.matches('p.muted'))pages.get('production').append(el);else if(el.querySelector('[data-v3-admin^="paid-capacity-"],[data-v3-admin^="urgency-"]'))pages.get('production').prepend(el);}
   for(const [key,page] of pages)if(!page.childElementCount)page.innerHTML='<p class="muted">Nenhuma informação nesta seção.</p>';
   selectTab(activeTab);
@@ -167,7 +182,7 @@ export async function openV3AdminOrder(code,initial,onChanged){
  (s.complementNote?'<p>Complemento solicitado: '+esc(s.complementNote)+'</p>':'')+agendaHtml(s)+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('')+
  brief.modules.map(m=>{const s=brief.services.find(x=>x.family===m.module);return '<details class="card v3-admin-panel" data-v3-panel="briefing-'+esc(m.module)+'"'+opened('briefing-'+m.module,!!s&&s.briefingStatus==='completed'&&!s.reviewedAt)+'><summary><strong>'+esc(names[m.module])+'</strong>'+ (s?' · '+esc(s.reviewedAt?'Conferido':s.briefingStatus==='completed'?'A conferir':'Aguardando respostas'):'')+'</summary>'+
  m.schema.sections.map(sec=>'<h4>'+esc(sec.title)+'</h4>'+sec.fields.filter(f=>m.data[f.key]!=null&&String(m.data[f.key]).trim()).map(f=>'<div class="order-answer-item"><strong>'+esc(f.label)+'</strong><p>'+esc(value(f,m.data[f.key]))+'</p></div>').join('')).join('')+
- (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a></p>').join('')+
+ (m.uploads||[]).map(u=>'<p>'+esc(u.originalFilename)+' · <a href="'+esc(u.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem privada</a> · <a href="'+esc(u.contentPath)+'?download=1" download>Baixar original</a></p>').join('')+
  materials(m)+(m.schema.sections.some(sec=>sec.fields.some(f=>f.key==='black_gift_media_sent'))?'<label><input type="checkbox" data-gift-media="'+esc(m.module)+'"> Conferi as fotos, a autorização e o escopo do presente Black Libri</label>':'')+(s?.briefingStatus==='completed'&&s.productionStatus==='pending'?'<div><button class="btn btn-primary" data-v3-admin="confirm" data-family="'+esc(m.module)+'">Confirmar briefing conferido</button><label>Complemento necessário <textarea maxlength="500" data-note="'+esc(m.module)+'"></textarea></label><button class="btn btn-secondary" data-v3-admin="reopen" data-family="'+esc(m.module)+'">Solicitar complemento</button></div>':'')+'</details>';}).join('')+
  ('<details class="card history-timeline" open><summary>Histórico geral do pedido</summary><div class="history-track">'+((brief.history||[]).length?brief.history.map(e=>'<article class="history-event"><time>'+esc(dateTimeBr(e.created_at))+'</time><strong>'+esc(e.description||e.action)+'</strong>'+(e.family?'<small>'+esc(names[e.family]||e.family)+'</small>':'')+(e.note?'<p>'+esc(e.note)+'</p>':'')+'</article>').join(''):'<p>Nenhuma movimentação registrada.</p>')+'</div></details>')+
  '<p class="muted">A agenda é validada ao iniciar a produção.</p>';
@@ -178,6 +193,8 @@ export async function openV3AdminOrder(code,initial,onChanged){
  host.addEventListener('click',async e=>{
  const tab=e.target.closest('[data-v3-admin-tab]');if(tab&&!busy){selectTab(tab.dataset.v3AdminTab);return;}const b=e.target.closest('[data-v3-admin]');if(!b||busy)return;
  const action=b.dataset.v3Admin,family=b.dataset.family;
+ if(action==='copy-data'||action==='copy-full'){try{await copyText(briefingText(action==='copy-full'));showToast('Dados copiados ✓');}catch(err){showToast(err.message);}return;}
+ if(action==='save-note'){const input=host.querySelector('[data-v3-internal-note]'),note=input?.value.trim();if(!note){showToast('Escreva a observação.');return;}busy=true;b.disabled=true;try{const r=await api('/api/admin/v2/orders/'+encodeURIComponent(code)+'/notes',{method:'POST',body:JSON.stringify({note})});brief=(await api(base)).briefing;showToast('Observação salva ✓');render();}catch(err){showToast(err.message);}finally{busy=false;host.querySelectorAll('button').forEach(x=>x.disabled=false);}return;}
  let path=base,payload=null,method='POST';
  if(action==='quick-start'){
    const s=brief.services.find(x=>x.family===family),m=brief.modules.find(x=>x.module===family);

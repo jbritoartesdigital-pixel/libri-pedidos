@@ -1084,3 +1084,10 @@ test('V121 direct final delivery without preview still requires full payment and
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_service_previews WHERE service_id=?').get(s.id).n,0);
  assert.equal(db.sqlite.prepare("SELECT preview_id FROM v3_service_production_events WHERE service_id=? AND action='delivered'").get(s.id).preview_id,null);
 });
+
+test('V123 notes remain private and are visible in the V3 administrative ficha',async t=>{
+ const {db,order}=await paid(t);
+ db.sqlite.prepare("INSERT INTO v2_internal_notes(order_id,note,created_at) VALUES(?, 'Observacao interna V123',datetime('now'))").run(order.orderId);
+ const admin=await getV3AdminBriefing(db,order.publicToken),customer=await getV3ModularBriefing(db,order.publicToken);
+ assert.equal(admin.notes[0].note,'Observacao interna V123');assert.equal(customer.notes,undefined);
+});

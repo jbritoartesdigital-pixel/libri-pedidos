@@ -1,3 +1,4 @@
+import {startV2Checkout} from '../../src/lib/v2-checkout.js';
 import {guardV3LegacyAdmin} from '../../src/lib/v3-legacy-guard.js';
 import {handleAdminOrderZipV2Api} from '../../src/routes/admin-order-zip-v2.js';
 import {handleStoreFunnel,getStoreFunnel} from '../../src/lib/v3-store-funnel.js';
@@ -49,6 +50,15 @@ try{
  unpaidFixture=await make('Festa teste pendente','5561888888888');assert.equal(mp.posts,2);mockFetch=globalThis.fetch;
 }finally{globalThis.fetch=originalFetch;}
 const readEnv={DB:fixtureDb,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'};
+const legacyDb=database(),legacyEnv={DB:legacyDb,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};let legacyFixture;
+try{
+ const mp=providerMock({mock:{method:(obj,key,fn)=>{obj[key]=fn;}}});
+ const termsVersion=legacyDb.sqlite.prepare('SELECT version FROM v2_terms_versions WHERE active=1').get().version;
+ legacyFixture=await startV2Checkout(new Request('https://test/api/v2/checkout/start'),legacyEnv,{clientRequestId:randomToken(),customer:{name:'Cliente legado',whatsapp:'5561777777777',email:'legacy@example.com'},event:{honoreeName:'Festa teste legada',type:'birthday',date:day(65)},selection:{productCode:'interactive_essential',paymentMethod:'pix'},deliveryWindow:{start:day(10),end:day(12)},termsAccepted:true,termsVersion,paymentMethod:'pix'});
+ mp.approve(legacyFixture.payment.providerOrderId);await syncMercadoPagoOrder(legacyEnv,legacyFixture.payment.providerOrderId);
+ // Avoid a code collision with the V3 fixture database.
+ legacyDb.sqlite.prepare("UPDATE v2_orders SET order_code='LIBRI-987654' WHERE order_code=?").run(legacyFixture.order.code);
+}finally{globalThis.fetch=originalFetch;}
 const manualDb=database();
 const manualEnv={DB:manualDb,LIBRI_V3_CHECKOUT_ENABLED:'true',LIBRI_V3_BLACK_LIBRI_ENABLED:'true',LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true',MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};
 await saveBlackLibriCampaign(manualEnv,{adminEnabled:true,complianceConfirmed:true,authorizationReference:'TESTE-INTERNO',adminNote:'Dados sintéticos',validFrom:'2020-01-01',validUntil:'2030-12-31'});
@@ -84,6 +94,8 @@ const server=createServer(async(req,res)=>{
      const zipEnv={...readEnv,FILES:{get:async()=>null}};
      result=await guardV3LegacyAdmin(request,zipEnv.DB,url)||await handleAdminOrderZipV2Api(request,zipEnv,url);
    }
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/LIBRI-987654/v3/briefing')result=await handleAdminBriefingV3Api(request,legacyEnv,url);
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/LIBRI-987654')result=await handleAdminV2CoreApi(request,legacyEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
@@ -300,12 +312,18 @@ try{
  const adminContext=await browser.newContext({viewport:{width:1280,height:900},reducedMotion:'reduce'});
  await adminContext.route('**/*',r=>r.request().url().startsWith(origin+'/')?r.continue():r.abort());
  const admin=await adminContext.newPage();admin.on('pageerror',e=>errors.push(e.message));
+ await admin.goto(origin+'/admin-v2?order=LIBRI-987654');
+ await admin.locator('#orderSummary').waitFor();
+ const oldDrawer=admin.locator('#modalRoot.order-drawer-root .libri-order-drawer');await oldDrawer.waitFor();
+ const oldBounds=await oldDrawer.boundingBox();
  await admin.goto(origin+'/admin-v2?order='+paidFixture.orderCode);
+ const newDrawer=admin.locator('#modalRoot.order-drawer-root .libri-order-drawer');await newDrawer.waitFor();
+ const newBounds=await newDrawer.boundingBox();assert.ok(Math.abs(oldBounds.width-newBounds.width)<2);assert.ok(Math.abs(oldBounds.x-newBounds.x)<2);
  await admin.locator('#v3AdminOrder .v3-admin-mini-service').first().waitFor();assert.equal(await admin.locator('#v3AdminOrder .v3-admin-mini-service').count(),3);assert.equal(await admin.locator('[data-v3-admin-page="summary"] [data-v3-download-folder]').getAttribute('href'),'/api/admin/v2/orders/'+paidFixture.orderCode+'/download-folder');
  const downloaded=admin.waitForEvent('download');
  await admin.locator('[data-v3-admin-page="summary"] [data-v3-download-folder]').click();
  const zip=await downloaded;assert.equal(await zip.failure(),null);assert.match(zip.suggestedFilename(),/\.zip$/i);
- const zipBytes=await readFile(await zip.path());assert.equal(zipBytes.readUInt32LE(0),0x04034b50);assert.match(zipBytes.toString('utf8'),/Jardim de teste/);assert.match(zipBytes.toString('utf8'),/Música de teste/);assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
+ const zipBytes=await readFile(await zip.path());assert.equal(zipBytes.readUInt32LE(0),0x04034b50);assert.match(zipBytes.toString('utf8'),/Jardim de teste/);assert.match(zipBytes.toString('utf8'),/Música de teste/);assert.equal(await admin.locator('[data-v3-admin-page="production"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="briefing"]').click();await admin.locator('[data-v3-admin-page="briefing"]').waitFor();assert.equal(await admin.locator('[data-v3-admin="copy-data"]').isVisible(),true);assert.equal(await admin.locator('[data-v3-admin="copy-full"]').isVisible(),true);assert.equal(await admin.locator('[data-v3-admin-page="finance"]').isVisible(),false);await admin.locator('.v3-admin-tabs [data-v3-admin-tab="finance"]').click();await admin.locator('[data-v3-admin-page="finance"]').waitFor();await admin.locator('.v3-admin-tabs [data-v3-admin-tab="production"]').click();await admin.locator('#v3AdminOrder .v3-admin-service').first().waitFor();
  assert.equal(await admin.locator('#v3AdminOrder .v3-admin-service').count(),3);
  await admin.screenshot({path:'artifacts/v3-browser/admin-three-services-desktop.png',fullPage:true});
  await admin.goto(origin+'/admin-v2');
@@ -397,4 +415,4 @@ try{
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_orders').get().n,0);
  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v3_store_journeys').get().n,0);
  console.log('Chromium: invite, Atelie, retro, three services, checkout terms, locked/unlocked customer shell, persisted draft, admin detail; test-only mock provider.');
-}finally{await browser.close();await new Promise(resolve=>server.close(resolve));db.sqlite.close();fixtureDb.sqlite.close();manualDb.sqlite.close();}
+}finally{await browser.close();await new Promise(resolve=>server.close(resolve));db.sqlite.close();fixtureDb.sqlite.close();manualDb.sqlite.close();legacyDb.sqlite.close();}

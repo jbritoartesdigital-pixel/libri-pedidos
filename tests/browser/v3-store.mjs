@@ -1,3 +1,4 @@
+import {handleAdminContractsV2Api} from '../../src/routes/admin-contracts-v2.js';
 import {startV2Checkout} from '../../src/lib/v2-checkout.js';
 import {guardV3LegacyAdmin} from '../../src/lib/v3-legacy-guard.js';
 import {handleAdminOrderZipV2Api} from '../../src/routes/admin-order-zip-v2.js';
@@ -96,6 +97,7 @@ const server=createServer(async(req,res)=>{
    }
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/LIBRI-987654/v3/briefing')result=await handleAdminBriefingV3Api(request,legacyEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/LIBRI-987654')result=await handleAdminV2CoreApi(request,legacyEnv,url);
+   else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/LIBRI-987654/contracts')result=await handleAdminContractsV2Api(request,legacyEnv,url);
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);

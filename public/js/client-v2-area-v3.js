@@ -52,7 +52,7 @@ export function renderV3Uploads(m,busy=false){
 }
 export async function startV3CustomerArea(root,{token,initial,api}){
   if(initial.locked&&initial.revision?.kind==='manual'&&!initial.cancellation&&['configuring','awaiting_payment'].includes(initial.orderStatus)){
-    const {startV3ManualCheckout}=await import('./client-v3-manual-checkout.js?v=111');
+    const {startV3ManualCheckout}=await import('./client-v3-manual-checkout.js?v=112');
     return startV3ManualCheckout(root,{token,api});
   }
   root.classList.add('libri-v3-area');document.body.classList.add('libri-v3-area-body');

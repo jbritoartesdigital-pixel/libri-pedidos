@@ -2232,3 +2232,11 @@ body.libri-manual-body .studio-manual-dialog::backdrop{background:#37282b65}
 .studio-manual-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .studio-manual-dialog-actions button{min-height:44px;border:1px solid var(--private-line);background:transparent;color:var(--private-rose);border-radius:10px;font:650 12px/1.3 var(--private-sans);cursor:pointer}
 .studio-manual-dialog-actions button+button{background:var(--private-rose);color:white;border-color:var(--private-rose)}
+
+/* V112: cart first, extras optional within the same screen. */
+.libri-manual-checkout .studio-manual-addons{flex:none;min-width:0}
+.libri-manual-checkout .studio-manual-addons-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--private-line);border-radius:10px;background:var(--private-surface);color:var(--private-ink);font:650 13px/1.25 var(--private-sans);cursor:pointer;text-align:left}
+.libri-manual-checkout .studio-manual-addons-toggle small{color:var(--private-rose);font:650 11px/1.3 var(--private-sans);white-space:nowrap}
+.libri-manual-checkout #manualOptionalAddons:not([hidden]){padding-top:5px}
+.libri-manual-checkout .manual-terms{padding:8px 10px}
+.libri-manual-checkout .manual-event>strong{font-size:18px}

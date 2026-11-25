@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V109: PR #160, CI 45513930500 aprovado; checkout manual, Black, datas e DDI; migration 0066, backup e gates mantidos.
 # Release V107: PR #159, CI 45509768298 aprovado; capturas reais e cinco adicionais sem rolagem verificados no simulador 390x740. Gates mantidos.
 # Release V106: PR #158, CI 45507064387 aprovado; cinco eventos em coluna, títulos grandes e capturas verificadas.
 # Release V105: PR #157, CI 45505943872 aprovado; capturas mobile, noturna e desktop revisadas. Gates mantidos.

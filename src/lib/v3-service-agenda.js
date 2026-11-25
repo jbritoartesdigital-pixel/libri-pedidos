@@ -48,10 +48,10 @@ function planForWindow(free,start,end,days,units,now){
  }
  return left?null:alloc.filter(r=>r.points_units>0).map(({day,points_units})=>({day,points_units}));
 }
-async function compute(db,token,family,input={}){
+async function compute(db,token,family,input={},allowUnreviewed=false){
  const ctx=await contextV3Briefing(db,token);if(!ctx||ctx.locked)fail('Pagamento e briefing precisam estar disponíveis.',403);
  const s=ctx.services.find(x=>x.family===family);if(!s)fail('Serviço não contratado.',404);
- if(s.briefing_status!=='completed'||!s.reviewed_at||s.production_status!=='pending')fail('Confira o briefing antes de planejar a produção.');
+ if(s.briefing_status!=='completed'||(!s.reviewed_at&&!allowUnreviewed)||s.production_status!=='pending')fail('Confira o briefing antes de planejar a produção.');
  if(family==='retrospectiva'&&!((await db.prepare('SELECT complete_at FROM v3_retro_material_receipts WHERE order_id=?').bind(ctx.order.id).first())?.complete_at))fail('Confirme todos os materiais recebidos.');
  const identity=ctx.services.find(x=>x.family==='identidade_visual');
  let depends=null;
@@ -72,7 +72,7 @@ async function compute(db,token,family,input={}){
  const capacity=v2IntSetting(settings,'default_sellable_points_per_day_units',400);
  const now=today(),days=Math.max(s.production_days,family==='convite'?0:15);
  const first=day(now,Math.max(1,days)),eventLimit=day(ctx.order.event_date,-v2IntSetting(settings,'minimum_delivery_days_before_event',3)),last=s.delivery_end&&s.delivery_end<eventLimit?s.delivery_end:eventLimit;
- if(first>last||day(first,2)>last)return {ctx,s,partition,rows,options:[],depends,capacity};
+ if(first>last)return {ctx,s,partition,rows,options:[],depends,capacity};
  // Limit planning horizon to avoid unbounded queries for malformed event dates.
  if(last>day(now,730))fail('Data fora do horizonte de planejamento.');
  const [config,used,holds]=await Promise.all([
@@ -90,7 +90,11 @@ async function compute(db,token,family,input={}){
    const end=day(start,2),allocation=planForWindow(free,start,end,days,s.points_units,now);
    if(allocation)options.push({start,end,allocation});
  }
- const original=ctx.order.delivery_start;
+ const original=ctx.order.delivery_start,originalEnd=ctx.order.delivery_end;
+ if(valid(original)&&valid(originalEnd)&&original>=first&&originalEnd>=original&&originalEnd<=last&&!options.some(o=>o.start===original&&o.end===originalEnd)){
+  const allocation=planForWindow(free,original,originalEnd,days,s.points_units,now);
+  if(allocation)options.push({start:original,end:originalEnd,allocation});
+ }
  options.sort((a,b)=>Number(b.start===original)-Number(a.start===original)||a.start.localeCompare(b.start));
  return {ctx,s,partition,rows,options,depends,capacity};
 }
@@ -98,25 +102,44 @@ export async function previewV3ServiceAgenda(db,token,family,input){
  const p=await compute(db,token,family,input);
  return {family,options:p.options.slice(0,8),pointsUnits:p.s.points_units,original:{start:p.ctx.order.delivery_start,end:p.ctx.order.delivery_end}};
 }
-export async function scheduleV3Service(db,token,family,input={}){
+export async function startV3ServiceFromBriefing(db,token,family,input={}){
+ return scheduleV3Service(db,token,family,input,true);
+}
+export async function scheduleV3Service(db,token,family,input={},startNow=false){
  const initial=await contextV3Briefing(db,token);if(!initial)return null;
- if(!valid(input.start)||!valid(input.end)||input.confirmed!==true)fail('Confirme uma janela de entrega válida.',422);
+ if(input.confirmed!==true||(!startNow&&(!valid(input.start)||!valid(input.end))))fail('Confirme uma janela de entrega válida.',422);
  return withV2PaymentLock(db,initial.order.id,async()=>{
- const p=await compute(db,token,family,input);
- const selected=p.options.find(o=>o.start===input.start&&o.end===input.end);
- if(!selected)fail('A janela perdeu disponibilidade. Consulte novamente.');
- if(p.urgency){await db.batch([db.prepare('UPDATE v2_agenda_allocations SET service_family=? WHERE order_id=? AND service_family IS NULL').bind(family,p.ctx.order.id),db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),production_status='ready',updated_at=datetime('now') WHERE id=?").bind(selected.start,selected.end,p.s.id)]);return {family,deliveryWindow:{start:selected.start,end:selected.end},pointsUnits:p.s.points_units,productionStatus:'ready'};}
- const keep=p.partition.filter(r=>r.service_family!==family);
- const next=[...keep,...selected.allocation.map(r=>({...r,service_family:family}))];
- if(sum(next)!==expectedCapacity(p.ctx.services))fail('A distribuição dos pontos está inconsistente.');
- const dbOrder=p.ctx.order.id,statements=[db.prepare('DELETE FROM v2_agenda_allocations WHERE order_id=?').bind(dbOrder)];
- for(const r of next){
-  statements.push(db.prepare('INSERT OR IGNORE INTO v2_agenda_days(day,sellable_capacity_units) VALUES(?,?)').bind(r.day,p.capacity));
-  statements.push(db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family) VALUES(?,?,?,'confirmed',?)").bind(dbOrder,r.day,r.points_units,r.service_family));
+ const p=await compute(db,token,family,input,startNow);
+ const {ctx,s}=p;
+ if(startNow){
+   if(ctx.order.archived_at||ctx.cancellation)fail('Pedido indisponível.');
+   if(!Number.isSafeInteger(input.version)||input.version!==s.production_version||!Number.isSafeInteger(input.revision)||input.revision!==(ctx.revisions[family]||0)||!Number.isSafeInteger(input.sharedRevision)||input.sharedRevision!==(ctx.revisions.shared||0))fail('O briefing ou a etapa mudou. Atualize antes de iniciar.');
+   if(await db.prepare("SELECT 1 FROM v3_service_supplements WHERE service_id=? AND status IN ('payment_pending','review')").bind(s.id).first())fail('Concilie o adicional pendente antes de iniciar.');
+   const prize=s.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
+   if(!s.reviewed_at&&['mini_retrospective','child_birthday'].includes(prize)&&input.giftMediaConfirmed!==true)fail('Confirme as fotos e a autorização do presente Black Libri.');
  }
- statements.push(db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),depends_on_identity=?,production_status='ready',updated_at=datetime('now') WHERE id=?").bind(selected.start,selected.end,p.depends==null?null:Number(p.depends),p.s.id));
+ const target=startNow?{start:ctx.order.delivery_start,end:ctx.order.delivery_end}:input;
+ const selected=p.options.find(o=>o.start===target.start&&o.end===target.end);
+ if(!selected)fail(startNow?'A data contratada precisa de revisão. Abra Produção e entrega para escolher a janela; nenhuma data foi alterada.':'A janela perdeu disponibilidade. Consulte novamente.');
+ const status=startNow?'in_production':'ready';
+ const dbOrder=ctx.order.id,statements=[];
+ if(p.urgency)statements.push(db.prepare('UPDATE v2_agenda_allocations SET service_family=? WHERE order_id=? AND service_family IS NULL').bind(family,dbOrder));
+ else{
+  const keep=p.partition.filter(r=>r.service_family!==family);
+  const next=[...keep,...selected.allocation.map(r=>({...r,service_family:family}))];
+  if(sum(next)!==expectedCapacity(ctx.services))fail('A distribuição dos pontos está inconsistente.');
+  statements.push(db.prepare('DELETE FROM v2_agenda_allocations WHERE order_id=?').bind(dbOrder));
+  for(const r of next){
+   statements.push(db.prepare('INSERT OR IGNORE INTO v2_agenda_days(day,sellable_capacity_units) VALUES(?,?)').bind(r.day,p.capacity));
+   statements.push(db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family) VALUES(?,?,?,'confirmed',?)").bind(dbOrder,r.day,r.points_units,r.service_family));
+  }
+ }
+ if(startNow){
+  statements.push(db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),depends_on_identity=?,reviewed_at=COALESCE(reviewed_at,datetime('now')),production_status='in_production',production_version=production_version+1,updated_at=datetime('now') WHERE id=? AND production_version=?").bind(selected.start,selected.end,p.depends==null?null:Number(p.depends),s.id,s.production_version));
+  statements.push(db.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,note) VALUES(?,'admin','started',?)").bind(s.id,'Briefing conferido e janela contratada validada no início da produção.'));
+ }else statements.push(db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),depends_on_identity=?,production_status='ready',updated_at=datetime('now') WHERE id=?").bind(selected.start,selected.end,p.depends==null?null:Number(p.depends),s.id));
  try{await db.batch(statements);}catch(e){if(String(e.message).includes('v3_capacity_changed'))fail('A capacidade mudou. Consulte a agenda novamente.');throw e;}
- return {family,deliveryWindow:{start:selected.start,end:selected.end},pointsUnits:p.s.points_units,productionStatus:'ready'};
+ return {family,deliveryWindow:{start:selected.start,end:selected.end},pointsUnits:s.points_units,productionStatus:status};
  });
 }
 

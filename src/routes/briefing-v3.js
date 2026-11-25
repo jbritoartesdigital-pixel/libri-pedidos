@@ -6,7 +6,7 @@ import {previewV3Supplement,createV3Supplement,decideV3Supplement} from '../lib/
 import {stageV3FinalFile,removeV3FinalFile,deliverV3Service,downloadV3FinalFile} from '../lib/v3-service-delivery.js';
 import {changeV3Production,publishV3ServicePreview,publishV3ExternalPreview,streamV3ServicePreview} from '../lib/v3-service-production.js';
 import {uploadV3ServiceImage,getV3ServiceImage,deleteV3ServiceImage} from '../lib/v3-service-uploads.js';
-import {previewV3ServiceAgenda,scheduleV3Service,releaseV3ServiceCapacity} from '../lib/v3-service-agenda.js';
+import {previewV3ServiceAgenda,scheduleV3Service,releaseV3ServiceCapacity,startV3ServiceFromBriefing} from '../lib/v3-service-agenda.js';
 import {recoverV3PaidCapacity,getV3AdminBriefing,reviewV3ServiceBriefing} from '../lib/v3-admin-briefing.js';
 import {json,fail,readJson} from '../lib/http.js';
 import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
@@ -205,14 +205,14 @@ export async function handleAdminBriefingV3Api(request,env,url){
       return fail('Método não permitido.',405);
     }catch(e){return errorResponse(e);}
   }
-  const agenda=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/agenda\/(convite|identidade_visual|retrospectiva)\/(preview|schedule|release)$/);
+  const agenda=url.pathname.match(/^\/api\/admin\/v2\/orders\/(LIBRI-\d{1,12})\/v3\/agenda\/(convite|identidade_visual|retrospectiva)\/(preview|schedule|release|start)$/);
   if(agenda){
     if(request.method!=='POST')return fail('Método não permitido.',405);
     try{
       const row=await env.DB.prepare('SELECT o.public_token FROM v2_orders o JOIN v3_order_checkout_snapshots s ON s.order_id=o.id WHERE o.order_code=?').bind(agenda[1]).first();
       if(!row)return fail('Pedido V3 não encontrado.',404);
       const body=await boundedJson(request);
-      const result=agenda[3]==='preview'?await previewV3ServiceAgenda(env.DB,row.public_token,agenda[2],body):agenda[3]==='release'?await releaseV3ServiceCapacity(env.DB,row.public_token,agenda[2],body):await scheduleV3Service(env.DB,row.public_token,agenda[2],body);
+      const result=agenda[3]==='start'?await startV3ServiceFromBriefing(env.DB,row.public_token,agenda[2],body):agenda[3]==='preview'?await previewV3ServiceAgenda(env.DB,row.public_token,agenda[2],body):agenda[3]==='release'?await releaseV3ServiceCapacity(env.DB,row.public_token,agenda[2],body):await scheduleV3Service(env.DB,row.public_token,agenda[2],body);
       return json({ok:true,result,briefing:await getV3AdminBriefing(env.DB,row.public_token)});
     }catch(e){return errorResponse(e);}
   }

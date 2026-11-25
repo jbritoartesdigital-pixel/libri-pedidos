@@ -298,31 +298,34 @@ try{
  const manualContext=await browser.newContext({viewport:{width:390,height:740},reducedMotion:'reduce'});
  await manualContext.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.request().url().startsWith('https://www.mercadopago.com.br/checkout/v1/redirect')?route.fulfill({status:200,contentType:'text/html',body:'<h1>Pagamento simulado</h1>'}):route.abort());
  const manualPage=await manualContext.newPage();manualPage.on('pageerror',e=>errors.push(e.message));
- await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.libri-manual-checkout .manual-v110-row').first().waitFor();
- assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
- assert.equal(await manualPage.locator('.manual-total').count(),1);
+ await manualPage.goto(origin+manualFixture.customerAreaPath);await manualPage.locator('.manual-cart-item').first().waitFor();
  assert.equal(await manualPage.getByRole('heading',{name:'Olá, Cliente!'}).count(),1);
+ assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
+ assert.equal(await manualPage.locator('[data-manual-action="cart"]').count(),0);
+ assert.equal(await manualPage.locator('.manual-total').count(),1);
+ assert.equal(await manualPage.locator('[data-manual-action="pay"]').isVisible(),true);
+ assert.equal(await manualPage.locator('#manualOptionalAddons').isVisible(),false);
+ for(const size of [{width:390,height:740},{width:360,height:640},{width:320,height:568}]){
+  await manualPage.setViewportSize(size);
+  const fit=await manualPage.evaluate(()=>{const button=document.querySelector('[data-manual-action="pay"]').getBoundingClientRect();const total=document.querySelector('.manual-total').getBoundingClientRect();return {bottom:button.bottom,top:total.top,viewport:innerHeight,wide:document.documentElement.scrollWidth>innerWidth};});
+  assert.ok(fit.bottom<=fit.viewport+1&&fit.top>=0,JSON.stringify(fit));assert.equal(fit.wide,false);
+ }
+ await manualPage.setViewportSize({width:390,height:740});
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v112-cart.png',fullPage:true});
+ await manualPage.locator('[data-manual-action="extras"]').click();
+ assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
  assert.equal(await manualPage.getByText('Formulário de confirmação',{exact:true}).count(),1);
  const optionsButton=manualPage.locator('[data-manual-open="save_the_date"]');
  const scrollHeightBefore=await manualPage.locator('.manual-scroll').evaluate(el=>el.scrollHeight);
  await optionsButton.click();await manualPage.locator('dialog.studio-manual-dialog[open]').waitFor();
  assert.equal(await manualPage.locator('.manual-scroll').evaluate(el=>el.scrollHeight),scrollHeightBefore);
- await manualPage.locator('dialog [data-dismiss]').click();assert.equal(await manualPage.locator('dialog[open]').count(),0);
- for(const size of [{width:390,height:740},{width:360,height:640},{width:320,height:568}]){
-  await manualPage.setViewportSize(size);
-  const fit=await manualPage.evaluate(()=>{const button=document.querySelector('[data-manual-action="cart"]').getBoundingClientRect();const total=document.querySelector('.manual-total').getBoundingClientRect();const scroll=document.querySelector('.manual-scroll');return {bottom:button.bottom,top:total.top,viewport:innerHeight,wide:document.documentElement.scrollWidth>innerWidth,rows:document.querySelectorAll('.manual-v110-row').length,overflow:scroll.scrollHeight-scroll.clientHeight};});
-  assert.ok(fit.bottom<=fit.viewport+1&&fit.top>=0,JSON.stringify(fit));
-  assert.equal(fit.wide,false);
-  if(size.height===740&&fit.rows<=8)assert.ok(fit.overflow<=2,JSON.stringify(fit));
- }
- await manualPage.setViewportSize({width:390,height:740});
- await manualPage.screenshot({path:'artifacts/v3-browser/manual-v110-extras.png',fullPage:true});
+ await manualPage.locator('dialog [data-dismiss]').click();await manualPage.locator('dialog[open]').waitFor({state:'hidden'});
+ await manualPage.screenshot({path:'artifacts/v3-browser/manual-v112-extras.png',fullPage:true});
  const add=manualPage.locator('[data-manual-choice="confirmation"]');
  await add.check();await manualPage.locator('#app[aria-busy="false"]').waitFor();assert.equal(await add.isChecked(),true);
- await manualPage.locator('[data-manual-action="cart"]').click();
+ await manualPage.locator('[data-manual-action="extras"]').click();
+ assert.equal(await manualPage.locator('#manualOptionalAddons').isVisible(),false);
  await manualPage.locator('[data-manual-terms]').waitFor();assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
- assert.equal(await manualPage.getByText('Aceitar proposta',{exact:true}).count(),0);
- await manualPage.screenshot({path:'artifacts/v3-browser/manual-v109-cart.png',fullPage:true});
  await manualPage.locator('[data-manual-action="pay"]').click();await manualPage.locator('.manual-error').waitFor();assert.equal(manualMP.posts,0);
  await manualPage.locator('[data-manual-terms]').check();await manualPage.locator('[data-manual-action="pay"]').click();
  await manualPage.locator('#manualV3SuggestionAccept').waitFor();assert.equal(manualMP.posts,0);await manualPage.screenshot({path:'artifacts/v3-browser/manual-v110-suggestion.png',fullPage:true});

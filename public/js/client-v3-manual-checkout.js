@@ -14,7 +14,7 @@ function safePay(v){try{const u=new URL(v);return u.protocol==='https:'&&/(^|\.)
 export async function startV3ManualCheckout(root,{token,api}){
  const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/manual-checkout';
  const c=await api(endpoint+'/catalog');
- let quote=c.quote,step=c.addons.length||c.extras.length?'extras':'cart',busy=false,error='',terms=false,black=null,suggestionSeen=false;
+ let quote=c.quote,extrasOpen=false,busy=false,error='',terms=false,black=null,suggestionSeen=false;
  const chosen=new Map(),quantities=new Map();let savedChosen=new Map(),savedQuantities=new Map();
  const selection=()=>({addonCodes:[...chosen.values()].filter(Boolean),extras:[...quantities].filter(([,q])=>q>0).map(([code,quantity])=>({code,quantity}))});
  const request=(action,data={})=>api(endpoint+'/'+action,{method:'POST',body:JSON.stringify(data)});
@@ -51,15 +51,15 @@ export async function startV3ManualCheckout(root,{token,api}){
  d.addEventListener('click',e=>{const opt=e.target.closest('[data-option]');if(opt){const value=opt.dataset.option;if(value)chosen.set(group,value);else chosen.delete(group);if(!albumSelected())chosen.delete('moments_extra');close();refresh();}else if(e.target.closest('[data-dismiss]'))close();});
  }
  function render(){
- const cart=step==='cart',firstName=String(c.customerName||'').trim().split(/\s+/)[0];
- root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(cart?'Seu pedido':firstName?'Olá, '+esc(firstName)+'!':'Olá!')+'</h1><p>'+(cart?'Confira seu pedido e finalize o pagamento.':'Aqui é sua área para finalizar seu pedido.')+'</p></header>'+
- '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+(cart?
- '<div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
- ((c.addons.length||c.extras.length)&&!black?'<button type="button" data-manual-action="extras" class="manual-text-btn">+ Alterar adicionais</button>':'')+
- '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(c.terms.general.body)+'</div>'+c.terms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked':'')+'> Li e aceito os termos da contratação.</label>':'<div class="studio-manual-section-title">Adicionais opcionais</div>'+extrasHtml())+'</div>'+
+ const firstName=String(c.customerName||'').trim().split(/\s+/)[0],hasExtras=Boolean(c.addons.length||c.extras.length);
+ root.innerHTML='<section class="manual-shell"><header class="manual-heading"><small>'+esc(c.orderCode)+'</small><h1>'+(firstName?'Olá, '+esc(firstName)+'!':'Olá!')+'</h1><p>Aqui é sua área para finalizar seu pedido.</p></header>'+
+ '<div class="manual-scroll">'+(error?'<p class="manual-error" role="alert">'+esc(error)+'</p>':'')+
+ '<div class="studio-manual-section-title">Seu pedido</div><div class="manual-event"><strong>'+esc(c.event.honoreeName)+'</strong><span>Festa: '+day(c.event.date)+'</span><span>Entrega: '+day(c.deliveryWindow.start)+(c.deliveryWindow.end!==c.deliveryWindow.start?' a '+day(c.deliveryWindow.end):'')+'</span></div>'+itemsHtml()+
+ (hasExtras&&!black?'<div class="studio-manual-addons"><button type="button" data-manual-action="extras" aria-expanded="'+extrasOpen+'" aria-controls="manualOptionalAddons" class="studio-manual-addons-toggle" '+(busy?'disabled':'')+'><span>Adicionais opcionais</span><small>'+(extrasOpen?'Recolher':'+ Ver opções')+'</small></button><div id="manualOptionalAddons" '+(extrasOpen?'':'hidden')+'>'+(extrasOpen?extrasHtml():'')+'</div></div>':'')+
+ '<details class="manual-terms"><summary>Termos da contratação</summary><div>'+esc(c.terms.general.body)+'</div>'+c.terms.services.map(t=>'<div>'+esc(t.body)+'</div>').join('')+'</details><label class="manual-terms-check"><input type="checkbox" data-manual-terms '+(terms?'checked ':'')+(busy?'disabled':'')+'> Li e aceito os termos da contratação.</label></div>'+
  '<footer class="manual-footer"><div class="manual-total"><div><strong>'+(c.paymentMethod==='pix'?'Total no Pix':'Total no cartão')+'</strong>'+(quote.discountCents?'<small>Desconto: − '+money(quote.discountCents)+'</small>':'')+(quote.blackLibri?'<small>Black Libri: '+esc(quote.blackLibri.label)+'</small>':'')+'</div><b>'+money(quote.totalCents)+'</b></div>'+
  (quote.depositPercent===50?'<div class="manual-payment-split"><span>Entrada: <b>'+money(quote.depositCents)+'</b></span><span>Saldo: '+money(quote.balanceCents)+'</span></div>':'')+
- '<button class="manual-primary" type="button" data-manual-action="'+(cart?'pay':'cart')+'" '+(busy?'disabled':'')+'>'+(busy?'Conferindo…':cart?(quote.depositPercent===50?'Pagar entrada':'Continuar para pagamento'):'Ir para o carrinho')+'</button></footer><div class="manual-progress" aria-label="Etapas"><span class="'+(!cart?'active':'done')+'"></span><span class="'+(cart?'active':'')+'"></span><span></span></div></section>';
+ '<button class="manual-primary" type="button" data-manual-action="pay" '+(busy?'disabled':'')+'>'+(busy?'Conferindo…':quote.depositPercent===50?'Pagar entrada':'Continuar para pagamento')+'</button></footer></section>';
  root.setAttribute('aria-busy',String(busy));
  }
  async function refresh(){
@@ -99,7 +99,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  function showSuggestion({group,a,next,delta}){
  const {d,close}=openStudioDialog(groupNames[group]||a.name,'<p>'+esc(suggestionCopy[group])+'</p><div class="studio-manual-offer"><small>Por apenas mais</small><strong>'+money(delta)+'</strong></div><div class="studio-manual-offer-total"><span>Novo total <b>'+money(next.totalCents)+'</b></span>'+(next.depositPercent===50?'<span>Entrada <b>'+money(next.depositCents)+'</b></span><span>Saldo <b>'+money(next.balanceCents)+'</b></span>':'')+'</div><div class="studio-manual-dialog-actions"><button type="button" id="manualV3SuggestionSkip">Agora não</button><button type="button" id="manualV3SuggestionAccept">Quero adicionar</button></div>');
  d.querySelector('#manualV3SuggestionSkip').onclick=()=>{close();finish();};
- d.querySelector('#manualV3SuggestionAccept').onclick=()=>{close();chosen.set(group,a.code);quote=next;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);error='';render();};
+ d.querySelector('#manualV3SuggestionAccept').onclick=()=>{close();extrasOpen=false;chosen.set(group,a.code);quote=next;savedChosen=new Map(chosen);savedQuantities=new Map(quantities);error='';render();};
  }
  async function finish(){
  if(busy)return;
@@ -126,7 +126,7 @@ export async function startV3ManualCheckout(root,{token,api}){
  if(busy)return;
  const open=e.target.closest('[data-manual-open]');if(open&&!black){openOptions(open.dataset.manualOpen);return;}
  const action=e.target.closest('[data-manual-action]')?.dataset.manualAction;
- if(action==='cart'||action==='extras'&&!black){step=action;error='';render();return;}
+ if(action==='extras'&&!black){const y=root.querySelector('.manual-scroll')?.scrollTop||0;extrasOpen=!extrasOpen;error='';render();const body=root.querySelector('.manual-scroll');if(body)body.scrollTop=y;root.querySelector('[data-manual-action="extras"]')?.focus({preventScroll:true});return;}
  if(action==='pay')finish();
  });
  render();

@@ -973,3 +973,28 @@ test('manual checkout: optional additions, terms, Black and one original order t
  mp.approve(payment.provider_order_id);await syncMercadoPagoOrder(env,payment.provider_order_id);
  const brief=await getV3ModularBriefing(db,token);assert.equal(brief.locked,false);assert.equal(brief.revision??null,null);assert.ok(brief.modules.some(m=>m.module==='convite'));assert.equal(mp.posts,1);
 });
+
+test('admin edits pristine manual order in place without customer acceptance or payment',async t=>{
+ const {db}=await setup(),mp=providerMock(t),env={DB:db,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token',LIBRI_V3_CHECKOUT_ENABLED:'true'};
+ const {getV3RevisionEditor,getV3ManualCheckout}=await import('../src/lib/v3-order-revisions.js');
+ const input={customer:{name:'Cliente edição',whatsapp:'5561888888666',email:''},event:{type:'birthday',honoreeName:'Edição',date:day(65)},items:[{productCode:'interactive_essential',variantCode:'interactive_essential_default',addonCodes:[]}],paymentMethod:'pix',depositPercent:100};
+ const initial=await previewV3ManualOrder(db,input);
+ const created=await createV3ManualOrder(env,{...input,deliveryWindow:initial.options[0],expectedTotalCents:initial.totalCents,requestKey:'3c'.repeat(18),confirmed:true});
+ const token=created.customerAreaPath.split('/').pop(),editor=await getV3RevisionEditor(db,created.orderCode);
+ const original=await getV3ManualCheckout(env,token,'catalog');
+ const addon=original.addons.find(a=>a.group==='confirmation');assert.ok(editor.direct);assert.ok(addon);
+ const items=input.items.map(i=>({...i,addonCodes:[addon.code]}));
+ const payload={items,deliveryWindow:editor.deliveryWindow,depositPercent:50,reason:'Alteração combinada no atendimento',expectedRevisionId:editor.revisionId,expectedRevisionVersion:editor.revisionVersion,expectedOriginalTotalCents:editor.originalTotalCents};
+ const p=await previewV3Revision(db,created.orderCode,payload);
+ await createV3Revision(env,created.orderCode,{...payload,expectedTotalCents:p.totalCents,confirmed:true,requestKey:'4d'.repeat(18)});
+ const c=await getV3ManualCheckout(env,token,'catalog');
+ assert.equal(c.quote.totalCents,p.totalCents);assert.equal(c.depositPercent,50);assert.equal(c.revisionId,editor.revisionId);assert.equal(mp.posts,0);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM v2_orders').get().n,1);
+ assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM v2_order_terms_acceptances').get().n,0);
+ await assert.rejects(getV3ManualCheckout(env,token,'quote',{revisionVersion:original.revisionVersion,extras:[],addonCodes:[]}),/atualizado/);
+ const variant=c.invitationVariants.find(v=>v.productCode==='interactive_gif');
+ assert.ok(variant);
+ const next=await getV3ManualCheckout(env,token,'quote',{revisionVersion:c.revisionVersion,invitationVariant:{productCode:variant.productCode,variantCode:variant.variantCode},extras:[],addonCodes:[]});
+ assert.equal(next.quote.items.find(i=>i.family==='convite').productName,variant.name);
+ assert.equal(mp.posts,0);
+});

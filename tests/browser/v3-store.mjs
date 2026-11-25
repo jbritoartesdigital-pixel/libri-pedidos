@@ -304,7 +304,7 @@ try{
  assert.equal(await manualPage.locator('[data-manual-action="cart"]').count(),0);
  assert.equal(await manualPage.locator('.manual-total').count(),1);
  assert.equal(await manualPage.locator('[data-manual-action="pay"]').isVisible(),true);
- assert.equal(await manualPage.locator('#manualOptionalAddons').isVisible(),false);
+ assert.equal(await manualPage.locator('#manualOptionalAddons').isVisible(),true);
  for(const size of [{width:390,height:740},{width:360,height:640},{width:320,height:568}]){
   await manualPage.setViewportSize(size);
   const fit=await manualPage.evaluate(()=>{const button=document.querySelector('[data-manual-action="pay"]').getBoundingClientRect();const total=document.querySelector('.manual-total').getBoundingClientRect();return {bottom:button.bottom,top:total.top,viewport:innerHeight,wide:document.documentElement.scrollWidth>innerWidth};});
@@ -312,7 +312,7 @@ try{
  }
  await manualPage.setViewportSize({width:390,height:740});
  await manualPage.screenshot({path:'artifacts/v3-browser/manual-v112-cart.png',fullPage:true});
- await manualPage.locator('[data-manual-action="extras"]').click();
+ await manualPage.locator('[data-manual-action="format"]').click();await manualPage.locator('dialog [data-format]').waitFor();await manualPage.locator('dialog .studio-manual-close').click();
  assert.equal(await manualPage.locator('.manual-cart-item').count(),1);
  assert.equal(await manualPage.getByText('Formulário de confirmação',{exact:true}).count(),1);
  const optionsButton=manualPage.locator('[data-manual-open="save_the_date"]');

@@ -381,7 +381,9 @@ async function orderContractContext(
     items.results
     || [];
 
-  const product =
+  const products=rows.filter(row=>row.item_type==='product');
+  const modular=await db.prepare('SELECT 1 FROM v3_order_checkout_snapshots WHERE order_id=?').bind(order.id).first();
+  const product = modular?{name_snapshot:products.map(row=>row.name_snapshot).join(' + ')}:
     rows.find(
       (row) =>
         row.item_type
@@ -538,7 +540,7 @@ function placeholderValues(
         ? addons
           .map(
             (item) =>
-              item.name_snapshot,
+              Number(item.quantity)>1?`${item.quantity} × ${item.name_snapshot}`:item.name_snapshot,
           )
           .join(
             ', ',

@@ -1,9 +1,10 @@
+import {openOrderDrawer} from './admin-order-drawer.v123.js';
 import {api,esc,money,modal,showToast,dateTimeBr} from './admin-v2-core.js';
 const names={shared:'Dados da comemoração',convite:'Convite digital',identidade_visual:'Libri Ateliê',retrospectiva:'Retrospectiva'};
 const value=(f,v)=>{const opts=f.options||[];const label=x=>opts.find(o=>typeof o==='object'&&o.value===x)?.label||x;return Array.isArray(v)?v.map(label).join(', '):label(v);};
 export async function openV3AdminOrder(code,initial,onChanged){
  const base='/api/admin/v2/orders/'+encodeURIComponent(code)+'/v3/briefing';
- const close=modal(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
+ const close=openOrderDrawer(code+' · '+initial.event.honoreeName,'<div id="v3AdminOrder"></div>');
  const host=document.getElementById('v3AdminOrder');let brief=initial,busy=false,error='',agenda={},supplementDrafts={},supplementCapacity={},revisionEditor=null,revisionPreview=null;
  function materials(m){
   const r=m.receipt||{},s=m.schema.materials;

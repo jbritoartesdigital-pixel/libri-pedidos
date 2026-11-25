@@ -1,3 +1,4 @@
+import {openOrderDrawer} from './admin-order-drawer.v123.js';
 import { summarizeBlackLibriAwards } from './admin-v2-black-libri-prize.js?v=20261110-1';
 import {
   api,
@@ -12,7 +13,7 @@ import {
 import { bindAdminWhatsAppBriefing } from './admin-v2-briefing.js?v=20261014-whatsapp-briefing-1';
 import { bindAdminOrderEditing } from './admin-v2-edit-order.js?v=20261113-existing-checkout-gift-1';
 import { isAtelieOrderDetail, mountAtelieProduction } from './admin-v2-atelie-production.js';
-import { openV3AdminOrder } from './admin-v2-order-v3.js?v=121';
+import { openV3AdminOrder } from './admin-v2-order-v3.js?v=123';
 import { mountAtelieCreativeBriefing } from './admin-v2-atelie-briefing.js';
 
 function whatsappBr(value) {
@@ -701,8 +702,8 @@ export async function openOrder(code, onChanged = null) {
     || [];
 
   const close =
-    modal(
-      `${detail.order.code} • ${detail.order.honoreeName}`,
+    openOrderDrawer(
+      `${detail.order.code} · ${detail.order.honoreeName}`,
       `
         <nav class="order-section-nav" aria-label="Ir para uma seção do pedido">
           <span class="order-section-nav-label">Ir direto para</span>
@@ -1141,9 +1142,6 @@ export async function openOrder(code, onChanged = null) {
           ${historyBlock(detail)}
         </details>
       `,
-      {
-        width: '1100px',
-      },
     );
 
   // Atalhos só abrem os painéis existentes. Não fazem ações financeiras.

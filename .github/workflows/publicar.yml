@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V117: PR #168; perguntas dinamicas, paridade do briefing de convite e agenda interna; gates obrigatorios.
 # Release V116: PR #167; area da cliente pos-pagamento, briefing guiado e resumo compacto; gates obrigatorios.
 # Release V115: PR #166; compactacao dos carrinhos, filtro uniforme e Atelie opcional; gates obrigatorios.
 # Release V114: PR #165; resumo administrativo, historico, premio Black e fila manual; sem campo e-mail no resumo; gates mantidos.

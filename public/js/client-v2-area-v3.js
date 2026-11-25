@@ -58,7 +58,11 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   root.classList.add('libri-v3-area');document.body.classList.add('libri-v3-area-body');
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
-  let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null;
+  let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null,contracts=null;
+  const contractEndpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/contracts';
+  async function loadContracts(){try{contracts=(await api(contractEndpoint)).result;}catch(e){error=e.message;}if(active==='contracts')render();}
+  function contractHtml(){return '<section class="card"><h2>Contratos</h2>'+(contracts?(contracts.contracts.length?contracts.contracts.map(c=>'<article class="contract-card"><h3>Versão '+esc(c.version)+'</h3><div class="contract-body" style="white-space:pre-wrap">'+esc(c.body)+'</div>'+(c.status==='waiting_customer'&&!area.locked?'<label>Nome de quem está assinando<input data-contract-name="'+esc(c.id)+'" value="'+esc(contracts.order.customerName||'')+'"></label><button data-v3-sign-contract="'+esc(c.id)+'" class="btn primary">Assinar contrato</button>':'')+(c.hasFinalPdf?'<a href="'+esc(contractEndpoint+'/'+c.id+'/pdf')+'" class="btn secondary">Baixar PDF assinado</a>':'')+'</article>').join(''):'<p>Nenhum contrato disponível.</p>'):'<p>Carregando contratos…</p>')+'</section>';}
+
   // Edits remain local until confirmed; a single serialized writer preserves server revisions.
   const pending=new Map();let writer=null,saveTimer=null,saveError='',saveNotice='';
   function current(){
@@ -121,7 +125,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     return '<section class="v3-client-next"><span class="v3-client-kicker">'+(area.payment.fullyPaid?'Pagamento confirmado':area.payment.receivedCents>0?'Entrada confirmada':'Meu pedido')+'</span><h2>'+(next?'Vamos começar?':count===total?'Dados enviados!':'Acompanhe seu pedido')+'</h2><p>'+(next?'Preencha os dados da comemoração e dos serviços contratados. Assim podemos preparar tudo para você.':count===total?'Recebemos seus dados. Acompanhe as próximas etapas por aqui.':'Consulte seus serviços e as atualizações do pedido.')+'</p>'+(next?'<button type="button" class="btn primary" data-v3-start="'+esc(next.module)+'">'+(next.revision?'Continuar preenchimento':'Preencher meus dados')+' <span aria-hidden="true">›</span></button>':'')+'<div class="v3-client-progress"><progress aria-label="Serviços com dados enviados" value="'+count+'" max="'+Math.max(total,1)+'"></progress><small>'+count+' de '+total+' '+(total===1?'serviço com dados enviados':'serviços com dados enviados')+'</small></div></section>';
   }
   function clientHeader(){
-    return '<header class="v3-client-header"><span class="v3-client-kicker">'+esc(area.orderCode)+'</span><h1>Meu pedido</h1><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p></header><nav aria-label="Área do pedido" class="v3-client-nav"><button type="button" class="btn secondary" aria-current="'+(active==='summary'?'page':'false')+'" data-v3-tab="summary">Resumo</button>'+(!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" aria-current="'+(active===x.module?'page':'false')+'" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>').join(''):'')+'</nav>';
+    return '<header class="v3-client-header"><span class="v3-client-kicker">'+esc(area.orderCode)+'</span><h1>Meu pedido</h1><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p></header><nav aria-label="Área do pedido" class="v3-client-nav"><button type="button" class="btn secondary" aria-current="'+(active==='summary'?'page':'false')+'" data-v3-tab="summary">Resumo</button>'+(!area.locked?area.modules.map(x=>'<button type="button" class="btn secondary" aria-current="'+(active===x.module?'page':'false')+'" data-v3-tab="'+esc(x.module)+'">'+esc(labels[x.module])+'</button>') .join(''):'')+'<button type="button" class="btn secondary" data-v3-tab="contracts" aria-current="'+(active==='contracts'?'page':'false')+'">Contratos</button></nav>';
   }
   function deliveryHtml(s){
     const d=s.delivery;if(!d?.delivered)return '';
@@ -217,7 +221,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const m=current();
     root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+completionNotice()+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
-      (m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
+      (active==='contracts'?contractHtml():m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
         (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
   }
@@ -305,8 +309,9 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   root.addEventListener('click',async e=>{
     const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab||e.target.closest('[data-v3-start]')?.dataset.v3Start;
     if(tab&&!busy){
-      active=tab;notice='';error='';render();window.scrollTo(0,0);void flushDrafts();return;
+      active=tab;notice='';error='';render();window.scrollTo(0,0);void flushDrafts();if(tab==='contracts')void loadContracts();return;
     }
+    const sign=e.target.closest('[data-v3-sign-contract]');if(sign&&!busy){const id=sign.dataset.v3SignContract,name=root.querySelector('[data-contract-name="'+id+'"]')?.value.trim();if(!name||!confirm('Confirma que leu e aceita este contrato?'))return;busy=true;sign.disabled=true;try{await api(contractEndpoint+'/'+id+'/sign',{method:'POST',body:JSON.stringify({accepted:true,signerName:name})});notice='Contrato assinado ✓';await loadContracts();}catch(e){error=e.message;}finally{busy=false;render();}return;}
     const id=e.target.closest('[data-v3-delete]')?.dataset.v3Delete;
     if(id&&!busy&&window.confirm('Remover esta imagem?')){await fileAction({id});return;}
     const supplement=e.target.closest('[data-v3-supplement]');if(supplement&&!busy){const a=supplement.dataset.v3Supplement;await (['pay','renew','verify'].includes(a)?supplementPaymentAction(supplement.dataset.id,a):decideSupplement(supplement.dataset.id,a));return;}

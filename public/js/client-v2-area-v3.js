@@ -1,4 +1,4 @@
-import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js';
+import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js?v=126';
 // V3 customer area is isolated from legacy single-product forms.
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
@@ -45,8 +45,8 @@ export function renderV3Uploads(m,busy=false){
  const files=m.uploads||[],rules=m.schema.uploadRules||[];
  if(!rules.length&&!files.length)return '';
  return '<section class="card"><h3>Imagens privadas</h3><p>JPG, PNG, WebP, HEIC ou HEIF, até 15 MB por imagem.</p>'+
- rules.map(r=>'<div class="field full"><label>'+esc(r.label)+'</label><p>'+esc(r.help||('Até '+r.max+' imagens.'))+'</p>'+
- (!r.authorized?'<p>Salve a autorização necessária antes do envio.</p>':m.editable?'<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" data-v3-upload="'+esc(r.fieldKey)+'" '+(busy?'disabled':'')+'>':'')+'</div>').join('')+
+ rules.map(r=>'<div class="field full" data-v3-upload-field="'+esc(r.fieldKey)+'"><label>'+esc(r.label)+'</label><p>'+esc(r.help||('Até '+r.max+' imagens.'))+'</p>'+
+ (r.requiresUploadAuthorization&&m.editable?'<small class="field-help">Ao enviar, você declara ter autorização da pessoa retratada ou de seu responsável legal para utilizar as imagens enviadas neste pedido.</small>':'')+(!r.authorized&&!r.requiresUploadAuthorization?'<p>Salve a autorização necessária antes do envio.</p>':m.editable?'<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" data-v3-upload="'+esc(r.fieldKey)+'" '+(busy?'disabled':'')+'>':'')+'</div>').join('')+
  files.map(x=>'<div class="field full"><span>'+esc(x.originalFilename)+'</span>'+
  (rules.some(r=>r.fieldKey===x.fieldKey&&r.authorized)?'<a href="'+esc(x.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem</a>':'<span>Imagem sem autorização ativa</span>')+
  (m.editable?'<button type="button" class="btn secondary" data-v3-delete="'+esc(x.id)+'" '+(busy?'disabled':'')+'>Remover</button>':'')+'</div>').join('')+'</section>';
@@ -247,20 +247,46 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     const tab=active;if(!await save({quiet:true})||active!==tab||busy)return;
     const m=current();busy=true;error='';notice='';render();
     try{
-      if(file){const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);await api(endpoint+'/'+m.module+'/uploads',{method:'POST',body});}
+      if(file){const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);if(m.schema.uploadRules.some(r=>r.fieldKey===fieldKey&&r.requiresUploadAuthorization))body.append('authorizationAccepted','true');await api(endpoint+'/'+m.module+'/uploads',{method:'POST',body});}
       else await api(endpoint+'/'+m.module+'/uploads/'+encodeURIComponent(id),{method:'DELETE'});
       area=(await api(endpoint)).briefing;notice=file?'Imagem enviada com segurança.':'Imagem removida.';
     }catch(e){error=e.message;}finally{busy=false;render();}
   }
+  function missingFields(modules){
+    const issues=[];
+    for(const m of modules.filter(Boolean)){
+      for(const f of m.schema.sections.flatMap(s=>s.fields)){
+        const v=m.data[f.key],filled=Array.isArray(v)?v.length>0:v!=null&&String(v).trim()!=='';
+        if(f.required&&!['info','upload'].includes(f.type)&&!filled)issues.push({module:m.module,key:f.key,label:f.label,kind:'field'});
+      }
+      for(const r of m.schema.uploadRules||[])if(r.min>0&&(!r.authorized||(m.uploads||[]).filter(x=>x.fieldKey===r.fieldKey).length<r.min))issues.push({module:m.module,key:r.fieldKey,label:r.label+': envie pelo menos '+r.min+' imagem(ns).',kind:'upload'});
+    }
+    return issues;
+  }
+  function showMissing(issues){
+    const issue=issues[0];if(!issue)return;
+    active=issue.module;notice='';error='';render();
+    for(const item of issues.filter(x=>x.module===active)){
+      const control=[...root.querySelectorAll(item.kind==='upload'?'[data-v3-upload-field]':'[data-v3-field]')].find(el=>item.kind==='upload'?el.dataset.v3UploadField===item.key:el.dataset.v3Field===item.key);
+      const field=control?.closest('.field');if(!field)continue;
+      field.classList.add('v3-invalid-field');control.setAttribute('aria-invalid','true');
+      const msg=document.createElement('p');msg.className='v3-field-error';msg.setAttribute('role','alert');msg.textContent=item.kind==='upload'?item.label:'Preencha este campo: '+item.label;field.append(msg);
+    }
+    const field=root.querySelector('.v3-invalid-field');
+    if(field){field.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'center'});field.querySelector('input,textarea,select')?.focus({preventScroll:true});}
+    else{error=issue.label;render();root.querySelector('[role="alert"]')?.scrollIntoView({block:'center'});}
+  }
   async function submit(){
     if(busy||!current()?.editable||active==='shared')return;
     const tab=active;if(!await save({quiet:true})||active!==tab||busy)return;
+    const issues=missingFields([area.modules.find(x=>x.module==='shared'),current()]);if(issues.length){showMissing(issues);return;}
     if(!window.confirm('Enviar as respostas definitivas deste serviço? Os dados compartilhados ficarão bloqueados para alterações.'))return;
     const m=current();busy=true;error='';notice='';render();
     try{
       const r=await api(endpoint+'/'+m.module+'/submit',{method:'POST',body:JSON.stringify({revision:m.revision,sharedRevision:area.modules.find(x=>x.module==='shared')?.revision||0})});
       area=r.briefing;notice='Briefing enviado com sucesso.';if(area.services.length&&area.services.every(s=>s.briefingStatus==='completed')){active='summary';window.scrollTo(0,0);}
-    }catch(e){error=e.message;}finally{busy=false;render();}
+    }catch(e){if(e.data?.details?.fields?.length){busy=false;showMissing(e.data.details.fields);return;}error=e.message;busy=false;render();return;}
+    busy=false;render();
   }
   async function productionAction(family,action){
     if(busy||!await flushDrafts()||busy)return;
@@ -294,6 +320,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     }
     root.querySelector('[data-v3-choice-error]')?.remove();
     if(el.type==='radio'||el.type==='checkbox')for(const input of el.closest('.field').querySelectorAll('input[data-v3-field]'))input.closest('.choice-card')?.classList.toggle('selected',input.checked);
+    const invalid=el.closest('.v3-invalid-field');if(invalid){invalid.classList.remove('v3-invalid-field');invalid.querySelector('.v3-field-error')?.remove();el.removeAttribute('aria-invalid');}
     rememberField(m,f.key,value);
     if(m.module==='convite'&&['pix_key_type','pix_key','pix_holder'].includes(f.key))rememberField(m,'pix_confirmed','');
     if(before!==schemaSignature(current()))refreshAfterSchemaChange();
@@ -327,7 +354,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       if(!area.revision)await verify();return;
     }
     if(action==='retry-draft'&&!busy){void flushDrafts();return;}
-    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save({quiet:true})&&active==='shared'&&!busy){const missing=current().schema.sections.flatMap(s=>s.fields).filter(f=>f.required&&!['info','upload'].includes(f.type)&&!String(current().data[f.key]??'').trim());if(missing.length){error='Ainda falta preencher: '+missing.map(f=>f.label).join('; ');notice='';render();document.getElementById('v3-f-'+missing[0].key)?.scrollIntoView({block:'center'});return;}const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
+    if(action==='next-briefing'&&!busy&&current()?.module==='shared'){if(await save({quiet:true})&&active==='shared'&&!busy){const missing=missingFields([current()]);if(missing.length){showMissing(missing);return;}const next=area.modules.find(m=>m.module!=='shared'&&m.editable);active=next?.module||'summary';notice='Dados da festa salvos.';render();window.scrollTo(0,0);}return;}
     if(action==='submit')submit();
     if(action==='payment')verify();
     if(action==='renew'&&payment?.canRenew)verify(true);

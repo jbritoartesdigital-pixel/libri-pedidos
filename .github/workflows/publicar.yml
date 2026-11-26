@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V131: inicio direto, briefing independente e gates completos.
 # Release V130.1: corrige contagem de migrations para 67; gates completos.
 # Release V130: inicio manual com reconciliacao da agenda; migration 0067; gates completos.
 # Release V129: upload multiplo e progresso real; gates completos.

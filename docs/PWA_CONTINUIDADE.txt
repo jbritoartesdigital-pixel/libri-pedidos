@@ -1,3 +1,5 @@
 PWA administrativo | 26/11/2026
 Entrada: /admin-v2
 Manifesto e ícones PNG exclusivos do painel; instalação sem cache novo, sem alteração de API, D1, R2, sessão ou links públicos. Service worker e Web Push existentes preservados. Validação pendente: deploy, HTTP, instalação Android/iOS, sessão e links públicos. Instalação pelo menu do navegador quando o botão nativo não estiver disponível.
+
+26/11/2026 | V2: service worker network-only registrado; Web Push original mantido no Pedidos. Cache-bust. Deploy e teste real pendentes.

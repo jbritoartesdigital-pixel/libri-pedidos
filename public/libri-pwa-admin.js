@@ -1,5 +1,8 @@
 (() => {
   "use strict";
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register("/admin-sw-v2.js", {scope:"/", updateViaCache:"none"}).catch(error => console.warn("Libri PWA:",error));
+  }
   let promptEvent;
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault(); promptEvent=event;

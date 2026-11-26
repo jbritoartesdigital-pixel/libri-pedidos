@@ -120,3 +120,9 @@ self.addEventListener(
     );
   },
 );
+
+// Network-only: never cache private data.
+self.addEventListener("fetch", event => {
+ const r=event.request,u=new URL(r.url);
+ if(r.method==="GET" && r.mode==="navigate" && u.origin===self.location.origin && (u.pathname==="/admin-v2" || u.pathname.startsWith("/admin-v2/"))) event.respondWith(fetch(r));
+});

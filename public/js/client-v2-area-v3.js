@@ -44,12 +44,22 @@ export function renderV3Materials(module){
     (wa?'<a class="btn secondary" href="'+esc(wa)+'" target="_blank" rel="noopener noreferrer">Enviar materiais pelo WhatsApp</a>':'<p>Solicite o canal de envio à Libri.</p>')+
     (module.receipt?'<p><strong>Recebimento registrado:</strong> '+esc(module.receipt.photoCount)+' fotos e '+esc(module.receipt.videoCount)+' vídeos. '+(module.receipt.completeAt?'Materiais completos confirmados.':'Ainda falta confirmar o recebimento completo.')+' A produção depende da conferência e da agenda.</p>':'<p>Aguardando conferência dos materiais pela Libri.</p>')+'</section>';
 }
-export function renderV3Uploads(m,busy=false){
+// Upload progress measures bytes sent; 100% is only shown after the server confirms storage.
+export function uploadV3WithProgress(url,body,onProgress){
+ return new Promise((resolve,reject)=>{
+  const xhr=new XMLHttpRequest();xhr.open('POST',url);xhr.timeout=120000;
+  xhr.upload.onprogress=e=>{if(e.lengthComputable&&e.total>0)onProgress(Math.min(1,e.loaded/e.total));};
+  xhr.onload=()=>{let data;try{data=JSON.parse(xhr.responseText);}catch{}if(xhr.status>=200&&xhr.status<300&&data?.ok&&data.result?.id){resolve(data);return;}const e=new Error(data?.error||'Não foi possível confirmar o envio.');e.uncertain=xhr.status>=500||xhr.status===0||!data;reject(e);};
+  const uncertain=()=>{const e=new Error('Conexão interrompida. Confira quais imagens foram salvas antes de tentar novamente.');e.uncertain=true;reject(e);};
+  xhr.onerror=uncertain;xhr.ontimeout=uncertain;xhr.onabort=uncertain;xhr.send(body);
+ });
+}
+export function renderV3Uploads(m,busy=false,uploadState=null){
  const files=m.uploads||[],rules=m.schema.uploadRules||[];
  if(!rules.length&&!files.length)return '';
  return '<section class="card"><h3>Imagens privadas</h3><p>JPG, PNG, WebP, HEIC ou HEIF, até 15 MB por imagem.</p>'+
- rules.map(r=>'<div class="field full" data-v3-upload-field="'+esc(r.fieldKey)+'"><label>'+esc(r.label)+'</label><p>'+esc(r.help||('Até '+r.max+' imagens.'))+'</p>'+
- (r.requiresUploadAuthorization&&m.editable?'<small class="field-help">Ao enviar, você declara ter autorização da pessoa retratada ou de seu responsável legal para utilizar as imagens enviadas neste pedido.</small>':'')+(!r.authorized&&!r.requiresUploadAuthorization?'<p>Salve a autorização necessária antes do envio.</p>':m.editable?'<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" data-v3-upload="'+esc(r.fieldKey)+'" '+(busy?'disabled':'')+'>':'')+'</div>').join('')+
+ rules.map(r=>{const count=files.filter(x=>x.fieldKey===r.fieldKey).length,remaining=Math.max(0,r.max-count),state=uploadState?.fieldKey===r.fieldKey?uploadState:null;return '<div class="field full" data-v3-upload-field="'+esc(r.fieldKey)+'"><label>'+esc(r.label)+'</label><p>'+esc(r.help||('Até '+r.max+' imagens.'))+'</p>'+
+ (r.requiresUploadAuthorization&&m.editable?'<small class="field-help">Ao enviar, você declara ter autorização da pessoa retratada ou de seu responsável legal para utilizar as imagens enviadas neste pedido.</small>':'')+(!r.authorized&&!r.requiresUploadAuthorization?'<p>Salve a autorização necessária antes do envio.</p>':m.editable?'<input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" data-v3-upload="'+esc(r.fieldKey)+'" '+(busy||!remaining?'disabled':'')+'>':'')+'<small class="field-help">'+count+' de '+r.max+' imagens • '+remaining+' disponíveis</small>'+(state?'<div class="v3-upload-progress" data-v3-upload-progress><progress max="100" value="'+esc(state.percent)+'" aria-label="Progresso do envio das imagens"></progress><small data-v3-upload-status role="status">'+esc(state.message)+'</small></div>':'')+'</div>';}).join('')+
  files.map(x=>'<div class="field full"><span>'+esc(x.originalFilename)+'</span>'+
  (rules.some(r=>r.fieldKey===x.fieldKey&&r.authorized)?'<a href="'+esc(x.contentPath)+'" target="_blank" rel="noopener noreferrer">Ver imagem</a>':'<span>Imagem sem autorização ativa</span>')+
  (m.editable?'<button type="button" class="btn secondary" data-v3-delete="'+esc(x.id)+'" '+(busy?'disabled':'')+'>Remover</button>':'')+'</div>').join('')+'</section>';
@@ -61,7 +71,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   root.classList.add('libri-v3-area');document.body.classList.add('libri-v3-area-body');
   const endpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/briefing';
-  let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null,contracts=null;
+  let area=initial,active='summary',busy=false,error='',notice='',payment=null,upsellSeen=false,acceptedUpsell=null,contracts=null,uploadState=null,uploadStarting=false;
   const contractEndpoint='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/contracts';
   async function loadContracts(){try{contracts=(await api(contractEndpoint)).result;}catch(e){error=e.message;}if(active==='contracts')render();}
   function contractHtml(){return '<section class="card"><h2>Contratos</h2>'+(contracts?(contracts.contracts.length?contracts.contracts.map(c=>'<article class="contract-card"><h3>Versão '+esc(c.version)+'</h3><div class="contract-body" style="white-space:pre-wrap">'+esc(c.body)+'</div>'+(c.status==='waiting_customer'&&!area.locked?'<label>Nome de quem está assinando<input data-contract-name="'+esc(c.id)+'" value="'+esc(contracts.order.customerName||'')+'"></label><button data-v3-sign-contract="'+esc(c.id)+'" class="btn primary">Assinar contrato</button>':'')+(c.hasFinalPdf?'<a href="'+esc(contractEndpoint+'/'+c.id+'/pdf')+'" class="btn secondary">Baixar PDF assinado</a>':'')+'</article>').join(''):'<p>Nenhum contrato disponível.</p>'):'<p>Carregando contratos…</p>')+'</section>';}
@@ -119,7 +129,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     refreshSaveStatus();
     try{return await writer;}finally{writer=null;refreshSaveStatus();}
   }
-  if(typeof window!=='undefined')window.addEventListener('beforeunload',e=>{if(pending.size){e.preventDefault();e.returnValue='';}});
+  if(typeof window!=='undefined')window.addEventListener('beforeunload',e=>{if(pending.size||uploadStarting||uploadState?.running){e.preventDefault();e.returnValue='';}});
   function nextBriefing(){return area.modules.find(m=>m.module==='shared'&&m.editable&&(!m.revision||m.schema?.sections.flatMap(s=>s.fields).some(f=>f.required&&!['info','upload'].includes(f.type)&&!String(m.data?.[f.key]??'').trim())))||area.modules.find(m=>m.module!=='shared'&&m.editable)||area.modules.find(m=>m.editable);}
   function completionNotice(){const url=safeWhatsApp(area.briefingWhatsappUrl);return !area.locked&&url?'<section class="card v3-client-completion"><h3>Tudo pronto! 💛</h3><p>Seus dados foram enviados. Avise a Libri pelo WhatsApp para facilitar o acompanhamento.</p><a class="btn primary" data-v3-briefing-whatsapp href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Avisar a Libri no WhatsApp 💛</a></section>':'';}
   function briefingHome(){
@@ -225,7 +235,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+completionNotice()+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+
       (active==='contracts'?contractHtml():m?'<section class="card"><h2>'+esc(labels[m.module])+'</h2><p>'+(!m.editable?'Este briefing está disponível apenas para consulta.':'Preencha com calma. As próximas perguntas aparecem conforme suas escolhas.')+'</p><form id="v3-module-form">'+m.schema.sections.map(s=>'<section><h3>'+esc(s.title)+'</h3>'+(s.description?'<p>'+esc(s.description)+'</p>':'')+s.fields.map(f=>v3FieldHtml(f,m.data[f.key],{disabled:busy||!m.editable})).join('')+'</section>').join('')+
-        (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
+        (m.editable?'<div class="v3-client-form-actions"><button type="submit" class="btn '+(m.module==='shared'?'secondary':'primary')+'" '+(busy?'disabled':'')+'>Salvar rascunho</button>'+(m.module==='shared'?'<button type="button" class="btn primary" data-v3-action="next-briefing" '+(busy?'disabled':'')+'>Salvar e continuar</button>':'')+'</div>':'')+'</form><p class="field-help">As respostas salvas ficam disponíveis quando você voltar.</p></section>'+renderV3Uploads(m,busy,uploadState?.module===m.module?uploadState:null)+renderV3Materials(m)+(m.editable&&m.module!=='shared'?'<section class="card"><button type="button" class="btn primary" data-v3-action="submit" '+(busy?'disabled':'')+'>Enviar dados definitivos</button></section>':''):summary()+paymentHtml());
     root.setAttribute('aria-busy',String(busy));
   }
   function collect(m){
@@ -245,15 +255,51 @@ export async function startV3CustomerArea(root,{token,initial,api}){
     if(ok&&!quiet&&active===tab){notice='Rascunho salvo.';render();}
     return ok;
   }
-  async function fileAction({fieldKey,file,id}){
-    if(busy||!current()?.editable)return;
-    const tab=active;if(!await save({quiet:true})||active!==tab||busy)return;
-    const m=current();busy=true;error='';notice='';render();
-    try{
-      if(file){const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);if(m.schema.uploadRules.some(r=>r.fieldKey===fieldKey&&r.requiresUploadAuthorization))body.append('authorizationAccepted','true');await api(endpoint+'/'+m.module+'/uploads',{method:'POST',body});}
-      else await api(endpoint+'/'+m.module+'/uploads/'+encodeURIComponent(id),{method:'DELETE'});
-      area=(await api(endpoint)).briefing;notice=file?'Imagem enviada com segurança.':'Imagem removida.';
-    }catch(e){error=e.message;}finally{busy=false;render();}
+  function updateUploadProgress(percent,message){
+    if(!uploadState)return;
+    uploadState.percent=percent;uploadState.message=message;
+    const box=root.querySelector('[data-v3-upload-progress]');
+    if(box){box.querySelector('progress').value=percent;box.querySelector('[data-v3-upload-status]').textContent=message;}
+  }
+  async function fileAction({fieldKey,files,id}){
+    if(busy||uploadStarting||!current()?.editable)return;
+    const tab=active;uploadStarting=true;
+    try{if(!await save({quiet:true})||active!==tab||busy)return;
+      const m=current();
+      if(id){busy=true;error='';notice='';uploadState=null;render();try{await api(endpoint+'/'+m.module+'/uploads/'+encodeURIComponent(id),{method:'DELETE'});area=(await api(endpoint)).briefing;notice='Imagem removida.';}catch(e){error=e.message;}finally{busy=false;render();}return;}
+      const rule=m.schema.uploadRules.find(r=>r.fieldKey===fieldKey);
+      if(!rule||(!rule.authorized&&!rule.requiresUploadAuthorization))return;
+      const remaining=Math.max(0,rule.max-(m.uploads||[]).filter(x=>x.fieldKey===fieldKey).length);
+      const selected=Array.from(files||[]);if(!selected.length)return;
+      // Reject an oversized selection rather than silently discarding images.
+      if(selected.length>remaining){uploadState={module:tab,fieldKey,running:false,percent:0,message:'Você pode selecionar até '+remaining+' imagem(ns) neste campo.'};render();return;}
+      const invalid=selected.find(file=>!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(file.type.toLowerCase())||file.size<=0||file.size>15*1024*1024);
+      if(invalid){uploadState={module:tab,fieldKey,running:false,percent:0,message:'Confira '+invalid.name+': envie JPG, PNG, WebP, HEIC ou HEIF de até 15 MB.'};render();return;}
+      busy=true;error='';notice='';
+      const total=selected.reduce((sum,file)=>sum+file.size,0);let confirmedBytes=0,confirmed=0,failure='';
+      uploadState={module:tab,fieldKey,running:true,percent:0,message:'Preparando '+selected.length+' imagem(ns)…'};render();
+      root.querySelector('[data-v3-upload-progress]')?.scrollIntoView({block:'nearest'});
+      try{
+        for(const file of selected){
+          const body=new FormData();body.append('fieldKey',fieldKey);body.append('file',file);
+          if(rule.requiresUploadAuthorization)body.append('authorizationAccepted','true');
+          const prefix='Enviando '+(confirmed+1)+' de '+selected.length;
+          updateUploadProgress(Math.floor(100*confirmedBytes/total),prefix+'…');
+          await uploadV3WithProgress(endpoint+'/'+m.module+'/uploads',body,fraction=>{
+            const percent=Math.min(99,Math.floor(100*(confirmedBytes+file.size*fraction)/total));
+            updateUploadProgress(percent,fraction===1?'Salvando imagem '+(confirmed+1)+' de '+selected.length+'…':prefix+' • '+percent+'%');
+          });
+          confirmed++;confirmedBytes+=file.size;
+          updateUploadProgress(Math.floor(100*confirmedBytes/total),confirmed+' de '+selected.length+' imagens salvas');
+        }
+      }catch(e){failure=e.message||'Falha no envio.';}
+      // Always reconcile from the server, including partial success or lost responses.
+      try{area=(await api(endpoint)).briefing;}catch(e){failure=(failure?failure+' ':'')+'Não foi possível atualizar a lista. Recarregue a página antes de enviar novamente.';}
+      uploadState.running=false;
+      uploadState.percent=Math.floor(100*confirmedBytes/total);
+      uploadState.message=failure?confirmed+' de '+selected.length+' confirmadas. '+failure:confirmed+' de '+selected.length+' imagens enviadas ✓';
+      busy=false;render();
+    }finally{uploadStarting=false;}
   }
   function missingFields(modules){
     const issues=[];
@@ -332,13 +378,13 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   root.addEventListener('input',e=>{const el=e.target;if(el.type!=='radio'&&el.type!=='checkbox')captureInput(el,false);});
   root.addEventListener('change',e=>{
     const el=e.target,fieldKey=el.dataset.v3Upload;
-    if(fieldKey&&el.files?.[0]){void fileAction({fieldKey,file:el.files[0]});return;}
+    if(fieldKey&&el.files?.length){const files=Array.from(el.files);el.value='';void fileAction({fieldKey,files});return;}
     if(el.type==='radio'||el.type==='checkbox')captureInput(el,true);
   });
   root.addEventListener('submit',e=>{if(e.target.id==='v3-module-form'){e.preventDefault();save();}});
   root.addEventListener('click',async e=>{
     const tab=e.target.closest('[data-v3-tab]')?.dataset.v3Tab||e.target.closest('[data-v3-start]')?.dataset.v3Start;
-    if(tab&&!busy){
+    if(tab&&!busy&&!uploadStarting){
       active=tab;notice='';error='';render();window.scrollTo(0,0);void flushDrafts();if(tab==='contracts')void loadContracts();return;
     }
     const sign=e.target.closest('[data-v3-sign-contract]');if(sign&&!busy){const id=sign.dataset.v3SignContract,name=root.querySelector('[data-contract-name="'+id+'"]')?.value.trim();if(!name||!confirm('Confirma que leu e aceita este contrato?'))return;busy=true;sign.disabled=true;try{await api(contractEndpoint+'/'+id+'/sign',{method:'POST',body:JSON.stringify({accepted:true,signerName:name})});notice='Contrato assinado ✓';await loadContracts();}catch(e){error=e.message;}finally{busy=false;render();}return;}

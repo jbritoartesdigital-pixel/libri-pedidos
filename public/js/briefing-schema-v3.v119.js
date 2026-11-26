@@ -1,4 +1,4 @@
-import {buildV2BriefingSimulationSchema} from './briefing-schema-v2.v119.js';
+import {buildV2BriefingSimulationSchema} from './briefing-schema-v2.v119.js?v=127';
 import {buildAtelieBriefingBlueprint} from './briefing-schema-atelie.v119.js';
 const fail=(message,status=422)=>{const e=new Error(message);e.status=status;throw e;};
 const field=(key,label,type='text',options={})=>({key,label,type,...options});

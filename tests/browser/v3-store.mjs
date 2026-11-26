@@ -50,7 +50,8 @@ try{
  paidFixture=await make('Festa teste integrada','5561999999999');mp.approve(paidFixture.providerOrderId);await syncMercadoPagoOrder(fixtureEnv,paidFixture.providerOrderId);
  unpaidFixture=await make('Festa teste pendente','5561888888888');assert.equal(mp.posts,2);mockFetch=globalThis.fetch;
 }finally{globalThis.fetch=originalFetch;}
-const readEnv={DB:fixtureDb,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true'};
+const storedUploads=new Map();
+const readEnv={DB:fixtureDb,LIBRI_V3_ADMIN_PAYMENT_ENABLED:'true',FILES:{put:async(key,stream)=>storedUploads.set(key,await new Response(stream).arrayBuffer()),delete:async key=>storedUploads.delete(key),get:async key=>storedUploads.has(key)?{body:storedUploads.get(key)}:null}};
 const legacyDb=database(),legacyEnv={DB:legacyDb,MERCADO_PAGO_ACCESS_TOKEN:'TEST-token'};let legacyFixture;
 try{
  const mp=providerMock({mock:{method:(obj,key,fn)=>{obj[key]=fn;}}});
@@ -101,6 +102,7 @@ const server=createServer(async(req,res)=>{
    else if(req.method==='GET'&&url.pathname==='/api/admin/v2/orders/'+paidFixture.orderCode+'/v3/briefing')result=await handleAdminBriefingV3Api(request,readEnv,url);
    else if(url.pathname.startsWith('/api/v2/customer-area/'+manualFixture.publicToken+'/v3/')){globalThis.fetch=manualFetch;try{result=await handleCustomerBriefingV3Api(request,manualEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else if([paidFixture,unpaidFixture].some(o=>url.pathname==='/api/v2/customer-area/'+o.publicToken+'/v3/briefing')&&req.method==='GET')result=await handleCustomerBriefingV3Api(request,readEnv,url);
+   else if(url.pathname.startsWith('/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing/convite/uploads')&&['POST','DELETE'].includes(req.method)){if(req.method==='POST')await new Promise(r=>setTimeout(r,500));result=await handleCustomerBriefingV3Api(request,readEnv,url);}
    else if(['/shared','/convite'].some(s=>url.pathname==='/api/v2/customer-area/'+paidFixture.publicToken+'/v3/briefing'+s)&&req.method==='PATCH'){if(req.headers['x-libri-test-slow-draft']==='1')await new Promise(r=>setTimeout(r,650));result=await handleCustomerBriefingV3Api(request,readEnv,url);}
    else if(url.pathname==='/api/v3/cart/recover'&&req.method==='POST'){const body=await request.clone().json();assert.ok([paidFixture,unpaidFixture,manualFixture].some(o=>o.publicToken===body.publicToken));const manual=body.publicToken===manualFixture.publicToken;globalThis.fetch=manual?manualFetch:mockFetch;try{result=await handlePublicCartV3Api(request,manual?manualEnv:fixtureEnv,url);}finally{globalThis.fetch=originalFetch;}}
    else {blocked++;console.error('Unexpected test API',req.method,url.pathname);res.writeHead(403);res.end('Test: route not allowed');return;}
@@ -312,6 +314,14 @@ try{
  assert.equal(await customer.locator('[data-v3-field="music_request"]').inputValue(),'Música de teste');
  assert.equal(await customer.locator('[data-v3-field="appearance_choice"][value="no"]').isChecked(),true);
  assert.equal(await customer.locator('[data-v3-field="gift_categories"][value="clothes"]').isChecked(),true);
+ const picker=customer.locator('[data-v3-upload="reference_files"]');assert.equal(await picker.getAttribute('multiple'),'');
+ const photo=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF2sAAAAASUVORK5CYII=','base64');
+ await picker.setInputFiles([{name:'lote-1.png',mimeType:'image/png',buffer:photo},{name:'lote-2.png',mimeType:'image/png',buffer:photo}]);
+ await customer.locator('[data-v3-upload-progress] progress').waitFor();
+ await customer.locator('[data-v3-upload-status]').filter({hasText:'2 de 2 imagens enviadas'}).waitFor();
+ assert.equal(await customer.locator('[data-v3-upload-progress] progress').getAttribute('value'),'100');assert.equal(storedUploads.size,2);
+ await customer.reload();await customer.locator('[data-v3-tab="convite"]').first().click();await customer.getByText('lote-1.png',{exact:true}).waitFor();await customer.getByText('lote-2.png',{exact:true}).waitFor();
+ customer.on('dialog',d=>d.accept());await customer.locator('[data-v3-delete]').first().click();await customer.getByText('Imagem removida.',{exact:true}).waitFor();await customer.locator('[data-v3-delete]').first().click();await customer.getByText('Imagem removida.',{exact:true}).waitFor();assert.equal(storedUploads.size,0);
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();
  await customer.screenshot({path:'artifacts/v3-browser/customer-retro-mobile.png',fullPage:true});
  assert.equal(await customer.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);

@@ -98,7 +98,7 @@ test('V3 customer routes isolate order tokens, require payment, and block legacy
   }),env,ctx);
   const get=await call(api+'/v3/briefing');
   assert.equal(get.status,200);
-  assert.equal(get.headers.get('cache-control'),'no-store');
+  assert.match(get.headers.get('cache-control'),/\bno-store\b/);
   assert.equal((await get.json()).briefing.modules.length,3);
   const saved=await call(api+'/v3/briefing/shared','PATCH',{revision:0,data:{theme_or_style:'Jardim'}});
   assert.equal(saved.status,200);
@@ -330,7 +330,9 @@ test('interactive link survives file download deadline and is restricted to Libr
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='approved' WHERE id=?").run(s.id);
  db.sqlite.prepare("INSERT INTO v3_service_previews(service_id,version,r2_key,mime_type,size_bytes,status,published_at,adjustment_deadline,approved_at) VALUES(?,1,'interactive_test_preview','image/png',8,'approved',datetime('now'),datetime('now','+7 days'),datetime('now'))").run(s.id);
  await assert.rejects(deliverV3Service(env,token,family,{version:0,confirmed:true,interactiveUrl:'https://libriconvites.com.br.example.com/foo'}),/domínio/);
- const d=await deliverV3Service(env,token,family,{version:0,confirmed:true,interactiveUrl:'https://libriconvites.com.br/festa-teste'});
+ await assert.rejects(deliverV3Service(env,token,family,{version:0,confirmed:true,interactiveUrl:'https://libriconvites.com.br/festa-teste',externalUrl:'https://drive.google.com.evil.example/file/d/test/view'}),/Google Drive/);
+ const d=await deliverV3Service(env,token,family,{version:0,confirmed:true,interactiveUrl:'https://libriconvites.com.br/festa-teste',externalUrl:'https://drive.google.com/file/d/test/view'});
+ assert.equal(d.externalUrl,'https://drive.google.com/file/d/test/view');assert.equal(d.files.length,0);
  assert.equal(d.interactiveUrl,'https://libriconvites.com.br/festa-teste');
  db.sqlite.prepare("UPDATE v3_order_services SET download_until='2000-01-01T00:00:00Z' WHERE id=?").run(s.id);
  const b=await getV3ModularBriefing(db,token);
@@ -1113,7 +1115,8 @@ test('V125 admin editor saves, submits and audits the modular briefing without c
  assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:1,data:{...data,theme_or_style:'Outro'}})).status,200);
  assert.equal((await getV3AdminBriefing(db,token)).services.find(s=>s.family==='identidade_visual').briefingStatus,'in_progress');
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
- assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:2,data})).status,409);
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:2,data})).status,200);
+ assert.equal((await getV3AdminBriefing(db,token)).services.find(s=>s.family==='identidade_visual').productionStatus,'in_production');
 });
 test('V125 archive and restore are audited and unpaid deletion checks confirmation and preserves paid orders',async t=>{
  const {db,order}=await paid(t);const env={DB:db};
@@ -1229,3 +1232,5 @@ test('V131 starts with incomplete briefing and absent materials without recordin
  }
  const area=await getV3ModularBriefing(db,token);assert.ok(area.modules.find(m=>m.module==='convite').editable);
 });
+
+ test('V132 Drive entrega identidade sem R2 e bloqueia upload de vídeo',async t=>{const {db,order}=await paid(t),token=order.publicToken,family='identidade_visual';db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=? AND family=?").run(order.orderId,family);const form=new FormData();form.append('file',new Blob(['video'],{type:'video/mp4'}),'final.mp4');form.append('version','0');await assert.rejects(stageV3FinalFile(new Request('https://test/final',{method:'POST',body:form}),{DB:db,FILES:{}},token,family),/Google Drive/);const result=await deliverV3Service({DB:db},token,family,{version:0,confirmed:true,externalUrl:'https://drive.google.com/file/d/test/view'});assert.equal(result.delivered,true);assert.equal(result.externalUrl,'https://drive.google.com/file/d/test/view');assert.equal(result.files.length,0);});

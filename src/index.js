@@ -413,7 +413,7 @@ async function handleCustomerV2Api(
   );
 }
 
-export default {
+const app = {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runV2Scheduler(env).then(result => {
       console.log('V2 scheduler', JSON.stringify(result));
@@ -639,3 +639,5 @@ export default {
 };
 
 
+
+export default {...app,async fetch(request,env,ctx){const response=await app.fetch(request,env,ctx);const headers=new Headers(response.headers);headers.set('x-content-type-options','nosniff');headers.set('referrer-policy','no-referrer');const path=new URL(request.url).pathname;if(/^\/(?:meu-pedido(?:\/|$)|admin(?:-v2)?(?:[/.]|$)|api\/(?:admin|v2\/(?:customer-area|manual-order|urgency))(?:\/|$))/.test(path)){headers.set('cache-control','private, no-store, max-age=0');headers.set('x-robots-tag','noindex, nofollow');}return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}};

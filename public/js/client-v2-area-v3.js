@@ -131,7 +131,8 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   }
   if(typeof window!=='undefined')window.addEventListener('beforeunload',e=>{if(pending.size||uploadStarting||uploadState?.running){e.preventDefault();e.returnValue='';}});
   function nextBriefing(){return area.modules.find(m=>m.module==='shared'&&m.editable&&(!m.revision||m.schema?.sections.flatMap(s=>s.fields).some(f=>f.required&&!['info','upload'].includes(f.type)&&!String(m.data?.[f.key]??'').trim())))||area.modules.find(m=>m.module!=='shared'&&m.editable)||area.modules.find(m=>m.editable);}
-  function completionNotice(){const url=safeWhatsApp(area.briefingWhatsappUrl);return !area.locked&&url?'<section class="card v3-client-completion"><h3>Tudo pronto! 💛</h3><p>Seus dados foram enviados. Avise a Libri pelo WhatsApp para facilitar o acompanhamento.</p><a class="btn primary" data-v3-briefing-whatsapp href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Avisar a Libri no WhatsApp 💛</a></section>':'';}
+  function allDelivered(){return !area.locked&&!area.cancellation&&area.services.length>0&&area.services.every(s=>s.delivery?.delivered)&&!(area.supplements||[]).some(x=>['offered','accepted','payment_pending','review'].includes(x.status));}
+  function completionNotice(){const url=safeWhatsApp(area.briefingWhatsappUrl);return !area.locked&&!area.services.some(s=>s.productionStatus!=='pending'&&s.productionStatus!=='ready')&&url?'<section class="card v3-client-completion"><h3>Tudo pronto! 💛</h3><p>Seus dados foram enviados. Avise a Libri pelo WhatsApp para facilitar o acompanhamento.</p><a class="btn primary" data-v3-briefing-whatsapp href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">Avisar a Libri no WhatsApp 💛</a></section>':'';}
   function briefingHome(){
     const next=nextBriefing(),count=area.services.filter(s=>s.briefingStatus==='completed').length,total=area.services.length;
     if(area.locked||area.cancellation)return '';
@@ -143,12 +144,16 @@ export async function startV3CustomerArea(root,{token,initial,api}){
   function deliveryHtml(s){
     const d=s.delivery;if(!d?.delivered)return '';
     const base='/api/v2/customer-area/'+encodeURIComponent(token)+'/v3/delivery/'+esc(s.family)+'/files/';
-    return '<section class="card"><h4>Seu serviço foi entregue!</h4><p>Entrega em '+day(d.deliveredAt.slice(0,10))+'</p>'+
-    (d.files.length?'<p>Arquivos finais disponíveis para download até '+day(d.downloadUntil.slice(0,10))+'.</p>':'')+
-    (d.warning&&(d.files.length||d.externalChannel==='drive')?'<p role="status"><strong>'+esc(d.warning)+'</strong></p>':'')+
-    d.files.map(f=>'<p>'+esc(f.filename)+' '+(f.available?'<a class="btn primary" href="'+esc(base+f.id)+'">Baixar arquivo</a>':'· Prazo de download encerrado')+'</p>').join('')+
-    (d.externalChannel==='whatsapp'?'<p>Arquivo final enviado pelo WhatsApp. Confira a conversa com a Libri.</p>':d.externalChannel==='drive'?(d.externalUrl?'<p>Baixe o arquivo até '+day(d.downloadUntil.slice(0,10))+'.</p><a class="btn primary" href="'+esc(d.externalUrl)+'" target="_blank" rel="noopener noreferrer">Abrir no Google Drive</a>':'<p>O prazo de acesso ao link pelo aplicativo encerrou.</p>'):'')+
-    (d.interactiveUrl?'<p><a class="btn primary" href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir meu convite interativo</a></p><p>A validade do convite segue a contratação, independentemente do prazo de download.</p>':'')+'</section>';
+    return '<div class="v3-delivery-links" style="display:grid;gap:10px;margin-top:12px">'+
+    (d.interactiveUrl?'<a class="btn primary" href="'+esc(d.interactiveUrl)+'" target="_blank" rel="noopener noreferrer">Abrir meu convite</a>':'')+
+    (d.externalUrl?'<a class="btn '+(d.interactiveUrl?'secondary':'primary')+'" href="'+esc(d.externalUrl)+'" target="_blank" rel="noopener noreferrer">Baixar pelo Google Drive</a>':'')+
+    (d.files||[]).filter(f=>f.available).map(f=>'<a class="btn secondary" href="'+esc(base+f.id)+'">Baixar '+esc(f.filename)+'</a>').join('')+
+    (d.externalChannel==='whatsapp'?'<p>Seu arquivo foi enviado pelo WhatsApp.</p>':'')+'</div>';
+  }
+  function deliveredSummary(){
+    return '<header class="v3-client-header"><span class="v3-client-kicker">'+esc(area.orderCode)+'</span><h1>Seu pedido está pronto! 💛</h1><p>'+esc(area.event.honoreeName)+' · '+day(area.event.date)+'</p></header>'+
+    area.services.map(s=>'<section class="card v3-client-service"><h3>'+esc(s.productName)+'</h3>'+deliveryHtml(s)+'<details style="margin-top:16px"><summary>O que você contratou</summary><p>'+esc(s.variantName||'')+'</p>'+ (s.extras||[]).map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+'<p>Valor: '+money(s.totalCents)+'</p><p>Entregue em '+day(s.delivery.deliveredAt.slice(0,10))+'</p></details></section>').join('')+
+    '<section class="card"><a class="btn secondary" href="/pedido">Contratar novo serviço</a></section>';
   }
   function productionHtml(s){
     const p=s.progress;if(!p)return '';
@@ -213,7 +218,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       '<p>Previsão inicial: '+day(area.deliveryWindow.start)+' a '+day(area.deliveryWindow.end)+'. '+(area.deliveryWindow.provisional?'O prazo será confirmado após o briefing e materiais necessários.':'')+'</p></details>'+
       area.services.map(s=>'<section class="card v3-client-service"><h3>'+esc(s.productName)+'</h3><p>'+esc(s.variantName)+'</p><span class="v3-client-service-status">'+esc(s.briefingStatus==='available'?'Dados pendentes':briefingLabels[s.briefingStatus]||'Em acompanhamento')+'</span><p>'+esc(productionLabels[s.productionStatus]||'Em acompanhamento')+'</p>'+
         (s.deliveryWindow?'<p><strong>Entrega prevista:</strong> '+day(s.deliveryWindow.start)+' a '+day(s.deliveryWindow.end)+'</p>':'<p>Prazo de entrega a confirmar.</p>')+(s.complementNote?'<p><strong>Complemento solicitado:</strong> '+esc(s.complementNote)+'</p>':'')+'<p>'+money(s.totalCents)+'</p>'+(s.blackLibri?'<p><strong>Black Libri:</strong> '+esc(s.blackLibri.label)+(s.blackLibri.gift?' · Brinde incluído':s.blackLibri.applied?' · Desconto aplicado':' · Melhor condição mantida')+'</p>':'')+s.extras.map(x=>'<p>'+esc(x.quantity)+' × '+esc(x.name)+'</p>').join('')+
-        (!area.locked?'<button type="button" class="btn '+(area.modules.find(m=>m.module===s.family)?.editable?'primary':'secondary')+'" data-v3-tab="'+esc(s.family)+'">'+(area.modules.find(m=>m.module===s.family)?.editable?'Preencher dados do serviço':'Ver dados do serviço')+'</button>':'')+productionHtml(s)+deliveryHtml(s)+supplementHtml(s)+'</section>').join('');
+        (!area.locked?'<button type="button" class="btn '+(area.modules.find(m=>m.module===s.family)?.editable?'primary':'secondary')+'" data-v3-tab="'+esc(s.family)+'">'+(area.modules.find(m=>m.module===s.family)?.editable?'Preencher dados do serviço':'Ver dados do serviço')+'</button>':'')+(s.delivery?.delivered?'':productionHtml(s))+deliveryHtml(s)+supplementHtml(s)+'</section>').join('');
   }
   function paymentHtml(){
     if(!area.locked)return '';
@@ -231,6 +236,7 @@ export async function startV3CustomerArea(root,{token,initial,api}){
       '<button type="button" class="btn secondary" data-v3-action="payment">Verificar pagamento</button></section>';
   }
   function render(){
+    if(allDelivered()){root.innerHTML=deliveredSummary();root.setAttribute('aria-busy','false');return;}
     const m=current();
     root.innerHTML=clientHeader()+saveStatusHtml()+(active==='summary'?briefingHome():'')+completionNotice()+
       (error?'<p role="alert" class="card">'+esc(error)+'</p>':'')+(notice?'<p role="status" class="card">'+esc(notice)+'</p>':'')+

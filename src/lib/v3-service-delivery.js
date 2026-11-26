@@ -36,6 +36,7 @@ export async function stageV3FinalFile(request,env,token,family){
  const initial=await access(env.DB,token,family);if(!initial)return null;
  if(Number(request.headers.get('content-length')||0)>MAX+100000)fail('Arquivo acima de 80 MB.',413);
  const form=await request.formData(),file=form.get('file'),version=Number(form.get('version'));
+ if(file?.type?.startsWith('video/'))fail('Entregue o vídeo por link do Google Drive, sem upload ao portal.',422);
  if(!file||typeof file.stream!=='function'||!Object.hasOwn(mimeExt,file.type)||file.size<=0||file.size>MAX)fail('Envie MP4, WebM, JPG, PNG, WebP, PDF ou ZIP de até 80 MB.',422);
  return withV2PaymentLock(env.DB,initial.ctx.order.id,async()=>{
  const {s}=await access(env.DB,token,family);check(s,version);
@@ -74,8 +75,8 @@ export async function deliverV3Service(env,token,family,input={}){
  if(s.production_status==='approved'&&approved?.status!=='approved')fail('A última prévia precisa estar aprovada.');
  const files=(await env.DB.prepare('SELECT r2_key FROM v3_service_final_files WHERE service_id=? AND purged_at IS NULL').bind(s.id).all()).results||[];
  const url=interactive(s)?link(input.interactiveUrl):null;
- const external=family==='retrospectiva'?externalV3RetroMedia({channel:input.externalChannel,url:input.externalUrl}):null;
- if(!external&&!url&&!files.length)fail('Adicione os arquivos finais antes da entrega.',422);
+ const external=family==='retrospectiva'?externalV3RetroMedia({channel:input.externalChannel,url:input.externalUrl}):(input.externalUrl?externalV3RetroMedia({channel:'drive',url:input.externalUrl}):null);
+ if(!external&&!url&&!files.length)fail('Informe o link do Google Drive para entregar os arquivos finais.',422);
  if(files.length&&!env.FILES)fail('Armazenamento indisponível.',503);
  for(const f of files){if(!await env.FILES.head(f.r2_key))fail('Um arquivo final está indisponível. Confira antes de entregar.');}
  const now=new Date(),stamp=now.toISOString(),until=n=>new Date(now.getTime()+n*DAY).toISOString();

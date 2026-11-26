@@ -120,7 +120,7 @@ test('private V3 images require contracted family and saved authorization; cross
  const env={DB:db,FILES},ctx={waitUntil(){}};
  const prefix='/api/v2/customer-area/'+order.publicToken+'/v3/briefing/';
  const call=(path,method='GET',body)=>worker.fetch(new Request('https://test'+path,{method,...(body?{body}:{})}),env,ctx);
- const form=field=>{const f=new FormData();f.set('fieldKey',field);f.set('file',new Blob([Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAADAAMDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCPAFl//9k=','base64')],{type:'image/jpeg'}),'foto.jpg');return f;};
+ const form=field=>{const f=new FormData();f.set('fieldKey',field);f.set('file',new Blob([Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDpKKKK9I8M/9k=','base64')],{type:'image/jpeg'}),'foto.jpg');return f;};
  assert.equal((await call(prefix+'identidade_visual/uploads','POST',form('childPhotos'))).status,403);
  await saveV3ModuleDraft(db,order.publicToken,'identidade_visual',{revision:0,data:{mascotMode:'criança ilustrada',childPhotoPermission:'sim',guardianAuthorization:'sim'}});
  const upload=await call(prefix+'identidade_visual/uploads','POST',form('childPhotos'));
@@ -1113,7 +1113,13 @@ test('V125 admin editor saves, submits and audits the modular briefing without c
  assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:1,data:{...data,theme_or_style:'Outro'}})).status,200);
  assert.equal((await getV3AdminBriefing(db,token)).services.find(s=>s.family==='identidade_visual').briefingStatus,'in_progress');
  db.sqlite.prepare("UPDATE v3_order_services SET production_status='in_production' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
- assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:2,data})).status,409);
+ // V131 permits editing incomplete briefings after production has begun.
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:2,data})).status,200);
+ const current=await getV3AdminBriefing(db,token);
+ assert.equal(current.services.find(s=>s.family==='identidade_visual').productionStatus,'in_production');
+ assert.equal(current.payment.fullyPaid,true);
+ db.sqlite.prepare("UPDATE v3_order_services SET production_status='delivered' WHERE order_id=? AND family='identidade_visual'").run(order.orderId);
+ assert.equal((await call('briefing-edit/shared','PATCH',{confirmed:true,revision:3,data})).status,409);
 });
 test('V125 archive and restore are audited and unpaid deletion checks confirmation and preserves paid orders',async t=>{
  const {db,order}=await paid(t);const env={DB:db};
@@ -1177,7 +1183,7 @@ test('V126 private invitation upload requires declaration at upload, not a separ
  assert.equal((await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite').data.private_photo_authorization,undefined);
  const env={DB:db,FILES:{put:async(k,v)=>objects.set(k,v),delete:async k=>objects.delete(k)}};
  const url=new URL('https://test/api/v2/customer-area/'+token+'/v3/briefing/convite/uploads');
- const call=async accepted=>{const form=new FormData();form.set('fieldKey','person_photos');form.set('file',new Blob([Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAADAAMDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCPAFl//9k=','base64')],{type:'image/jpeg'}),'foto.jpg');if(accepted)form.set('authorizationAccepted','true');return handleCustomerBriefingV3Api(new Request(url,{method:'POST',body:form}),env,url);};
+ const call=async accepted=>{const form=new FormData();form.set('fieldKey','person_photos');form.set('file',new Blob([Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAEAAQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDpKKKK9I8M/9k=','base64')],{type:'image/jpeg'}),'foto.jpg');if(accepted)form.set('authorizationAccepted','true');return handleCustomerBriefingV3Api(new Request(url,{method:'POST',body:form}),env,url);};
  assert.equal((await call(false)).status,403);assert.equal(objects.size,0);
  assert.equal((await call(true)).status,201);assert.equal(objects.size,1);
  const m=(await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite');assert.equal(m.data.private_photo_authorization,'sim');assert.equal(m.revision,2);

@@ -14,3 +14,6 @@ Auditoria inicial: 9 alertas nas dependências (5 altos, 4 moderados); 2 alertas
 
 ## Rodada 3
 A candidata Wrangler 4.168.0 passou em pnpm audit sem vulnerabilidades conhecidas, instalação congelada e check. Manifesto e lockfile exatos gerados no CI foram integrados somente nesta branch. Os dois alertas Gitleaks correspondem à mesma chave Pix UUID de teste em dois commits de tests/v2.test.mjs, não a credenciais de API. A origem real/fictícia não é comprovada: substituída por UUID sintético no código atual, histórico não reescrito e alertas históricos não ignorados. Não publicar até resolver/classificar o histórico. JPEG sintético produzido em ambiente local com Pillow, sem dados reais. V131 preexistente continua com falha de teste, não corrigida nesta branch.
+
+## Rodada 4
+Auditoria do lockfile integrado confirmou zero vulnerabilidades conhecidas no CI 45847045041. Os dois alertas históricos Pix permanecem, sem confirmação da natureza da chave antiga. Amostras de JPEG, PNG e WebP agora geradas por Pillow localmente (4x4 RGB, sem dados pessoais), substituídas nos testes. Adequação isolada de teste V125 à regra já existente da V131: briefing incompleto pode ser editado em produção; após entrega, bloqueado. Nenhuma alteração funcional V131 nem publicação. Aguardar evidência do novo CI antes de considerar regressões resolvidas.

@@ -315,7 +315,7 @@ try{
  assert.equal(await customer.locator('[data-v3-field="appearance_choice"][value="no"]').isChecked(),true);
  assert.equal(await customer.locator('[data-v3-field="gift_categories"][value="clothes"]').isChecked(),true);
  const picker=customer.locator('[data-v3-upload="reference_files"]');assert.equal(await picker.getAttribute('multiple'),'');
- const photo=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGOMrl7FwMDAxMDAwMDAAAAR2wGEcAQnLQAAAABJRU5ErkJggg==','base64');
+ const photo=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGOs2HKCAQaYGJAAbg4AYlwB/Kg5E9EAAAAASUVORK5CYII=','base64');
  await picker.setInputFiles([{name:'lote-1.png',mimeType:'image/png',buffer:photo},{name:'lote-2.png',mimeType:'image/png',buffer:photo}]);
  await customer.locator('[data-v3-upload-progress] progress').waitFor();
  await customer.locator('[data-v3-upload-status]').filter({hasText:'2 de 2 imagens enviadas'}).waitFor();
@@ -342,7 +342,7 @@ try{
    module.uploads=photoPaths.map((contentPath,i)=>({id:91001+i,fieldKey:'childPhotos',originalFilename:'teste-'+(i+1)+'.png',mimeType:'image/png',contentPath}));
    await route.fulfill({response,json});
  });
- for(const photoPath of photoPaths)await admin.route(origin+photoPath+'*',route=>route.fulfill({status:200,contentType:'image/png',headers:{'cache-control':'private, no-store'},body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGOMrl7FwMDAxMDAwMDAAAAR2wGEcAQnLQAAAABJRU5ErkJggg==','base64')}));
+ for(const photoPath of photoPaths)await admin.route(origin+photoPath+'*',route=>route.fulfill({status:200,contentType:'image/png',headers:{'cache-control':'private, no-store'},body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAFElEQVR4nGOs2HKCAQaYGJAAbg4AYlwB/Kg5E9EAAAAASUVORK5CYII=','base64')}));
  await admin.goto(origin+'/admin-v2?order='+paidFixture.orderCode);
  const newDrawer=admin.locator('#modalRoot.order-drawer-root .libri-order-drawer');await newDrawer.waitFor();
  const newBounds=await newDrawer.boundingBox();assert.ok(Math.abs(oldBounds.width-newBounds.width)<2);assert.ok(Math.abs(oldBounds.x-newBounds.x)<2);

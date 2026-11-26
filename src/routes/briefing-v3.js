@@ -18,7 +18,7 @@ import {decideV2Urgency} from '../lib/v2-urgency-admin.js';
 import {getV3ModularBriefing,saveV3ModuleDraft,recordV3RetroMaterialReceipt,submitV3ServiceBriefing} from '../lib/v3-modular-briefing.js';
 import {recoverV3Checkout} from '../lib/v3-checkout.js';
 const customerBrief=async(env,token)=>{const b=await getV3ModularBriefing(env.DB,token);return b?{...b,manualUpsell:b.revision?.kind==='manual'?await getV3ManualUpsell(env.DB,token).catch(()=>null):null,supplementPaymentsEnabled:env.LIBRI_V3_SUPPLEMENT_PAYMENT_ENABLED==='true'}:null;};
-const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422);
+const errorResponse=e=>fail(e?.status?e.message:'Não foi possível atualizar o briefing.',Number(e?.status)||422,e?.details);
 async function boundedJson(request){
   const size=Number(request.headers.get('content-length')||0);
   if(size>100000){const e=new Error('Dados muito grandes.');e.status=413;throw e;}

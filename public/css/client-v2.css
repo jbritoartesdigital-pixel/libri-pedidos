@@ -2307,3 +2307,9 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 
 /* V118: unobtrusive autosave status, never disable the form during background draft writes. */
 .libri-v3-area .v3-draft-status{font:600 11px/1.5 var(--private-sans);color:var(--private-muted);min-height:16px;padding:0 2px}.libri-v3-area .v3-draft-status:empty{display:none}.libri-v3-area .v3-draft-status .btn{min-height:28px;padding:4px 9px;font-size:11px;margin-left:5px}
+
+/* V126: validação localizada, com preferência por movimento reduzido. */
+.v3-invalid-field{border:2px solid #d63749!important;border-radius:12px;padding:10px;scroll-margin:90px;animation:v3-invalid-pulse .45s ease-in-out 3;}
+.v3-field-error{color:#d63749!important;font-weight:600;margin:6px 0 0;font-size:13px;}
+@keyframes v3-invalid-pulse{50%{box-shadow:0 0 0 5px #d6374955;}}
+@media(prefers-reduced-motion:reduce){.v3-invalid-field{animation:none;}}

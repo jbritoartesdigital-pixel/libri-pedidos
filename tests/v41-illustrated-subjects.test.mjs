@@ -33,13 +33,13 @@ test('Convite de irmãos permite vários nomes sem multiplicar personagens cobra
   const one=buildV2BriefingSimulationSchema({...base,data:{joint_celebration:'yes',appearance_choice:'yes'}});
   assert.ok(keys(one).includes('joint_honorees'));
   assert.ok(!keys(one).includes('age'));
-  assert.ok(keys(one).includes('additional_illustrated_subjects'));
+  assert.ok(!keys(one).includes('additional_illustrated_subjects'));
   const extras=buildV2BriefingSimulationSchema({...base,data:{
     joint_celebration:'yes',appearance_choice:'yes',additional_illustrated_subjects:'yes'}});
-  assert.ok(keys(extras).includes('additional_illustrated_subjects_details'));
+  assert.ok(!keys(extras).includes('additional_illustrated_subjects_details'));
   assert.ok(!keys(extras).includes('age'));
   const no=buildV2BriefingSimulationSchema({...base,data:{appearance_choice:'no'}});
-  assert.ok(keys(no).includes('additional_illustrated_subjects'));
+  assert.ok(!keys(no).includes('additional_illustrated_subjects'));
 });
 test('Personagens do tema previstos na composição não são classificados como extras',()=>{
   const atelie=buildAtelieBriefingBlueprint({packageCode:'essencia',requiresChildPhoto:true,data:{}});
@@ -49,7 +49,7 @@ test('Personagens do tema previstos na composição não são classificados como
   assert.match(extraAtelie.hint,/Personagens do tema já previstos na composição não são adicionais/);
   const convite=buildV2BriefingSimulationSchema({product:{code:'cinematic_interactive',name:'Convite interativo'},eventType:'birthday',addons:[],data:{}});
   const extraConvite=convite.sections.flatMap(section=>section.fields).find(field=>field.key==='additional_illustrated_subjects');
-  assert.match(extraConvite.help,/Figuras do tema já previstas na composição não são adicionais/);
+  assert.equal(extraConvite,undefined);
 });
 
 test('Ateliê release records one principal illustrated subject and poses by package',async()=>{

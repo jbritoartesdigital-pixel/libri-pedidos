@@ -1,5 +1,5 @@
-import {v3FieldHtml} from './client-v2-area-v3.js?v=126';
-import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js?v=126';
+import {v3FieldHtml} from './client-v2-area-v3.js?v=127';
+import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js?v=127';
 import {orderGalleryHtml,bindOrderGallery} from './admin-order-gallery.v124.js';
 import {openOrderDrawer} from './admin-order-drawer.v123.js';
 import {api,esc,money,modal,showToast,dateTimeBr} from './admin-v2-core.js';

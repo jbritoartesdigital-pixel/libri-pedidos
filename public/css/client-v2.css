@@ -2313,3 +2313,8 @@ body:has(.studio-private-loading) .site-header{visibility:hidden}
 .v3-field-error{color:#d63749!important;font-weight:600;margin:6px 0 0;font-size:13px;}
 @keyframes v3-invalid-pulse{50%{box-shadow:0 0 0 5px #d6374955;}}
 @media(prefers-reduced-motion:reduce){.v3-invalid-field{animation:none;}}
+
+/* V127: compact original style examples, aligned within the radio cards. */
+.v3-style-examples .v3-style-example{align-items:center;min-width:0;}
+.v3-style-examples .v3-style-label{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+.v3-style-thumbnail{width:clamp(56px,15vw,80px);height:auto;aspect-ratio:4/5;object-fit:cover;border-radius:9px;flex-shrink:0;}

@@ -46,3 +46,9 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
  const initial={orderCode:'LIBRI-TEST',locked:false,orderStatus:'briefing_pending',event:{honoreeName:'Ana',date:'2027-02-01'},payment:{totalCents:14900,fullyPaid:true,receivedCents:14900},deliveryWindow:{start:'2027-01-05',end:'2027-01-07'},services:[{family:'convite',productName:'Convite',variantName:'Vídeo',briefingStatus:'completed',productionStatus:'pending',totalCents:14900,extras:[]}],modules:[{module:'shared',editable:false},{module:'convite',editable:false}],briefingWhatsappUrl:'https://wa.me/5561999999999?text=LIBRI-TEST'};
  await startV3CustomerArea(root,{token:'ord_test',initial,api:async()=>{throw Error('unexpected API request');}});assert.match(root.innerHTML,/Avisar a Libri no WhatsApp/);assert.match(root.innerHTML,/data-v3-briefing-whatsapp/);
  });
+
+test('V127 shows compact existing images only on child-style choices',()=>{
+ const f={key:'visual_style',label:'Estilo',type:'choice',options:[{value:'stylized_doll',label:'Bonequinho estilizado'},{value:'realistic_detailed',label:'Realista e detalhado'},{value:'libri_decides',label:'Deixo a Libri decidir'}]};
+ const html=v3FieldHtml(f,'stylized_doll');assert.match(html,/mascote-bonequinho\.webp/);assert.match(html,/mascote-realista\.webp/);assert.equal((html.match(/class="v3-style-thumbnail"/g)||[]).length,2);assert.match(html,/value="stylized_doll"[^>]*checked/);
+ assert.doesNotMatch(v3FieldHtml({...f,options:[{value:'realistic_detailed',label:'Realista'}]},''),/v3-style-thumbnail/);
+});

@@ -124,6 +124,8 @@ export async function saveV3ModuleDraft(db,token,module,payload={}, {actor='cust
     if(module==='convite'){
       if(data.pix_key_type==='phone'&&data.pix_key)data.pix_key=normalizePixPhoneKey(data.pix_key);
       const previous=ctx.drafts.convite||{};
+      // Preserve historical optional answers; no longer expose or solicit these in invitations.
+      for(const key of ['additional_illustrated_subjects','additional_illustrated_subjects_details'])if(Object.hasOwn(previous,key))data[key]=previous[key];
       // Preserve server-recorded or historical permission, never accept it via draft payload.
       if(['sim','não'].includes(previous.private_photo_authorization))data.private_photo_authorization=previous.private_photo_authorization;
       if(['pix_key_type','pix_key','pix_holder'].some(k=>String(data[k]??'')!==String(previous[k]??'')))delete data.pix_confirmed;

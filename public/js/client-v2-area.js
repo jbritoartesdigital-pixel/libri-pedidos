@@ -1,5 +1,5 @@
 import { openBlackLibriPrizeDetails } from './client-v2-black-libri.js?v=20261124-atelier-gift-v3';
-import { startV3CustomerArea } from './client-v2-area-v3.js?v=127';
+import { startV3CustomerArea } from './client-v2-area-v3.js?v=128';
 import { atelieBriefingHtml, bindAtelieBriefing } from './client-v2-atelie-briefing.js';
 
 import {
@@ -70,11 +70,15 @@ export function inputHtml(
     const styleExamples = childStyle ? {
       stylized_doll: {
         image: '/images/exemplos/mascote-bonequinho.webp',
+        boy: '/images/exemplos/mascote-menino-bonequinho.webp',
+        boyAlt: 'Menino em estilo bonequinho',
         alt: 'Exemplo de personagem infantil com estilo bonequinho',
         detail: 'Traços infantis mais desenhados e delicados.',
       },
       realistic_detailed: {
         image: '/images/exemplos/mascote-realista.webp',
+        boy: '/images/exemplos/mascote-menino-realista.webp',
+        boyAlt: 'Menino em estilo realista',
         alt: 'Exemplo de personagem infantil mais realista e detalhado',
         detail: 'Traços e detalhes mais próximos de uma pessoa real.',
       },
@@ -109,10 +113,10 @@ export function inputHtml(
 
                 <span class="choice-main">
                   ${styleExamples[option.value] ? `
-                    <img class="choice-reference-image"
-                      src="${styleExamples[option.value].image}"
-                      alt="${esc(styleExamples[option.value].alt)}"
-                      loading="lazy" decoding="async" width="320" height="400">
+                    <span class="libri-style-pair">
+                      <img class="choice-reference-image" src="${styleExamples[option.value].image}" alt="${esc(styleExamples[option.value].alt)}" loading="lazy" decoding="async" width="48" height="64">
+                      <img class="choice-reference-image" src="${styleExamples[option.value].boy}" alt="${esc(styleExamples[option.value].boyAlt)}" loading="lazy" decoding="async" width="48" height="64">
+                    </span>
                   ` : ''}
                   <strong>${esc(option.label)}</strong>
                   ${styleExamples[option.value] ? `<small>${esc(styleExamples[option.value].detail)}</small>` : ''}

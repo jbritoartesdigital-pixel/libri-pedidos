@@ -49,6 +49,6 @@ test('V3 private area shows only purchased services and shared fields',async(t)=
 
 test('V127 shows compact existing images only on child-style choices',()=>{
  const f={key:'visual_style',label:'Estilo',type:'choice',options:[{value:'stylized_doll',label:'Bonequinho estilizado'},{value:'realistic_detailed',label:'Realista e detalhado'},{value:'libri_decides',label:'Deixo a Libri decidir'}]};
- const html=v3FieldHtml(f,'stylized_doll');assert.match(html,/mascote-bonequinho\.webp/);assert.match(html,/mascote-realista\.webp/);assert.equal((html.match(/class="v3-style-thumbnail"/g)||[]).length,2);assert.match(html,/value="stylized_doll"[^>]*checked/);
+ const html=v3FieldHtml(f,'stylized_doll');assert.match(html,/mascote-bonequinho\.webp/);assert.match(html,/mascote-realista\.webp/);assert.match(html,/mascote-menino-bonequinho\.webp/);assert.match(html,/mascote-menino-realista\.webp/);assert.equal((html.match(/class="v3-style-thumbnail"/g)||[]).length,4);assert.match(html,/value="stylized_doll"[^>]*checked/);
  assert.doesNotMatch(v3FieldHtml({...f,options:[{value:'realistic_detailed',label:'Realista'}]},''),/v3-style-thumbnail/);
 });

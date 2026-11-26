@@ -35,7 +35,7 @@ export async function getV3AdminBriefing(db,token){
  brief.history=history;
  brief.lifecycle=v3AdminLifecycle(financialCtx);
  brief.contracts=(await listV2ContractsForAdmin(db,order.order_code))?.contracts||[];
- for(const m of brief.modules){const affected=m.module==='shared'?financialCtx.services:financialCtx.services.filter(s=>s.family===m.module);m.adminEditable=!brief.locked&&!order.archived_at&&['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&affected.length>0&&affected.every(s=>s.production_status==='pending');}
+ for(const m of brief.modules){const affected=m.module==='shared'?financialCtx.services:financialCtx.services.filter(s=>s.family===m.module);m.adminEditable=!brief.locked&&!order.archived_at&&['available','in_progress'].includes(order.briefing_status)&&['briefing_pending','waiting_customer'].includes(order.status)&&affected.length>0&&affected.every(s=>['pending','ready','in_production'].includes(s.production_status)&&(s.production_status==='pending'||s.briefing_status!=='completed'));}
  brief.notes=((await db.prepare('SELECT id,note,created_at FROM v2_internal_notes WHERE order_id=? ORDER BY created_at DESC,id DESC').bind(order.id).all()).results||[]).map(n=>({id:n.id,note:n.note,createdAt:n.created_at}));
  brief.termsAcceptances=acceptances.results||[];
  brief.paymentAttempts=(financialCtx.finance?.payments||[]).map(p=>({provider:p.provider,type:p.payment_type,status:p.status,amountCents:p.amount_cents,method:p.method,paidAt:p.paid_at}));

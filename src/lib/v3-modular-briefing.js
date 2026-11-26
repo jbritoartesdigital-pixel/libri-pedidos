@@ -103,7 +103,7 @@ export async function saveV3ModuleDraft(db,token,module,payload={}, {actor='cust
     if(ctx.order.archived_at)fail('Restaure o pedido antes de editar.',409);
     const administrative=actor==='admin';
     const affected=module==='shared'?ctx.services:ctx.services.filter(s=>s.family===module);
-    if(administrative&&(!affected.length||affected.some(s=>s.production_status!=='pending')))fail('A edição administrativa exige produção ainda pendente.',409);
+    if(administrative&&(!affected.length||affected.some(s=>!['pending','ready','in_production'].includes(s.production_status)||(s.production_status!=='pending'&&s.briefing_status==='completed'))))fail('Este briefing já foi concluído em uma etapa de produção posterior.',409);
     if(!['available','in_progress'].includes(ctx.order.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status))
       fail('O briefing não está disponível para edição.',409);
     if(!administrative&&module==='shared'&&ctx.services.some(s=>s.briefing_status==='completed'))fail('Os dados compartilhados já foram usados em um briefing enviado. Solicite uma alteração à Libri.',409);
@@ -151,7 +151,7 @@ export async function recordV3RetroMaterialReceipt(db,orderId,{photoCount,videoC
       FROM v3_order_services s JOIN v2_orders o ON o.id=s.order_id WHERE s.order_id=? AND s.family='retrospectiva'`).bind(orderId).first();
     if(!row)fail('Retrospectiva não contratada.',404);
     const ctx=await contextV3Briefing(db,row.public_token);
-    if(!ctx||ctx.locked||row.production_status!=='pending'||!['available','in_progress','completed'].includes(row.service_briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
+    if(!ctx||ctx.locked||!['pending','ready','in_production'].includes(row.production_status)||!['available','in_progress','completed'].includes(row.service_briefing_status)||!['briefing_pending','waiting_customer'].includes(row.status))
       fail('Pedido indisponível para confirmação de materiais.',409);
     const spec=retroSpec(parse(row.commercial_snapshot_json));
     if(photoCount>spec.maxPhotos||videoCount>spec.maxVideos)fail('Os materiais excedem o limite contratado. Avalie um adicional antes de confirmar.');
@@ -207,7 +207,7 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}, {actor
     if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))addMissing(family,data.childPhotoPermission!=='sim'?'childPhotoPermission':'guardianAuthorization','Autorização do responsável para a ilustração da criança.');
     if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;e.details={fields};throw e;}
     if(ctx.order.archived_at)fail('Restaure o pedido antes de enviar.',409);
-    if(actor==='admin'&&(payload.confirmed!==true||service.production_status!=='pending'))fail('Confirme o envio administrativo dos dados fornecidos pela cliente.',409);
+    if(actor==='admin'&&(payload.confirmed!==true||!['pending','ready','in_production'].includes(service.production_status)))fail('Confirme o envio administrativo dos dados fornecidos pela cliente.',409);
     // Completing the artistic briefing is not a production release. Materials,
     // dependencies and the independent agenda still require confirmation.
     const result=await db.prepare("UPDATE v3_order_services SET briefing_status='completed',briefing_submitted_at=datetime('now'),reviewed_at=NULL,complement_note=NULL,updated_at=datetime('now') WHERE id=? AND briefing_status IN ('available','in_progress')").bind(service.id).run();

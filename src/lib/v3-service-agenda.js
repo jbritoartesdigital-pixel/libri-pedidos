@@ -133,8 +133,41 @@ export async function previewV3ServiceAgenda(db,token,family,input){
  const p=await compute(db,token,family,input);
  return {family,options:p.options.slice(0,8),pointsUnits:p.s.points_units,original:{start:p.ctx.order.delivery_start,end:p.ctx.order.delivery_end}};
 }
+// Starting work is an administrative status change, not a declaration that
+// customer data, materials or image permission have been received or reviewed.
 export async function startV3ServiceFromBriefing(db,token,family,input={}){
- return scheduleV3Service(db,token,family,input,true);
+ const initial=await contextV3Briefing(db,token);if(!initial)return null;
+ return withV2PaymentLock(db,initial.order.id,async()=>{
+  const ctx=await contextV3Briefing(db,token);
+  if(!ctx||ctx.locked||ctx.cancellation||ctx.order.archived_at||!ctx.finance?.depositConfirmed)fail('Pedido indisponível: pagamento, cancelamento ou arquivamento.',403);
+  const s=ctx.services.find(x=>x.family===family);if(!s)fail('Serviço não contratado.',404);
+  if(s.production_status==='in_production')return {family,productionStatus:'in_production',deliveryWindow:{start:s.delivery_start||ctx.order.delivery_start,end:s.delivery_end||ctx.order.delivery_end},pointsUnits:s.points_units};
+  if(!['pending','ready'].includes(s.production_status))fail('Este serviço já está em outra etapa da produção.');
+  if(input.version!==undefined&&input.version!==s.production_version)fail('A etapa mudou. Atualize a ficha.');
+  const start=s.delivery_start||ctx.order.delivery_start,end=s.delivery_end||ctx.order.delivery_end;
+  const rows=(await db.prepare('SELECT * FROM v2_agenda_allocations WHERE order_id=? ORDER BY day,id').bind(ctx.order.id).all()).results||[];
+  const manual=ctx.order.source==='manual_whatsapp'&&!ctx.order.urgency_enabled;
+  let partition=null,agendaPending=false;
+  try{partition=manual?reconcileManualV3Allocations(ctx.services,rows,{start:ctx.order.delivery_start,end:ctx.order.delivery_end}):partitionV3Allocations(ctx.services,rows);}catch{agendaPending=true;}
+  const state=()=>{
+   const statements=[db.prepare("UPDATE v3_order_services SET delivery_start=COALESCE(delivery_start,?),delivery_end=COALESCE(delivery_end,?),scheduled_at=COALESCE(scheduled_at,datetime('now')),production_status='in_production',production_version=production_version+1,updated_at=datetime('now') WHERE id=? AND production_version=?").bind(start,end,s.id,s.production_version),
+   db.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,note) VALUES(?,'admin','started',?)").bind(s.id,'Início direto pela administração. Briefing, materiais e autorizações mantidos como estavam.')];
+   if(agendaPending)statements.push(db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_start_agenda_pending','Produção iniciada; reserva existente preservada, agenda pendente de conciliação.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({family})));
+   return statements;
+  };
+  const before=rows.map(r=>({day:r.day,points_units:r.points_units,service_family:r.service_family||null,allocation_type:r.allocation_type}));
+  const after=partition?.map(r=>({day:r.day,points_units:r.points_units,service_family:r.service_family,allocation_type:'confirmed'}));
+  const norm=xs=>JSON.stringify([...xs].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  const change=after&&norm(before)!==norm(after);
+  if(change){
+   const capacity=v2IntSetting(await loadV2Settings(db),'default_sellable_points_per_day_units',400);
+   const statements=[db.prepare('DELETE FROM v2_agenda_allocations WHERE order_id=?').bind(ctx.order.id)];
+   for(const r of after){statements.push(db.prepare('INSERT OR IGNORE INTO v2_agenda_days(day,sellable_capacity_units) VALUES(?,?)').bind(r.day,capacity),db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family,manual_override) VALUES(?,?,?,'confirmed',?,?)").bind(ctx.order.id,r.day,r.points_units,r.service_family,manual?1:0));}
+   if(manual)statements.push(db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_manual_agenda_confirmed','Data manual preservada e pontos reconciliados.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({family,previousUnits:sum(rows),confirmedUnits:sum(after)})));
+   try{await db.batch([...statements,...state()]);}catch(e){if(!/v3_capacity_changed|v3_manual_points_exceeded|v3_manual_override_not_allowed/.test(String(e.message)))throw e;agendaPending=true;await db.batch(state());}
+  }else await db.batch(state());
+  return {family,productionStatus:'in_production',deliveryWindow:{start,end},pointsUnits:s.points_units,agendaPending};
+ });
 }
 export async function scheduleV3Service(db,token,family,input={},startNow=false){
  const initial=await contextV3Briefing(db,token);if(!initial)return null;

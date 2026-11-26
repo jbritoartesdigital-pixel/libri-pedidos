@@ -1050,7 +1050,8 @@ import {downloadV2OrderFolder} from '../src/lib/v2-order-zip.js';
 test('V120 admin ZIP includes modular questions and authorized originals, not the empty V2 briefing',async t=>{
  const {db,order}=await paid(t);
  await saveV3ModuleDraft(db,order.publicToken,'shared',{revision:0,data:{theme_or_style:'Jardim V120',joint_celebration:'no',age:4}});
- await saveV3ModuleDraft(db,order.publicToken,'convite',{revision:0,data:{appearance_choice:'yes',private_photo_authorization:'sim',music_choice:'yes',music_request:'Musica V120'}});
+ await saveV3ModuleDraft(db,order.publicToken,'convite',{revision:0,data:{appearance_choice:'yes',music_choice:'yes',music_request:'Musica V120'}});
+ db.sqlite.prepare("UPDATE v3_order_briefing_drafts SET data_json=json_set(data_json,'$.private_photo_authorization','sim') WHERE order_id=? AND module='convite'").run(order.orderId);
  db.sqlite.prepare("INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,'convite','person_photos','foto.jpg','image/jpeg',4,'test-authorized')").run(order.orderId);
  db.sqlite.prepare("INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,'convite','outfit_photos','roupa.jpg','image/jpeg',4,'test-not-authorized')").run(order.orderId);
  const requested=[];const response=await downloadV2OrderFolder({DB:db,FILES:{get:async key=>{requested.push(key);return {body:new Response(new Uint8Array([255,216,255,217])).body};}}},order.orderCode||'LIBRI-9000');
@@ -1149,4 +1150,38 @@ test('V125 contract uses all original products, is scoped to its order, and has 
  assert.equal((await (await customer('')).json()).result.contracts[0].status,'signed');
  assert.equal(objects.size,1);
  assert.equal((await call('/'+c.id+'/sign-libri','POST',{})).status,409);
+});
+
+test('V126 invitation photo requirements follow explicit appearance and no separate permission question',()=>{
+ const order={event_type:'birthday',honoree_display_name:'Ana',event_date:day(65)};
+ const services=[{family:'convite',product_code:'interactive_essential',snapshot:{product:{code:'interactive_essential',name:'Convite'},addons:[]}}];
+ for(const choice of ['no','libri_decides','yes']){
+  const s=buildV3ModuleSchema(order,services,'convite',{convite:{appearance_choice:choice,outfit_choice:'send_photo'}});
+  assert.ok(!s.sections.flatMap(s=>s.fields).some(f=>f.key==='private_photo_authorization'));
+  const rule=s.uploadRules.find(r=>r.fieldKey==='person_photos');
+  if(choice==='no')assert.equal(rule,undefined);else{assert.equal(rule.min,choice==='yes'?2:0);assert.equal(rule.requiresUploadAuthorization,true);}
+  if(choice!=='yes')assert.ok(s.uploadRules.every(r=>r.min===0));
+ }
+});
+test('V126 submission exposes module and field keys for missing information',async t=>{
+ const {db,order}=await paid(t);
+ await saveV3ModuleDraft(db,order.publicToken,'convite',{revision:0,data:{appearance_choice:'no',interactive_resources:['location']}});
+ const url=new URL('https://test/api/v2/customer-area/'+order.publicToken+'/v3/briefing/convite/submit');
+ const res=await handleCustomerBriefingV3Api(new Request(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({revision:1,sharedRevision:0})}),{DB:db},url);
+ assert.equal(res.status,422);const data=await res.json();
+ assert.ok(data.details.fields.some(f=>f.module==='convite'&&f.key==='location_url'));
+ assert.ok(!data.details.fields.some(f=>f.key==='person_photos'||f.key==='private_photo_authorization'));
+});
+test('V126 private invitation upload requires declaration at upload, not a separate answer',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken,objects=new Map();
+ await saveV3ModuleDraft(db,token,'convite',{revision:0,data:{appearance_choice:'yes',private_photo_authorization:'sim'}});
+ assert.equal((await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite').data.private_photo_authorization,undefined);
+ const env={DB:db,FILES:{put:async(k,v)=>objects.set(k,v),delete:async k=>objects.delete(k)}};
+ const url=new URL('https://test/api/v2/customer-area/'+token+'/v3/briefing/convite/uploads');
+ const call=async accepted=>{const form=new FormData();form.set('fieldKey','person_photos');form.set('file',new Blob([new Uint8Array([255,216,255,224,0,0,0,0,0,0,0,0,0,0,0,0])],{type:'image/jpeg'}),'foto.jpg');if(accepted)form.set('authorizationAccepted','true');return handleCustomerBriefingV3Api(new Request(url,{method:'POST',body:form}),env,url);};
+ assert.equal((await call(false)).status,403);assert.equal(objects.size,0);
+ assert.equal((await call(true)).status,201);assert.equal(objects.size,1);
+ const m=(await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite');assert.equal(m.data.private_photo_authorization,'sim');assert.equal(m.revision,2);
+ await saveV3ModuleDraft(db,token,'convite',{revision:2,data:{appearance_choice:'no'}});
+ assert.ok(!(await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite').schema.uploadRules.some(r=>r.fieldKey==='person_photos'));
 });

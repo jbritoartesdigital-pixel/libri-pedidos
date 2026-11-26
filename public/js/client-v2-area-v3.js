@@ -19,11 +19,11 @@ export function v3FieldHtml(f,value,{disabled=false}={}){
   if(f.type==='choice'||f.type==='multi_choice'){
     const multi=f.type==='multi_choice',selected=multi?(Array.isArray(value)?value:[]):[value];
     const childStyle=f.key==='visual_style'&&(f.options||[]).some(o=>o.value==='stylized_doll');
-    const examples=childStyle?{stylized_doll:{src:'/images/exemplos/mascote-bonequinho.webp',alt:'Exemplo de bonequinho estilizado'},realistic_detailed:{src:'/images/exemplos/mascote-realista.webp',alt:'Exemplo de personagem realista e detalhado'}}:{};
+    const examples=childStyle?{stylized_doll:{src:'/images/exemplos/mascote-bonequinho.webp',alt:'Menina em estilo bonequinho',boy:'/images/exemplos/mascote-menino-bonequinho.webp',boyAlt:'Menino em estilo bonequinho'},realistic_detailed:{src:'/images/exemplos/mascote-realista.webp',alt:'Menina em estilo realista',boy:'/images/exemplos/mascote-menino-realista.webp',boyAlt:'Menino em estilo realista'}}:{};
     control='<div class="grid two'+(childStyle?' v3-style-examples':'')+'">'+(f.options||[]).map((o,i)=>{
       const v=typeof o==='string'?o:o.value, name=typeof o==='string'?o:o.label;
       const example=examples[v];
-      return '<label class="choice-card '+(selected.includes(v)?'selected':'')+(example?' v3-style-example':'')+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+id+'" id="'+id+'-'+i+'" value="'+esc(v)+'"'+common+(selected.includes(v)?' checked':'')+'> <span class="v3-style-label">'+(example?'<img class="v3-style-thumbnail" src="'+esc(example.src)+'" alt="'+esc(example.alt)+'" width="80" height="100" loading="lazy" decoding="async">':'')+'<span>'+esc(name)+'</span></span></label>';
+      return '<label class="choice-card '+(selected.includes(v)?'selected':'')+(example?' v3-style-example':'')+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+id+'" id="'+id+'-'+i+'" value="'+esc(v)+'"'+common+(selected.includes(v)?' checked':'')+'> <span class="v3-style-label">'+(example?'<span class="libri-style-pair"><img class="v3-style-thumbnail" src="'+esc(example.src)+'" alt="'+esc(example.alt)+'" width="48" height="64" loading="lazy" decoding="async"><img class="v3-style-thumbnail" src="'+esc(example.boy)+'" alt="'+esc(example.boyAlt)+'" width="48" height="64" loading="lazy" decoding="async"></span>':'')+'<span>'+esc(name)+'</span></span></label>';
     }).join('')+'</div>';
   }else if(f.type==='textarea'){
     control='<textarea id="'+id+'" class="textarea"'+common+'>'+esc(value??'')+'</textarea>';

@@ -1185,3 +1185,10 @@ test('V126 private invitation upload requires declaration at upload, not a separ
  await saveV3ModuleDraft(db,token,'convite',{revision:2,data:{appearance_choice:'no'}});
  assert.ok(!(await getV3ModularBriefing(db,token)).modules.find(m=>m.module==='convite').schema.uploadRules.some(r=>r.fieldKey==='person_photos'));
 });
+
+test('V127 illustrated extras question belongs only to identity briefing',()=>{
+ const order={event_type:'birthday',honoree_display_name:'Ana',event_date:day(65)};
+ const services=[{family:'convite',product_code:'interactive_essential',snapshot:{product:{code:'interactive_essential',name:'Convite'},addons:[]}},{family:'identidade_visual',product_code:'atelie_essencia',snapshot:{product:{code:'atelie_essencia',name:'Ateliê'},variant:{config:{atelie:{}}}}}];
+ const keys=module=>buildV3ModuleSchema(order,services,module,{convite:{appearance_choice:'yes',additional_illustrated_subjects:'yes'}}).sections.flatMap(s=>s.fields.map(f=>f.key));
+ assert.ok(!keys('convite').includes('additional_illustrated_subjects'));assert.ok(!keys('convite').includes('additional_illustrated_subjects_details'));assert.ok(keys('identidade_visual').includes('additionalSubjects'));
+});

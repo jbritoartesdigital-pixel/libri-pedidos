@@ -278,6 +278,9 @@ try{
  await customer.locator('[data-v3-start]').click();
  await customer.locator('#v3-module-form').waitFor();
  assert.equal(await customer.locator('[data-v3-tab="shared"]').getAttribute('aria-current'),'page');
+ await customer.locator('[data-v3-action="next-briefing"]').click();
+ await customer.locator('.v3-invalid-field [data-v3-field="theme_or_style"]').waitFor();
+ assert.equal(await customer.locator('.v3-invalid-field .v3-field-error').first().isVisible(),true);
  await customer.locator('#v3-f-theme_or_style').fill('Jardim de teste');
  await customer.locator('#v3-module-form button[type="submit"]').click();await customer.getByText('Rascunho salvo.',{exact:false}).waitFor();
  await customer.reload();await customer.locator('[data-v3-tab="shared"]').click();
@@ -288,6 +291,8 @@ try{
  assert.equal(await customer.locator('[data-v3-draft-status]').filter({hasText:'Salvando'}).count(),1);
  assert.equal(await customer.locator('[data-v3-field="appearance_choice"][value="no"]').isEnabled(),true);
  await customer.locator('[data-v3-field="appearance_choice"][value="no"]').check();
+ assert.equal(await customer.locator('[data-v3-upload="person_photos"]').count(),0);
+ assert.equal(await customer.locator('[data-v3-field="private_photo_authorization"]').count(),0);
  await customer.locator('[data-v3-tab="retrospectiva"]').first().click();
  assert.equal(await customer.locator('[data-v3-tab="retrospectiva"]').getAttribute('aria-current'),'page');
  await customer.locator('[data-v3-tab="convite"]').first().click();

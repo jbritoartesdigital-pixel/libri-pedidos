@@ -124,6 +124,8 @@ export async function saveV3ModuleDraft(db,token,module,payload={}, {actor='cust
     if(module==='convite'){
       if(data.pix_key_type==='phone'&&data.pix_key)data.pix_key=normalizePixPhoneKey(data.pix_key);
       const previous=ctx.drafts.convite||{};
+      // Preserve server-recorded or historical permission, never accept it via draft payload.
+      if(['sim','não'].includes(previous.private_photo_authorization))data.private_photo_authorization=previous.private_photo_authorization;
       if(['pix_key_type','pix_key','pix_holder'].some(k=>String(data[k]??'')!==String(previous[k]??'')))delete data.pix_confirmed;
     }
     const result=await db.prepare(`INSERT INTO v3_order_briefing_drafts(order_id,module,data_json,revision,updated_at)
@@ -177,30 +179,31 @@ export async function submitV3ServiceBriefing(db,token,family,payload={}, {actor
     if(!Number.isSafeInteger(payload.revision)||payload.revision!==(ctx.revisions[family]||0)||
       !Number.isSafeInteger(payload.sharedRevision)||payload.sharedRevision!==(ctx.revisions.shared||0))
       fail('As respostas mudaram. Atualize o briefing antes de enviar.',409);
-    const missing=[];
+    const missing=[],fields=[];
+    const addMissing=(module,key,label,kind='field')=>{missing.push(label);fields.push({module,key,label,kind});};
     for(const module of ['shared',family]){
       const schema=buildV3ModuleSchema(ctx.order,ctx.services,module,ctx.drafts);
       const data=ctx.drafts[module]||{};
       for(const f of schema.sections.flatMap(s=>s.fields)){
-        if(f.required&&!['info','upload'].includes(f.type)&&!filled(data[f.key]))missing.push(f.label);
+        if(f.required&&!['info','upload'].includes(f.type)&&!filled(data[f.key]))addMissing(module,f.key,f.label);
       }
       for(const rule of schema.uploadRules||[]){
         if(rule.min>0){
           const row=await db.prepare('SELECT COUNT(*) AS n FROM v3_service_uploads WHERE order_id=? AND family=? AND field_key=?').bind(ctx.order.id,module,rule.fieldKey).first();
-          if(!rule.authorized||Number(row.n)<rule.min)missing.push(rule.label+': envie pelo menos '+rule.min+' imagem(ns).');
+          if(!rule.authorized||Number(row.n)<rule.min)addMissing(module,rule.fieldKey,rule.label+': envie pelo menos '+rule.min+' imagem(ns).','upload');
         }
       }
     }
     const data=ctx.drafts[family]||{};
-    if(family==='convite'&&['pix','both'].includes(data.gift_mode)&&!validPixKey(data.pix_key_type,data.pix_key))missing.push('Confira o formato da chave Pix informada.');
+    if(family==='convite'&&['pix','both'].includes(data.gift_mode)&&!validPixKey(data.pix_key_type,data.pix_key))addMissing(family,'pix_key','Confira o formato da chave Pix informada.');
     const prize=service.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
     if(['mini_retrospective','child_birthday'].includes(prize)){
-      if(data.black_gift_media_authorization!=='sim')missing.push('Autorização para as fotos do presente Black Libri.');
-      if(data.black_gift_media_sent!=='sim')missing.push('Envio das fotos do presente pelo WhatsApp.');
+      if(data.black_gift_media_authorization!=='sim')addMissing(family,'black_gift_media_authorization','Autorização para as fotos do presente Black Libri.');
+      if(data.black_gift_media_sent!=='sim')addMissing(family,'black_gift_media_sent','Envio das fotos do presente pelo WhatsApp.');
     }
-    if(family==='retrospectiva'&&data.media_authorization!=='sim')missing.push('Autorização para uso das fotos e vídeos.');
-    if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))missing.push('Autorização do responsável para a ilustração da criança.');
-    if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;throw e;}
+    if(family==='retrospectiva'&&data.media_authorization!=='sim')addMissing(family,'media_authorization','Autorização para uso das fotos e vídeos.');
+    if(family==='identidade_visual'&&data.mascotMode==='criança ilustrada'&&(data.childPhotoPermission!=='sim'||data.guardianAuthorization!=='sim'))addMissing(family,data.childPhotoPermission!=='sim'?'childPhotoPermission':'guardianAuthorization','Autorização do responsável para a ilustração da criança.');
+    if(missing.length){const e=new Error('Ainda faltam informações: '+missing.join('; '));e.status=422;e.details={fields};throw e;}
     if(ctx.order.archived_at)fail('Restaure o pedido antes de enviar.',409);
     if(actor==='admin'&&(payload.confirmed!==true||service.production_status!=='pending'))fail('Confirme o envio administrativo dos dados fornecidos pela cliente.',409);
     // Completing the artistic briefing is not a production release. Materials,

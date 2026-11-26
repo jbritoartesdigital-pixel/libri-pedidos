@@ -41,10 +41,7 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
   if(module==='convite'){
     const sections=inviteSchema.sections.filter(s=>s.id!=='event');
     if(addedInvite){const extras=inviteSchema.sections.filter(s=>s.id==='event').flatMap(s=>s.fields).filter(f=>!sharedKeys.has(f.key)||['event_time','venue_name','venue_address'].includes(f.key));if(extras.length)sections.unshift(section('added_event','Dados adicionais do convite',extras));}
-    const personal=inviteSchema.uploadRules.some(r=>r.fieldKey==='person_photos');
-    if(personal)sections.push(section('private_permission','Autorização de imagens',[
-      field('private_photo_authorization','Você possui autorização da pessoa retratada ou de seu responsável legal para usar as fotos nesta criação?','choice',{required:true,options:['sim','não']})
-    ]));
+    // Permission is declared at upload, not a separate briefing question.
     const gift=service.snapshot.blackLibri?.gift;
     if(gift?.config?.giftOnly){
       const prize=gift.config.blackLibriPrizeCode;
@@ -55,7 +52,7 @@ export function buildV3ModuleSchema(order,services,module,drafts={}){
       }
       sections.push(section('black_gift','Seu presente Black Libri',fields));
     }
-    return {...inviteSchema,sections,uploadRules:inviteSchema.uploadRules.map(r=>({...r,authorized:!['person_photos','outfit_photos'].includes(r.fieldKey)||data.private_photo_authorization==='sim'}))};
+    return {...inviteSchema,sections,uploadRules:inviteSchema.uploadRules.map(r=>{const personal=['person_photos','outfit_photos'].includes(r.fieldKey);return {...r,min:personal&&data.appearance_choice!=='yes'?0:r.min,authorized:!personal||data.private_photo_authorization==='sim',requiresUploadAuthorization:personal};})};
   }
   if(module==='identidade_visual'){
     const config=service.snapshot.variant?.config?.atelie||{};

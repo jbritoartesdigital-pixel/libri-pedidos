@@ -1,10 +1,24 @@
 {
-  "name": "Libri Convites | Admin",
-  "short_name": "Libri Admin",
-  "description": "Painel de produção e pedidos da Libri Convites",
+  "id": "/admin-v2",
+  "name": "Libri Pedidos",
+  "short_name": "Pedidos",
   "start_url": "/admin-v2",
   "scope": "/admin-v2",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff"
+  "theme_color": "#a26e4c",
+  "icons": [
+    {
+      "src": "/libri-pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/libri-pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }

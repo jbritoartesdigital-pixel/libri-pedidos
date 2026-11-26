@@ -2370,7 +2370,7 @@ test('video gift page has required Pix recipient confirmation just like interact
   await save({ gift_page_video: 'yes' });
   await save({ gift_mode: 'pix' });
   const data = await save({ pix_key_type: 'random',
-    pix_key: '123e4567-e89b-12d3-a456-426614174000', pix_holder: 'Titular' });
+    pix_key: '00000000-0000-4000-8000-000000000001', pix_holder: 'Titular' });
   assert.ok(data.schema.sections.flatMap(s => s.fields).some(f =>
     f.key === 'pix_confirmed' && f.required));
   const result = await save({ gift_page_video: 'no' });

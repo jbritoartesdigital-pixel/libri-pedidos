@@ -49,7 +49,7 @@ export async function listV3Production(db,{status='',q='',when='',service='',art
  return [...orders.values()].map(o=>({...o,aggregate:summarizeV3Order(o.services,{orderStatus:o.parentStatus,capacityReview:o.capacityReview})})).filter(o=>{
   const matches=family?o.services.filter(s=>s.family===family):o.services;
   if(!matches.length)return false;
-  if(when==='new'&&!matches.some(s=>s.productionStatus==='ready'))return false;
+  if(when==='new'&&!matches.some(s=>['pending','ready'].includes(s.productionStatus)))return false;
   if(when==='in_production'&&!matches.some(s=>s.productionStatus==='in_production'))return false;
   if(status==='finalized')return family?matches.some(s=>s.productionStatus==='delivered'):o.aggregate.status==='finalized';
   if(status&&status!=='all')return matches.some(s=>statusMap[s.productionStatus]===status);
@@ -65,7 +65,7 @@ export async function getV3OrderHistory(db,orderId){
 }
 
 export async function getV3CentralQueues(db,production){
- const newOrders=production.filter(o=>!o.capacityReview&&o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+(s.productionStatus==='ready'?'Iniciar produção':s.briefingStatus==='completed'?(s.reviewedAt?'Confirmar agenda':'Conferir briefing'):'Aguardar briefing')).join(' · ')}));
+ const newOrders=production.filter(o=>!o.capacityReview&&o.services.some(s=>s.productionStatus==='pending'||s.productionStatus==='ready')).map(o=>({...o,status:o.aggregate.status,statusLabel:o.aggregate.label,nextAction:o.services.filter(s=>['pending','ready'].includes(s.productionStatus)).map(s=>s.productName+': '+('Iniciar produção')).join(' · ')}));
  const rows=(await db.prepare(`SELECT o.id,o.order_code,o.honoree_display_name,o.status,o.briefing_status,c.name AS customer_name,p.payment_method,p.total_cents,p.deposit_cents,p.balance_cents,p.deposit_percent,
   (SELECT deposit_percent FROM v3_admin_payment_policies WHERE order_id=o.id) AS authorized_percent,
   (SELECT COUNT(*) FROM v2_checkout_holds h WHERE h.order_id=o.id AND h.status IN ('active','converted')) AS live_holds,

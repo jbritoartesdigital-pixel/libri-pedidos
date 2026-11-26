@@ -1,4 +1,5 @@
 name: Publicar Portal de Pedidos
+# Release V130: inicio manual com reconciliacao da agenda; migration 0067; gates completos.
 # Release V129: upload multiplo e progresso real; gates completos.
 # Release V128: quatro miniaturas originais e correcoes V127 acumuladas; gates completos.
 # Release V127: exemplos visuais compactos e pergunta exclusiva do Atelie.

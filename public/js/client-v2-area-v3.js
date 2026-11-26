@@ -1,4 +1,4 @@
-import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js?v=126';
+import {buildV3ModuleSchema} from './briefing-schema-v3.v119.js?v=127';
 // V3 customer area is isolated from legacy single-product forms.
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v/100);
@@ -18,9 +18,12 @@ export function v3FieldHtml(f,value,{disabled=false}={}){
   let control='';
   if(f.type==='choice'||f.type==='multi_choice'){
     const multi=f.type==='multi_choice',selected=multi?(Array.isArray(value)?value:[]):[value];
-    control='<div class="grid two">'+(f.options||[]).map((o,i)=>{
+    const childStyle=f.key==='visual_style'&&(f.options||[]).some(o=>o.value==='stylized_doll');
+    const examples=childStyle?{stylized_doll:{src:'/images/exemplos/mascote-bonequinho.webp',alt:'Exemplo de bonequinho estilizado'},realistic_detailed:{src:'/images/exemplos/mascote-realista.webp',alt:'Exemplo de personagem realista e detalhado'}}:{};
+    control='<div class="grid two'+(childStyle?' v3-style-examples':'')+'">'+(f.options||[]).map((o,i)=>{
       const v=typeof o==='string'?o:o.value, name=typeof o==='string'?o:o.label;
-      return '<label class="choice-card '+(selected.includes(v)?'selected':'')+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+id+'" id="'+id+'-'+i+'" value="'+esc(v)+'"'+common+(selected.includes(v)?' checked':'')+'> <span>'+esc(name)+'</span></label>';
+      const example=examples[v];
+      return '<label class="choice-card '+(selected.includes(v)?'selected':'')+(example?' v3-style-example':'')+'"><input type="'+(multi?'checkbox':'radio')+'" name="'+id+'" id="'+id+'-'+i+'" value="'+esc(v)+'"'+common+(selected.includes(v)?' checked':'')+'> <span class="v3-style-label">'+(example?'<img class="v3-style-thumbnail" src="'+esc(example.src)+'" alt="'+esc(example.alt)+'" width="80" height="100" loading="lazy" decoding="async">':'')+'<span>'+esc(name)+'</span></span></label>';
     }).join('')+'</div>';
   }else if(f.type==='textarea'){
     control='<textarea id="'+id+'" class="textarea"'+common+'>'+esc(value??'')+'</textarea>';

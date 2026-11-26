@@ -701,7 +701,8 @@ test('admin entry HTML has correctly quoted executable module import (regression
 });
 
 test('all migrations run in SQLite with V1, V2 and disabled V3 staging intact', () => {
-  const DB = database(); assert.equal(DB.migrationCount, 66);
+  const DB = database(); assert.equal(DB.migrationCount, 67);
+  assert.ok(DB.sqlite.prepare("SELECT name FROM pragma_table_info('v2_agenda_allocations') WHERE name='manual_override'").get());
   assert.ok(DB.sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v3_store_journey_names'").get());
   for(const table of [
     'v2_order_drive_folders','v2_drive_oauth_state','v2_drive_oauth_connection',

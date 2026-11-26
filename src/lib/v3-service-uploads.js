@@ -20,6 +20,7 @@ async function access(db,token,family,write=false){
  if(!service)error('Serviço não contratado.',404);
  if(ctx.locked)error('Arquivos disponíveis após confirmação do pagamento.',403);
  if(service.originals_until&&Date.now()>=Date.parse(service.originals_until))error('Prazo de armazenamento encerrado.',410);
+ if(write&&ctx.order.archived_at)error('Pedido arquivado.',409);
  if(write&&(!['available','in_progress'].includes(service.briefing_status)||!['briefing_pending','waiting_customer'].includes(ctx.order.status)))error('Este briefing não permite alterar arquivos.',409);
  return ctx;
 }
@@ -38,13 +39,19 @@ export async function uploadV3ServiceImage(request,env,token,family){
    const ctx=await access(env.DB,token,family,true);
    const schema=buildV3ModuleSchema(ctx.order,ctx.services,family,ctx.drafts);
    const rule=schema.uploadRules.find(r=>r.fieldKey===fieldKey);
-   if(!rule||!rule.authorized)error('Salve as respostas e autorizações necessárias antes do envio.',403);
+   if(!rule||(!rule.authorized&&!rule.requiresUploadAuthorization))error('Salve as respostas e autorizações necessárias antes do envio.',403);
+   if(rule.requiresUploadAuthorization&&form.get('authorizationAccepted')!=='true')error('Confirme a declaração de uso das imagens ao enviar.',403);
    const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_service_uploads WHERE order_id=? AND family=? AND field_key=?').bind(ctx.order.id,family,fieldKey).first();
    if(count.n>=rule.max)error('Limite de imagens atingido.',409);
    const key='orders/'+ctx.order.id+'/v3/'+family+'/'+fieldKey+'/'+randomToken('file_')+ext[mime];
    await env.FILES.put(key,file.stream(),{httpMetadata:{contentType:mime,cacheControl:'private, no-store'}});
    try{
-     const r=await env.DB.prepare('INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,?,?,?,?,?,?)').bind(ctx.order.id,family,fieldKey,String(file.name||'imagem').slice(0,200),mime,file.size,key).run();
+     const statements=[env.DB.prepare('INSERT INTO v3_service_uploads(order_id,family,field_key,original_filename,mime_type,size_bytes,r2_key) VALUES(?,?,?,?,?,?,?)').bind(ctx.order.id,family,fieldKey,String(file.name||'imagem').slice(0,200),mime,file.size,key)];
+     if(rule.requiresUploadAuthorization){
+       statements.push(env.DB.prepare("UPDATE v3_order_briefing_drafts SET data_json=json_set(data_json,'$.private_photo_authorization','sim'),revision=revision+1,updated_at=datetime('now') WHERE order_id=? AND module=?").bind(ctx.order.id,family));
+       statements.push(env.DB.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_photo_upload_authorized','Declaração de autorização registrada no envio das imagens.',?,datetime('now'))").bind(ctx.order.id,JSON.stringify({family,fieldKey,source:'customer_upload'})));
+     }
+     const [r]=await env.DB.batch(statements);
      return {id:Number(r.meta.last_row_id)};
    }catch(e){await env.FILES.delete(key).catch(()=>{});throw e;}
  });

@@ -1064,15 +1064,14 @@ test('V121 starts a submitted service in one operation without changing contract
  const {db,order}=await paid(t),token=order.publicToken;
  const before=await getV3ModularBriefing(db,token),original=before.deliveryWindow;
  const input={confirmed:true,revision:0,sharedRevision:0,version:0,dependsOnIdentity:false};
- await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
  db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=? AND family='convite'").run(order.orderId);
  await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',{...input,version:9}),/mudou/);
  const points=db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n;
  const result=await startV3ServiceFromBriefing(db,token,'convite',input);
  assert.equal(result.productionStatus,'in_production');assert.deepEqual(result.deliveryWindow,{start:original.start,end:original.end});
- const state=await getV3ModularBriefing(db,token),s=state.services.find(x=>x.family==='convite');assert.ok(s.reviewedAt);assert.equal(s.productionStatus,'in_production');assert.equal(s.progress.version,1);assert.equal(s.progress.events.filter(e=>e.action==='started').length,1);
+ const state=await getV3ModularBriefing(db,token),s=state.services.find(x=>x.family==='convite');assert.equal(s.reviewedAt,null);assert.equal(s.productionStatus,'in_production');assert.equal(s.progress.version,1);assert.equal(s.progress.events.filter(e=>e.action==='started').length,1);
  assert.equal(db.sqlite.prepare('SELECT SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,points);
- await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+ assert.equal((await startV3ServiceFromBriefing(db,token,'convite',input)).productionStatus,'in_production');
 });
 
 test('V121 direct final delivery without preview still requires full payment and final files',async t=>{
@@ -1209,7 +1208,7 @@ test('V130 manual paid order starts with missing reservation and blocked agenda 
  const history=db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='v3_manual_agenda_confirmed'").get(order.orderId);assert.equal(history.n,1);
  const identity=await startV3ServiceFromBriefing(db,token,'identidade_visual',{...input,dependsOnIdentity:undefined});
  assert.equal(identity.productionStatus,'in_production');assert.deepEqual(rows(),expected);
- await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+ assert.equal((await startV3ServiceFromBriefing(db,token,'convite',input)).productionStatus,'in_production');
  assert.deepEqual(rows(),expected);
 });
 test('V130 public order cannot use manual capacity override',async t=>{
@@ -1218,5 +1217,15 @@ test('V130 public order cannot use manual capacity override',async t=>{
  db.sqlite.prepare("DELETE FROM v2_agenda_allocations WHERE order_id=?").run(order.orderId);
  const start=(await getV3ModularBriefing(db,token)).deliveryWindow.start;
  assert.throws(()=>db.sqlite.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family,manual_override) VALUES(?,?,100,'confirmed','convite',1)").run(order.orderId,start),/v3_manual_override_not_allowed/);
- await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',{confirmed:true,revision:0,sharedRevision:0,version:0,dependsOnIdentity:false}),/reserva original/);
+ const result=await startV3ServiceFromBriefing(db,token,'convite',{version:0});assert.equal(result.productionStatus,'in_production');assert.equal(result.agendaPending,true);assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM v2_agenda_allocations WHERE order_id=?').get(order.orderId).n,0);
+});
+
+test('V131 starts with incomplete briefing and absent materials without recording invented consent or review',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken;
+ for(const family of ['convite','identidade_visual','retrospectiva']){
+  const before=db.sqlite.prepare('SELECT * FROM v3_order_services WHERE order_id=? AND family=?').get(order.orderId,family);if(!before)continue;
+  const result=await startV3ServiceFromBriefing(db,token,family,{version:before.production_version});assert.equal(result.productionStatus,'in_production');
+  const after=db.sqlite.prepare('SELECT * FROM v3_order_services WHERE id=?').get(before.id);assert.equal(after.briefing_status,before.briefing_status);assert.equal(after.reviewed_at,before.reviewed_at);assert.equal(after.briefing_submitted_at,before.briefing_submitted_at);
+ }
+ const area=await getV3ModularBriefing(db,token);assert.ok(area.modules.find(m=>m.module==='convite').editable);
 });

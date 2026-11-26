@@ -1,3 +1,4 @@
+import {validateImageFile} from './image-validation.js';
 import {contextV3Briefing,buildV3ModuleSchema} from './v3-modular-briefing.js';
 import {withV2PaymentLock} from './v2-payment-lock.js';
 import {randomToken,fail} from './http.js';
@@ -34,7 +35,7 @@ export async function uploadV3ServiceImage(request,env,token,family){
  const mime=String(file.type||'').toLowerCase();
  if(!Object.hasOwn(ext,mime))error('Envie JPG, PNG, WebP, HEIC ou HEIF.');
  if(file.size<=0||file.size>MAX)error('Cada imagem deve ter até 15 MB.',413);
- if(!validV3ImageHeader(new Uint8Array(await file.slice(0,16).arrayBuffer()),mime))error('Formato de imagem inválido.');
+ if(!await validateImageFile(file,mime,MAX))error('Formato de imagem inválido ou arquivo incompleto.');
  return withV2PaymentLock(env.DB,initial.order.id,async()=>{
    const ctx=await access(env.DB,token,family,true);
    const schema=buildV3ModuleSchema(ctx.order,ctx.services,family,ctx.drafts);

@@ -1,3 +1,4 @@
+import {validateImageFile} from './image-validation.js';
 import { fail, randomToken } from './http.js';
 import { getAtelieUploadAccess } from './v3-atelie-customer-briefing.js';
 
@@ -88,8 +89,7 @@ export async function uploadAtelieCustomerImage(request,env,token) {
   const size=Number(file.size||0),mime=String(file.type||'').toLowerCase();
   if(size<=0||size>MAX_BYTES)throw error('Cada imagem deve ter no máximo 15 MB.',413);
   if(!Object.hasOwn(ACCEPT,mime))throw error('Envie JPG, PNG, WebP, HEIC ou HEIF.');
-  const head=new Uint8Array(await file.slice(0,16).arrayBuffer());
-  if(!validMagic(head,mime))throw error('O conteúdo da imagem não corresponde ao formato informado.');
+  if(!await validateImageFile(file,mime,MAX_BYTES))throw error('O conteúdo da imagem não corresponde ao formato informado.');
   const originalFilename=String(file.name||'imagem').slice(0,200);
   const note=String(form.get('note')||'').trim();
   if(note.length>500)throw error('Observação muito longa.');

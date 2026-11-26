@@ -1,3 +1,4 @@
+import {securityGate,secureResponse} from './lib/security-boundary.js';
 import {
   fail,
   json,
@@ -413,7 +414,7 @@ async function handleCustomerV2Api(
   );
 }
 
-export default {
+const application = {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runV2Scheduler(env).then(result => {
       console.log('V2 scheduler', JSON.stringify(result));
@@ -639,3 +640,5 @@ export default {
 };
 
 
+
+export default {...application,async fetch(request,env,ctx){const blocked=await securityGate(request,env);return secureResponse(request,blocked||await application.fetch(request,env,ctx));}};

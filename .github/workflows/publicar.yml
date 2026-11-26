@@ -92,6 +92,8 @@ jobs:
     steps:
       - name: Baixar repositório
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Proteger branch de produção
         run: |
@@ -122,6 +124,10 @@ jobs:
           APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
+      - name: Auditoria de dependências (sem alterar lockfile)
+        run: pnpm audit --audit-level high
+      - name: Verificar segredos no histórico Git (saída redigida)
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all"
       - name: Validar sintaxe JavaScript
         run: npm run check
 

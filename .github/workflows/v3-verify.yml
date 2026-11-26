@@ -15,12 +15,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - uses: pnpm/action-setup@v4
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
+      - name: Auditoria de dependências (sem alterar lockfile)
+        run: pnpm audit --audit-level high
+      - name: Verificar segredos no histórico Git (saída redigida)
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all"
       - name: Conferir sintaxe e imports
         run: npm run check
       - name: Testes automatizados

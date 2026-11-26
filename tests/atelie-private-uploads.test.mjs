@@ -51,7 +51,7 @@ function fixture() {
   }};
   return {sqlite,db,env,objects};
 }
-const jpg=new Uint8Array([255,216,255,224,0,16,74,70,73,70,0,1,2,3,4,5]);
+const jpg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwClABUn/9k=','base64');
 function formRequest(fieldKey='referenceFiles',file=new File([jpg],'teste.jpg',{type:'image/jpeg'})){
   const form=new FormData();
   form.append('fieldKey',fieldKey);form.append('file',file);

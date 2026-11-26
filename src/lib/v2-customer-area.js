@@ -1,3 +1,4 @@
+import {validateImageFile} from './image-validation.js';
 import {buildSchema,buildV2BriefingSimulationSchema} from '../../public/js/briefing-schema-v2.v119.js';
 export {buildV2BriefingSimulationSchema};
 import { syncMercadoPagoOrder } from './v2-mercadopago.js';
@@ -1904,6 +1905,7 @@ export async function uploadV2BriefingFile(
     );
   }
 
+  if (mime !== 'application/pdf' && !await validateImageFile(file,mime,MAX_IMAGE_BYTES)) throw new Error('Formato de imagem inválido ou arquivo incompleto.');
   const count =
     await countFieldUploads(
       env.DB,

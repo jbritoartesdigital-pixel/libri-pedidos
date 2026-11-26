@@ -1,0 +1,116 @@
+name: Agenda | Migration 0007 isolada
+on:
+  push:
+    branches: [ops/agenda-migration-0007-20261126]
+    paths: ['.github/workflows/agenda-migration-0007-once.yml']
+permissions:
+  contents: read
+concurrency:
+  group: agenda-migration-0007-isolada
+  cancel-in-progress: false
+jobs:
+  agenda-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Preparar exclusivamente configuração e SQL da Agenda
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/agenda-only"
+          cd "$RUNNER_TEMP/agenda-only"
+          cat > wrangler.toml <<'CONFIG'
+          name = "libri-agenda-api"
+          compatibility_date = "2026-09-17"
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "libri-agenda"
+          database_id = "b897896e-bc07-458c-bf49-ff51f46cf19c"
+          CONFIG
+          cat > 0007_secretary.sql <<'SQL'
+          -- Modo Secretaria: somente estruturas aditivas, sem preencher datas fictícias.
+          CREATE TABLE IF NOT EXISTS return_plans (
+            appointment_id INTEGER PRIMARY KEY REFERENCES appointments(id) ON DELETE CASCADE,
+            due_date TEXT,
+            contacted_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE INDEX IF NOT EXISTS idx_return_plans_due ON return_plans(due_date);
+          
+          CREATE TABLE IF NOT EXISTS agenda_push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL REFERENCES auth_accounts(id) ON DELETE CASCADE,
+            professional_id INTEGER NOT NULL REFERENCES professionals(id) ON DELETE CASCADE,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            last_sent_date TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE INDEX IF NOT EXISTS idx_agenda_push_account ON agenda_push_subscriptions(account_id, professional_id);
+          
+          -- Protege contra reservas simultâneas, inclusive entre requisições concorrentes.
+          CREATE TRIGGER IF NOT EXISTS agenda_no_overlap_insert BEFORE INSERT ON appointments
+          WHEN NEW.status <> 'cancelled' AND EXISTS (
+            SELECT 1 FROM appointments a WHERE a.professional_id = NEW.professional_id
+              AND a.appointment_date = NEW.appointment_date AND a.status <> 'cancelled'
+              AND a.start_time < NEW.end_time AND a.end_time > NEW.start_time
+          )
+          BEGIN SELECT RAISE(ABORT, 'AGENDA_CONFLICT'); END;
+          
+          CREATE TRIGGER IF NOT EXISTS agenda_no_overlap_update
+          BEFORE UPDATE OF appointment_date,start_time,end_time,status ON appointments
+          WHEN NEW.status <> 'cancelled' AND (NEW.appointment_date <> OLD.appointment_date OR NEW.start_time <> OLD.start_time OR NEW.end_time <> OLD.end_time OR OLD.status = 'cancelled')
+          AND EXISTS (
+            SELECT 1 FROM appointments a WHERE a.id <> NEW.id AND a.professional_id = NEW.professional_id
+              AND a.appointment_date = NEW.appointment_date AND a.status <> 'cancelled'
+              AND a.start_time < NEW.end_time AND a.end_time > NEW.start_time
+          )
+          BEGIN SELECT RAISE(ABORT, 'AGENDA_CONFLICT'); END;
+          SQL
+          npm install --no-audit --no-fund --no-package-lock wrangler@4.168.0
+      - name: Conferir autorização do token no banco Agenda sem dados pessoais
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/agenda-only"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler d1 execute libri-agenda --remote --json --command "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('appointments','auth_accounts','professionals','patients')" > /tmp/agenda-schema-before.json
+          node -e "const r=require('/tmp/agenda-schema-before.json'); if(r[0]?.results?.[0]?.n!==4) throw Error('Banco Agenda não reconhecido.'); console.log('Esquema de origem confirmado.')"
+      - name: Registrar ponto de recuperação D1 da Agenda
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/agenda-only"
+          npx wrangler d1 time-travel info libri-agenda --json > /tmp/agenda-bookmark.json
+          node -e "const fs=require('node:fs'); const d=require('/tmp/agenda-bookmark.json'); const b=d.bookmark??d.result?.bookmark; if(!/^[a-zA-Z0-9_-]{12,120}$/.test(String(b||'')))throw Error('Ponto de recuperação inválido');fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Bookmark de recuperação Agenda: '+b+'\n')"
+      - name: Aplicar somente 0007 da Agenda
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/agenda-only"
+          npx wrangler d1 execute libri-agenda --remote --file 0007_secretary.sql
+      - name: Verificar objetos da migration sem ler pacientes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/agenda-only"
+          npx wrangler d1 execute libri-agenda --remote --json --command "SELECT name,type FROM sqlite_master WHERE name IN ('return_plans','agenda_push_subscriptions','idx_return_plans_due','idx_agenda_push_account','agenda_no_overlap_insert','agenda_no_overlap_update') ORDER BY name" > /tmp/agenda-schema-after.json
+          node -e "const r=require('/tmp/agenda-schema-after.json'); const a=r[0]?.results||[]; const m=Object.fromEntries(a.map(x=>[x.name,x.type])); const e={return_plans:'table',agenda_push_subscriptions:'table',idx_return_plans_due:'index',idx_agenda_push_account:'index',agenda_no_overlap_insert:'trigger',agenda_no_overlap_update:'trigger'}; if(!Object.entries(e).every(([k,v])=>m[k]===v))throw Error('Migração Agenda não confirmada'); console.log('Migration Agenda 0007 confirmada: 2 tabelas, 2 índices, 2 gatilhos.')"

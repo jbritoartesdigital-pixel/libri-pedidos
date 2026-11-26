@@ -3,3 +3,5 @@ Entrada: /admin-v2
 Manifesto e ícones PNG exclusivos do painel; instalação sem cache novo, sem alteração de API, D1, R2, sessão ou links públicos. Service worker e Web Push existentes preservados. Validação pendente: deploy, HTTP, instalação Android/iOS, sessão e links públicos. Instalação pelo menu do navegador quando o botão nativo não estiver disponível.
 
 26/11/2026 | V2: service worker network-only registrado; Web Push original mantido no Pedidos. Cache-bust. Deploy e teste real pendentes.
+
+26/11/2026 | V3: pré-verificação 45882713653 aprovada, D1 sem migrations pendentes. Release pontual pela rota push já existente, com todos os gates; bloqueia se D1 não estiver atualizado e não executa migration nem ativação de catálogo nessa publicação específica. Deploy e teste real pendentes.

@@ -23,10 +23,6 @@ jobs:
       - uses: pnpm/action-setup@v4
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
-      - name: Auditoria de dependências (sem alterar lockfile)
-        run: pnpm audit --audit-level high
-      - name: Verificar segredos no histórico Git (saída redigida)
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all"
       - name: Conferir sintaxe e imports
         run: npm run check
       - name: Testes automatizados
@@ -46,3 +42,31 @@ jobs:
           path: artifacts/v3-browser/
           if-no-files-found: ignore
           retention-days: 7
+
+  security-audit:
+    name: Auditoria de dependências e histórico (sem deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+      - name: Auditoria de dependências (sem alterar lockfile)
+        run: pnpm audit --audit-level high
+      - name: Verificar segredos no histórico Git (saída redigida)
+        if: always()
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all"
+  security-regressions:
+    name: Testes específicos de segurança (sem deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/security-hardening.test.mjs

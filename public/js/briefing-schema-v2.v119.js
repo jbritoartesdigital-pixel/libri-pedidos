@@ -532,30 +532,6 @@ export function buildSchema(
     );
   }
 
-  appearanceFields.push(field(
-    'additional_illustrated_subjects',
-    'Quer encomendar outra criança, pet ou ilustração individual fora da composição prevista?',
-    'choice',
-    {
-      required:false,
-      help:'Figuras do tema já previstas na composição não são adicionais, mesmo quando aparecem junto com a criança. Novas ilustrações individuais fora do escopo precisam de orçamento e aceite, sem cobrança automática.',
-      options:[
-        {value:'no',label:'Não, somente o que já está contratado'},
-        {value:'yes',label:'Sim, quero solicitar orçamento'}
-      ]
-    }
-  ));
-  if(data.additional_illustrated_subjects==='yes') {
-    appearanceFields.push(field(
-      'additional_illustrated_subjects_details',
-      'Quem mais você gostaria de ilustrar?',
-      'textarea',
-      {
-        required:true,
-        help:'Ex.: outro irmão, cachorro, papagaio ou uma nova ilustração individual fora da composição temática prevista. Diga quantos e quem são.'
-      }
-    ));
-  }
   sections.push({
     id:
       'appearance',

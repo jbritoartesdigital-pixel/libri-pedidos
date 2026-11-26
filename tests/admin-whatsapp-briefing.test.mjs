@@ -118,7 +118,7 @@ test('WhatsApp admin workflow: payment gate, conditional fields, audit, correcti
   assert.equal(workflow.next_action, 'Entregar convite');
   const secondForm = new FormData();
   secondForm.append('fieldKey', 'reference_files');
-  secondForm.append('file', new File(['fictitious image'], 'referencia-2.webp', { type:'image/webp' }));
+  secondForm.append('file', new File([Buffer.from('UklGRjQAAABXRUJQVlA4ICgAAACwAQCdASoCAAIAAUAmJZgCdLoABGaAAP7fgD+4OXLiCjL+tQjDmQgA','base64')], 'referencia-2.webp', { type:'image/webp' }));
   await uploadAdminBriefing(new Request('https://example.test/upload',
     { method: 'POST', body: secondForm }), env, code);
   workflow = DB.sqlite.prepare('SELECT status, next_action FROM v2_orders WHERE order_code=?').get(code);

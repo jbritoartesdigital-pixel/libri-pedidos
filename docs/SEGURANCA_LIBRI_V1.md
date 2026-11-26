@@ -8,3 +8,6 @@ Base: fcf3fabde9c93f68f7690e26cbc5490e823b55fd (main V131, cuja publicação ant
 - Bloqueio de origens cruzadas para mutações administrativas; passkey e cookies existentes preservados.
 - .gitignore reforçado. Auditoria de dependências e segredos deve executar em CI com logs redigidos. Nenhum segredo deve ser copiado para relatório. Caso haja achados, rotacionar apenas com autorização.
 - Testes SEC passam pela suíte habitual; CI de revisão não realiza deploy. Aprovação da proprietária e todos os gates são pré-requisitos para integrar/publicar. Não há estimativa percentual de invasão.
+
+## Rodada 2
+Auditoria inicial: 9 alertas nas dependências (5 altos, 4 moderados); 2 alertas históricos do scanner, ainda sem classificação. Nenhuma credencial exibida ou rotacionada. Fixtures de imagens substituídas por arquivos sintéticos válidos gerados com Pillow; teste de cache confirma no-store sem exigir texto idêntico. Candidata de atualização do Wrangler será resolvida e auditada isoladamente, sem alterar o lockfile definitivo antes de verificar compatibilidade. A falha V131 preexistente continua separada.

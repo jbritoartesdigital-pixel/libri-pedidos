@@ -98,7 +98,7 @@ test('V3 customer routes isolate order tokens, require payment, and block legacy
   }),env,ctx);
   const get=await call(api+'/v3/briefing');
   assert.equal(get.status,200);
-  assert.equal(get.headers.get('cache-control'),'no-store');
+  assert.match(get.headers.get('cache-control'),/\bno-store\b/);
   assert.equal((await get.json()).briefing.modules.length,3);
   const saved=await call(api+'/v3/briefing/shared','PATCH',{revision:0,data:{theme_or_style:'Jardim'}});
   assert.equal(saved.status,200);

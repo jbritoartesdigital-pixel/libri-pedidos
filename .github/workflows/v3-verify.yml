@@ -59,7 +59,15 @@ jobs:
         run: pnpm audit --audit-level high
       - name: Verificar segredos no histórico Git (saída redigida)
         if: always()
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all"
+        run: |
+          out="$(mktemp -d)"
+          rc=0
+          docker run --rm -v "$PWD:/repo:ro" -v "$out:/out" ghcr.io/gitleaks/gitleaks:v8.24.3 git /repo --redact=100 --no-banner --log-opts="--all" --report-format=json --report-path=/out/report.json || rc=$?
+          if [ -f "$out/report.json" ]; then
+            node -e 'const fs=require("fs");const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));for(const x of a||[])console.log(JSON.stringify({rule:x.RuleID,file:x.File,line:x.StartLine,commit:x.Commit}));' "$out/report.json"
+          fi
+          rm -rf "$out"
+          exit "$rc"
   security-regressions:
     name: Testes específicos de segurança (sem deploy)
     runs-on: ubuntu-24.04
@@ -70,3 +78,27 @@ jobs:
         with:
           node-version: '24'
       - run: node --test tests/security-hardening.test.mjs
+
+  dependency-candidate:
+    name: Verificar atualização candidata do Wrangler (sem deploy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+      - name: Gerar lockfile candidato em ambiente descartável
+        run: pnpm update wrangler --latest --lockfile-only
+      - name: Verificar vulnerabilidades da candidata
+        run: pnpm audit --audit-level high
+      - name: Conferir instalação e sintaxe
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run check
+      - name: Disponibilizar somente manifesto e lockfile gerados
+        run: |
+          node -e 'const fs=require("fs");for(const f of ["package.json","pnpm-lock.yaml"]){const b=fs.readFileSync(f).toString("base64");for(let i=0;i<b.length;i+=2000)console.log("SEC_CANDIDATE "+f+" "+b.slice(i,i+2000));}'

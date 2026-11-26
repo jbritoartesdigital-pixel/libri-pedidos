@@ -25,9 +25,9 @@ test('SEC private links suppress caching, referrers and indexing; cookies surviv
  assert.match(res.headers.get('cache-control'),/no-store/);assert.equal(res.headers.get('referrer-policy'),'no-referrer');assert.match(res.headers.get('x-robots-tag'),/noindex/);assert.match(res.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.ok(res.headers.get('content-security-policy-report-only'));assert.equal(res.headers.get('set-cookie'),'test=1; HttpOnly');
 });
 test('SEC complete image containers reject truncated, disguised, altered and trailing files',()=>{
- const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR42mN8tm8fAwMDEwMDAwMDAwAc6gJmwz4zqQAAAABJRU5ErkJggg==','base64'),jpg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwClABUn/9k=','base64');
- for(const [b,m] of [[png,'image/png'],[jpg,'image/jpeg']]){
-  assert.equal(validImageStructure(b,m),true);
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGOMrl7FwMDAxMDAwMDAAAAR2wGEcAQnLQAAAABJRU5ErkJggg==','base64'),jpg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAwX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwClABUn/9k=','base64');
+ for(const [b,m] of [[png,'image/png'],[jpg,'image/jpeg'],[Buffer.from('UklGRjQAAABXRUJQVlA4ICgAAACwAQCdASoCAAIAAUAmJZgCdLoABGaAAP7fgD+4OXLiCjL+tQjDmQgA','base64'),'image/webp']]){
+  assert.equal(validImageStructure(b,m),true,m+' fixture');
   assert.equal(validImageStructure(b.subarray(0,16),m),false);
   assert.equal(validImageStructure(Buffer.concat([b,Buffer.from('<html>')]),m),false);
   assert.equal(validImageStructure(Buffer.from('<svg onload=alert(1)>'),m),false);

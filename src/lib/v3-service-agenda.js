@@ -30,6 +30,28 @@ export function partitionV3Allocations(services,rows){
  }
  return result;
 }
+// Reconcile the order's existing ledger, not a second reservation. Preserve assigned days first.
+export function reconcileManualV3Allocations(services,rows,original){
+ const remaining=new Map(services.map(s=>[s.family,remainingV3Capacity(s)]));
+ if(!valid(original.start)||!valid(original.end)||original.end<original.start||services.some(s=>!Number.isSafeInteger(remaining.get(s.family))||remaining.get(s.family)<0))fail('Confira a data e a carga contratadas do pedido manual.');
+ const ordered=[...services].sort((a,b)=>priority.indexOf(a.family)-priority.indexOf(b.family));
+ const result=[],sorted=[...rows].sort((a,b)=>a.day.localeCompare(b.day)||a.id-b.id);
+ const take=(r,family,units)=>{const n=Math.min(units,remaining.get(family)||0);if(n>0){result.push({day:r.day,points_units:n,service_family:family,allocation_type:'confirmed'});remaining.set(family,remaining.get(family)-n);}return n;};
+ for(const r of sorted.filter(r=>r.service_family)){if(!remaining.has(r.service_family)||!valid(r.day)||!Number.isSafeInteger(r.points_units)||r.points_units<=0)fail('Há uma reserva manual inválida. Confira o cadastro do serviço.');take(r,r.service_family,r.points_units);}
+ for(const r of sorted.filter(r=>!r.service_family)){if(!valid(r.day)||!Number.isSafeInteger(r.points_units)||r.points_units<=0)fail('Há uma reserva manual inválida.');let units=r.points_units;for(const s of ordered){units-=take(r,s.family,units);if(!units)break;}}
+ for(const s of ordered){
+   const units=remaining.get(s.family);if(!units)continue;
+   const start=s.delivery_start||original.start;
+   if(!valid(start))fail('A data contratada do serviço está inválida.');
+   // Use the existing assigned day when possible; otherwise reserve on the agreed work window.
+   const existing=result.filter(r=>r.service_family===s.family).at(-1)?.day;
+   const workDay=s.production_days>0?day(start,-1):start;
+   const d=existing||workDay;
+   take({day:d},s.family,units);
+ }
+ if(sum(result)!==expectedCapacity(services)||services.some(s=>sum(result.filter(r=>r.service_family===s.family))!==remainingV3Capacity(s)))fail('Não foi possível reconciliar os pontos do pedido manual.');
+ return result;
+}
 function planForWindow(free,start,end,days,units,now){
  const first=days?day(start,-days):start,last=days?day(start,-1):end;
  const eligible=[];
@@ -61,6 +83,15 @@ async function compute(db,token,family,input={},allowUnreviewed=false){
    if(depends&&!['approved','delivered'].includes(identity.production_status))fail('Aguarde a aprovação da identidade visual antes de programar o convite dependente.');
  }
  const rows=(await db.prepare('SELECT * FROM v2_agenda_allocations WHERE order_id=? ORDER BY day,id').bind(ctx.order.id).all()).results||[];
+ const manual=ctx.order.source==='manual_whatsapp'&&!ctx.order.urgency_enabled;
+ if(manual){
+  if(ctx.order.archived_at||ctx.cancellation||!ctx.finance?.depositConfirmed)fail('Pedido manual indisponível para planejamento.');
+  const original={start:ctx.order.delivery_start,end:ctx.order.delivery_end};
+  const start=s.delivery_start||original.start,end=s.delivery_end||original.end;
+  if(!valid(start)||!valid(end)||end<start)fail('Confira a data contratada do pedido manual.');
+  const partition=reconcileManualV3Allocations(ctx.services,rows,original);
+  return {ctx,s,partition,rows,options:[{start,end,allocation:partition.filter(r=>r.service_family===family)}],depends,manual:true,capacity:v2IntSetting(await loadV2Settings(db),'default_sellable_points_per_day_units',400)};
+ }
  const partition=partitionV3Allocations(ctx.services,rows);
  if(ctx.order.urgency_enabled&&ctx.services.length===1&&family==='convite'){
   const u=await db.prepare('SELECT status,requested_delivery_start,requested_delivery_end FROM v2_urgency_requests WHERE order_id=?').bind(ctx.order.id).first();
@@ -118,12 +149,24 @@ export async function scheduleV3Service(db,token,family,input={},startNow=false)
    const prize=s.snapshot.blackLibri?.gift?.config?.blackLibriPrizeCode;
    if(!s.reviewed_at&&['mini_retrospective','child_birthday'].includes(prize)&&input.giftMediaConfirmed!==true)fail('Confirme as fotos e a autorização do presente Black Libri.');
  }
- const target=startNow?{start:ctx.order.delivery_start,end:ctx.order.delivery_end}:input;
+ const target=startNow?(p.manual?{start:s.delivery_start||ctx.order.delivery_start,end:s.delivery_end||ctx.order.delivery_end}:{start:ctx.order.delivery_start,end:ctx.order.delivery_end}):input;
  const selected=p.options.find(o=>o.start===target.start&&o.end===target.end);
  if(!selected)fail(startNow?'A data contratada precisa de revisão. Abra Produção e entrega para escolher a janela; nenhuma data foi alterada.':'A janela perdeu disponibilidade. Consulte novamente.');
  const status=startNow?'in_production':'ready';
  const dbOrder=ctx.order.id,statements=[];
- if(p.urgency)statements.push(db.prepare('UPDATE v2_agenda_allocations SET service_family=? WHERE order_id=? AND service_family IS NULL').bind(family,dbOrder));
+ if(p.manual){
+  const before=p.rows.map(r=>({day:r.day,points_units:r.points_units,service_family:r.service_family||null,allocation_type:r.allocation_type}));
+  const after=p.partition.map(r=>({day:r.day,points_units:r.points_units,service_family:r.service_family,allocation_type:'confirmed'}));
+  const normalize=xs=>JSON.stringify([...xs].sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  if(normalize(before)!==normalize(after)){
+   statements.push(db.prepare('DELETE FROM v2_agenda_allocations WHERE order_id=?').bind(dbOrder));
+   for(const r of after){
+    statements.push(db.prepare('INSERT OR IGNORE INTO v2_agenda_days(day,sellable_capacity_units) VALUES(?,?)').bind(r.day,p.capacity));
+    statements.push(db.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family,manual_override) VALUES(?,?,?,'confirmed',?,1)").bind(dbOrder,r.day,r.points_units,r.service_family));
+   }
+  }
+  statements.push(db.prepare("INSERT INTO v2_order_history(order_id,action_code,description,metadata_json,created_at) VALUES(?,'v3_manual_agenda_confirmed','Data definida pela administradora preservada; agenda reconciliada sem duplicação.',?,datetime('now'))").bind(dbOrder,JSON.stringify({family,previousUnits:sum(p.rows),confirmedUnits:sum(p.partition),deliveryWindow:{start:selected.start,end:selected.end}})));
+ }else if(p.urgency)statements.push(db.prepare('UPDATE v2_agenda_allocations SET service_family=? WHERE order_id=? AND service_family IS NULL').bind(family,dbOrder));
  else{
   const keep=p.partition.filter(r=>r.service_family!==family);
   const next=[...keep,...selected.allocation.map(r=>({...r,service_family:family}))];
@@ -136,7 +179,7 @@ export async function scheduleV3Service(db,token,family,input={},startNow=false)
  }
  if(startNow){
   statements.push(db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),depends_on_identity=?,reviewed_at=COALESCE(reviewed_at,datetime('now')),production_status='in_production',production_version=production_version+1,updated_at=datetime('now') WHERE id=? AND production_version=?").bind(selected.start,selected.end,p.depends==null?null:Number(p.depends),s.id,s.production_version));
-  statements.push(db.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,note) VALUES(?,'admin','started',?)").bind(s.id,'Briefing conferido e janela contratada validada no início da produção.'));
+  statements.push(db.prepare("INSERT INTO v3_service_production_events(service_id,actor,action,note) VALUES(?,'admin','started',?)").bind(s.id,p.manual?'Briefing conferido. Data manual preservada e carga reconciliada.':'Briefing conferido e janela contratada validada no início da produção.'));
  }else statements.push(db.prepare("UPDATE v3_order_services SET delivery_start=?,delivery_end=?,scheduled_at=datetime('now'),depends_on_identity=?,production_status='ready',updated_at=datetime('now') WHERE id=?").bind(selected.start,selected.end,p.depends==null?null:Number(p.depends),s.id));
  try{await db.batch(statements);}catch(e){if(String(e.message).includes('v3_capacity_changed'))fail('A capacidade mudou. Consulte a agenda novamente.');throw e;}
  return {family,deliveryWindow:{start:selected.start,end:selected.end},pointsUnits:s.points_units,productionStatus:status};

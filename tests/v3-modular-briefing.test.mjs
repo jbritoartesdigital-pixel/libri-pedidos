@@ -1192,3 +1192,31 @@ test('V127 illustrated extras question belongs only to identity briefing',()=>{
  const keys=module=>buildV3ModuleSchema(order,services,module,{convite:{appearance_choice:'yes',additional_illustrated_subjects:'yes'}}).sections.flatMap(s=>s.fields.map(f=>f.key));
  assert.ok(!keys('convite').includes('additional_illustrated_subjects'));assert.ok(!keys('convite').includes('additional_illustrated_subjects_details'));assert.ok(keys('identidade_visual').includes('additionalSubjects'));
 });
+
+test('V130 manual paid order starts with missing reservation and blocked agenda preserving date and exact points',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken;
+ const original=(await getV3ModularBriefing(db,token)).deliveryWindow;
+ db.sqlite.prepare("UPDATE v2_orders SET source='manual_whatsapp' WHERE id=?").run(order.orderId);
+ db.sqlite.prepare("DELETE FROM v2_agenda_allocations WHERE order_id=?").run(order.orderId);
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=?").run(order.orderId);
+ db.sqlite.prepare("INSERT INTO v2_agenda_days(day,blocked) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET blocked=1").run(original.start);
+ const input={confirmed:true,revision:0,sharedRevision:0,version:0,dependsOnIdentity:false};
+ const result=await startV3ServiceFromBriefing(db,token,'convite',input);
+ assert.equal(result.productionStatus,'in_production');assert.deepEqual(result.deliveryWindow,{start:original.start,end:original.end});
+ const rows=()=>db.sqlite.prepare("SELECT service_family,SUM(points_units) AS n FROM v2_agenda_allocations WHERE order_id=? GROUP BY service_family ORDER BY service_family").all(order.orderId);
+ const expected=db.sqlite.prepare("SELECT family AS service_family,points_units-released_points_units AS n FROM v3_order_services WHERE order_id=? ORDER BY family").all(order.orderId);
+ assert.deepEqual(rows(),expected);
+ const history=db.sqlite.prepare("SELECT COUNT(*) AS n FROM v2_order_history WHERE order_id=? AND action_code='v3_manual_agenda_confirmed'").get(order.orderId);assert.equal(history.n,1);
+ const identity=await startV3ServiceFromBriefing(db,token,'identidade_visual',{...input,dependsOnIdentity:undefined});
+ assert.equal(identity.productionStatus,'in_production');assert.deepEqual(rows(),expected);
+ await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',input),/Confira o briefing/);
+ assert.deepEqual(rows(),expected);
+});
+test('V130 public order cannot use manual capacity override',async t=>{
+ const {db,order}=await paid(t),token=order.publicToken;
+ db.sqlite.prepare("UPDATE v3_order_services SET briefing_status='completed' WHERE order_id=? AND family='convite'").run(order.orderId);
+ db.sqlite.prepare("DELETE FROM v2_agenda_allocations WHERE order_id=?").run(order.orderId);
+ const start=(await getV3ModularBriefing(db,token)).deliveryWindow.start;
+ assert.throws(()=>db.sqlite.prepare("INSERT INTO v2_agenda_allocations(order_id,day,points_units,allocation_type,service_family,manual_override) VALUES(?,?,100,'confirmed','convite',1)").run(order.orderId,start),/v3_manual_override_not_allowed/);
+ await assert.rejects(startV3ServiceFromBriefing(db,token,'convite',{confirmed:true,revision:0,sharedRevision:0,version:0,dependsOnIdentity:false}),/reserva original/);
+});

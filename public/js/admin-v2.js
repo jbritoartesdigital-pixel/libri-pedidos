@@ -30,7 +30,7 @@ import {
 
 import {
   openOrder,
-} from './admin-v2-order.js?v=20261124-admin-v3-83&detail=129';
+} from './admin-v2-order.js?v=20261124-admin-v3-83&detail=130';
 
 import {
   renderAgenda,
